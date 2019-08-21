@@ -1,0 +1,109 @@
+//Microsoft Developer Studio generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// Finnish resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_FIN)
+#ifdef _WIN32
+LANGUAGE LANG_FINNISH, SUBLANG_DEFAULT
+#pragma code_page(1252)
+#endif //_WIN32
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_ICON1               ICON    DISCARDABLE     "iconCWA.ico"
+#endif    // Finnish resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+
+
+//v1.13 added version information
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION		1,16
+PRODUCTVERSION	1,16
+FILEFLAGSMASK	VS_FFI_FILEFLAGSMASK
+
+#ifdef _DEBUG
+	FILEFLAGS	VS_FF_DEBUG | VS_FF_PRERELEASE
+#else
+	FILEFLAGS	0x0L
+#endif
+
+FILEOS		VOS_NT_WINDOWS32
+FILETYPE	VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+	BLOCK "StringFileInfo"
+	BEGIN
+		BLOCK "040904b0"
+		BEGIN
+			VALUE "Comments", "Compiled by Faguss. Original written by Kegetys.\r\n\r\nAPIHijack DLL by Matt Pietrek/Wade Brainerd/Wei Junping\0"
+			VALUE "CompanyName", "ofp-faguss.com/fwatch\0"
+			VALUE "FileDescription", "CWA Script Extender\0"
+			VALUE "FileVersion", "1, 16, 6, 0\0"
+			VALUE "InternalName", "Fwatch\0"
+			VALUE "LegalCopyright", "PD 2017\0"
+			VALUE "OriginalFilename", "fwatchcwa.exe\0"
+			VALUE "ProductName", "Fwatch\0"
+			VALUE "ProductVersion", "1, 16, 6, 0\0"
+		END
+	END
+	BLOCK "VarFileInfo"
+	BEGIN
+		VALUE "Translation", 0x409, 0x04B0
+	END
+END

@@ -1,0 +1,10 @@
+# Microsoft Developer Studio Generated Dependency File, included by TestLauncher.mak
+
+.\script1.rc : \
+	".\iconCWA.ico"\
+	
+
+.\TestLauncher.cpp : \
+	"..\testdll\testdll.h"\
+	"c:\dxsdk\include\basetsd.h"\
+	
