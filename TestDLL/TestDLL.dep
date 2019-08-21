@@ -1,0 +1,36 @@
+# Microsoft Developer Studio Generated Dependency File, included by TestDLL.mak
+
+..\apihijack.cpp : \
+	"..\apihijack.h"\
+	".\testdll.h"\
+	
+
+.\chandler.cpp : \
+	".\testdll.h"\
+	"c:\dxsdk\include\basetsd.h"\
+	
+
+.\dllmain.cpp : \
+	"..\apihijack.h"\
+	".\testdll.h"\
+	"c:\dxsdk\include\basetsd.h"\
+	
+
+.\fdb.cpp : \
+	"c:\program files\microsoft visual studio\vc98\include\basetsd.h"\
+	
+
+.\scripth.cpp : \
+	".\_functions.hpp"\
+	".\class_commands.hpp"\
+	".\clip_commands.hpp"\
+	".\exe_commands.hpp"\
+	".\file_commands.hpp"\
+	".\igse_commands.hpp"\
+	".\info_commands.hpp"\
+	".\input_commands.hpp"\
+	".\mem_commands.hpp"\
+	".\string_commands.hpp"\
+	".\testdll.h"\
+	"c:\dxsdk\include\basetsd.h"\
+	

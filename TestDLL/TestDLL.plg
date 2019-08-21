@@ -1,0 +1,37 @@
+<html>
+<body>
+<pre>
+<h1>Build Log</h1>
+<h3>
+--------------------Configuration: TestDLL - Win32 Release--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating temporary file "C:\DOCUME~1\Bart\USTAWI~1\Temp\RSPD.tmp" with contents
+[
+/nologo /G6 /MT /W3 /Ox /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" /D "_USRDLL" /D "TESTDLL_EXPORTS" /Fp"Release/TestDLL.pch" /YX /Fo"Release/" /Fd"Release/" /FD /c 
+"D:\Gry\OFP\TestDLL\scripth.cpp"
+]
+Creating command line "cl.exe @C:\DOCUME~1\Bart\USTAWI~1\Temp\RSPD.tmp" 
+Creating temporary file "C:\DOCUME~1\Bart\USTAWI~1\Temp\RSPE.tmp" with contents
+[
+kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib shlwapi.lib Winmm.lib version.lib /nologo /dll /incremental:no /pdb:"..\fwatch.pdb" /machine:I386 /def:".\testdll.def" /out:"..\fwatch.dll" /implib:"..\fwatch.lib" 
+.\Release\apihijack.obj
+.\Release\chandler.obj
+.\Release\dllmain.obj
+.\Release\fdb.obj
+.\Release\scripth.obj
+]
+Creating command line "link.exe @C:\DOCUME~1\Bart\USTAWI~1\Temp\RSPE.tmp"
+<h3>Output Window</h3>
+Compiling...
+scripth.cpp
+Linking...
+   Creating library ..\fwatch.lib and object ..\fwatch.exp
+
+
+
+<h3>Results</h3>
+fwatch.dll - 0 error(s), 0 warning(s)
+</pre>
+</body>
+</html>
