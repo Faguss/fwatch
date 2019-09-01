@@ -698,30 +698,33 @@ unsigned long resolv(char *host)
 
 
 
-char* Tokenize(char *string, char *delimiter, int &i, int string_length) {
+char* Tokenize(char *string, char *delimiter, int &i, int string_length, bool square_brackets) {
 	int delimiter_len = strlen(delimiter);
-	bool in_brackets = false;
+	bool in_brackets  = false;
 
 	for (int begin=-1; i<=string_length; i++) {
-		bool complete_word = i == string_length;
-
-		if (string[i] == '[')
+		if (square_brackets && string[i] == '[')
 			in_brackets = true;
 
-		if (string[i] == ']')
+		if (square_brackets && string[i] == ']')
 			in_brackets = false;
 
+		bool is_delim = false;
 		for (int j=0; j<delimiter_len; j++)
 			if (string[i] == delimiter[j] && !in_brackets  ||  delimiter[j]==' ' && isspace(string[i])) {
-				complete_word = true;
+				is_delim = true;
 				break;
 			}
 
-		if (!complete_word  &&  begin<0)
+		if (begin<0  &&  (!is_delim || i==string_length))
 			begin = i;
 
-		if (complete_word  &&  begin>=0) {
-			string[i++] = '\0';
+		if (begin>=0  &&  (is_delim ||  i==string_length)) {
+			string[i] = '\0';
+			
+			if (i<string_length)
+				i++;
+				
 			return string+begin;
 		}
 	}
@@ -781,7 +784,7 @@ int Read_Config_Fwatch_HUD(char *filename, bool *no_ar, bool *is_custom, float *
 		int value_index  = -1;
 		
 		while (settings_pos < result) {
-			char *setting = Tokenize(settings, ";", settings_pos, result);
+			char *setting = Tokenize(settings, ";", settings_pos, result, true);
 
 			char *equality = strchr(setting, '=');
 			if (equality == NULL)
@@ -808,7 +811,7 @@ int Read_Config_Fwatch_HUD(char *filename, bool *no_ar, bool *is_custom, float *
 			int values_pos = 0;
 
 			while (values_pos < values_len) {
-				char *value = Tokenize(setting, ",", values_pos, values_len);
+				char *value = Tokenize(setting, ",", values_pos, values_len, true);
 				value = Trim(value);
 
 				if (strcmpi(value, "noar")==0)
@@ -850,17 +853,13 @@ void Transfer_Modfolder_Missions(char *mod, bool server)
 
 	FILE *f = fopen(filename,"a");
 	if (f) {
-		fprintf(f, "?%s", mod);
-
 		char source[2048]      = "";
 		char destination[2048] = "";
 		sprintf(source, "%s\\Missions", mod);
 		sprintf(destination, "Missions\\%s", mod);
 
 		if (MoveFileEx(source, destination, 0))
-			fprintf(f, "?");
-
-		fprintf(f, "\n");
+			fprintf(f, "%s\n", source);
 
 		WIN32_FIND_DATA fd;
 		HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -873,65 +872,94 @@ void Transfer_Modfolder_Missions(char *mod, bool server)
 				sprintf(destination, "MPMissions\\%s", fd.cFileName);
 
 				if (MoveFileEx(source, destination, 0))
-					fprintf(f, "%s\n", fd.cFileName);
+					fprintf(f, "%s\n", source);
 			} 
 			while (FindNextFile(hFind, &fd) != 0);
 			FindClose(hFind);
 		}
 
 		fclose(f);
-	};
+	}
 }
 
-void Return_Modfolder_Missions(bool server) {
-	char line[2048]        = "";
-	char source[2048]      = "";
-	char destination[2048] = "";
-	char mod[2048]         = "";
+void Return_Modfolder_Missions(bool server) 
+{
 	char filename[64]      = "fwatch\\data\\sortMissions";
 	strcat(filename, server ? "_server.txt" : ".txt");
 
-	FILE *f = fopen(filename,"r");
+	FILE *f = fopen(filename,"rb");
 	if (f) {
-		char *ret;
-		while(ret = fgets(line, 2048 ,f)) {
-			int len = strlen(line);
+		fseek(f, 0, SEEK_END);
+		int file_size = ftell(f);
+		fseek(f, 0, SEEK_SET);
 
-			if (line[len-1] == '\n') {
-				line[len-1] = '\0';
-				len -= 1;
-			}
-
-			// mod identifier
-			if (line[0] == '?') {
-				strcpy(line, line+1);		
-				len -= 1;
-				bool sp = false;
-
-				// sp mission identifier
-				if (line[len-1] == '?') {
-					sp          = true;
-					line[len-1] = '\0';
-				}
-
-				strcpy(mod, line);
-
-				if (sp) {
-					sprintf(source, "Missions\\%s", mod);
-					sprintf(destination, "%s\\Missions", mod);
-					MoveFileEx(source, destination, 0);
-				}
-			} else {
-				sprintf(source, "MPMissions\\%s", line);
-				sprintf(destination, "%s\\MPMissions\\%s", mod, line);
-				MoveFileEx(source, destination, 0);
-			}
+		char *text_buffer = (char *) malloc(file_size + 1);
+		if (text_buffer == NULL) {
+			fclose(f);
+			return;
 		}
 
-		fclose(f);
-	}
+		memset(text_buffer, 0, file_size);
 
-	unlink(filename);
+		int result = fread(text_buffer, 1, file_size, f);
+		fclose(f);
+		if (result != file_size) {
+			free(text_buffer);
+			return;
+		}
+
+		text_buffer[file_size] = '\0';
+
+
+		int i          = 0;
+		int word_start = 0;
+		
+		while (i < file_size) {
+			char *destination = Tokenize(text_buffer, "\r\n", i, file_size, false);
+			char *mission     = strrchr(destination,'\\');
+			bool remove_line  = false;
+			
+			if (mission != NULL) {
+				char source[2048] = "";
+
+				if (strcmpi(mission,"\\missions") == 0) {
+					strcpy(source, "missions\\");
+					memcpy(source+9, destination, mission - destination);
+				} else
+					sprintf(source, "mpmissions%s", mission);
+
+				if (MoveFileEx(source, destination, 0))
+					remove_line = true;
+			} else
+				remove_line = true;
+			
+			if (i>0)
+				text_buffer[i-1] = '\r';
+				
+			if (remove_line) {
+				if (text_buffer[i] == '\n') 
+					i++;
+					
+				memcpy(text_buffer+word_start, text_buffer+i, file_size-i);
+				
+				int len    = i - word_start;
+				i         -= len;
+				file_size -= len;
+			}
+
+			word_start = i;
+		}
+
+		text_buffer[file_size] = '\0';
+		
+		f = fopen(filename, "wb");
+		if (f) {
+			result = fwrite(text_buffer, 1, file_size, f);
+			fclose(f);
+		}
+
+		free(text_buffer);
+	}
 }
 // ******************************************************************************************************
 
@@ -1052,7 +1080,7 @@ void FwatchPresence(void *loop)
 						int parameters_pos = 0;
 
 						while (parameters_pos < parameters_len) {
-							char *parameter = Tokenize(parameters, " ", parameters_pos, parameters_len);
+							char *parameter = Tokenize(parameters, " ", parameters_pos, parameters_len, false);
 
 							if (strncmp(parameter,"-mod=",5) == 0) {
 								parameter += 5;
@@ -1060,7 +1088,7 @@ void FwatchPresence(void *loop)
 								int parameter_pos = 0;
 
 								while (parameter_pos < parameter_len) {
-									char *mod = Tokenize(parameter, ";", parameter_pos, parameter_len);
+									char *mod = Tokenize(parameter, ";", parameter_pos, parameter_len, false);
 									Transfer_Modfolder_Missions(mod, server);
 								}
 							}
@@ -1921,7 +1949,7 @@ void FixUIAspectRatio(void *loop)
 					int parameters_pos = 0;
 
 					while (parameters_pos < parameters_len) {
-						char *parameter = Tokenize(parameters, " ", parameters_pos, parameters_len);
+						char *parameter = Tokenize(parameters, " ", parameters_pos, parameters_len, false);
 
 						if (strncmp(parameter,"-mod=",5) == 0) {
 							parameter += 5;
@@ -1929,7 +1957,7 @@ void FixUIAspectRatio(void *loop)
 							int parameter_pos = 0;
 
 							while (parameter_pos < parameter_len) {
-								char *mod = Tokenize(parameter, ";", parameter_pos, parameter_len);
+								char *mod = Tokenize(parameter, ";", parameter_pos, parameter_len, false);
 								char filename[512] = "";
 								sprintf(filename, "%s\\bin\\config_fwatch_hud.cfg", mod);
 								Read_Config_Fwatch_HUD(filename, no_ar, is_custom, custom, customINT);
