@@ -1067,7 +1067,7 @@ int main(int argc, char *argv[])
 	string game_exe           = "";
 	string server_uniqueid    = "";
 	string PBOaddon   		  = "";
-	string teamspeak3         = "";
+	string voice_server       = "";
 	bool self_update		  = false;
 	bool server_equalmodreq   = false;
 	bool scheduled            = false;
@@ -1168,8 +1168,13 @@ int main(int argc, char *argv[])
 				continue;
 			}
 			
-			if (Equals(name,"-ets3")) {
-				teamspeak3 = Decrypt(value);
+			if (Equals(name,"-evoice")) {
+				if (value.substr(0,12) == "ts3server://")
+					voice_server = "ts3server://" + Decrypt(value.substr(12));
+					
+				if (value.substr(0,12) == "mumble://")
+					voice_server = "mumble://" + Decrypt(value.substr(9));
+				
 				continue;
 			}
 		}
@@ -1784,10 +1789,8 @@ int main(int argc, char *argv[])
 	global.logfile << "Operation successful\n\n--------------\n\n";
 	global.logfile.close();
 	
-	if (teamspeak3 != "") {
-		teamspeak3 = "ts3server://" + teamspeak3;
-		ShellExecute(NULL, "open", teamspeak3.c_str(), NULL, NULL, SW_SHOWNORMAL);
-	}
+	if (!voice_server.empty())
+		ShellExecute(NULL, "open", voice_server.c_str(), NULL, NULL, SW_SHOWNORMAL);
 	
 	return 0;
 };

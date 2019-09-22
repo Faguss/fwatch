@@ -26,6 +26,7 @@ struct GLOBAL_VARIABLES
 	bool first_exe				 ;
 	bool unpack_set_error		 ;
 	bool auto_install_next_file  ;
+	bool run_voice_program       ;
 	int game_ver_index           ;
 	int command_line_num         ;
 	int mirror                   ;
@@ -56,6 +57,7 @@ struct GLOBAL_VARIABLES
 	true,
 	true,
 	false,
+	true,
 	-1,
 	0,
 	0,
@@ -442,6 +444,7 @@ void WriteProgressFile(int status, string input)
 		return;
 
 	progressLog << "_auto_restart=" << (global.restart_game ? "true" : "false") 
+				<< ";_run_voice_program=" << (global.run_voice_program ? "true" : "false")
 				<< ";_install_status=" << status << ";\"" << ReplaceAll(input, "\"", "\"\"") << "\"";
 	progressLog.close();
 };
@@ -525,6 +528,9 @@ void ReceiveInstructions(void *nothing)
 
 				if (text == "restart")
 					global.restart_game = !global.restart_game;
+					
+				if (text == "voice")
+					global.run_voice_program = !global.run_voice_program;
 			}
 		}
 
@@ -2000,6 +2006,9 @@ int SCRIPT_Move(const vector<string> &arg)
 			} else
 				path[SOURCE] = "fwatch\\tmp\\_extracted\\" + path[SOURCE];
 
+	// If user selected directory then move it along with its sub-folders
+	if (path[SOURCE].find("*")==string::npos && path[SOURCE].find("?")==string::npos && GetFileAttributes(path[SOURCE].c_str()) & FILE_ATTRIBUTE_DIRECTORY)
+		match_dirs = true;
 
 	// Format destination path
 	bool destination_passed = !path[DESTINATION].empty();
@@ -2791,7 +2800,7 @@ int SCRIPT_ExtractPBO(const vector<string> &arg)
 
 	if (!destination.empty()) {
 		if (dest_has_space)
-			arguments += current_drive + "temp\\";
+			arguments += current_drive + "temp\\_extractedPBO\\";
 		else
 			arguments += destination;
 	}
@@ -3053,6 +3062,7 @@ int main(int argc, char *argv[])
 	global.arguments_table.insert(pair<string,string>("installid",""));
 	global.arguments_table.insert(pair<string,string>("installdir",""));
 	global.arguments_table.insert(pair<string,string>("downloadscript",""));
+	global.arguments_table.insert(pair<string,string>("evoice",""));
 
 	// Separate arguments:
 	// arguments for this program go to the table
@@ -3350,6 +3360,9 @@ int main(int argc, char *argv[])
 	// If user wants to restart the game after installation
 	if (global.restart_game) {
 		DeleteFile("fwatch\\tmp\\schedule\\install_progress.sqf");
+		
+		if (global.run_voice_program)
+			global.gamerestart_arguments += " -evoice=" + global.arguments_table["evoice"];
 		
 		STARTUPINFO si;
 		PROCESS_INFORMATION pi;
