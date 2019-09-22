@@ -2428,7 +2428,7 @@ void GetFirstTwoWords(char* text, char *buffer, int maxSize)
 
 
 
-// Similar to strtok2 but for the new argumen system
+// Similar to strtok2 but for the named argument system
 char* strtok3(char* str, int CommandID) 
 {
 	char c;
@@ -3127,27 +3127,37 @@ void String_end(String &str)
 }
 
 //1.16 tokenize string
-char* Tokenize(char *string, char *delimiter, int &i, int string_length, char &save) {
+char* Tokenize(char *string, char *delimiter, int &i, int string_length, char &save, bool square_brackets) {
 	int delimiter_len = strlen(delimiter);
+	bool in_brackets  = false;
 	
 	if (save != 0)
-		string[i++] = save;
+		string[i-1] = save;
 
 	for (int begin=-1; i<=string_length; i++) {
-		bool complete_word = i == string_length;
+		if (square_brackets && string[i] == '[')
+			in_brackets = true;
 
+		if (square_brackets && string[i] == ']')
+			in_brackets = false;
+
+		bool is_delim = false;
 		for (int j=0; j<delimiter_len; j++)
-			if (string[i] == delimiter[j]  ||  delimiter[j]==' ' && isspace(string[i])) {
-				complete_word = true;
+			if (string[i] == delimiter[j] && !in_brackets  ||  delimiter[j]==' ' && isspace(string[i])) {
+				is_delim = true;
 				break;
 			}
 
-		if (!complete_word  &&  begin<0)
+		if (begin<0  &&  (!is_delim || i==string_length))
 			begin = i;
 
-		if (complete_word  &&  begin>=0) {
+		if (begin>=0  &&  (is_delim ||  i==string_length)) {
 			save      = string[i];
 			string[i] = '\0';
+			
+			if (i<string_length)
+				i++;
+				
 			return string+begin;
 		}
 	}

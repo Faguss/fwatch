@@ -281,4 +281,4 @@ void String_end(String &str);
 int String_append(String &str, char *text);
 int String_append_quotes(String &str, char *left, char *text, char *right);
 int String_allocate(String &str, int new_maximal_length);
-char* Tokenize(char *string, char *delimiter, int &i, int string_length, char &save);
+char* Tokenize(char *string, char *delimiter, int &i, int string_length, char &save, bool square_brackets);

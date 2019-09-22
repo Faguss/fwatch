@@ -271,8 +271,8 @@ case C_RESTART_CLIENT:
 	
 	
 	// Optional argument - check if the program is running or terminate it
-	bool check = strcmpi(par[2],"check") == 0;
-	bool close = strcmpi(par[2],"close") == 0;
+	bool check = numP>2 && strcmpi(par[2],"check") == 0;
+	bool close = numP>2 && strcmpi(par[2],"close") == 0;
 
 	if (check || close) {
 		DWORD pid	= 0;
@@ -523,13 +523,29 @@ case C_RESTART_CLIENT:
 		break;
 
 	
+	// Create log file
+	SECURITY_ATTRIBUTES sa;
+    sa.nLength              = sizeof(sa);
+    sa.lpSecurityDescriptor = NULL;
+    sa.bInheritHandle       = TRUE;       
+
+    HANDLE logFile = CreateFile(TEXT("fwatch\\tmp\\exelog.txt"),
+        FILE_APPEND_DATA,
+        FILE_SHARE_WRITE | FILE_SHARE_READ,
+        &sa,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL );
+
 	// Run program
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
 	ZeroMemory(&si, sizeof(si));
 	si.cb          = sizeof(si);
-	si.dwFlags     = STARTF_USESHOWWINDOW;
+	si.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
 	si.wShowWindow = SW_HIDE;
+	si.hStdOutput  = logFile;
+	si.hStdError   = logFile;
 	ZeroMemory(&pi, sizeof(pi));
 	
 	if (CreateProcess(exe_path, param.pointer, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
@@ -575,6 +591,7 @@ case C_RESTART_CLIENT:
 
 	CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
+	CloseHandle(logFile);
 	String_end(param);
 };
 break;
