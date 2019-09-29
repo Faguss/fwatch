@@ -679,7 +679,7 @@ int Download(string url)
 }
 
 
-int Unpack(string file_name)
+int Unpack(string file_name, string password="")
 {
 	// Get subdirectories
 	string relative_path = PathNoLastItem(file_name);
@@ -721,7 +721,7 @@ int Unpack(string file_name)
 	si.hStdInput     = NULL;
 	si.hStdOutput    = logFile;
 	si.hStdError     = logFile;
-	string arguments = WrapInQuotes(global.working_directory) + " x -y -o" + destination + "\\ -bb3 -bsp1 " + "\"fwatch\\tmp\\" + file_name + "\"";
+	string arguments = WrapInQuotes(global.working_directory) + (password.empty() ? "" : " -p"+password) + " x -y -o" + destination + "\\ -bb3 -bsp1 " + "\"fwatch\\tmp\\" + file_name + "\"";
 
 	if (!CreateProcess("fwatch\\data\\7z.exe", &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {		
 		int errorCode = GetLastError();
@@ -1695,14 +1695,14 @@ int main(int argc, char *argv[])
 	if (self_update) {
 		Sleep(1000);
 		int result;
-		DeleteFile("fwatch\\tmp\\fwatch_self_update.rar");
-		if (result=Download("http://ofp-faguss.com/fwatch/download/fwatch_self_update.rar") != 0) {
+		DeleteFile("fwatch\\tmp\\fwatch_self_update.7z");
+		if (result=Download("http://ofp-faguss.com/fwatch/download/fwatch_self_update.7z") != 0) {
 			global.logfile << "Download failed\n\n--------------\n\n";
 			global.logfile.close();
 			return result;
 		}
 		
-		Unpack(global.downloaded_filename);
+		Unpack(global.downloaded_filename, "fwatch");
 		
 		if (GetFileAttributes("fwatch\\tmp\\_extracted\\fwatch\\data\\gameRestart.exe") != INVALID_FILE_ATTRIBUTES) {
 			DeleteFile("fwatch\\data\\gameRestart_old.exe");
@@ -1710,7 +1710,7 @@ int main(int argc, char *argv[])
 		}
 		
 		MoveFiles("fwatch\\tmp\\_extracted\\*" , "", "", true, true, true);
-		DeleteFile("fwatch\\tmp\\fwatch_self_update.rar");
+		DeleteFile("fwatch\\tmp\\fwatch_self_update.7z");
 		if (!DeleteFile("fwatch\\tmp\\schedule\\schedule.bin")) {
 			string errorMSG = FormatError(GetLastError());
 			global.logfile << "Failed to remove file " << errorMSG;
