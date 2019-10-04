@@ -474,8 +474,8 @@ void listDirFiles(char* path, HANDLE out, int mode, int systime, int CommandID)
 				continue;
 
 			char path2[MAX_PATH] = "";
-			char required[][10]  = {"addons","bin","campaigns", "dta", "worlds"};
-			int max_loops	     = (sizeof(required) / sizeof(required[0])) - 1;
+			char required[][16]  = {"addons","bin","campaigns", "dta", "worlds", "Missions", "MPMissions"};
+			int max_loops	     = (sizeof(required) / sizeof(required[0]));
 
 			// Check if current directory contains at least one of four required sub-folders
 			for (int i=0; i<max_loops; i++)
@@ -622,8 +622,12 @@ void listDirFiles(char* path, HANDLE out, int mode, int systime, int CommandID)
 			kilobytes -= fmod(kilobytes, 1),
 			bytes     -= kilobytes * 1024;
 
+		unsigned int hash = 2166136261;
+		hash = fnv_hash(hash,Attributes.pointer,Attributes.current_length);
+		hash = fnv_hash(hash,Versions.pointer,Versions.current_length);
+
 		char number[256] = "";
-		sprintf(number, "\",[%f,%f,%f]]", bytes, kilobytes, megabytes);
+		sprintf(number, "\",[%f,%f,%f],\"%u\"]", bytes, kilobytes, megabytes,hash);
 		QWrite(number, out);
 	} else {
 		QWrite("]]", out);
@@ -3300,4 +3304,13 @@ int VerifyPath(char *path, int mode) {
 	};*/
 
 return 0;
+};
+
+//https://stackoverflow.com/questions/11413860/best-string-hashing-function-for-short-filenames
+unsigned int fnv_hash (unsigned int hash, char* text, int text_length)
+{
+    for (int i=0; i<text_length; i++)
+        hash = (hash*16777619) ^ text[i];
+
+    return hash;
 };
