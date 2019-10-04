@@ -31,6 +31,8 @@ struct GLOBAL_VARIABLES
 	int command_line_num         ;
 	int mirror                   ;
 	int current_mod_version_date ;
+	int instructions_pos         ;
+	int instructions_max         ;
 	string gamerestart_arguments ;
 	string downloaded_filename   ;
 	string current_mod			 ;
@@ -59,6 +61,8 @@ struct GLOBAL_VARIABLES
 	false,
 	true,
 	-1,
+	0,
+	0,
 	0,
 	0,
 	0,
@@ -442,6 +446,14 @@ void WriteProgressFile(int status, string input)
 
 	if (!progressLog.is_open())
 		return;
+		
+	if (status==INSTALL_PROGRESS  &&  global.instructions_pos>0  &&  global.instructions_max>0) {
+		char percent_txt[8];
+		sprintf(percent_txt, "%.0f", (100.0*(global.instructions_pos)/global.instructions_max));
+		input = "Installation progress: " + (string)percent_txt + "%\\n\\n" + input;
+		
+		//input = "Installation progress: " + Int2Str(global.instructions_pos) + "/" + Int2Str(global.instructions_max) + "\\n\\n" + input;
+	}
 
 	progressLog << "_auto_restart=" << (global.restart_game ? "true" : "false") 
 				<< ";_run_voice_program=" << (global.run_voice_program ? "true" : "false")
@@ -494,10 +506,27 @@ int ErrorMessage(const string message, int error_code=COMMAND_FAILED)
 	
 	// show which command failed
 	if (error_code == COMMAND_FAILED) {
-		message_for_game = "ERROR\\n" + global.current_mod + "\\nIn version " + global.current_mod_version + "\\nOn line " + Int2Str(global.command_line_num) + "\\n" + global.command_line + "\\n" + message;
+		message_for_game = "ERROR\\n" + global.current_mod;
+		
+		if (global.current_mod_version != "")
+			message_for_game += "\\nIn version " + global.current_mod_version;
+		
+		if (global.command_line_num > 0)
+			message_for_game += "\\nOn line " + Int2Str(global.command_line_num) + "\\n" + global.command_line;
+			
+		message_for_game += "\\n" + message;
 
-		if (status == INSTALL_ERROR)
-			global.logfile << "ERROR " << global.current_mod << " " << global.current_mod_version << " line " << Int2Str(global.command_line_num) << ": " << global.command_line << " - " << ReplaceAll(message, "\\n", " ") << endl;
+		if (status == INSTALL_ERROR) {
+			global.logfile << "ERROR " << global.current_mod;
+			
+			if (global.current_mod_version != "")
+				global.logfile << " " << global.current_mod_version;
+			
+			if (global.command_line_num > 0)	
+				global.logfile << " line " << Int2Str(global.command_line_num) << ": " << global.command_line;
+				
+			global.logfile << " - " << ReplaceAll(message, "\\n", " ") << endl;
+		}
 	}
 	
 	// just display input message
@@ -1785,6 +1814,8 @@ void EndModVersion()
 	if (global.current_mod.empty())
 		return;
 		
+	WriteProgressFile(INSTALL_PROGRESS, "Cleaning up");
+		
 	// Remove downloaded files
 	if (!global.test_mode) {
 		for (int i=0; i<global.downloads.size(); i++) {
@@ -1812,6 +1843,8 @@ void EndMod()
 	if (global.current_mod.empty())
 		return;
 		
+	WriteProgressFile(INSTALL_PROGRESS, "Cleaning up");
+		
 	// Check if folder even exists
 	DWORD dir = GetFileAttributesA(global.current_mod_new_name.c_str());
 
@@ -1820,7 +1853,6 @@ void EndMod()
 			global.missing_modfolders += ", ";
 
 		global.missing_modfolders += global.current_mod;
-
 		global.logfile << "Modfolder " << global.current_mod << " wasn't actually installed!" << endl;
 	}
 
@@ -2108,6 +2140,8 @@ int SCRIPT_StartMod(const vector<string> &arg)
 	
 	if (!global.current_mod.empty())
 		EndMod();
+		
+	WriteProgressFile(INSTALL_PROGRESS, "Preparing to install a mod");
 
 	global.current_mod          = arg[1];
 	global.current_mod_id       = arg[2];
@@ -2149,19 +2183,28 @@ int SCRIPT_StartMod(const vector<string> &arg)
 				id_file.close();
 			}
 		}
-	}
-
+	}	
+		
 	// Rename current modfolder to make space for a new one
 	if (activate_rename) {
-		int tries         = 2;
 		string rename_src = global.current_mod_new_name;
-		string rename_dst = global.current_mod_new_name + "_" + Int2Str(tries);
+		string rename_dst = "";
+		int tries         = 1;
+		int last_error    = 0;
 		
-		while (rename(rename_src.c_str(), rename_dst.c_str()) != 0) {
-			Sleep(100);
-			rename_dst = global.current_mod_new_name + "_old" + (tries>2 ? Int2Str(tries) : "");
-			tries++;
-		}
+		do {
+			rename_dst = global.current_mod_new_name + "_old" + (tries>1 ? Int2Str(tries) : "");
+			if (MoveFileEx(rename_src.c_str(), rename_dst.c_str(), 0))
+				last_error = 0;
+			else {
+				tries++;
+				last_error = GetLastError();
+				if (last_error != 183) {
+					ErrorMessage(" FAILED to rename " + rename_src + " to " + rename_dst + " - " + Int2Str(last_error) + " " + FormatError(last_error));
+					return COMMAND_FAILED;
+				}
+			}
+		} while (last_error == 183);
 		
 		global.logfile << "Renaming existing " << rename_src << " to " << rename_dst << endl;
 	}
@@ -3115,7 +3158,7 @@ int main(int argc, char *argv[])
 
 
 
-	WriteProgressFile(INSTALL_PROGRESS, "Initializing...");
+	WriteProgressFile(INSTALL_PROGRESS, "Initializing");
 
 
 	// Start listen thread
@@ -3208,6 +3251,8 @@ int main(int argc, char *argv[])
 
 	// Download installation script
 	if (!global.arguments_table["downloadscript"].empty()) {
+		WriteProgressFile(INSTALL_PROGRESS, "Fetching installation script");
+
 		string url = "";
 		fstream url_file;
 
@@ -3229,6 +3274,8 @@ int main(int argc, char *argv[])
 	}
 	
 	// Open script file and store lines in a vector
+	WriteProgressFile(INSTALL_PROGRESS, "Reading installation script");
+
     vector<string> instructions;
     fstream script_file;
     string script_file_name = global.test_mode ? "fwatch\\data\\addonInstaller_test.txt" : "fwatch\\tmp\\installation script";
@@ -3238,8 +3285,13 @@ int main(int argc, char *argv[])
 	if (script_file.is_open()) {
 		string script_line;
 
-		while(getline(script_file, script_line))
+		while(getline(script_file, script_line)) {
 			instructions.push_back(Trim(script_line));
+			
+			string cut = Trim(script_line).substr(0,9);
+			if (cut!="begin_mod" && cut!="begin_ver" && !cut.empty())
+				global.instructions_max++;
+		}
 		
 		script_file.close();
 		
@@ -3271,6 +3323,10 @@ int main(int argc, char *argv[])
 		global.command_line     = instructions[i];
 		bool manual_install     = false;
 		global.unpack_set_error = true;
+		
+		string cut = instructions[i].substr(0,9);
+		if (cut!="begin_mod" && cut!="begin_ver" && !cut.empty())
+			global.instructions_pos++;
 
 		vector<string> command_arguments;
 		Tokenize(instructions[i], " \t\r\n", command_arguments);

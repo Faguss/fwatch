@@ -1584,15 +1584,25 @@ int main(int argc, char *argv[])
 				if (required_mods[ID][i] == mods[ID][j]) {
 					if ((server_equalmodreq || force_name[j])   &&   !Equals(required_mods[NAME][i],mods[NAME][j])) {	// if there's a name conflict					
 						if (GetFileAttributes(required_mods[NAME][i].c_str()) != INVALID_FILE_ATTRIBUTES) {	// if so then rename to something else
-							int tries         = 2;
 							string rename_src = required_mods[NAME][i];
-							string rename_dst = required_mods[NAME][i] + "_" + Int2Str(tries);
+							string rename_dst = "";
+							int tries         = 1;
+							int last_error    = 0;
 							
-							while (rename(rename_src.c_str() , rename_dst.c_str()) != 0) {
-								rename_dst = required_mods[NAME][i] + "_renamed" + (tries>2 ? Int2Str(tries) : "");
-								Sleep(100);
-								tries++;
-							}
+							do {
+								rename_dst = required_mods[NAME][i] + "_renamed" + (tries>1 ? Int2Str(tries) : "");
+								if (MoveFileEx(rename_src.c_str(), rename_dst.c_str(), 0))
+									last_error = 0;
+								else {
+									tries++;
+									last_error = GetLastError();
+									if (last_error != 183) {
+										global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << " - " << FormatError(last_error);
+										global.logfile.close();
+										return 7;
+									}
+								}
+							} while (last_error == 183);
 							
 							global.logfile << "Renamed " << rename_src << " to " << rename_dst << endl;
 						}
@@ -1636,15 +1646,25 @@ int main(int argc, char *argv[])
 				if (data.size() >= 5) {
 					if (Equals(data[4],"true")  &&  !Equals(required_mods[NAME][i],data[3])) {
 						if (GetFileAttributes(data[3].c_str()) != INVALID_FILE_ATTRIBUTES) {
-							int tries         = 2;
 							string rename_src = data[3];
-							string rename_dst = data[3] + "_" + Int2Str(tries);
+							string rename_dst = "";
+							int tries         = 1;
+							int last_error    = 0;
 							
-							while (rename(rename_src.c_str() , rename_dst.c_str()) != 0) {
-								rename_dst = required_mods[NAME][i] + "_renamed" + (tries>2 ? Int2Str(tries) : "");
-								Sleep(100);
-								tries++;
-							}
+							do {
+								rename_dst = data[3] + "_renamed" + (tries>1 ? Int2Str(tries) : "");
+								if (MoveFileEx(rename_src.c_str(), rename_dst.c_str(), 0))
+									last_error = 0;
+								else {
+									tries++;
+									last_error = GetLastError();
+									if (last_error != 183) {
+										global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << " - " << FormatError(last_error);
+										global.logfile.close();
+										return 7;
+									}
+								}
+							} while (last_error == 183);
 							
 							global.logfile << "Renamed " << rename_src << " to " << rename_dst << endl;
 						}
