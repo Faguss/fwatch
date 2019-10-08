@@ -424,71 +424,119 @@ int ParseWgetLog(string &error)
     DownloadLog.open("fwatch\\tmp\\schedule\\downloadLog.txt", ios::in);
 
 	if (DownloadLog.is_open()) {
-		string text        = "";
-		string filesize    = "";
-		bool foundFileName = false;
-		string Progress[]  = {"", "", "", ""};
+		string line                  = "";
+		string filesize              = "";
+		string size_downloaded       = "";
+		string percentage_downloaded = "";
+		string download_speed        = "";
+		string time_remaining        = "";
+		
+		const int filename_messages_items = 4;
+		vector<string> filename_messages[filename_messages_items];
+		filename_messages[0].push_back("Saving to: 'fwatch/tmp/");
+		filename_messages[0].push_back("'");
+		filename_messages[1].push_back(") - 'fwatch/tmp/");
+		filename_messages[1].push_back("' saved [");
+		filename_messages[2].push_back("File 'fwatch/tmp/");
+		filename_messages[2].push_back("' already there; not retrieving");
+		filename_messages[3].push_back("Server file no newer than local file 'fwatch/tmp/");
+		filename_messages[3].push_back("' -- not retrieving");
+			
+		vector<string> error_messages;
+		error_messages.push_back("failed");
+		error_messages.push_back("ERROR");
 
-		while(getline(DownloadLog, text)) {
-			text = Trim(text);
+		while(getline(DownloadLog, line)) {
+			line = Trim(line);
 
-			if (text.empty())
+			if (line.empty())
 				continue;
 
 			// Get file size
-			if (filesize==""  &&  text.substr(0,8) == "Length: ") {
-				size_t open  = text.find('(');
-				size_t close = text.find(')');
+			if (filesize.empty()  &&  line.substr(0,8) == "Length: ") {
+				size_t open  = line.find('(');
+				size_t close = line.find(')');
 
 				if (open!=string::npos  &&  close!=string::npos)
-					filesize = text.substr( open+1, close-open-1);
+					filesize = line.substr( open+1, close-open-1);
 			}
 
 			// Get progress bar
-			if (text.find("0K ") != string::npos  &&  text.find("% ") != string::npos) {
-				vector<string> Tokens;
-				Tokenize(text, " .=", Tokens);
+			size_t letter_k = line.find("K .");
+
+			if (letter_k == string::npos)
+				letter_k = line.find("K ,");
+			
+			if (letter_k != string::npos) {			
+				size_downloaded = line.substr(0, letter_k);
+				int size_num    = atoi(size_downloaded.c_str());
 				
-				for (int i=0; i<Tokens.size(); i++)
-					Progress[i] = Tokens[i];
+				if (size_num > 1024) {
+					double megabytes = size_num / (1024);
+					char temp[128] = "";
+					sprintf(temp, "%.0f M", megabytes);
+					size_downloaded = (string)temp;
+				} else
+					size_downloaded += " K";
+				
+				string new_download_speed = "";
+				size_t percent            = line.find("% ");
+				if (percent != string::npos) {
+					while(percent>=0  &&  (line[percent]=='%'  ||  isdigit(line[percent])))
+						percent--;
+						
+					vector<string> Tokens;
+					Tokenize(line.substr(percent), " =", Tokens);
+					
+					if (Tokens.size() > 0)
+						percentage_downloaded = Tokens[0];
+						
+					if (Tokens.size() > 1) {
+						new_download_speed = Tokens[1];
+					}
+						
+					if (Tokens.size() > 2)
+						time_remaining = Tokens[2];
+				} else {
+					int i = letter_k + 3;
+					while(i<line.length() && !isdigit(line[i]))
+						i++;
+						
+					if (i < line.length())
+						new_download_speed = line.substr(i);
+				}
+				
+				if (new_download_speed.length() > 0)
+					download_speed = new_download_speed.substr(0,new_download_speed.length()-1) + " " + new_download_speed.substr(new_download_speed.length()-1);
 			}
 
 			// Get file name
-			const int items = 4;
-			vector<string> SearchFor[items];
-
-			SearchFor[0].push_back("Saving to: `fwatch/tmp/");
-			SearchFor[0].push_back("'");
-
-			SearchFor[1].push_back(") - `fwatch/tmp/");
-			SearchFor[1].push_back("' saved [");
-
-			SearchFor[2].push_back("File `fwatch/tmp/");
-			SearchFor[2].push_back("' already there; not retrieving");
-
-			SearchFor[3].push_back("Server file no newer than local file `fwatch/tmp/");
-			SearchFor[3].push_back("' -- not retrieving");
-
-			for (int i=0; i<items; i++) {
-				size_t search1 = text.find(SearchFor[i][0]);
-				size_t search2 = text.find(SearchFor[i][1]);
-
-				if (search1!=string::npos  &&  search2!=string::npos) {
-					global.downloaded_filename = text.substr( search1 + SearchFor[i][0].length(),  search2 - search1 - SearchFor[i][0].length());
-					foundFileName              = true;
-					break;
+			for (int i=0; i<filename_messages_items; i++) {
+				size_t begin = line.find(filename_messages[i][0]);
+				
+				if (begin != string::npos) {
+					int len      = filename_messages[i][0].length();
+					size_t end   = line.find(filename_messages[i][1], begin+len);
+					
+					if (end != string::npos) {
+						global.downloaded_filename = line.substr(begin+len,  end-(begin+len));
+						break;
+					}
 				}
 			}
 
 			// Get error message
-			size_t search1 = text.find("failed");
-			size_t search2 = text.find("ERROR");
-
-			if (search1 != string::npos)
-				error = text;
-
-			if (search2 != string::npos)
-				error = text.substr(search2);
+			for (int i=0; i<error_messages.size(); i++) {
+				size_t search = line.find(error_messages[i]);
+				if (search != string::npos) {
+					if (i==1)
+						error = line.substr(search);
+					else
+						error = line;
+					break;
+				} else
+					error = line;
+			}
 		}
 
 		DownloadLog.close();
@@ -509,6 +557,7 @@ int ParseUnpackLog(string &error, string &file_name)
 
     int line_number      = 0;
     int error_until_line = 0;
+	string error_msg   = "";
 
 	if (UnpackLog.is_open()) {
 		string text         = "";
@@ -541,15 +590,20 @@ int ParseUnpackLog(string &error, string &file_name)
 			}
 
 			// Get error message
-			size_t errormsg = text.find("ERROR:");
+			size_t error_pos = text.find("ERROR:");
 
-			if (errormsg != string::npos  &&  error=="") {
-				error            = text.substr(errormsg);
+			if (error_pos != string::npos  &&  error=="") {
+				error            = text.substr(error_pos);
+				error_msg        = text.substr(error_pos+7);
 				error_until_line = line_number + 1;
 			}
 
-			if (line_number == error_until_line)
-				error += " - " + text;
+			if (line_number == error_until_line) {
+				if (text != error_msg)
+					error += " - " + text;
+				else
+					error_until_line++;
+			}
 
 		}
 
@@ -626,11 +680,11 @@ int DeleteDirectory(const string &refcstrRootDirectory, bool bDeleteSubdirectori
 }
 
 
-int Download(string url)
+int Download(string url, string &error_text)
 {
 	// Format arguments
 	global.downloaded_filename = PathLastItem(url);
-	string arguments           = " --no-clobber --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ " + url;
+	string arguments           = " --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ " + url;
 
 	unlink("fwatch\\tmp\\schedule\\downloadLog.txt");
 
@@ -648,6 +702,7 @@ int Download(string url)
 	if (!CreateProcess("fwatch\\data\\wget.exe", &arguments[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi)) {
 		int errorCode = GetLastError();
 		global.logfile << "Failed to launch wget.exe - " << errorCode << " " << FormatError(errorCode);
+		error_text += "Failed to launch wget.exe - " + Int2Str(errorCode) + " " + FormatError(errorCode);
 		return errorCode;
 	} else
 		global.logfile << "Downloading  " << url << endl;
@@ -672,14 +727,16 @@ int Download(string url)
 	
 	ParseWgetLog(message);
 	
-	if (exit_code != 0)
+	if (exit_code != 0) {
 		global.logfile << "Failed to download " << global.downloaded_filename << " - " << exit_code << " - " << message << endl;
+		error_text + "Failed to download " + global.downloaded_filename + " - " + Int2Str(exit_code) + " - " + message + "\n";
+	}
 	
 	return exit_code;
 }
 
 
-int Unpack(string file_name, string password="")
+int Unpack(string file_name, string password, string &error_text)
 {
 	// Get subdirectories
 	string relative_path = PathNoLastItem(file_name);
@@ -726,6 +783,7 @@ int Unpack(string file_name, string password="")
 	if (!CreateProcess("fwatch\\data\\7z.exe", &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {		
 		int errorCode = GetLastError();
 		global.logfile << "Failed to launch 7z.exe - " << errorCode << " " << FormatError(errorCode);
+		error_text += "Failed to launch 7z.exe - " + Int2Str(errorCode) + FormatError(errorCode);
 		return errorCode;
 	} else
 		global.logfile << "Extracting " << file_name << endl;
@@ -734,7 +792,7 @@ int Unpack(string file_name, string password="")
 
 
 	// Wait for the program to finish its job
-	DWORD exit_code;	
+	DWORD exit_code;
 	string message = "";
 
 	do {					
@@ -746,8 +804,10 @@ int Unpack(string file_name, string password="")
 
 	ParseUnpackLog(message, file_name);
 
-	if (exit_code != 0)
+	if (exit_code != 0) {
 		global.logfile << "Failed to extract " << file_name << " - " << exit_code << " - " << message << endl;
+		error_text += "Failed to extract " + file_name + " - " + Int2Str(exit_code) + " - " + message;
+	}
 
 	CloseHandle(pi.hProcess);
 	CloseHandle(pi.hThread);
@@ -906,7 +966,7 @@ int CreateFileList(string source, string destination, vector<string> &sources, v
 }
 
 
-int MoveFiles(string source, string destination, string new_name, bool is_move, bool overwrite, bool match_dirs=false)
+int MoveFiles(string source, string destination, string new_name, bool is_move, bool overwrite, bool match_dirs, string &error_text)
 {
 	// Find files and save them to a list
 	vector<string> source_list;
@@ -914,6 +974,7 @@ int MoveFiles(string source, string destination, string new_name, bool is_move, 
 	vector<bool>   is_dir_list;
 	vector<string> empty_dirs;
 	int buffer_size = 0;
+	int final_result = 0;
 	
 	int result = CreateFileList(source, destination+new_name, source_list, destination_list, is_dir_list, is_move, empty_dirs, buffer_size, match_dirs);
 
@@ -952,14 +1013,20 @@ int MoveFiles(string source, string destination, string new_name, bool is_move, 
 	    if (result == 0) {
 			return_value = GetLastError();
 			
-	    	if (!overwrite  &&  return_value==183)
+	    	/*if (!overwrite  &&  return_value==183)
 	    		global.logfile << "  - file already exists";
-			else
+			else */{
+				final_result = 1;
 				global.logfile << "  FAILED " << return_value << " " << FormatError(return_value);
+				error_text += "Failed to move " + source_list[i] + FormatError(return_value);
+			}
 		}
 			
 		global.logfile << endl;
 	}
+	
+	if (source_list.size() == 0)
+		final_result = 1;
 
 
 	// Remove empty directories
@@ -967,7 +1034,7 @@ int MoveFiles(string source, string destination, string new_name, bool is_move, 
 		for (int i=empty_dirs.size()-1; i>=0; i--)
 			RemoveDirectory(empty_dirs[i].c_str());
 	
-	return 0;
+	return final_result;
 }
 
 string Decrypt(string sentence) 
@@ -1714,23 +1781,46 @@ int main(int argc, char *argv[])
 	// Self-update ---------------------------------------------
 	if (self_update) {
 		Sleep(1000);
+		string error_text = "";
+		char url[] = "http://ofp-faguss.com/fwatch/116test";
 		int result;
-		DeleteFile("fwatch\\tmp\\fwatch_self_update.7z");
-		if (result=Download("http://ofp-faguss.com/fwatch/download/fwatch_self_update.7z") != 0) {
+		if (result=Download("http://ofp-faguss.com/fwatch/download/fwatch_self_update.7z", error_text) != 0) {
 			global.logfile << "Download failed\n\n--------------\n\n";
 			global.logfile.close();
+			error_text += "\n\nYou have to update manually";
+			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 			return result;
 		}
 		
-		Unpack(global.downloaded_filename, "fwatch");
+		result = Unpack(global.downloaded_filename, "fwatch", error_text);
+		if (result != 0) {
+			global.logfile << "Unpacking failed\n\n--------------\n\n";
+			global.logfile.close();
+			error_text += "\n\nYou have to update manually";
+			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+			return result;			
+		}
 		
 		if (GetFileAttributes("fwatch\\tmp\\_extracted\\fwatch\\data\\gameRestart.exe") != INVALID_FILE_ATTRIBUTES) {
 			DeleteFile("fwatch\\data\\gameRestart_old.exe");
-			rename("fwatch\\data\\gameRestart.exe", "fwatch\\data\\gameRestart_old.exe");
+			string rename_src = "fwatch\\data\\gameRestart.exe";
+			string rename_dst = "fwatch\\data\\gameRestart_old.exe";
+			int result = MoveFileEx(rename_src.c_str(), rename_dst.c_str(), MOVEFILE_REPLACE_EXISTING);
+			if (result == 0) {
+				int last_error = GetLastError();
+				global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << FormatError(last_error) << endl;
+				error_text += "Failed to rename " + rename_src + " to " + rename_dst + FormatError(last_error);
+				global.logfile.close();
+				error_text += "\n\nYou have to update manually";
+				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+				ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+				return result;
+			}
 		}
 		
-		MoveFiles("fwatch\\tmp\\_extracted\\*" , "", "", true, true, true);
-		DeleteFile("fwatch\\tmp\\fwatch_self_update.7z");
+		DeleteFile(global.downloaded_filename.c_str());
 		if (!DeleteFile("fwatch\\tmp\\schedule\\schedule.bin")) {
 			string errorMSG = FormatError(GetLastError());
 			global.logfile << "Failed to remove file " << errorMSG;
@@ -1741,6 +1831,15 @@ int main(int argc, char *argv[])
 		DeleteFile("fwatch\\data\\libintl3.dll");
 		DeleteFile("fwatch\\data\\libssl32.dll");
 		DeleteFile("fwatch\\data\\sortMissions.exe");
+
+		result = MoveFiles("fwatch\\tmp\\_extracted\\*" , "", "", true, true, true, error_text);
+		if (result != 0) {
+			error_text += "\n\nYou have to update manually";
+			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+			global.logfile.close();
+			return result;
+		}
 	} else 
 		DeleteFile("fwatch\\data\\gameRestart_old.exe");
 	
