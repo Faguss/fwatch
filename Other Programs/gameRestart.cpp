@@ -12,6 +12,7 @@
 #include <vector>       // dynamic array
 #include <algorithm>	// tolower
 #include <sstream>		// converting int to string
+#include <Shlobj.h>		// opening explorer
 
 using namespace std;
 
@@ -433,13 +434,13 @@ int ParseWgetLog(string &error)
 		
 		const int filename_messages_items = 4;
 		vector<string> filename_messages[filename_messages_items];
-		filename_messages[0].push_back("Saving to: 'fwatch/tmp/");
+		filename_messages[0].push_back("Saving to: '");
 		filename_messages[0].push_back("'");
-		filename_messages[1].push_back(") - 'fwatch/tmp/");
+		filename_messages[1].push_back(") - '");
 		filename_messages[1].push_back("' saved [");
-		filename_messages[2].push_back("File 'fwatch/tmp/");
+		filename_messages[2].push_back("File '");
 		filename_messages[2].push_back("' already there; not retrieving");
-		filename_messages[3].push_back("Server file no newer than local file 'fwatch/tmp/");
+		filename_messages[3].push_back("Server file no newer than local file '");
 		filename_messages[3].push_back("' -- not retrieving");
 			
 		vector<string> error_messages;
@@ -684,7 +685,7 @@ int Download(string url, string &error_text)
 {
 	// Format arguments
 	global.downloaded_filename = PathLastItem(url);
-	string arguments           = " --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ " + url;
+	string arguments           = " --tries=1 --output-file=fwatch\\tmp\\schedule\\downloadLog.txt " + url;
 
 	unlink("fwatch\\tmp\\schedule\\downloadLog.txt");
 
@@ -778,7 +779,7 @@ int Unpack(string file_name, string password, string &error_text)
 	si.hStdInput     = NULL;
 	si.hStdOutput    = logFile;
 	si.hStdError     = logFile;
-	string arguments = WrapInQuotes(global.working_directory) + (password.empty() ? "" : " -p"+password) + " x -y -o" + destination + "\\ -bb3 -bsp1 " + "\"fwatch\\tmp\\" + file_name + "\"";
+	string arguments = WrapInQuotes(global.working_directory) + (password.empty() ? "" : " -p"+password) + " x -y -bb3 -bsp1 " + file_name;
 
 	if (!CreateProcess("fwatch\\data\\7z.exe", &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {		
 		int errorCode = GetLastError();
@@ -1051,7 +1052,7 @@ string Decrypt(string sentence)
 		
 		for (int j=0; j<words[i].length(); j++) {
 			char digit = words[i][j];
-			digits += Int2Str(digit-0);
+			digits += Int2Str(digit-98);
 		}
 		
 		numbers.push_back(atoi(digits.c_str()));
@@ -1109,23 +1110,6 @@ int main(int argc, char *argv[])
 
 
 
-
-	// Create log file -----------------------------------------
-	SYSTEMTIME st;
-	GetLocalTime(&st);
-	
-	global.logfile.open("fwatch\\data\\gameRestartLog.txt", ios::out | ios::app);
-	global.logfile << "\n--------------\n\n" 
-			<< st.wYear << "." 
-			<< LeadingZero(st.wMonth) << "." 
-			<< LeadingZero(st.wDay) << "  " 
-			<< LeadingZero(st.wHour) << ":" 
-			<< LeadingZero(st.wMinute) << ":" 
-			<< LeadingZero(st.wSecond) << endl;
-
-
-
-
 	// Process arguments ---------------------------------------
 	GetCurrentDirectory(MAX_PATH, pwd);
 	
@@ -1135,11 +1119,10 @@ int main(int argc, char *argv[])
 	string server_uniqueid    = "";
 	string PBOaddon   		  = "";
 	string voice_server       = "";
+	string server_time        = "";
 	bool self_update		  = false;
 	bool server_equalmodreq   = false;
-	bool scheduled            = false;
 	DWORD game_pid            = 0;
-	FILETIME schedule;
 	vector<string> required_mods[2];
 	
 	for (int i=1; i<argc; i++) {
@@ -1196,31 +1179,7 @@ int main(int argc, char *argv[])
 			}
 			
 			if (Equals(name,"-servertime")) {
-				vector<string> date;
-				Tokenize(value, "[,]", date);
-				
-				if (date.size() >= 8) {
-					scheduled = true;
-					SYSTEMTIME st;
-					st.wYear         = atoi(date[0].c_str());
-					st.wMonth        = atoi(date[1].c_str());
-					st.wDay          = atoi(date[2].c_str());
-					st.wHour         = atoi(date[4].c_str());
-					st.wMinute       = atoi(date[5].c_str());
-					st.wSecond       = atoi(date[6].c_str());
-					st.wMilliseconds = atoi(date[7].c_str());
-	 
-					SystemTimeToFileTime(&st      , &schedule);
-					FileTimeToSystemTime(&schedule, &st);						
-					global.logfile << "Game is scheduled to restart at " << LeadingZero(st.wHour) << ":" << LeadingZero(st.wMinute) << endl;
-					
-					char processID[12] = "";
-					sprintf(processID, "%d", GetCurrentProcessId());
-					
-					string temp = "_gamerestart_pid=" + (string)processID + ";";
-					WriteSaveStateFile(temp);
-				}
-				
+				server_time = value;				
 				continue;
 			}
 
@@ -1239,9 +1198,21 @@ int main(int argc, char *argv[])
 				if (value.substr(0,12) == "ts3server://")
 					voice_server = "ts3server://" + Decrypt(value.substr(12));
 					
-				if (value.substr(0,12) == "mumble://")
+				if (value.substr(0,9) == "mumble://")
 					voice_server = "mumble://" + Decrypt(value.substr(9));
+					
+				if (value.substr(0,19) == "https://discord.gg/") {
+					voice_server = "https://discord.gg/" + Decrypt(value.substr(19));
+					ShellExecute(NULL, "open", voice_server.c_str(), NULL, NULL, SW_SHOWNORMAL);
+					return 0;
+				}
 				
+				if (value.substr(0,20) == "https://s.team/chat/") {
+					voice_server = "https://s.team/chat/" + Decrypt(value.substr(20));
+					ShellExecute(NULL, "open", voice_server.c_str(), NULL, NULL, SW_SHOWNORMAL);
+					return 0;
+				}
+					
 				continue;
 			}
 		}
@@ -1250,13 +1221,59 @@ int main(int argc, char *argv[])
 		user_arguments_log += namevalue + " ";
 	}
 
+
+
+
+
+
+	// Create log file -----------------------------------------
+	SYSTEMTIME st;
+	GetLocalTime(&st);
+	
+	global.logfile.open("fwatch\\data\\gameRestartLog.txt", ios::out | ios::app);
+	global.logfile << "\n--------------\n\n" 
+			<< st.wYear << "." 
+			<< LeadingZero(st.wMonth) << "." 
+			<< LeadingZero(st.wDay) << "  " 
+			<< LeadingZero(st.wHour) << ":" 
+			<< LeadingZero(st.wMinute) << ":" 
+			<< LeadingZero(st.wSecond) << endl;
 	
 	global.logfile << "Arguments: " << global.working_directory << user_arguments_log << endl;
 
 
 
 	// If scheduled to restart at a specific time --------------
-	if (scheduled) {
+	if (!server_time.empty()) {
+		FILETIME schedule;
+		vector<string> date;
+		Tokenize(server_time, "[,]", date);
+		
+		if (date.size() >= 8) {
+			SYSTEMTIME st;
+			st.wYear         = atoi(date[0].c_str());
+			st.wMonth        = atoi(date[1].c_str());
+			st.wDay          = atoi(date[2].c_str());
+			st.wHour         = atoi(date[4].c_str());
+			st.wMinute       = atoi(date[5].c_str());
+			st.wSecond       = atoi(date[6].c_str());
+			st.wMilliseconds = atoi(date[7].c_str());
+
+			SystemTimeToFileTime(&st      , &schedule);
+			FileTimeToSystemTime(&schedule, &st);						
+			global.logfile << "Game is scheduled to restart at " << LeadingZero(st.wHour) << ":" << LeadingZero(st.wMinute) << endl;
+			
+			char processID[12] = "";
+			sprintf(processID, "%d", GetCurrentProcessId());
+			
+			string temp = "_gamerestart_pid=" + (string)processID + ";";
+			WriteSaveStateFile(temp);
+		} else {
+			global.logfile << "Incorrect date passed" << endl;
+			global.logfile.close();
+			return 1;
+		}
+				
         // Keep checking time
 		SYSTEMTIME st;
 		FILETIME now;
@@ -1687,12 +1704,14 @@ int main(int argc, char *argv[])
 					}
 
 					if (add_param_name) {
-						user_arguments += "-mod=";
+						user_arguments     += "-mod=";
+						user_arguments_log += "-mod=";
 						add_param_name  = false;
 					} else
 						user_arguments += ";";
 					
-					user_arguments += mods[NAME][j];
+					user_arguments     += mods[NAME][j];
+					user_arguments_log += mods[NAME][j];
 				}
 			}
 		}
@@ -1749,10 +1768,12 @@ int main(int argc, char *argv[])
 				}
 			}
 
-			user_arguments += (i==0 ? "-mod=" : ";") + required_mods[NAME][i];
+			user_arguments     += (i==0 ? "-mod=" : ";") + required_mods[NAME][i];
+			user_arguments_log += (i==0 ? "-mod=" : ";") + required_mods[NAME][i];
 		}
 		
-	user_arguments += " ";
+	user_arguments     += " ";
+	user_arguments_log += " ";
 	
 
 	// Read from a file user's startup parameters for this server
@@ -1767,10 +1788,12 @@ int main(int argc, char *argv[])
 				if (Equals(params_array[i].substr(0,5),"-mod="))
 					continue;
 					
-				user_arguments += params_array[i] + " ";
+				user_arguments     += params_array[i] + " ";
+				user_arguments_log += params_array[i] + " ";
 			}
 		} else
-			user_arguments += params + " ";
+			user_arguments     += params + " ";
+			user_arguments_log += params + " ";
 	}
 
 
@@ -1780,65 +1803,164 @@ int main(int argc, char *argv[])
 	
 	// Self-update ---------------------------------------------
 	if (self_update) {
-		Sleep(1000);
+		char url[]        = "http://ofp-faguss.com/fwatch/116test";
 		string error_text = "";
-		char url[] = "http://ofp-faguss.com/fwatch/116test";
-		int result;
-		if (result=Download("http://ofp-faguss.com/fwatch/download/fwatch_self_update.7z", error_text) != 0) {
-			global.logfile << "Download failed\n\n--------------\n\n";
-			global.logfile.close();
-			error_text += "\n\nYou have to update manually";
-			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
-			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
-			return result;
-		}
+		int result        = 0;
 		
-		result = Unpack(global.downloaded_filename, "fwatch", error_text);
-		if (result != 0) {
-			global.logfile << "Unpacking failed\n\n--------------\n\n";
-			global.logfile.close();
-			error_text += "\n\nYou have to update manually";
-			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
-			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
-			return result;			
-		}
-		
-		if (GetFileAttributes("fwatch\\tmp\\_extracted\\fwatch\\data\\gameRestart.exe") != INVALID_FILE_ATTRIBUTES) {
-			DeleteFile("fwatch\\data\\gameRestart_old.exe");
-			string rename_src = "fwatch\\data\\gameRestart.exe";
-			string rename_dst = "fwatch\\data\\gameRestart_old.exe";
-			int result = MoveFileEx(rename_src.c_str(), rename_dst.c_str(), MOVEFILE_REPLACE_EXISTING);
-			if (result == 0) {
-				int last_error = GetLastError();
-				global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << FormatError(last_error) << endl;
-				error_text += "Failed to rename " + rename_src + " to " + rename_dst + FormatError(last_error);
+		if (nolaunch) {
+			if (fwatch_pid == 0)
+				fwatch_pid = get_process_id("fwatch.exe");
+			
+			HANDLE fwatch_handle = OpenProcess(PROCESS_ALL_ACCESS, 0, fwatch_pid);
+			
+			if (fwatch_handle == NULL) {
+				int last_error  = GetLastError();
+				string errorMSG = FormatError(last_error);
+				global.logfile << "Failed to access Fwatch process " << last_error << errorMSG << endl;
 				global.logfile.close();
-				error_text += "\n\nYou have to update manually";
+				error_text += "Failed to access Fwatch process " + Int2Str(last_error) + errorMSG;
+				
+				if (last_error == 5)
+					error_text += "\n\nSet gameRestart.exe to run as admin and try again";
+				else
+					error_text += "\n\nYou have to download and update manually";
+				
+				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+				
+				if (last_error == 5) {
+					CHAR pwd[MAX_PATH];
+					GetCurrentDirectory(MAX_PATH,pwd);				
+					string path_to_file = (string)pwd + "\\fwatch\\data\\gameRestart.exe";
+					ITEMIDLIST *pIDL    = ILCreateFromPath(path_to_file.c_str());
+		
+					if (pIDL != NULL) {
+						CoInitialize(NULL);
+					    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
+					    	ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
+						CoUninitialize();
+					    ILFree(pIDL);
+					}
+				}
+				else
+					ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+				
+				return 1;
+			}
+			
+			bool terminated = TerminateProcess(fwatch_handle, 0);
+			CloseHandle(fwatch_handle);
+			
+			if (!terminated) {
+				int last_error  = GetLastError();
+				string errorMSG = FormatError(last_error);
+				global.logfile << "Failed to close Fwatch " << last_error << errorMSG << endl;
+				global.logfile.close();
+				error_text += "Failed to close Fwatch " + Int2Str(last_error) + errorMSG;
+				error_text += "\n\nYou have to download and update manually";
 				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
 				ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
-				return result;
+				return 1;
 			}
 		}
-		
-		DeleteFile(global.downloaded_filename.c_str());
-		if (!DeleteFile("fwatch\\tmp\\schedule\\schedule.bin")) {
-			string errorMSG = FormatError(GetLastError());
-			global.logfile << "Failed to remove file " << errorMSG;
-		}
-		
+			
+		Sleep(1000);
+
 		DeleteFile("fwatch\\data\\libeay32.dll");
 		DeleteFile("fwatch\\data\\libiconv2.dll");
 		DeleteFile("fwatch\\data\\libintl3.dll");
 		DeleteFile("fwatch\\data\\libssl32.dll");
 		DeleteFile("fwatch\\data\\sortMissions.exe");
 
-		result = MoveFiles("fwatch\\tmp\\_extracted\\*" , "", "", true, true, true, error_text);
-		if (result != 0) {
-			error_text += "\n\nYou have to update manually";
+		string file_name = "fwatch\\tmp\\schedule\\schedule.bin";
+		if (!DeleteFile(file_name.c_str())) {
+			string errorMSG = FormatError(GetLastError());
+			global.logfile << "Failed to delete " << file_name << errorMSG;
+			error_text += "Failed to delete " + file_name + errorMSG;
+		}
+		
+		string rename_src = "fwatch\\data\\gameRestart.exe";
+		string rename_dst = "fwatch\\data\\gameRestart_old.exe";
+		DeleteFile(rename_dst.c_str());
+		result = MoveFileEx(rename_src.c_str(), rename_dst.c_str(), MOVEFILE_REPLACE_EXISTING);
+		if (result == 0) {
+			int last_error = GetLastError();
+			global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << FormatError(last_error) << endl;
+			error_text += "Failed to rename " + rename_src + " to " + rename_dst + FormatError(last_error);
+			global.logfile.close();
+			error_text += "\n\nYou have to download and update manually";
 			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
 			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
-			global.logfile.close();
 			return result;
+		}
+
+		result = Download("http://ofp-faguss.com/fwatch/download/fwatch_self_update.7z", error_text);
+		if (result != 0) {
+			global.logfile << "Download failed\n\n--------------\n\n";
+			global.logfile.close();
+			error_text += "\n\nYou have to download and update manually";
+			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+			return result;
+		}
+					
+		result = Unpack(global.downloaded_filename, "fwatch", error_text);
+		if (result != 0) {
+			global.logfile << "Unpacking failed\n\n--------------\n\n";
+			global.logfile.close();
+			
+			if (error_text.find("Can not open the file as") != string::npos)
+				error_text += "\n\nYou have to download and update manually";
+			else
+				error_text += "\n\nYou have to unpack files manually";
+			
+			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+			
+			if (error_text.find("Can not open the file as") != string::npos) {
+				ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+			} else {
+				CHAR pwd[MAX_PATH];
+				GetCurrentDirectory(MAX_PATH,pwd);				
+				string path_to_file = (string)pwd + "\\" + global.downloaded_filename;
+				ITEMIDLIST *pIDL    = ILCreateFromPath(path_to_file.c_str());
+	
+				if (pIDL != NULL) {
+					CoInitialize(NULL);
+				    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
+				    	ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
+					CoUninitialize();
+				    ILFree(pIDL);
+				};
+			}
+			
+			return result;			
+		}
+
+		DeleteFile(global.downloaded_filename.c_str());
+		
+		if (steam) {
+			MessageBox(NULL, "Update complete. Start the Fwatch again", "Fwatch self-update", MB_OK | MB_ICONINFORMATION);
+			global.logfile << "Operation successful\n\n--------------\n\n";
+			global.logfile.close();	
+			return 0;
+		}
+				
+		if (nolaunch) {
+			Sleep(500);
+			PROCESS_INFORMATION pi;
+		    STARTUPINFO si; 
+			ZeroMemory( &si, sizeof(si) );
+			ZeroMemory( &pi, sizeof(pi) );
+			si.cb 		   = sizeof(si);
+			si.dwFlags 	   = STARTF_USESHOWWINDOW;
+			si.wShowWindow = SW_SHOW;
+		
+			string launch_exe = global.working_directory + "\\" + "fwatch.exe";
+			string launch_arg = " " + global.working_directory + " -nolaunch " + fwatch_arguments;
+			
+			CreateProcess(&launch_exe[0], &launch_arg[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi);
+			CloseHandle(pi.hProcess);
+		    CloseHandle(pi.hThread);
+		    Sleep(500);
 		}
 	} else 
 		DeleteFile("fwatch\\data\\gameRestart_old.exe");
@@ -1851,8 +1973,38 @@ int main(int argc, char *argv[])
 	
 	// Start a new game ----------------------------------------
 	string launch_exe     = global.working_directory + "\\" + (nolaunch ? game_exe : "fwatch.exe");
-	string launch_arg     = " " + global.working_directory + " " + filtered_game_arguments + user_arguments + " " + (nolaunch ? "" : fwatch_arguments);
-	string launch_arg_log = " " + global.working_directory + " " + filtered_game_arguments + user_arguments_log + " " + (nolaunch ? "" : fwatch_arguments);
+	string launch_arg     = " \"" + global.working_directory + "\" " + filtered_game_arguments + user_arguments + " " + (nolaunch ? "" : fwatch_arguments);
+	string launch_arg_log = " \"" + global.working_directory + "\" " + filtered_game_arguments + user_arguments_log + " " + (nolaunch ? "" : fwatch_arguments);	
+	
+	// Sort arguments to deal with the OFP arguments bug
+	vector<string> temp_array;
+	Tokenize(launch_arg, " ", temp_array);
+	string with_equality    = "";
+	string without_equality = "";
+
+	for (int i=0; i<temp_array.size(); i++) {
+		if (temp_array[i].find_first_of("=") != string::npos)
+			with_equality += temp_array[i] + " ";
+		else
+			without_equality += temp_array[i] + " ";
+	}
+	
+	launch_arg = without_equality + with_equality;
+	
+	temp_array.clear();
+	Tokenize(launch_arg_log, " ", temp_array);
+	with_equality    = "";
+	without_equality = "";
+
+	for (int i=0; i<temp_array.size(); i++) {
+		if (temp_array[i].find_first_of("=") != string::npos)
+			with_equality += temp_array[i] + " ";
+		else
+			without_equality += temp_array[i] + " ";
+	}
+	
+	launch_arg_log = without_equality + with_equality;
+	
 	
 	if (steam) {
 		HKEY hKey			     = 0;
