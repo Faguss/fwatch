@@ -346,15 +346,17 @@ case C_FILE_MODLIST:
 	int pointer       = 0;
 	char username[30] = "";
 
-	switch(Game_Version) {
-		case VER_196 : base=0x7DD184; break;
-		case VER_199 : base=0x7CC144; break;
-		case VER_201 : base=Game_Exe_Address+0x714C10; break;
-	}
+	if (!DedicatedServer) {
+		switch(Game_Version) {
+			case VER_196 : base=0x7DD184; break;
+			case VER_199 : base=0x7CC144; break;
+			case VER_201 : base=Game_Exe_Address+0x714C10; break;
+		}
 
-	if (base != 0) {
-		ReadProcessMemory(phandle, (LPVOID)base,		  &pointer,  4, &stBytes);
-		ReadProcessMemory(phandle, (LPVOID)(pointer+0x8), &username, 30, &stBytes);
+		if (base != 0) {
+			ReadProcessMemory(phandle, (LPVOID)base,		  &pointer,  4, &stBytes);
+			ReadProcessMemory(phandle, (LPVOID)(pointer+0x8), &username, 30, &stBytes);
+		}
 	}
 
 	listDirFiles(username, out, MODFOLDERS, false, CommandID);

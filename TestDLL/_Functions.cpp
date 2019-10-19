@@ -2493,21 +2493,23 @@ char* strtok3(char* str, int CommandID)
 
 				if 
 				(
-					strncmpi(str+i,"text:"		,j-i+1) == 0   ||
-					strncmpi(str+i,"text1:"		,j-i+1) == 0   || 
-					strncmpi(str+i,"text2:"		,j-i+1) == 0   || 
-					strncmpi(str+i,"find:"		,j-i+1) == 0   ||
-					strncmpi(str+i,"replace:"	,j-i+1) == 0   ||
-					strncmpi(str+i,"delimiter:"	,j-i+1) == 0   ||
-					strncmpi(str+i,"merge:"		,j-i+1) == 0   ||
-					strncmpi(str+i,"add:"		,j-i+1) == 0   &&   CommandID == C_CLASS_MODTOK   ||
-					strncmpi(str+i,"append:"	,j-i+1) == 0   &&   CommandID == C_CLASS_MODTOK   ||
-					strncmpi(str+i,"key:"	    ,j-i+1) == 0   &&   CommandID == C_IGSE_DB   ||
-					strncmpi(str+i,"read:"	    ,j-i+1) == 0   &&   CommandID == C_IGSE_DB   ||
-					strncmpi(str+i,"write:"	    ,j-i+1) == 0   &&   CommandID == C_IGSE_DB   ||
-					strncmpi(str+i,"append:"	,j-i+1) == 0   &&   CommandID == C_IGSE_DB   ||
-					strncmpi(str+i,"rename:"	,j-i+1) == 0   &&   CommandID == C_IGSE_DB   ||
-					strncmpi(str+i,"remove:"    ,j-i+1) == 0   &&   CommandID == C_IGSE_DB
+					strncmpi(str+i,"text:"     ,j-i+1) == 0 ||
+					strncmpi(str+i,"text1:"    ,j-i+1) == 0 || 
+					strncmpi(str+i,"text2:"    ,j-i+1) == 0 || 
+					strncmpi(str+i,"find:"     ,j-i+1) == 0 ||
+					strncmpi(str+i,"replace:"  ,j-i+1) == 0 ||
+					strncmpi(str+i,"delimiter:",j-i+1) == 0 ||
+					strncmpi(str+i,"merge:"    ,j-i+1) == 0 ||
+					(CommandID == C_STRING_RANGE2 &&  strncmpi(str+i,"startfind",j-i+1) == 0) ||
+					(CommandID == C_STRING_RANGE2 &&  strncmpi(str+i,"endfind"  ,j-i+1) == 0) ||
+					(CommandID == C_CLASS_MODTOK  &&  strncmpi(str+i,"add:"	    ,j-i+1) == 0) ||
+					(CommandID == C_CLASS_MODTOK  &&  strncmpi(str+i,"append:"  ,j-i+1) == 0) ||
+					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"key:"	    ,j-i+1) == 0) ||
+					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"read:"    ,j-i+1) == 0) ||
+					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"write:"   ,j-i+1) == 0) ||
+					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"append:"  ,j-i+1) == 0) ||
+					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"rename:"  ,j-i+1) == 0) ||
+					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"remove:"  ,j-i+1) == 0)
 				)
 					waitForSpecialSeparator=true;
 			};

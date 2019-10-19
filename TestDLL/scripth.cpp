@@ -416,7 +416,8 @@ int MemCommandsDedicated[] = {
 	C_MEM_BULLETS,
 	C_MEM_GETWEATHER,
 	C_MEM_SETWEATHER,
-	C_MEM_MISSIONINFO
+	C_MEM_MISSIONINFO,
+	C_FILE_MODLIST
 };
 
 char* strtok2(char* str);
