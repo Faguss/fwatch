@@ -1458,8 +1458,8 @@ int main(int argc, char *argv[])
 	// Access game process
 	string filtered_game_arguments = " ";
 
-	if (!nolaunch)
-		filtered_game_arguments += fwatch_arguments;
+	/*if (!nolaunch)
+		filtered_game_arguments += fwatch_arguments;*/
 
 	if (global.game_window_handle) {
 		HANDLE game_handle = OpenProcess(PROCESS_ALL_ACCESS, 0, game_pid);
