@@ -698,11 +698,11 @@ unsigned long resolv(char *host)
 
 
 
-char* Tokenize(char *string, char *delimiter, int &i, int string_length, bool square_brackets) {
+char* Tokenize(char *string, char *delimiter, int &i, int string_length, bool square_brackets, bool reverse) {
 	int delimiter_len = strlen(delimiter);
 	bool in_brackets  = false;
 
-	for (int begin=-1; i<=string_length; i++) {
+	for (int begin=-1;  !reverse && i<=string_length || reverse && i>=-1;  reverse ? i-- : i++) {
 		if (square_brackets && string[i] == '[')
 			in_brackets = true;
 
@@ -716,16 +716,17 @@ char* Tokenize(char *string, char *delimiter, int &i, int string_length, bool sq
 				break;
 			}
 
-		if (begin<0  &&  (!is_delim || i==string_length))
-			begin = i;
+		if (begin<0  &&  (!is_delim || (!reverse && i==string_length || reverse && i==-1))) {
+			begin = i + (!reverse ? 0 : 1);
+		}
 
-		if (begin>=0  &&  (is_delim ||  i==string_length)) {
-			string[i] = '\0';
+		if (begin>=0  &&  (is_delim ||  (!reverse && i==string_length || reverse && i==-1))) {
+			string[(!reverse ? i : begin)] = '\0';
 			
-			if (i<string_length)
+			if (!reverse && i<string_length)
 				i++;
 				
-			return string+begin;
+			return (!reverse ? string+begin : string+i+1);
 		}
 	}
 
@@ -784,7 +785,7 @@ int Read_Config_Fwatch_HUD(char *filename, bool *no_ar, bool *is_custom, float *
 		int value_index  = -1;
 		
 		while (settings_pos < result) {
-			char *setting = Tokenize(settings, ";", settings_pos, result, true);
+			char *setting = Tokenize(settings, ";", settings_pos, result, true, false);
 
 			char *equality = strchr(setting, '=');
 			if (equality == NULL)
@@ -811,7 +812,7 @@ int Read_Config_Fwatch_HUD(char *filename, bool *no_ar, bool *is_custom, float *
 			int values_pos = 0;
 
 			while (values_pos < values_len) {
-				char *value = Tokenize(setting, ",", values_pos, values_len, true);
+				char *value = Tokenize(setting, ",", values_pos, values_len, true, false);
 				value = Trim(value);
 
 				if (strcmpi(value, "noar")==0)
@@ -915,7 +916,7 @@ void Return_Modfolder_Missions(bool server)
 		int word_start = 0;
 		
 		while (i < file_size) {
-			char *destination = Tokenize(text_buffer, "\r\n", i, file_size, false);
+			char *destination = Tokenize(text_buffer, "\r\n", i, file_size, false, false);
 			char *mission     = strrchr(destination,'\\');
 			bool remove_line  = false;
 			
@@ -1020,10 +1021,13 @@ void FwatchPresence(void *loop)
 		}
 
 		if (pid == 0) {
-			Return_Modfolder_Missions(server);
-			sleepRate = !server ? 500 : 1000; 
-			lastpid   = 0;
-			done_missions = false;
+			if (done_missions) {
+				Return_Modfolder_Missions(server);
+				done_missions = false;
+			}
+
+			sleepRate     = !server ? 500 : 1000; 
+			lastpid       = 0;
 			continue;
 		}
 		
@@ -1077,18 +1081,18 @@ void FwatchPresence(void *loop)
 								emptyChars = 0;
 
 						int parameters_len = strlen(parameters);
-						int parameters_pos = 0;
+						int parameters_pos = parameters_len - 1;
 
-						while (parameters_pos < parameters_len) {
-							char *parameter = Tokenize(parameters, " ", parameters_pos, parameters_len, false);
+						while (parameters_pos > 0) {
+							char *parameter = Tokenize(parameters, " ", parameters_pos, parameters_len, false, true);
 
 							if (strncmp(parameter,"-mod=",5) == 0) {
 								parameter += 5;
 								int parameter_len = strlen(parameter);
-								int parameter_pos = 0;
+								int parameter_pos = parameter_len - 1;
 
-								while (parameter_pos < parameter_len) {
-									char *mod = Tokenize(parameter, ";", parameter_pos, parameter_len, false);
+								while (parameter_pos > 0) {
+									char *mod = Tokenize(parameter, ";", parameter_pos, parameter_len, false, true);
 									Transfer_Modfolder_Missions(mod, server);
 								}
 							}
@@ -1949,7 +1953,7 @@ void FixUIAspectRatio(void *loop)
 					int parameters_pos = 0;
 
 					while (parameters_pos < parameters_len) {
-						char *parameter = Tokenize(parameters, " ", parameters_pos, parameters_len, false);
+						char *parameter = Tokenize(parameters, " ", parameters_pos, parameters_len, false, false);
 
 						if (strncmp(parameter,"-mod=",5) == 0) {
 							parameter += 5;
@@ -1957,7 +1961,7 @@ void FixUIAspectRatio(void *loop)
 							int parameter_pos = 0;
 
 							while (parameter_pos < parameter_len) {
-								char *mod = Tokenize(parameter, ";", parameter_pos, parameter_len, false);
+								char *mod = Tokenize(parameter, ";", parameter_pos, parameter_len, false, false);
 								char filename[512] = "";
 								sprintf(filename, "%s\\bin\\config_fwatch_hud.cfg", mod);
 								Read_Config_Fwatch_HUD(filename, no_ar, is_custom, custom, customINT);
