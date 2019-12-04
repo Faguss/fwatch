@@ -1,17 +1,17 @@
 # Fwatch 1.16 early release
 
-Fwatch was created by [Kegetys](http://www.kegetys.fi/). New functionality added by [Faguss](ofp-faguss.com)
+Fwatch was created by [Kegetys](http://www.kegetys.fi/). New functionality added by [Faguss](https://ofp-faguss.com).
 
-Code to report listen server to the master server was taken from OFPReportListenServer by Pulverizer and was improved with the help of [Poweruser](https://github.com/Poweruser)
+Code to report listen server to the master server was taken from OFPReportListenServer by Pulverizer and was improved with the help of [Poweruser](https://github.com/Poweruser).
 
-Uses [natsort](https://github.com/sourcefrog/natsort) by Martin Pool
+Uses [natsort](https://github.com/sourcefrog/natsort) by Martin Pool.
 
 ## Compiling
 
 Project is compiled using Microsoft Visual C++ 6.0 on WinXP SP3
 
 ```
-Open project TestDLL.dsw or TestLauncher.dsw
+Open file TestDLL.dsw or TestLauncher.dsw
 Build >> Set Active Configuration >> Win32 Release
 Press F7
 ```
