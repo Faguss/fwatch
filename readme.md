@@ -1,52 +1,30 @@
-Fwatch 1.16 early release
+# Fwatch 1.16 early release
 
-Fwatch was created by Kegetys. New functionality added by Faguss (ofp-faguss.com)
+Fwatch was created by [Kegetys](http://www.kegetys.fi/). New functionality added by [Faguss](ofp-faguss.com)
 
+Code to report listen server to the master server was taken from OFPReportListenServer by Pulverizer and was improved with the help of [Poweruser](https://github.com/Poweruser)
 
+Uses [natsort](https://github.com/sourcefrog/natsort) by Martin Pool
 
-Code to report listen server to the master server was taken from OFPReportListenServer by Pulverizer and was improved with the help of Poweruser
+## Compiling
 
-Uses natsort by Martin Pool
+Project is compiled using Microsoft Visual C++ 6.0 on WinXP SP3
 
+```
+Open project TestDLL.dsw or TestLauncher.dsw
+Build >> Set Active Configuration >> Win32 Release
+Press F7
+```
 
+## Program Description
 
-Compiled using Microsoft Visual C++ 6.0 on WinXP SP3
+Fwatch adds additional scripting functionality to Operation Flashpoint Resistance by hooking file access calls from OFP. New commands include functions to handle strings, file access, and keyboard/mouse input. 
 
-
-
-To open project:
-
-   TestDLL \ TestDLL.dsw
-
-   TestLauncher \ TestLauncher.dsw
-
-
-
-To compile select:
-
-   Build >> Set Active Configuration >> Win32 Release
-
-and then press F7
-
-
-
-==================================================================
-
-
-
-Fwatch adds additional scripting functionality to Operation
-
-Flashpoint Resistance by hooking file access calls from
-
-OFP. New commands include functions to handle strings, file
-
-access, and keyboard/mouse input. 
-
-
+## Original Readme
 
 Fwatch v1.0d source code.
 
-by Kegetys <kegetys@dnainternet.net>
+by Kegetys <kegetys@dnainternet.net>m
 
 Based on apihijack example code from CodeGuru.com by Matt Pietrek and Wade Brainerd. 
 
