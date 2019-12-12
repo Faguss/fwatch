@@ -348,7 +348,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 				delete[] cmdLine;*/
 			};
 
-		MessageBox( NULL, "Hook installed, waiting for the game or dedicated server\nPress OK to remove hook and exit.", "fwatch", MB_OK|MB_ICONINFORMATION );
+		MessageBox( NULL, "Fwatch is now waiting for you to run the game and/or dedicated server\nWhen you're done playing press OK to exit.", "fwatch", MB_OK|MB_ICONINFORMATION );
 	}
 
 
@@ -990,10 +990,12 @@ void FwatchPresence(void *loop)
 {
 	bool server		   = (int)loop==2;
 	int stage		   = 0;
-	int sleepRate	   = !server ? 500 : 1000;
+	int sleepRate	   = !server ? 250 : 500;
 	char string[8]	   = "";
 	char buffer[2049]  = "";
 	bool done_missions = false;
+	int signal_action  = -1;
+	char *signal_buffer = "";
 
 	FILE *fp;
 	HANDLE phandle;
@@ -1003,7 +1005,7 @@ void FwatchPresence(void *loop)
 
 	// If normal - loop until string has been changed
 	// If -nolaunch - keep going forever
-	while (!loop && (lastpid==0 || !done_missions)  ||  loop) {
+	while (true) {
 		Sleep(sleepRate);
 
 		// Search for the OFP window ------------------------------
@@ -1026,12 +1028,11 @@ void FwatchPresence(void *loop)
 				done_missions = false;
 			}
 
-			sleepRate     = !server ? 500 : 1000; 
+			sleepRate     = !server ? 250 : 500; 
 			lastpid       = 0;
 			continue;
 		}
 		
-
 		// If already changed mem then loop back
 		if (lastpid != 0) {
 			// Get active modfolders
@@ -1105,16 +1106,50 @@ void FwatchPresence(void *loop)
 				CloseHandle(phandle);
 			}
 
-			if (server) {
-				// Check if there's signal to restart the server
-				fp = fopen("fwatch_server_restart.db", "r");					 
-				if (fp) {
-					char *ret, line[1024];
-					ret = fgets(line, 1024, fp);
-					fclose(fp);
 
-					TerminateProcess(phandle, 0);
-					CloseHandle(phandle);
+			// Check if there's signal to restart the client/server
+			char file_name[64] = "fwatch\\data\\fwatch_client_restart.db";
+
+			if (server)
+				strcpy(file_name, "fwatch\\data\\fwatch_server_restart.db");
+
+			if (signal_action == -1) {
+				fp = fopen(file_name, "r");					 
+				if (fp) {
+					fseek(fp, 0, SEEK_END);
+					int buffer_size = ftell(fp);
+					signal_buffer   = (char*) malloc (buffer_size+1);
+
+					if (signal_buffer) {
+						fseek(fp, 0, SEEK_SET);
+						fread(signal_buffer, 1, buffer_size, fp);
+						signal_buffer[buffer_size] = '\0';
+						signal_action = 1;
+					}
+				
+					fclose(fp);
+				}
+			} 
+
+			if (signal_action == 1) {
+				bool file_removed = false;
+
+				if (remove(file_name) == 0) {
+					file_removed = true;
+				} else {
+					if (errno == 2) {
+						file_removed = true;
+					}
+				}
+
+				if (file_removed) {
+					char exe_name[64] = "fwatch\\data\\gameRestart.exe";
+
+					if (server) {
+						strcpy(exe_name, GameServerName);
+						TerminateProcess(phandle, 0);
+						CloseHandle(phandle);
+					}
 
 					// Run program
 					STARTUPINFO si;
@@ -1122,27 +1157,19 @@ void FwatchPresence(void *loop)
 					ZeroMemory(&si, sizeof(si));
 					si.cb = sizeof(si);
 					si.dwFlags = STARTF_USESHOWWINDOW;
-					si.wShowWindow = SW_SHOW;
+					si.wShowWindow = SW_HIDE;
 					ZeroMemory(&pi, sizeof(pi));
-					int tries = 0;
 
-					// Try 5 times before giving up
-					while (tries<5)
-					{
-						if (CreateProcess(GameServerName, line, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi))
-						{
-							CloseHandle(pi.hProcess);
-							CloseHandle(pi.hThread); 
-							break;
-						};
+					if (CreateProcess(exe_name, signal_buffer, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
+						CloseHandle(pi.hProcess);
+						CloseHandle(pi.hThread); 
+					}
 
-						Sleep(500);
-						tries++;
-					};
-					remove("fwatch_server_restart.db");
-				};
-			};
-			
+					signal_action = -1;
+					free(signal_buffer);
+				}
+			}
+		
 			sleepRate = 1000;
 			continue;
 		};		
