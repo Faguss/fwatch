@@ -10,9 +10,7 @@
 #include <sstream>      // for converting int to string
 #include <Shlobj.h>		// opening explorer
 #include <map>			// associative array for arguments
-#include <sstream>		// converting int to string
 #include <time.h>		// get current time as unix timestamp
-#include <algorithm>
 
 using namespace std;
 
@@ -48,6 +46,8 @@ struct GLOBAL_VARIABLES
 	vector<string> downloads     ;
 	vector<string> mod_id        ;
 	vector<string> mod_name      ;
+	string *lang                 ;
+	string *lang_eng             ;
 	map<string, string> arguments_table;
 	ofstream logfile;
 } global = {
@@ -120,6 +120,71 @@ enum MIRROR_STATES
 	DISABLED,
 	ENABLED,
 	SKIP_REMAINING	
+};
+
+enum STRINGTABLE
+{
+	STR_ACTION_INIT,
+	STR_ACTION_GETSCRIPT,
+	STR_ACTION_READSCRIPT,
+	STR_ACTION_CONNECTING,
+	STR_ACTION_DOWNLOADING,
+	STR_ACTION_DOWNLOADED,
+	STR_ACTION_EXTRACTING,
+	STR_ACTION_UNPACKINGPBO,
+	STR_ACTION_PACKINGPBO,
+	STR_ACTION_COPYING,
+	STR_ACTION_COPYINGDOWNLOAD,
+	STR_ACTION_CLEANING,
+	STR_ACTION_PREPARING,
+	STR_ACTION_DELETING,
+	STR_ACTION_RENAMING,
+	STR_ACTION_EDITING,
+	STR_ACTION_ABORTED,
+	STR_ACTION_DONE,
+	STR_ACTION_DONEWARNING,
+	STR_PROGRESS,
+	STR_ALTTAB,
+	STR_ERROR,
+	STR_ERROR_LOGFILE,
+	STR_ERROR_READSCRIPT,
+	STR_ERROR_INVERSION,
+	STR_ERROR_ONLINE,
+	STR_ERROR_EXE,
+	STR_ERROR_ARG_COUNT,
+	STR_ERROR_FILE_LIST,
+	STR_ERROR_NO_FILE,
+	STR_ERROR_PATH,
+	STR_ERROR_INVALID_SCRIPT,
+	STR_ERROR_INVALID_ARG,
+	STR_ERROR_BUFFER,
+	STR_DOWNLOAD_LEFT,
+	STR_DOWNLOAD_TOTAL,
+	STR_DOWNLOAD_PATH_ERROR,
+	STR_DOWNLOAD_FAILED,
+	STR_DOWNLOAD_FIND_ERROR,
+	STR_UNPACK_REDO_FILE,
+	STR_UNPACK_ERROR,
+	STR_MDIR_ERROR,
+	STR_AUTO_READ_ATTRI,
+	STR_UNPACKPBO_SRC_PATH_ERROR,
+	STR_UNPACKPBO_DST_PATH_ERROR,
+	STR_MOVE_DST_PATH_ERROR,
+	STR_MOVE_RENAME_ERROR,
+	STR_MOVE_RENAME_TO_ERROR,
+	STR_RENAME_DST_PATH_ERROR,
+	STR_RENAME_WILDCARD_ERROR,
+	STR_RENAME_NO_NAME_ERROR,
+	STR_ASK_EXE,
+	STR_ASK_DLOAD,
+	STR_ASK_DLOAD_SELECT,
+	STR_IF_NUMBER_ERROR,
+	STR_PBO_NAME_ERROR,
+	STR_PBO_MAKE_ERROR,
+	STR_PBO_UNPACK_ERROR,
+	STR_EDIT_READ_ERROR,
+	STR_EDIT_WRITE_ERROR,
+	STR_MAX
 };
 
 
@@ -448,11 +513,11 @@ void WriteProgressFile(int status, string input)
 		return;
 		
 	if (status==INSTALL_PROGRESS  &&  global.instructions_pos>0  &&  global.instructions_max>0) {
-		char percent_txt[8];
+		/*char percent_txt[8];
 		sprintf(percent_txt, "%.0f", (100.0*(global.instructions_pos)/global.instructions_max));
-		input = "Installation progress: " + (string)percent_txt + "%\\n\\n" + input;
+		input = "Installation progress: " + (string)percent_txt + "%\\n\\n" + input;*/
 		
-		//input = "Installation progress: " + Int2Str(global.instructions_pos) + "/" + Int2Str(global.instructions_max) + "\\n\\n" + input;
+		input = global.lang[STR_PROGRESS] + " " + Int2Str(global.instructions_pos) + "/" + Int2Str(global.instructions_max) + "\\n\\n" + input;
 	}
 
 	progressLog << "_auto_restart=" << (global.restart_game ? "true" : "false") 
@@ -499,22 +564,27 @@ int WriteModID(string modfolder, string content, string content2)
 
 
 
-int ErrorMessage(const string message, int error_code=COMMAND_FAILED) 
+int ErrorMessage(int string_code, string message="%STR%", int error_code=COMMAND_FAILED) 
 {
+	if (global.current_mod=="parsetest" && global.current_mod_version=="-1")
+		return NO_ERRORS;
+	
 	int status              = global.mirror==ENABLED ? INSTALL_PROGRESS : INSTALL_ERROR;
-	string message_for_game = "";
+	string message_eng      = ReplaceAll(message, "%STR%", global.lang_eng[string_code]);
+	string message_local    = ReplaceAll(message, "%STR%", global.lang[string_code]);
+	string message_complete = "";
 	
 	// show which command failed
 	if (error_code == COMMAND_FAILED) {
-		message_for_game = "ERROR\\n" + global.current_mod;
+		message_complete = global.lang[STR_ERROR] + "\\n" + global.current_mod;
 		
 		if (global.current_mod_version != "")
-			message_for_game += "\\nIn version " + global.current_mod_version;
+			message_complete += "\\n" + global.lang[STR_ERROR_INVERSION] + " " + global.current_mod_version;
 		
 		if (global.command_line_num > 0)
-			message_for_game += "\\nOn line " + Int2Str(global.command_line_num) + "\\n" + global.command_line;
+			message_complete += "\\n" + global.lang[STR_ERROR_ONLINE] + " " + Int2Str(global.command_line_num) + "\\n" + global.command_line;
 			
-		message_for_game += "\\n" + message;
+		message_complete += "\\n" + message_local;
 
 		if (status == INSTALL_ERROR) {
 			global.logfile << "ERROR " << global.current_mod;
@@ -525,17 +595,17 @@ int ErrorMessage(const string message, int error_code=COMMAND_FAILED)
 			if (global.command_line_num > 0)	
 				global.logfile << " line " << Int2Str(global.command_line_num) << ": " << global.command_line;
 				
-			global.logfile << " - " << ReplaceAll(message, "\\n", " ") << endl;
+			global.logfile << " - " << ReplaceAll(message_eng, "\\n", " ") << endl;
 		}
 	}
 	
 	// just display input message
 	if (error_code == SCRIPT_ERROR) {
-		message_for_game = "ERROR\\n" + message;
-		global.logfile << "ERROR - " << ReplaceAll(message, "\\n", " ") << endl;
+		message_complete = global.lang[STR_ERROR] + "\\n" + message_local;
+		global.logfile << "ERROR - " << ReplaceAll(message_eng, "\\n", " ") << endl;
 	}
 	
-	WriteProgressFile(status, message_for_game);
+	WriteProgressFile(status, message_complete);
 	return error_code;
 }
 
@@ -576,7 +646,7 @@ void ReceiveInstructions(void *nothing)
 int Abort()
 {
 	if (global.abort_installer) {
-		WriteProgressFile(INSTALL_ABORTED, "Installation aborted by user");	
+		WriteProgressFile(INSTALL_ABORTED, global.lang[STR_ACTION_ABORTED]);	
 
 		if (global.logfile.is_open()) {
 			global.logfile << "Installation aborted by user\n\n--------------\n\n";
@@ -716,21 +786,21 @@ int ParseWgetLog(string &error)
 
 		DownloadLog.close();
 
-		string tosave = "Connecting...";
+		string tosave = global.lang[STR_ACTION_CONNECTING] + "...";
 
 		if (!size_downloaded.empty()) {
-			tosave = "Downloading...\\n" + 
+			tosave = global.lang[STR_ACTION_DOWNLOADING] + "...\\n" + 
 					 global.downloaded_filename + "\\n\\n" +
 					 size_downloaded + (filesize.empty() ? "" : (" / "+filesize+" - "+percentage_downloaded))  + "\\n" + 
 					 download_speed + "/s" + "\\n" + 
-					 (time_remaining.empty() ? "" : (time_remaining + " left"));
+					 (time_remaining.empty() ? "" : (time_remaining + " " + global.lang[STR_DOWNLOAD_LEFT]));
 					 
 			if (percentage_downloaded == "100%")
-				tosave = "Downloaded\\n" + 
+				tosave = global.lang[STR_ACTION_DOWNLOADED] + "\\n" + 
 						 global.downloaded_filename + "\\n\\n" +
 						 (filesize.empty() ? size_downloaded : filesize) + "\\n" + 
 						 "\\n" + 
-						 time_remaining + " total";
+						 time_remaining + " " + global.lang[STR_DOWNLOAD_TOTAL];
 		}
 
 		WriteProgressFile(INSTALL_PROGRESS, tosave);
@@ -802,7 +872,7 @@ int ParseUnpackLog(string &error, string &file_name)
 
 		UnpackLog.close();
 
-		string tosave = "Extracting...\\n" + file_name + "\\n" + percentage + "\\n\\n" + current_file;
+		string tosave = global.lang[STR_ACTION_EXTRACTING] + "...\\n" + file_name + "\\n" + percentage + "\\n\\n" + current_file;
 		WriteProgressFile(INSTALL_PROGRESS, tosave);
 	}
 
@@ -819,10 +889,10 @@ int ParsePBOLog(string &message, string &exename, string &file_name)
 	string verb = "";
 
 	if (exename == "ExtractPbo.exe")
-		verb = "Packing";
+		verb = global.lang[STR_ACTION_UNPACKINGPBO];
 
 	if (exename == "MakePbo.exe")
-		verb = "Unpacking";
+		verb = global.lang[STR_ACTION_PACKINGPBO];
 
 	if (PackLog.is_open()) {
 		string text = "";
@@ -999,7 +1069,7 @@ int Download(string url, string log="", bool overwrite=false)
 		path        = ReplaceAll(path, "\"", "");
 		
 		if (path.empty()  ||  path=="..")
-			return ErrorMessage("Incorrect argument");
+			return ErrorMessage(STR_DOWNLOAD_PATH_ERROR);
 		
 		// reassemble
 		url = url.substr(0,find) + (outer_quote ? "" : "\"") + "fwatch\\tmp\\" + path + "\" " + url.substr(end);
@@ -1032,7 +1102,7 @@ int Download(string url, string log="", bool overwrite=false)
 			path        = ReplaceAll(path, "\"", "");
 	
 			if (path.empty()  ||  path=="..")
-				return ErrorMessage("Incorrect argument");
+				return ErrorMessage(STR_DOWNLOAD_PATH_ERROR);
 	
 			url = url.substr(0,find) + "\"fwatch\\tmp\\" + path + "\" " + url.substr(end);
 		}
@@ -1057,7 +1127,7 @@ int Download(string url, string log="", bool overwrite=false)
 	
 	if (!CreateProcess("fwatch\\data\\wget.exe", &arguments[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi)) {
 		int errorCode = GetLastError();
-		return ErrorMessage("Failed to launch wget.exe - " + Int2Str(errorCode) + " " + FormatError(errorCode));
+		return ErrorMessage(STR_ERROR_EXE, "%STR% wget.exe - " + Int2Str(errorCode) + " " + FormatError(errorCode));
 	} else
 		if (!silent_mode)
 			global.logfile << "Downloading  " << (log.empty() ? url : log) << endl;
@@ -1113,7 +1183,7 @@ int Download(string url, string log="", bool overwrite=false)
 		}
 		
 		global.logfile << exit_code << " - " << exit_status << " - " << message << endl;
-		ErrorMessage("Failed to download\\n" + global.downloaded_filename + "\\n\\n" + message, silent_mode ? SCRIPT_ERROR : COMMAND_FAILED);		
+		ErrorMessage(STR_DOWNLOAD_FAILED, "%STR%\\n" + global.downloaded_filename + "\\n\\n" + message, silent_mode ? SCRIPT_ERROR : COMMAND_FAILED);		
 		string filename = "fwatch\\tmp\\" + global.downloaded_filename;
 		DeleteFile(filename.c_str());
 	} else
@@ -1127,7 +1197,7 @@ int Download(string url, string log="", bool overwrite=false)
 int Download_Wrapper(const vector<string> &arg)
 {
 	if (arg.size() == 0)
-		return ErrorMessage("download address not specified");
+		return ErrorMessage(STR_ERROR_ARG_COUNT);
 		
 	if (arg.size() == 1)
 		return Download(arg[0]);
@@ -1209,7 +1279,7 @@ int Download_Wrapper(const vector<string> &arg)
 		}
 
 		if (!found_phrase)
-			return ErrorMessage("Failed to find " + arg[i]);
+			return ErrorMessage(STR_DOWNLOAD_FIND_ERROR, "%STR% " + arg[i]);
 			
 		token_file += Int2Str(i);
 	}
@@ -1273,7 +1343,7 @@ int Unpack(string file_name, string password="")
 
 	if (!CreateProcess("fwatch\\data\\7z.exe", &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {		
 		int errorCode = GetLastError();
-		return ErrorMessage("Failed to launch 7z.exe - " + Int2Str(errorCode) + " " + FormatError(errorCode));
+		return ErrorMessage(STR_ERROR_EXE, "%STR% 7z.exe - " + Int2Str(errorCode) + " " + FormatError(errorCode));
 	} else
 		global.logfile << "Extracting " << file_name << endl;
 		
@@ -1305,10 +1375,10 @@ int Unpack(string file_name, string password="")
 		global.logfile << exit_code << " - " << message << endl;
 		
 		if (message.find("Can not open the file as") != string::npos  &&  message.find("archive") != string::npos)
-			message += " - remove this file and download again";
+			message += " - " + global.lang[STR_UNPACK_REDO_FILE];
 
 		if (global.unpack_set_error)
-			ErrorMessage("Failed to extract\\n" + file_name + "\\n\\n" + message);
+			ErrorMessage(STR_UNPACK_ERROR, "%STR%\\n" + file_name + "\\n\\n" + message);
 	}
 
 	CloseHandle(pi.hProcess);
@@ -1334,7 +1404,7 @@ int MakeDir(string path)
 		if (!result) {
 			int errorCode = GetLastError();
 			if (errorCode != 183)
-				return ErrorMessage("Failed to create directory " + build_path + " " + Int2Str(errorCode) + " " + FormatError(errorCode));
+				return ErrorMessage(STR_MDIR_ERROR, "%STR% " + build_path + " " + Int2Str(errorCode) + " " + FormatError(errorCode));
 		} else
 			global.logfile << "Created directory " << build_path << endl;
 	}
@@ -1355,7 +1425,7 @@ int CreateFileList(string source, string destination, vector<string> &sources, v
 		if (allow_error && errorCode==2 || errorCode==3)
 			return 0;
 
-		return ErrorMessage("Failed to list files in " + source + "  - " + Int2Str(errorCode) + " " + FormatError(errorCode));
+		return ErrorMessage(STR_ERROR_FILE_LIST, "%STR% " + source + "  - " + Int2Str(errorCode) + " " + FormatError(errorCode));
 	}
 
 	recursion++;
@@ -1424,7 +1494,7 @@ int CreateFileList(string source, string destination, vector<string> &sources, v
 
 int MoveFiles(string source, string destination, string new_name, bool is_move, bool overwrite, bool match_dirs=false)
 {
-	WriteProgressFile(INSTALL_PROGRESS, "Copying...");
+	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_COPYING]+"...");
 
 
 	// Find files and save them to a list
@@ -1498,7 +1568,7 @@ int RequestExecution(string path_to_dir, string file_name)
 {		
 	global.logfile << "Asking the user to run " << file_name << endl;
 	
-	string message = "You must manually run:\\n" + file_name + "\\n\\nALT+TAB to desktop";
+	string message = global.lang[STR_ASK_EXE] + ":\\n" + file_name + "\\n\\n" + global.lang[STR_ALTTAB];
 	WriteProgressFile(INSTALL_WAITINGFORUSER, message);
 	
 	message = "You must manually run\n" + file_name + "\n\nPress OK to start\nPress CANCEL to skip installing this modfolder";
@@ -1581,7 +1651,7 @@ int Auto_Install(string file, string password="")
 		string errorMSG = FormatError(errorCode);
 		
 		if (FirstFile)
-			return ErrorMessage("Failed to get attributes of " + file + " - " + Int2Str(errorCode) + " " + errorMSG);
+			return ErrorMessage(STR_AUTO_READ_ATTRI, "%STR% " + file + " - " + Int2Str(errorCode) + " " + errorMSG);
 		else {
 			global.logfile << "Failed to get attributes of " << file << " - " << errorCode + " " << errorMSG << endl;
 			return NO_ERRORS;
@@ -1725,7 +1795,7 @@ int Auto_Install(string file, string password="")
 					string errorMSG = FormatError(errorCode);
 					
 					if (FirstFile)
-						return ErrorMessage("Failed to list files in " + file + " - " + Int2Str(errorCode) + " " + errorMSG);
+						return ErrorMessage(STR_ERROR_FILE_LIST, "%STR% " + file + " - " + Int2Str(errorCode) + " " + errorMSG);
 					else {
 						global.logfile << "Failed to list files in " << file << " - " << errorCode + " " << errorMSG << endl;
 						return NO_ERRORS;
@@ -1814,7 +1884,7 @@ void EndModVersion()
 	if (global.current_mod.empty())
 		return;
 		
-	WriteProgressFile(INSTALL_PROGRESS, "Cleaning up");
+	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_CLEANING]);
 		
 	// Remove downloaded files
 	if (!global.test_mode) {
@@ -1843,7 +1913,7 @@ void EndMod()
 	if (global.current_mod.empty())
 		return;
 		
-	WriteProgressFile(INSTALL_PROGRESS, "Cleaning up");
+	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_CLEANING]);
 		
 	// Check if folder even exists
 	DWORD dir = GetFileAttributesA(global.current_mod_new_name.c_str());
@@ -1951,7 +2021,7 @@ int SCRIPT_Unpack(const vector<string> &arg)
 	}
 
 	if (file_name.empty())
-		return ErrorMessage("file to unpack not specified");
+		return ErrorMessage(STR_ERROR_NO_FILE);
 
 	return Unpack(file_name, password);
 }
@@ -1999,7 +2069,7 @@ int SCRIPT_Move(const vector<string> &arg)
 
 		if (j<3  &&  path[j].empty()) {
 			if (!VerifyPath(arg[i]))
-				return ErrorMessage("path must not lead to the parent directory");
+				return ErrorMessage(STR_ERROR_PATH);
 
 			if (arg[i] != ".")
 				path[j++] = arg[i];
@@ -2009,7 +2079,7 @@ int SCRIPT_Move(const vector<string> &arg)
 	
 	// Format source path
 	if (path[SOURCE].empty())
-		return ErrorMessage("not specified which file to move");
+		return ErrorMessage(STR_ERROR_NO_FILE);
 
 	if (Download_Arguments.size() > 0) {
 		int result = Download_Wrapper(Download_Arguments);
@@ -2034,7 +2104,7 @@ int SCRIPT_Move(const vector<string> &arg)
 				if (!is_move)
 					path[SOURCE] = path[SOURCE].substr(7);
 				else
-					return ErrorMessage("must not move files out of the game folder");
+					return ErrorMessage(STR_MOVE_DST_PATH_ERROR);
 			} else
 				path[SOURCE] = "fwatch\\tmp\\_extracted\\" + path[SOURCE];
 
@@ -2065,7 +2135,7 @@ int SCRIPT_Move(const vector<string> &arg)
 	// Format new name 
 	// 3rd argument - new name
 	if (path[NEW_NAME].find("\\")!=string::npos  ||  path[NEW_NAME].find("/")!=string::npos)
-		return ErrorMessage("new name must not contain slashes");
+		return ErrorMessage(STR_RENAME_DST_PATH_ERROR);
 
 	return MoveFiles(path[SOURCE], path[DESTINATION], path[NEW_NAME], is_move, overwrite, match_dirs);
 }
@@ -2079,7 +2149,7 @@ int SCRIPT_MakeDir(const vector<string> &arg)
 		directory = arg[1];	
 	
 	if (!VerifyPath(directory))
-		return ErrorMessage("path must not lead to the parent directory");
+		return ErrorMessage(STR_ERROR_PATH);
 
 	return MakeDir(global.current_mod_new_name + "\\" + directory);
 }
@@ -2116,10 +2186,10 @@ int SCRIPT_RequestExecution(const vector<string> &arg)
 	}
 
 	if (file_name.empty())
-		return ErrorMessage("file to run not specified");
+		return ErrorMessage(STR_ERROR_NO_FILE);
 
 	if (!VerifyPath(file_name))
-		return ErrorMessage("path must not lead to the parent directory");
+		return ErrorMessage(STR_ERROR_PATH);
 
 	string path_to_dir = global.working_directory;
 	
@@ -2136,12 +2206,12 @@ int SCRIPT_RequestExecution(const vector<string> &arg)
 int SCRIPT_StartMod(const vector<string> &arg) 
 {
 	if (arg.size() < 4)
-		return ErrorMessage("Installation script is invalid", SCRIPT_ERROR);
+		return ErrorMessage(STR_ERROR_INVALID_SCRIPT, "%STR%", SCRIPT_ERROR);
 	
 	if (!global.current_mod.empty())
 		EndMod();
 		
-	WriteProgressFile(INSTALL_PROGRESS, "Preparing to install a mod");
+	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_PREPARING]);
 
 	global.current_mod          = arg[1];
 	global.current_mod_id       = arg[2];
@@ -2155,7 +2225,7 @@ int SCRIPT_StartMod(const vector<string> &arg)
 			global.current_mod_new_name = global.mod_name[i];
 
 	if (global.current_mod_new_name.empty())
-		return ErrorMessage("Installation arguments are invalid", SCRIPT_ERROR);
+		return ErrorMessage(STR_ERROR_INVALID_ARG, "%STR%", SCRIPT_ERROR);
 
 	
 	bool activate_rename = false;
@@ -2200,7 +2270,7 @@ int SCRIPT_StartMod(const vector<string> &arg)
 				tries++;
 				last_error = GetLastError();
 				if (last_error != 183) {
-					ErrorMessage(" FAILED to rename " + rename_src + " to " + rename_dst + " - " + Int2Str(last_error) + " " + FormatError(last_error));
+					ErrorMessage(STR_MOVE_RENAME_ERROR, "%STR% " + rename_src + " "+global.lang[STR_MOVE_RENAME_TO_ERROR]+" " + rename_dst + " - " + Int2Str(last_error) + " " + FormatError(last_error));
 					return COMMAND_FAILED;
 				}
 			}
@@ -2215,7 +2285,7 @@ int SCRIPT_StartMod(const vector<string> &arg)
 
 int SCRIPT_Delete(const vector<string> &arg) 
 {
-	WriteProgressFile(INSTALL_PROGRESS, "Deleting...");
+	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+"...");
 
 
 	vector<string> path;
@@ -2231,7 +2301,7 @@ int SCRIPT_Delete(const vector<string> &arg)
 
 		if (j<1  &&  path[j].empty()) {
 			if (!VerifyPath(arg[i]))
-				return ErrorMessage("path must not lead to the parent directory");
+				return ErrorMessage(STR_ERROR_PATH);
 			
 			path[j++] = arg[i];
 		}
@@ -2243,7 +2313,7 @@ int SCRIPT_Delete(const vector<string> &arg)
 
 	if (path[SOURCE].empty()) {
 		if (global.downloaded_filename.empty())
-			return ErrorMessage("not specified which file to delete");
+			return ErrorMessage(STR_ERROR_NO_FILE);
 	
 		path[SOURCE] = "fwatch\\tmp\\" + global.downloaded_filename;
 	} else {
@@ -2275,7 +2345,7 @@ int SCRIPT_Delete(const vector<string> &arg)
 		file_list = new char[buffer_size];
 
 		if (!file_list)
-			return ErrorMessage("Failed to allocate buffer " + Int2Str(buffer_size));
+			return ErrorMessage(STR_ERROR_BUFFER, "%STR% " + Int2Str(buffer_size));
 	}
 
 
@@ -2324,7 +2394,7 @@ int SCRIPT_Delete(const vector<string> &arg)
 
 int SCRIPT_Rename(const vector<string> &arg) 
 {
-	WriteProgressFile(INSTALL_PROGRESS, "Renaming...");
+	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_RENAMING]+"...");
 
 	vector<string> path;
 	path.push_back("");
@@ -2340,7 +2410,7 @@ int SCRIPT_Rename(const vector<string> &arg)
 
 		if (j<2  &&  path[j].empty()) {
 			if (!VerifyPath(arg[i]))
-				return ErrorMessage("path must not lead to the parent directory");
+				return ErrorMessage(STR_ERROR_PATH, "%STR%");
 			
 			path[j++] = arg[i];
 		}
@@ -2348,7 +2418,7 @@ int SCRIPT_Rename(const vector<string> &arg)
 
 	// Format source path
 	if (path[SOURCE].empty())
-		return ErrorMessage("not specified which file to rename");
+		return ErrorMessage(STR_RENAME_NO_NAME_ERROR, "%STR%");
 	
 	if (Equals(path[SOURCE],"<download>")  ||  Equals(path[SOURCE],"<dl>"))	
 		path[SOURCE]  = "fwatch\\tmp\\_extracted\\" + global.downloaded_filename;
@@ -2360,15 +2430,15 @@ int SCRIPT_Rename(const vector<string> &arg)
 	bool source_wildcard = false;
 
 	if (relative_path.find("*")!=string::npos  ||  relative_path.find("?")!=string::npos)
-		return ErrorMessage("parent directories in the path must not contain wildcards");
+		return ErrorMessage(STR_RENAME_WILDCARD_ERROR, "%STR%");
 	
 
 	// Format new name
 	if (path[DESTINATION].empty())
-		return ErrorMessage("not specified new name of the file");
+		return ErrorMessage(STR_RENAME_NO_NAME_ERROR);
 	
 	if (path[DESTINATION].find("\\")!=string::npos  ||  path[DESTINATION].find("/")!=string::npos)
-		return ErrorMessage("new name must not contain slashes");
+		return ErrorMessage(STR_RENAME_DST_PATH_ERROR);
 		
 			
 	// Find files and save them to a list
@@ -2459,7 +2529,7 @@ std::string BrowseFolder(std::string saved_path)
 int SCRIPT_RequestDownload(const vector<string> &arg) 
 {
 	if (arg.size() < 3)
-		return ErrorMessage("not enough arguments");
+		return ErrorMessage(STR_ERROR_ARG_COUNT);
 
 	string file_name    = arg[1];
 	string url          = arg[2];
@@ -2489,7 +2559,7 @@ int SCRIPT_RequestDownload(const vector<string> &arg)
 			global.logfile << "Found " << path2 << endl;
 			global.downloads.push_back(global.downloaded_filename);
 		} else {
-			string message = "You must manually download:\\n" + file_name + "\\n\\nALT+TAB to desktop";
+			string message = global.lang[STR_ASK_DLOAD] + ":\\n" + file_name + "\\n\\n" + global.lang[STR_ALTTAB];
 			WriteProgressFile(INSTALL_WAITINGFORUSER, message);
 			
 			ShellExecute(0, 0, url.c_str(), 0, 0 , SW_SHOW);
@@ -2502,7 +2572,7 @@ int SCRIPT_RequestDownload(const vector<string> &arg)
 				global.skip_modfolder = true;
 			else {
 				if (download_dir.empty()  ||  GetFileAttributes(path1.c_str()) == INVALID_FILE_ATTRIBUTES) {
-					WriteProgressFile(INSTALL_WAITINGFORUSER, "Installer is waiting for you to select folder where the file has been downloaded\\n\\nALT+TAB to desktop");
+					WriteProgressFile(INSTALL_WAITINGFORUSER, global.lang[STR_ASK_DLOAD_SELECT] + "\\n\\n" + global.lang[STR_ALTTAB]);
 					
 					download_dir = BrowseFolder("");
 					printf("%s", download_dir.c_str());
@@ -2520,7 +2590,7 @@ int SCRIPT_RequestDownload(const vector<string> &arg)
 		}
 		
 	if (move) {
-		WriteProgressFile(INSTALL_PROGRESS, "Copying downloaded file to fwatch\\tmp");
+		WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_COPYINGDOWNLOAD]);
 		
 		string source      = download_dir + "\\" + file_name;
 		string destination = global.working_directory + "\\fwatch\\tmp\\" + file_name;
@@ -2544,7 +2614,7 @@ int SCRIPT_RequestDownload(const vector<string> &arg)
 int SCRIPT_If_version(const vector<string> &arg) 
 {
 	if (arg.size() < 2)
-		return ErrorMessage("condition not specified");
+		return ErrorMessage(STR_ERROR_ARG_COUNT);
 	
 	// Process arguments (two or three)
 	string op          = "==";
@@ -2559,7 +2629,7 @@ int SCRIPT_If_version(const vector<string> &arg)
 		if (isdigit(first_letter)  ||  first_letter=='.')
 			given_number = atof(arg[1].c_str());
 		else
-			return ErrorMessage("not specified version number");
+			return ErrorMessage(STR_IF_NUMBER_ERROR);
 	}
 
 	
@@ -2624,7 +2694,7 @@ int SCRIPT_Endif(const vector<string> &arg)
 
 int SCRIPT_MakePBO(const vector<string> &arg) 
 {
-	WriteProgressFile(INSTALL_PROGRESS, "Packing...");
+	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_PACKINGPBO]+"...");
 
 		
 	vector<string> path;
@@ -2640,7 +2710,7 @@ int SCRIPT_MakePBO(const vector<string> &arg)
 
 		if (j<1  &&  path[j].empty()) {
 			if (!VerifyPath(arg[i]))
-				return ErrorMessage("path must not lead to the parent directory");
+				return ErrorMessage(STR_ERROR_PATH);
 			
 			path[j++] = arg[i];
 		}
@@ -2650,7 +2720,7 @@ int SCRIPT_MakePBO(const vector<string> &arg)
 	// Format source path
 	if (path[SOURCE].empty()) {
 		if (global.last_pbo_file.empty())
-			return ErrorMessage("not specified which directory to pack");
+			return ErrorMessage(STR_ERROR_NO_FILE);
 	
 		path[SOURCE] = global.last_pbo_file;
 	} else
@@ -2689,7 +2759,7 @@ int SCRIPT_MakePBO(const vector<string> &arg)
 
 	if (!CreateProcess(&executable[0], &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {
 		int errorCode = GetLastError();
-		return ErrorMessage("Failed to launch " + exename + " - " + Int2Str(errorCode) + " " + FormatError(errorCode));
+		return ErrorMessage(STR_ERROR_EXE, "%STR% " + exename + " - " + Int2Str(errorCode) + " " + FormatError(errorCode));
 	} else
 		global.logfile << "Creating a PBO file out of " << path[SOURCE] << endl;
 		
@@ -2718,7 +2788,7 @@ int SCRIPT_MakePBO(const vector<string> &arg)
 	ParsePBOLog(message, exename, path[SOURCE]);
 
 	if (exit_code != 0)
-		ErrorMessage("Failed to create pbo " + Int2Str(exit_code) + " - " + message);
+		ErrorMessage(STR_PBO_MAKE_ERROR, "%STR% " + Int2Str(exit_code) + " - " + message);
 	else {
 		ChangeFileDate(path[SOURCE]+".pbo");
 		
@@ -2740,7 +2810,7 @@ int SCRIPT_MakePBO(const vector<string> &arg)
 
 int SCRIPT_ExtractPBO(const vector<string> &arg) 
 {
-	WriteProgressFile(INSTALL_PROGRESS, "Unpacking...");
+	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_UNPACKINGPBO]+"...");
 
 
 		
@@ -2750,15 +2820,15 @@ int SCRIPT_ExtractPBO(const vector<string> &arg)
 	if (arg.size() >= 2)
 		source = arg[1];
 	else
-		return ErrorMessage("not specified which file to unpack");
+		return ErrorMessage(STR_ERROR_NO_FILE);
 		
 	if (!VerifyPath(source))
-		return ErrorMessage("source path must not lead to the parent directory");
+		return ErrorMessage(STR_UNPACKPBO_SRC_PATH_ERROR);
 	
 	string extension = GetFileExtension(source);
 	
 	if (!Equals(extension,"pbo")  &&  !Equals(extension,"xbo")  &&  !Equals(extension,"ebo")  &&  !Equals(extension,"ifa"))
-		return ErrorMessage("File must have PBO extension");
+		return ErrorMessage(STR_PBO_NAME_ERROR);
 	
 	bool game_dir = false;
 	
@@ -2782,7 +2852,7 @@ int SCRIPT_ExtractPBO(const vector<string> &arg)
 		destination = arg[2];
 
 		if (!VerifyPath(destination))
-			return ErrorMessage("destination path must not lead to the parent directory");
+			return ErrorMessage(STR_UNPACKPBO_DST_PATH_ERROR);
 	}
 
 	if (!destination.empty()  ||  game_dir) {
@@ -2850,7 +2920,7 @@ int SCRIPT_ExtractPBO(const vector<string> &arg)
 
 	if (!CreateProcess(&executable[0], &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {
 		int errorCode = GetLastError();
-		return ErrorMessage("Failed to launch " + exename + " - " + Int2Str(errorCode) + " " + FormatError(errorCode));	
+		return ErrorMessage(STR_ERROR_EXE, "%STR% " + exename + " - " + Int2Str(errorCode) + " " + FormatError(errorCode));	
 	} else {
 		global.logfile << "Extracting  " << source;
 		
@@ -2885,7 +2955,7 @@ int SCRIPT_ExtractPBO(const vector<string> &arg)
 	ParsePBOLog(error_message, exename, source);
 
 	if (exit_code != 0)
-		ErrorMessage("Failed to create pbo " + Int2Str(exit_code) + " - " + error_message);
+		ErrorMessage(STR_PBO_UNPACK_ERROR, "%STR% " + Int2Str(exit_code) + " - " + error_message);
 	else
 		// Because of extractpbo.exe bug we extracted to D:\temp
 		// now we have to move it to the destination directory selected by the user
@@ -2908,10 +2978,10 @@ int SCRIPT_ExtractPBO(const vector<string> &arg)
 
 int SCRIPT_EditLine(const vector<string> &arg) 
 {
-	WriteProgressFile(INSTALL_PROGRESS, "Editing...");
+	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_EDITING]+"...");
 
 	if (arg.size() < 3)
-		return ErrorMessage("not enough arguments");
+		return ErrorMessage(STR_ERROR_ARG_COUNT);
 		
 	vector<string> arg2;
 	arg2.push_back("");
@@ -2946,10 +3016,10 @@ int SCRIPT_EditLine(const vector<string> &arg)
 		file_name = global.current_mod_new_name + "\\" + file_name;
 
 	if (file_name.empty())
-		return ErrorMessage("not specified which file to edit");
+		return ErrorMessage(STR_ERROR_NO_FILE);
 
 	if (!VerifyPath(file_name))
-		return ErrorMessage("path must not lead to the parent directory");
+		return ErrorMessage(STR_ERROR_PATH);
 
 	vector<string> contents;
     fstream file;
@@ -2983,7 +3053,7 @@ int SCRIPT_EditLine(const vector<string> &arg)
 			
 			file.close();
 		} else 
-			return ErrorMessage("Failed to read file");
+			return ErrorMessage(STR_EDIT_READ_ERROR);
 	} else {
 		global.logfile << "Creating new file " << file_name << endl;
 		contents.push_back(arg2[2]);
@@ -3025,7 +3095,7 @@ int SCRIPT_EditLine(const vector<string> &arg)
 
 		file.close();
 	} else
-		return ErrorMessage("Failed to write file");
+		return ErrorMessage(STR_EDIT_WRITE_ERROR);
 
     ChangeFileDate(file_name);
 
@@ -3036,7 +3106,7 @@ int SCRIPT_EditLine(const vector<string> &arg)
 int SCRIPT_StartVersion(const vector<string> &arg) 
 {
 	if (arg.size() < 3)
-		return ErrorMessage("Installation script is invalid", SCRIPT_ERROR);
+		return ErrorMessage(STR_ERROR_INVALID_SCRIPT, "%STR%", SCRIPT_ERROR);
 
 	if (!global.current_mod_version.empty())
 		EndModVersion();
@@ -3106,6 +3176,7 @@ int main(int argc, char *argv[])
 	global.arguments_table.insert(pair<string,string>("installdir",""));
 	global.arguments_table.insert(pair<string,string>("downloadscript",""));
 	global.arguments_table.insert(pair<string,string>("evoice",""));
+	global.arguments_table.insert(pair<string,string>("language","English"));
 
 	// Separate arguments:
 	// arguments for this program go to the table
@@ -3136,6 +3207,142 @@ int main(int argc, char *argv[])
 
 
 	
+	// Load language
+	string stringtable[][STR_MAX] = {
+		{
+			"Initializing",
+			"Fetching installation script",
+			"Reading installation script",
+			"Connecting",
+			"Downloading",
+			"Downloaded",
+			"Extracting",
+			"Unpacking PBO",
+			"Packing PBO",
+			"Copying",
+			"Copying downloaded file to the fwatch\\tmp",
+			"Cleaning up",
+			"Preparing to install a mod",
+			"Deleting",
+			"Renaming",
+			"Editing",
+			"Installation aborted by user",
+			"Installation complete!",
+			"Done\\nbut mods %MOD% are still missing\\nOpen fwatch\\data\\addonInstallerLog.txt for details",
+			"Installation progress:",
+			"ALT+TAB to the desktop",
+			"ERROR",
+			"Can't create logfile",
+			"Can't read install script",
+			"In version",
+			"On line",
+			"Failed to launch",
+			"Not enough arguments",
+			"Failed to list files in ",
+			"Missing file name argument",
+			"Path is leaving current directory",
+			"Installation script is invalid",
+			"Invalid installator arguments",
+			"Failed to allocate buffer",
+			"left",
+			"total",
+			"Invalid download destination",
+			"Failed to download",
+			"Failed to find",
+			"remove this file and download again",
+			"Failed to extract",
+			"Failed to create directory",
+			"Failed to get attributes of",
+			"Source path is leaving current directory",
+			"Destination path is leaving current directory",
+			"Not allowed to move files out of the game directory",
+			"Failed to rename",
+			"to",
+			"New file name contains slashes",
+			"Wildcards in the path",
+			"Missing new file name",
+			"You must manually run",
+			"You must manually download",
+			"Select folder with the downloaded file",
+			"Missing version number",
+			"Not a PBO file",
+			"Failed to create PBO",
+			"Failed to unpack PBO",
+			"Failed to read file",
+			"Failed to create file"
+		},
+		{
+			"Çaióne",		//0
+			"Iîëó÷aíea ne?eioa ónoaíîâee",		//1
+			"N÷eouâaíea ôaéëîâ",		//2
+			"Iîäeë?÷aíea",		//3
+			"Çaa?óçea",		//4
+			"Çaa?óçea çaâa?oaía",		//5
+			"Eçâëa÷aíea ôaéëîâ",		//6
+			"?aniaeîâea a?oeâa PBO",		//7
+			"Nîçäaíea a?oeâa PBO",		//8
+			"Eîie?îâaíea",		//9
+			"Eîie?îâaíea çaa?óaaííîaî ôaéëa â fwatch\tmp",		//10
+			"Óäaëaíea â?aiaííuo ôaéëîâ",		//11
+			"Ía÷aëî ónoaíîâee iîäa",		//12
+			"Óäaëaíea ôaéëîâ iîäa",		//13
+			"Ia?aeiaíîâaíea ôaéëîâ iîäa",		//14
+			"?aäaeoe?îâaíea ôaéëîâ iîäa",		//15
+			"Ónoaíîâea i?a?âaía iîëüçîâaoaëai",		//16
+			"Ónoaíîâea çaâa?oaía!",		//17
+			"Ónoaíîâea çaâa?oaía\níî îonóonoâó?o iîäu %MOD%. Äîiîëíeoaëüíay eíôî?iaöey â fwatch\\data\\addonInstallerLog.txt",		//18
+			"I?îöann ónoaíîâee:",		//19
+			"Íaaieoa ALT+TAB, ÷oîáu nâa?íóoü ea?ó",		//20
+			"ÎOEÁEA",		//21
+			"Íaâîçiîaíî nîçäaoü ôaéë aó?íaëa ónoaíîâee",		//22
+			"Íaâîçiîaíî n÷eoaoü ne?eio ónoaíîâee",		//23
+			"Â âa?nee",		//24
+			"Â no?îea",		//25
+			"Îoeáea i?e çaiónea",		//26
+			"Íaäînoaoî÷íî a?aóiaíoîâ ôóíeöee",		//27
+			"Îoeáea i?e nîçäaíee nienea ôaéëîâ â iaiea ",		//28
+			"Îonóonoâóao eiy ôaéëa a?aóiaíoa",		//29
+			"Ióoü ía nîîoâaonoâóao oaeóuaé iaiea",		//30
+			"Íaâa?íué ne?eio ónoaíîâee",		//31
+			"Íaâa?íua a?aóiaíou ianoa?a ónoaíîâee",		//32
+			"Îoeáea i?e âuäaëaíee iîíyoeé",		//33
+			"înoaëînü",		//34
+			"ânaaî",		//35
+			"Íaâa?íué ióoü ónoaíîâee",		//36
+			"Îoeáea i?e çaa?óçea",		//37
+			"Nîâiaäaíeé ía íaéäaíî",		//38
+			"óäaëeoa ýoîo ôaéë e çaa?óçeoa níîâa",		//39
+			"Îoeáea i?e eçâëa÷aíee",		//40
+			"Îoeáea i?e nîçäaíee iaiee",		//41
+			"Îoeáea i?e n÷eouâaíee ao?eáóoîâ ôaéëa",		//42
+			"Enoîäíué ióoü ía nîîoâaonoâóao oaeóuaé iaiea",		//43
+			"Ióoü íaçía÷aíey ía nîîoâaonoâóao oaeóuaé iaiea",		//44
+			"Íaâîçiîaíî ia?aianoeoü ôaéëu eç iaiee ea?u",		//45
+			"Îoeáea i?e ia?aeiaíîâaíee ôaéëa",		//46
+			"â",		//47
+			"Íîâîa eiy ôaéëa nîäa?aeo nëaoe",		//48
+			"Ióoü nîäa?aeo neiâîëu iîänoaíîâee",		//49
+			"Îonóonoâóao íîâîa eiy ôaéëa",		//50
+			"Íaîáoîäeiî çaiónoeoü â?ó÷íó?",		//51
+			"Íaîáoîäeiî çaa?óçeoü â?ó÷íó?",		//52
+			"Âuáa?eoa iaieó n çaa?óaaííui ôaéëîi",		//53
+			"Îonóonoâóao íîia? âa?nee",		//54
+			"Ía ôaéë oeia PBO",		//55
+			"Îoeáea i?e nîçäaíee ôaéëa PBO",		//56
+			"Îoeáea i?e eçâëa÷aíee eç a?oeâa PBO",		//57
+			"Îoeáea i?e n÷eouâaíee",		//58
+			"Îoeáea i?e nîçäaíee ôaéëa"		//59
+		}
+	};
+	
+	global.lang_eng = stringtable[0];
+	global.lang     = stringtable[0];
+	
+	if (Equals(global.arguments_table["language"],"Russian"))
+		global.lang = stringtable[1];
+
+
+	
 	// Find current directory
 	TCHAR pwd[MAX_PATH];
 	GetCurrentDirectory(MAX_PATH, pwd);
@@ -3158,7 +3365,7 @@ int main(int argc, char *argv[])
 
 
 
-	WriteProgressFile(INSTALL_PROGRESS, "Initializing");
+	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_INIT]);
 
 
 	// Start listen thread
@@ -3174,7 +3381,7 @@ int main(int argc, char *argv[])
 	global.logfile.open("fwatch\\data\\addonInstallerLog.txt", ios::out | ios::app);
 
 	if (!global.logfile.is_open()) {
-		WriteProgressFile(INSTALL_ERROR, "FAILURE\\nCan't create logfile");
+		WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR]+"\\n"+global.lang[STR_ERROR_LOGFILE]));
 		return LOGFILE_ERROR;
 	}
 
@@ -3251,7 +3458,7 @@ int main(int argc, char *argv[])
 
 	// Download installation script
 	if (!global.arguments_table["downloadscript"].empty()) {
-		WriteProgressFile(INSTALL_PROGRESS, "Fetching installation script");
+		WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_GETSCRIPT]);
 
 		string url = "";
 		fstream url_file;
@@ -3274,7 +3481,7 @@ int main(int argc, char *argv[])
 	}
 	
 	// Open script file and store lines in a vector
-	WriteProgressFile(INSTALL_PROGRESS, "Reading installation script");
+	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_READSCRIPT]);
 
     vector<string> instructions;
     fstream script_file;
@@ -3286,10 +3493,59 @@ int main(int argc, char *argv[])
 		string script_line;
 
 		while(getline(script_file, script_line)) {
-			instructions.push_back(Trim(script_line));
+			script_line = Trim(script_line);
 			
-			string cut = Trim(script_line).substr(0,9);
-			if (cut!="begin_mod" && cut!="begin_ver" && !cut.empty())
+			instructions.push_back(script_line);
+			
+			// Do preliminary parsing to determine number of steps
+			vector<string> command_arguments;
+			Tokenize(script_line, " \t\r\n", command_arguments);
+			
+			if (command_arguments.size() == 0)
+				continue;
+	
+			// If url then keep j==0 which is auto installation; otherwise search for a command
+			int j = 0;
+			if (!IsURL(script_line))
+				for (; j<number_of_commands; j++)
+					if (Equals(command_arguments[0], Commands[j].name))
+						break;
+									
+			if (j == number_of_commands)
+				continue;
+				
+			// if modfolder wasn't formally started OR skipping this mod
+			if ((global.current_mod.empty() || global.skip_modfolder)  &&  Commands[j].execute!=SCRIPT_StartMod)
+				continue;
+				
+			// if version wasn't formally started
+			if (!global.current_mod.empty()  &&  global.current_mod_version.empty()  &&  Commands[j].execute!=SCRIPT_StartVersion)
+				continue;
+	
+			// if inside condition block
+			if (global.game_ver_index >= 0  &&  !global.game_ver_cond[global.game_ver_index]  &&  Commands[j].execute!=SCRIPT_StartMod  &&  Commands[j].execute!=SCRIPT_StartVersion  &&  Commands[j].execute!=SCRIPT_If_version  &&  Commands[j].execute!=SCRIPT_Else  &&  Commands[j].execute!=SCRIPT_Endif)
+				continue;
+	
+			// /mirror switch enables error fallthrough
+			bool is_mirror = false;
+			for (int k=0;  k<command_arguments.size();  k++)
+				if (Equals(command_arguments[k].substr(0,10), "/mirror")) {
+					is_mirror = true;
+					break;
+				}
+					
+			if (is_mirror)
+				continue;
+		
+			if (Commands[j].execute==SCRIPT_StartMod)
+				global.current_mod = "parsetest";
+			else 
+			if (Commands[j].execute==SCRIPT_StartVersion)
+				global.current_mod_version = "-1";
+			else
+			if (Commands[j].execute==SCRIPT_If_version || Commands[j].execute==SCRIPT_Else || Commands[j].execute==SCRIPT_Endif)
+				Commands[j].execute(command_arguments);
+			else
 				global.instructions_max++;
 		}
 		
@@ -3297,9 +3553,16 @@ int main(int argc, char *argv[])
 		
 		if (!global.test_mode)
 			DeleteFile(script_file_name.c_str());
+			
+		// Reset variables
+		global.current_mod         = "";
+		global.current_mod_version = "";
+		global.game_ver_index      = -1;
+		global.game_ver_cond.clear();
+		
 	} else {
 		global.logfile << "Failed to open " << script_file_name << "\n\n--------------\n\n";
-		WriteProgressFile(INSTALL_ERROR, "FAILURE\\nCan't read install script");
+		WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR]+"\\n"+global.lang[STR_ERROR_READSCRIPT]));
 		global.logfile.close();
 		return NO_SCRIPT;
 	}
@@ -3323,10 +3586,6 @@ int main(int argc, char *argv[])
 		global.command_line     = instructions[i];
 		bool manual_install     = false;
 		global.unpack_set_error = true;
-		
-		string cut = instructions[i].substr(0,9);
-		if (cut!="begin_mod" && cut!="begin_ver" && !cut.empty())
-			global.instructions_pos++;
 
 		vector<string> command_arguments;
 		Tokenize(instructions[i], " \t\r\n", command_arguments);
@@ -3334,13 +3593,13 @@ int main(int argc, char *argv[])
 		if (command_arguments.size() == 0)
 			continue;
 
+		// If url then keep j==0 which is auto installation; otherwise search for a command
 		int j = 0;
 		if (!IsURL(instructions[i]))
 			for (; j<number_of_commands; j++)
 				if (Equals(command_arguments[0], Commands[j].name))
 					break;
-				
-		// If url then set auto installation				
+
 		if (j == number_of_commands)
 			continue;
 			
@@ -3373,6 +3632,9 @@ int main(int argc, char *argv[])
 		} else
 			global.mirror = is_mirror ? ENABLED : DISABLED;
 
+		if (Commands[j].execute!=SCRIPT_StartMod  &&  Commands[j].execute!=SCRIPT_StartVersion  &&  Commands[j].execute!=SCRIPT_If_version  &&  Commands[j].execute!=SCRIPT_Else  &&  Commands[j].execute!=SCRIPT_Endif)
+			global.instructions_pos++;
+		
 		result = Commands[j].execute(command_arguments);
 		
 		if (result == USER_ABORTED)
@@ -3402,11 +3664,12 @@ int main(int argc, char *argv[])
 
 	// Finish log file
 	if (global.missing_modfolders.empty()) {
-		WriteProgressFile(INSTALL_DONE, "Installation complete!");
+		WriteProgressFile(INSTALL_DONE, global.lang[STR_ACTION_DONE]);
 		GetLocalTime(&st);
 		global.logfile << "All done  " << LeadingZero(st.wHour) << ":" << LeadingZero(st.wMinute) << ":" << LeadingZero(st.wSecond) << endl;
 	} else {
-		WriteProgressFile(INSTALL_WARNING, "Done\\nbut mods " + global.missing_modfolders + " are still missing\\nOpen fwatch\\data\\addonInstallerLog.txt for details");
+		string message = ReplaceAll(global.lang[STR_ACTION_DONEWARNING], "%MOD%", global.missing_modfolders);
+		WriteProgressFile(INSTALL_WARNING, message);
 		global.logfile << "WARNING: Installation completed but modfolders " << global.missing_modfolders << " are still missing" << endl;
 		global.restart_game = false;
 	}

@@ -1,9 +1,6 @@
 // gameRestart by Faguss (ofp-faguss.com) for Fwatch v1.16
 // Program restarting Operation Flashpoint game
 
-
-
-	// Headers
 #include <fstream>		// file operations
 #include <windows.h>	// winapi
 #include <tlhelp32.h>	// process/module traversing
@@ -11,8 +8,9 @@
 #include <sstream>      // for converting int to string
 #include <vector>       // dynamic array
 #include <algorithm>	// tolower
-#include <sstream>		// converting int to string
 #include <Shlobj.h>		// opening explorer
+
+#define USING_LOLE32 1
 
 using namespace std;
 
@@ -687,7 +685,7 @@ int Download(string url, string &error_text)
 	global.downloaded_filename = PathLastItem(url);
 	string arguments           = " --tries=1 --output-file=fwatch\\tmp\\schedule\\downloadLog.txt " + url;
 
-	unlink("fwatch\\tmp\\schedule\\downloadLog.txt");
+	remove("fwatch\\tmp\\schedule\\downloadLog.txt");
 
 
 				
@@ -737,7 +735,7 @@ int Download(string url, string &error_text)
 }
 
 
-int Unpack(string file_name, string password, string &error_text)
+int Unpack(string file_name, string password, string &error_text, bool tmp_dir=false)
 {
 	// Get subdirectories
 	string relative_path = PathNoLastItem(file_name);
@@ -779,7 +777,7 @@ int Unpack(string file_name, string password, string &error_text)
 	si.hStdInput     = NULL;
 	si.hStdOutput    = logFile;
 	si.hStdError     = logFile;
-	string arguments = WrapInQuotes(global.working_directory) + (password.empty() ? "" : " -p"+password) + " x -y -bb3 -bsp1 " + file_name;
+	string arguments = WrapInQuotes(global.working_directory) + (password.empty() ? "" : " -p"+password) + " x -y -bb3 -bsp1 " + (tmp_dir ? ("-ofwatch\\tmp\\_extracted ") : "") + file_name;
 
 	if (!CreateProcess("fwatch\\data\\7z.exe", &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {		
 		int errorCode = GetLastError();
@@ -1120,6 +1118,7 @@ int main(int argc, char *argv[])
 	string PBOaddon   		  = "";
 	string voice_server       = "";
 	string server_time        = "";
+	string update_resource    = "";
 	bool self_update		  = false;
 	bool server_equalmodreq   = false;
 	DWORD game_pid            = 0;
@@ -1183,8 +1182,8 @@ int main(int argc, char *argv[])
 				continue;
 			}
 
-			if (Equals(name,"-selfupdate")) {
-				self_update = Equals(value,"true");
+			if (Equals(name,"-updateresource")) {
+				update_resource = value;
 				continue;
 			}
 			
@@ -1195,24 +1194,55 @@ int main(int argc, char *argv[])
 			}
 			
 			if (Equals(name,"-evoice")) {
-				if (value.substr(0,12) == "ts3server://")
-					voice_server = "ts3server://" + Decrypt(value.substr(12));
+				if (value.substr(0,12) == "ts3server://") {
+					string ip        = value.substr(12);
+					string query     = "";
+					size_t query_pos = ip.find("?");
+					
+					// Decrypt query string
+					if (query_pos != string::npos) {
+						query = ip.substr(query_pos+1);
+						ip    = ip.substr(0, query_pos);
+						
+						vector<string> query_string_array;
+						Tokenize(query, "&", query_string_array);
+						query = "";
+						
+						for (int i=0; i<query_string_array.size(); i++) {							
+							vector<string> var;
+							Tokenize(query_string_array[i], "=", var);
+							
+							if (var.size() > 1) {
+								if (Equals(var[0],"password"))
+									var[1] = Decrypt(var[1]);
+									
+								if (Equals(var[0],"channelpassword"))
+									var[1] = Decrypt(var[1]);
+									
+								query += (query!="" ? "&" : "") + var[0] + "=" + var[1];
+							} else
+								if (var.size() > 0)
+									query += var[0];
+						}
+					}
+
+					voice_server = "ts3server://" + Decrypt(ip) + (query!="" ? "?" : "") + query;
+				}
 					
 				if (value.substr(0,9) == "mumble://")
 					voice_server = "mumble://" + Decrypt(value.substr(9));
 					
-				if (value.substr(0,19) == "https://discord.gg/") {
+				if (value.substr(0,19) == "https://discord.gg/")
 					voice_server = "https://discord.gg/" + Decrypt(value.substr(19));
-					ShellExecute(NULL, "open", voice_server.c_str(), NULL, NULL, SW_SHOWNORMAL);
-					return 0;
-				}
 				
-				if (value.substr(0,20) == "https://s.team/chat/") {
+				if (value.substr(0,20) == "https://s.team/chat/")
 					voice_server = "https://s.team/chat/" + Decrypt(value.substr(20));
-					ShellExecute(NULL, "open", voice_server.c_str(), NULL, NULL, SW_SHOWNORMAL);
-					return 0;
-				}
 					
+				continue;
+			}
+			
+			if (Equals(name,"-voice")) {
+				voice_server = value;
 				continue;
 			}
 		}
@@ -1220,7 +1250,11 @@ int main(int argc, char *argv[])
 		user_arguments     += namevalue + " ";
 		user_arguments_log += namevalue + " ";
 	}
-
+	
+	if (voice_server.substr(0,19) == "https://discord.gg/" || voice_server.substr(0,20) == "https://s.team/chat/") {
+		ShellExecute(NULL, "open", voice_server.c_str(), NULL, NULL, SW_SHOWNORMAL);
+		return 0;
+	}
 
 
 
@@ -1831,15 +1865,19 @@ int main(int argc, char *argv[])
 					CHAR pwd[MAX_PATH];
 					GetCurrentDirectory(MAX_PATH,pwd);				
 					string path_to_file = (string)pwd + "\\fwatch\\data\\gameRestart.exe";
-					ITEMIDLIST *pIDL    = ILCreateFromPath(path_to_file.c_str());
-		
-					if (pIDL != NULL) {
-						CoInitialize(NULL);
-					    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
-					    	ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
-						CoUninitialize();
-					    ILFree(pIDL);
-					}
+					
+					#if USING_LOLE32 == 1
+						ITEMIDLIST *pIDL = ILCreateFromPath(path_to_file.c_str());
+						if (pIDL != NULL) {
+							CoInitialize(NULL);
+						    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
+						    	ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
+							CoUninitialize();
+						    ILFree(pIDL);
+						}
+					#else
+						ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
+					#endif
 				}
 				else
 					ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
@@ -1921,15 +1959,19 @@ int main(int argc, char *argv[])
 				CHAR pwd[MAX_PATH];
 				GetCurrentDirectory(MAX_PATH,pwd);				
 				string path_to_file = (string)pwd + "\\" + global.downloaded_filename;
-				ITEMIDLIST *pIDL    = ILCreateFromPath(path_to_file.c_str());
-	
-				if (pIDL != NULL) {
-					CoInitialize(NULL);
-				    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
-				    	ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
-					CoUninitialize();
-				    ILFree(pIDL);
-				};
+				
+				#if USING_LOLE32 == 1
+					ITEMIDLIST *pIDL = ILCreateFromPath(path_to_file.c_str());
+					if (pIDL != NULL) {
+						CoInitialize(NULL);
+					    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
+					    	ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
+						CoUninitialize();
+					    ILFree(pIDL);
+					};
+				#else
+					ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
+				#endif
 			}
 			
 			return result;			
@@ -1964,6 +2006,103 @@ int main(int argc, char *argv[])
 		}
 	} else 
 		DeleteFile("fwatch\\data\\gameRestart_old.exe");
+		
+	if (update_resource != "") {
+		string error_text = "";
+		char url[]        = "http://ofp-faguss.com/fwatch/116test";
+		
+		int result = Download("http://ofp-faguss.com/fwatch/download/ofp_aspect_ratio_for_fwatch116.7z", error_text);
+		if (result != 0) {
+			global.logfile << "Download failed\n\n--------------\n\n";
+			global.logfile.close();
+			error_text += "\n\nYou have to download and update manually";
+			int msgboxID = MessageBox(NULL, error_text.c_str(), "Resource update", MB_OK | MB_ICONSTOP);
+			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+			return result;
+		}
+				
+		Unpack(global.downloaded_filename, "", error_text, true);
+		DeleteFile(global.downloaded_filename.c_str());
+		
+		if (result != 0) {
+			global.logfile << "Unpacking failed\n\n--------------\n\n";
+			global.logfile.close();
+			int msgboxID = MessageBox(NULL, error_text.c_str(), "Resource update", MB_OK | MB_ICONSTOP);		
+			return result;			
+		}
+		
+		string source = "fwatch\\tmp\\_extracted\\Files\\";
+		string destination = "bin\\";
+		
+		if (update_resource == "1.96") {
+			source += "OFP Resistance 1.96";
+			destination = "Res\\bin\\";
+		}
+			
+		if (update_resource == "1.99")
+			source += "ArmA Cold War Assault 1.99";
+			
+		if (update_resource == "2.01")
+			source += "ArmA Resistance 2.01";
+
+		string destination_folder = destination;
+		source += "\\Resource.cpp";
+		destination += "Resource.cpp";
+		int tries = 1;
+		int last_error = 0;
+		string destination_backup = "";
+		
+		do {
+			destination_backup = destination_folder + "Resource_backup" + (tries>1 ? Int2Str(tries) : "") + ".cpp";
+			if (MoveFileEx(destination.c_str(), destination_backup.c_str(), 0))
+				last_error = 0;
+			else {
+				tries++;
+				last_error = GetLastError();
+				if (last_error != 183) {
+					string message = "Failed to rename " + destination + " to " + destination_backup + " - " + FormatError(last_error);
+					global.logfile << message;
+					global.logfile.close();
+					int msgboxID = MessageBox(NULL, message.c_str(), "Resource update", MB_OK | MB_ICONSTOP);		
+					return 7;
+				}
+			}
+		} while (last_error == 183);
+		
+		if (!MoveFileEx(source.c_str(), destination.c_str(), 0)) {
+			string message = "Failed to move " + source + " to " + destination + " - " + FormatError(GetLastError());
+			global.logfile << message;
+			global.logfile.close();
+			int msgboxID = MessageBox(NULL, message.c_str(), "Resource update", MB_OK | MB_ICONSTOP);		
+			return 7;
+		}
+		
+		if (steam) {
+			MessageBox(NULL, "Update complete. Start the Fwatch again", "Fwatch self-update", MB_OK | MB_ICONINFORMATION);
+			global.logfile << "Operation successful\n\n--------------\n\n";
+			global.logfile.close();	
+			return 0;
+		}
+				
+		if (nolaunch) {
+			Sleep(500);
+			PROCESS_INFORMATION pi;
+		    STARTUPINFO si; 
+			ZeroMemory( &si, sizeof(si) );
+			ZeroMemory( &pi, sizeof(pi) );
+			si.cb 		   = sizeof(si);
+			si.dwFlags 	   = STARTF_USESHOWWINDOW;
+			si.wShowWindow = SW_SHOW;
+		
+			string launch_exe = global.working_directory + "\\" + "fwatch.exe";
+			string launch_arg = " " + global.working_directory + " -nolaunch " + fwatch_arguments;
+			
+			CreateProcess(&launch_exe[0], &launch_arg[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi);
+			CloseHandle(pi.hProcess);
+		    CloseHandle(pi.hThread);
+		    Sleep(500);
+		}
+	}
 	
 
 
