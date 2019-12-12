@@ -138,7 +138,7 @@ case C_RESTART_SERVER:
 	if (!DedicatedServer) 
 		break;
 	
-	FILE *fp = fopen("fwatch_server_restart.db", "w");
+	FILE *fp = fopen("fwatch\\data\\fwatch_server_restart.db", "w");
 
 	if (fp) 
 		fprintf(fp, " %s", com+15), 
@@ -522,7 +522,19 @@ case C_RESTART_CLIENT:
 	if (error)
 		break;
 
-	
+	if (CommandID == C_RESTART_CLIENT) {
+		FILE *f = fopen("fwatch\\data\\fwatch_client_restart.db", "a");
+		fprintf(f, " %s ", exe_path);
+		fprintf(f, param.pointer);
+		fclose(f);
+		String_end(param);
+		FWerror(0,0,CommandID,"","",0,0,out);
+		QWrite("0]", out);
+		break;
+	}
+
+
+
 	// Create log file
 	SECURITY_ATTRIBUTES sa;
     sa.nLength              = sizeof(sa);

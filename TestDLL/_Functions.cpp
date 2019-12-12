@@ -553,7 +553,7 @@ void listDirFiles(char* path, HANDLE out, int mode, int systime, int CommandID)
 
 			hFind = FindFirstFile(path_to_user, &fd);
 			if (hFind != INVALID_HANDLE_VALUE) {
-				if (fd.nFileSizeLow > bytes) {
+				if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 102400) {
 					strncpy(customfilename, fd.cFileName, 255);
 					bytes = fd.nFileSizeLow;
 				}
@@ -562,7 +562,7 @@ void listDirFiles(char* path, HANDLE out, int mode, int systime, int CommandID)
 				sprintf(path_to_user, "Users\\%s\\face.jpg", path);
 				hFind = FindFirstFile(path_to_user, &fd);
 				if (hFind != INVALID_HANDLE_VALUE)
-					if (fd.nFileSizeLow > bytes) {
+					if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 102400) {
 						strncpy(customfilename, fd.cFileName, 255);
 						bytes = fd.nFileSizeLow;
 					}
@@ -582,7 +582,7 @@ void listDirFiles(char* path, HANDLE out, int mode, int systime, int CommandID)
 				if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
 					continue;
 
-				if (fd.nFileSizeLow > bytes) {
+				if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 51200) {
 					bytes = fd.nFileSizeLow;
 					strncpy(customfilename, fd.cFileName, 255);
 				}
