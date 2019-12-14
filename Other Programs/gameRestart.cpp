@@ -2011,7 +2011,7 @@ int main(int argc, char *argv[])
 		string error_text = "";
 		char url[]        = "http://ofp-faguss.com/fwatch/116test";
 		
-		int result = Download("http://ofp-faguss.com/fwatch/download/ofp_aspect_ratio_for_fwatch116.7z", error_text);
+		int result = Download("https://ofp-faguss.com/fwatch/download/ofp_aspect_ratio207.7z", error_text);
 		if (result != 0) {
 			global.logfile << "Download failed\n\n--------------\n\n";
 			global.logfile.close();
@@ -2021,7 +2021,7 @@ int main(int argc, char *argv[])
 			return result;
 		}
 				
-		Unpack(global.downloaded_filename, "", error_text, true);
+		result = Unpack(global.downloaded_filename, "", error_text, true);
 		DeleteFile(global.downloaded_filename.c_str());
 		
 		if (result != 0) {
