@@ -3560,6 +3560,16 @@ int main(int argc, char *argv[])
 		global.game_ver_index      = -1;
 		global.game_ver_cond.clear();
 		
+		if (global.test_mode) {
+			global.current_mod              = global.arguments_table["testmod"];
+			global.current_mod_version      = "1";
+			global.current_mod_version_date = time(0);
+			
+			if (global.arguments_table["testdir"].empty())
+				global.current_mod_new_name = global.arguments_table["testmod"];
+			else
+				global.current_mod_new_name = global.arguments_table["testdir"];
+		}
 	} else {
 		global.logfile << "Failed to open " << script_file_name << "\n\n--------------\n\n";
 		WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR]+"\\n"+global.lang[STR_ERROR_READSCRIPT]));
