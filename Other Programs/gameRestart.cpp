@@ -1186,7 +1186,12 @@ int main(int argc, char *argv[])
 				update_resource = value;
 				continue;
 			}
-			
+
+			if (Equals(name,"-selfupdate")) {
+				self_update = Equals(value,"true");
+				continue;
+			}
+
 			if (Equals(name,"-econnect") || Equals(name,"-eport") || Equals(name,"-epassword")) {
 				user_arguments     += "-" + name.substr(2) + "=" + Decrypt(value) + " ";
 				user_arguments_log += "-" + name.substr(2) + "=hidden ";
