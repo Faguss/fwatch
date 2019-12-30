@@ -1945,6 +1945,34 @@ int main(int argc, char *argv[])
 			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 			return result;
 		}
+		
+		// Delete files manually to make sure they're not being accessed
+		result = 0;
+		int tries = 4;
+		
+		do {
+			if (!DeleteFile("fwatch.dll")) {
+				result = GetLastError();
+				if (result == 2)
+					result = 0;
+				if (result != 0) {
+					Sleep(500);
+					tries--;
+				}
+				global.logfile << "Delete fwatch.dll " << result << endl;
+			} else {
+				global.logfile << "Delete fwatch.dll success" << endl;
+			}
+		} while (result != 0 && tries>=0);
+		
+		if (result != 0) {
+			global.logfile << "Delete failed\n\n--------------\n\n";
+			global.logfile.close();
+			error_text += "Failed to delete fwatch.dll " + FormatError(result);
+			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+			return result;
+		}
 					
 		result = Unpack(global.downloaded_filename, "fwatch", error_text);
 		if (result != 0) {
@@ -2165,7 +2193,12 @@ int main(int argc, char *argv[])
 
 			if (key1 && key2) {
 				launch_exe = (string)SteamExe;
-				launch_arg = " " + (string)SteamPath + " -applaunch 65790 " + global.working_directory + " -nomap " + filtered_game_arguments + user_arguments;
+				launch_arg = " -applaunch 65790 ";
+				
+				if (filtered_game_arguments.find("-nomap")==string::npos && user_arguments.find("-nomap")==string::npos)
+					launch_arg += " -nomap ";
+					
+				launch_arg += filtered_game_arguments + user_arguments;
 			} else {
                 string errorMSG = FormatError(GetLastError());
                 global.logfile << "Couldn't read registry key" << errorMSG;
