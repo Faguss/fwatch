@@ -524,7 +524,7 @@ case C_RESTART_CLIENT:
 
 	if (CommandID == C_RESTART_CLIENT) {
 		FILE *f = fopen("fwatch\\data\\fwatch_client_restart.db", "a");
-		fprintf(f, " %s ", exe_path);
+		//fprintf(f, " %s ", exe_path);
 		fprintf(f, param.pointer);
 		fclose(f);
 		String_end(param);
