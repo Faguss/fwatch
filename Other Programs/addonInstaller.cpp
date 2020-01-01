@@ -251,11 +251,12 @@ string LeadingZero(int number)
 string GetFileExtension(string file_name)
 {
 	string file_extension = file_name.substr( file_name.find_last_of('.')+1 );
+	transform(file_extension.begin(), file_extension.end(), file_extension.begin(), ::tolower);
 	
 	// If extension is a number then it's a wget backup - find real extension
 	int Number;
 	
-	if ( (istringstream(file_extension) >> Number) ) {
+	if (file_extension!="7z" && istringstream(file_extension) >> Number) {
 		size_t lastDot       = file_name.find_last_of('.');
 		size_t secondLastDot = file_name.find_last_of('.', lastDot-1);
 		
@@ -1228,7 +1229,7 @@ int Download_Wrapper(const vector<string> &arg)
 		if (result != 0)
 			return result;
 
-		// Parse downloaded file and get code
+		// Parse downloaded file and find link
 		fstream token_file_handle;
 		token_file_handle.open(token_file.c_str(), ios::in);
 		
@@ -1239,39 +1240,33 @@ int Download_Wrapper(const vector<string> &arg)
 				size_t find = line.find(arg[i]);
 	
 				if (find != string::npos) {
-					found_phrase = true;
-					int start    = find;
-					int end      = find + arg[i].length();	
+					size_t left_quote  = line.rfind("\"", find);
+					size_t right_quote = line.find("\"", find + arg[i].length());
 					
-					while(start>=0  &&  line[start]!='\"')
-						start--;
+					if (left_quote!=string::npos && right_quote!=string::npos) {
+						left_quote++;
+						found_phrase = true;
+						new_url      = line.substr(left_quote, right_quote - left_quote);
+						new_url      = ReplaceAll(new_url, "&amp;", "&");
 						
-					while(end<line.length()  &&  line[end]!='\"')
-						end++;
+						// if relative address
+						if (new_url[0] == '/') {
+							int offset = 0;
+							size_t doubleslash = original_url.find("//");
+							
+							if (doubleslash != string::npos)
+								offset = doubleslash + 2;
+							
+							size_t slash = original_url.find_first_of("/", offset);
+							
+							if (slash != string::npos)
+								original_url = original_url.substr(0, slash);
+							
+							new_url = original_url + new_url;
+						}
 						
-					if (line[start] == '\"')
-						start++;
-	
-					new_url = line.substr(start, end - start);
-					new_url = ReplaceAll(new_url, "&amp;", "&");
-					
-					// if relative address
-					if (new_url[0] == '/') {
-						int offset = 0;
-						size_t doubleslash = original_url.find("//");
-						
-						if (doubleslash != string::npos)
-							offset = doubleslash + 2;
-						
-						size_t slash = original_url.find_first_of("/", offset);
-						
-						if (slash != string::npos)
-							original_url = original_url.substr(0, slash);
-						
-						new_url = original_url + new_url;
+						break;
 					}
-
-					break;
 				}
 			}
 
@@ -2827,7 +2822,7 @@ int SCRIPT_ExtractPBO(const vector<string> &arg)
 	
 	string extension = GetFileExtension(source);
 	
-	if (!Equals(extension,"pbo")  &&  !Equals(extension,"xbo")  &&  !Equals(extension,"ebo")  &&  !Equals(extension,"ifa"))
+	if (extension != "pbo")
 		return ErrorMessage(STR_PBO_NAME_ERROR);
 	
 	bool game_dir = false;
@@ -3024,6 +3019,7 @@ int SCRIPT_EditLine(const vector<string> &arg)
 	vector<string> contents;
     fstream file;
 	int line_number = 0;
+	bool ends_with_newline = true;
     
     if (!create) {
     	global.logfile << "Editing line " << wanted_line << " in " << file_name << endl;
@@ -3034,6 +3030,9 @@ int SCRIPT_EditLine(const vector<string> &arg)
 		
 			while (getline(file, line)) {
 				line_number++;
+				
+				if (file.eof())
+					ends_with_newline = false;
 				
 				if (line_number == wanted_line) {
 					contents.push_back(arg2[2]);
@@ -3089,7 +3088,7 @@ int SCRIPT_EditLine(const vector<string> &arg)
 		for (int i=0; i<contents.size(); i++) {
 			file << contents[i];
 			
-			if (i+1 < line_number)
+			if (i+1 < line_number || i+1==line_number && ends_with_newline)
 				file << endl;
 		}
 
