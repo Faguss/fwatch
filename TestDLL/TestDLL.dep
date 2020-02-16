@@ -3,17 +3,18 @@
 ..\apihijack.cpp : \
 	"..\apihijack.h"\
 	".\testdll.h"\
+	"c:\program files\microsoft visual studio\vc98\include\basetsd.h"\
 	
 
 .\chandler.cpp : \
 	".\testdll.h"\
-	"c:\dxsdk\include\basetsd.h"\
+	"c:\program files\microsoft visual studio\vc98\include\basetsd.h"\
 	
 
 .\dllmain.cpp : \
 	"..\apihijack.h"\
 	".\testdll.h"\
-	"c:\dxsdk\include\basetsd.h"\
+	"c:\program files\microsoft visual studio\vc98\include\basetsd.h"\
 	
 
 .\fdb.cpp : \
@@ -21,16 +22,17 @@
 	
 
 .\scripth.cpp : \
-	".\_functions.hpp"\
-	".\class_commands.hpp"\
-	".\clip_commands.hpp"\
-	".\exe_commands.hpp"\
-	".\file_commands.hpp"\
-	".\igse_commands.hpp"\
-	".\info_commands.hpp"\
-	".\input_commands.hpp"\
-	".\mem_commands.hpp"\
-	".\string_commands.hpp"\
+	".\_functions.cpp"\
+	".\class_commands.cpp"\
+	".\clip_commands.cpp"\
+	".\exe_commands.cpp"\
+	".\file_commands.cpp"\
+	".\global_vars.h"\
+	".\igse_commands.cpp"\
+	".\info_commands.cpp"\
+	".\input_commands.cpp"\
+	".\mem_commands.cpp"\
+	".\string_commands.cpp"\
 	".\testdll.h"\
-	"c:\dxsdk\include\basetsd.h"\
+	"c:\program files\microsoft visual studio\vc98\include\basetsd.h"\
 	

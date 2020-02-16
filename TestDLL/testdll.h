@@ -215,15 +215,12 @@ void  fdbGet2(char* file, char* var, int CommandID, HANDLE out);							//v1.1
 
 // New functions
 //1.1
-bool getMissionDir(char** FileName, int &FileNameLength, int CommandID, HANDLE out);
 void listDirFiles (char* path, HANDLE out, int mode, int systime, int CommandID);
 
 //1.11
 int findProcess(char* name);
 
 //1.12
-bool isAllowedExternalPath (char* path, bool mode);
-bool isLeavingDir (char* directory, bool isDownload, bool restrictive, int CommandID, HANDLE out);
 char* str_replace(const char *strbuf, const char *strold, const char *strnew, int matchWord, int caseSens);
 
 //1.13
@@ -281,5 +278,8 @@ void String_end(String &str);
 int String_append(String &str, char *text);
 int String_append_quotes(String &str, char *left, char *text, char *right);
 int String_allocate(String &str, int new_maximal_length);
-char* Tokenize(char *string, char *delimiter, int &i, int string_length, char &save, bool square_brackets);
+int VerifyPath(char **ptr_filename, String &str, int mode, int CommandID, HANDLE out);
 unsigned int fnv_hash (unsigned int hash, char* text, int text_length);
+void PurgeComments(char *text, int string_start, int string_end);
+char* Output_Nested_Array(char *temp, int level, char *output_strings_name, int j, int *subclass_count);
+int DeleteWrapper(char *refcstrRootDirectory);

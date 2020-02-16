@@ -33,19 +33,25 @@ INTDIR=.\Release
 OutDir=.\..\ 
 # End Custom Macros
 
-ALL : "$(OUTDIR)\fwatch.dll"
+ALL : "$(OUTDIR)\fwatch.dll" "$(OUTDIR)\TestDLL.bsc"
 
 
 CLEAN :
 	-@erase "$(INTDIR)\apihijack.obj"
+	-@erase "$(INTDIR)\apihijack.sbr"
 	-@erase "$(INTDIR)\chandler.obj"
+	-@erase "$(INTDIR)\chandler.sbr"
 	-@erase "$(INTDIR)\dllmain.obj"
+	-@erase "$(INTDIR)\dllmain.sbr"
 	-@erase "$(INTDIR)\fdb.obj"
+	-@erase "$(INTDIR)\fdb.sbr"
 	-@erase "$(INTDIR)\scripth.obj"
+	-@erase "$(INTDIR)\scripth.sbr"
 	-@erase "$(INTDIR)\vc60.idb"
 	-@erase "$(OUTDIR)\fwatch.dll"
 	-@erase "$(OUTDIR)\fwatch.exp"
 	-@erase "$(OUTDIR)\fwatch.lib"
+	-@erase "$(OUTDIR)\TestDLL.bsc"
 
 "$(OUTDIR)" :
     if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
@@ -54,7 +60,7 @@ CLEAN :
     if not exist "$(INTDIR)/$(NULL)" mkdir "$(INTDIR)"
 
 CPP=cl.exe
-CPP_PROJ=/nologo /G6 /MT /W3 /Ox /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" /D "_USRDLL" /D "TESTDLL_EXPORTS" /Fp"$(INTDIR)\TestDLL.pch" /YX /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
+CPP_PROJ=/nologo /G6 /MT /W3 /Ox /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" /D "_USRDLL" /D "TESTDLL_EXPORTS" /FR"$(INTDIR)\\" /Fp"$(INTDIR)\TestDLL.pch" /YX /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
 
 .c{$(INTDIR)}.obj::
    $(CPP) @<<
@@ -92,7 +98,17 @@ RSC=rc.exe
 BSC32=bscmake.exe
 BSC32_FLAGS=/nologo /o"$(OUTDIR)\TestDLL.bsc" 
 BSC32_SBRS= \
-	
+	"$(INTDIR)\apihijack.sbr" \
+	"$(INTDIR)\chandler.sbr" \
+	"$(INTDIR)\dllmain.sbr" \
+	"$(INTDIR)\fdb.sbr" \
+	"$(INTDIR)\scripth.sbr"
+
+"$(OUTDIR)\TestDLL.bsc" : "$(OUTDIR)" $(BSC32_SBRS)
+    $(BSC32) @<<
+  $(BSC32_FLAGS) $(BSC32_SBRS)
+<<
+
 LINK32=link.exe
 LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib shlwapi.lib Winmm.lib version.lib /nologo /dll /incremental:no /pdb:"$(OUTDIR)\fwatch.pdb" /machine:I386 /def:".\testdll.def" /out:"$(OUTDIR)\fwatch.dll" /implib:"$(OUTDIR)\fwatch.lib" 
 DEF_FILE= \
@@ -181,7 +197,7 @@ BSC32_FLAGS=/nologo /o"$(OUTDIR)\TestDLL.bsc"
 BSC32_SBRS= \
 	
 LINK32=link.exe
-LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib shlwapi.lib /nologo /dll /incremental:yes /pdb:"$(OUTDIR)\TestDLL.pdb" /debug /machine:I386 /def:".\testdll.def" /out:"$(OUTDIR)\TestDLL.dll" /implib:"$(OUTDIR)\TestDLL.lib" /pdbtype:sept 
+LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib shlwapi.lib Winmm.lib version.lib /nologo /dll /incremental:yes /pdb:"$(OUTDIR)\TestDLL.pdb" /debug /machine:I386 /def:".\testdll.def" /out:"$(OUTDIR)\TestDLL.dll" /implib:"$(OUTDIR)\TestDLL.lib" /pdbtype:sept 
 DEF_FILE= \
 	".\testdll.def"
 LINK32_OBJS= \
@@ -211,29 +227,85 @@ LINK32_OBJS= \
 !IF "$(CFG)" == "TestDLL - Win32 Release" || "$(CFG)" == "TestDLL - Win32 Debug"
 SOURCE=..\apihijack.cpp
 
+!IF  "$(CFG)" == "TestDLL - Win32 Release"
+
+
+"$(INTDIR)\apihijack.obj"	"$(INTDIR)\apihijack.sbr" : $(SOURCE) "$(INTDIR)"
+	$(CPP) $(CPP_PROJ) $(SOURCE)
+
+
+!ELSEIF  "$(CFG)" == "TestDLL - Win32 Debug"
+
+
 "$(INTDIR)\apihijack.obj" : $(SOURCE) "$(INTDIR)"
 	$(CPP) $(CPP_PROJ) $(SOURCE)
 
 
+!ENDIF 
+
 SOURCE=.\chandler.cpp
+
+!IF  "$(CFG)" == "TestDLL - Win32 Release"
+
+
+"$(INTDIR)\chandler.obj"	"$(INTDIR)\chandler.sbr" : $(SOURCE) "$(INTDIR)"
+
+
+!ELSEIF  "$(CFG)" == "TestDLL - Win32 Debug"
+
 
 "$(INTDIR)\chandler.obj" : $(SOURCE) "$(INTDIR)"
 
 
+!ENDIF 
+
 SOURCE=.\dllmain.cpp
+
+!IF  "$(CFG)" == "TestDLL - Win32 Release"
+
+
+"$(INTDIR)\dllmain.obj"	"$(INTDIR)\dllmain.sbr" : $(SOURCE) "$(INTDIR)"
+
+
+!ELSEIF  "$(CFG)" == "TestDLL - Win32 Debug"
+
 
 "$(INTDIR)\dllmain.obj" : $(SOURCE) "$(INTDIR)"
 
 
+!ENDIF 
+
 SOURCE=.\fdb.cpp
+
+!IF  "$(CFG)" == "TestDLL - Win32 Release"
+
+
+"$(INTDIR)\fdb.obj"	"$(INTDIR)\fdb.sbr" : $(SOURCE) "$(INTDIR)"
+
+
+!ELSEIF  "$(CFG)" == "TestDLL - Win32 Debug"
+
 
 "$(INTDIR)\fdb.obj" : $(SOURCE) "$(INTDIR)"
 
 
+!ENDIF 
+
 SOURCE=.\scripth.cpp
+
+!IF  "$(CFG)" == "TestDLL - Win32 Release"
+
+
+"$(INTDIR)\scripth.obj"	"$(INTDIR)\scripth.sbr" : $(SOURCE) "$(INTDIR)"
+
+
+!ELSEIF  "$(CFG)" == "TestDLL - Win32 Debug"
+
 
 "$(INTDIR)\scripth.obj" : $(SOURCE) "$(INTDIR)"
 
+
+!ENDIF 
 
 
 !ENDIF 

@@ -162,6 +162,9 @@ static enum {
 	C_CLASS_TOKENS,				//v1.13
 	C_CLASS_MODIFY,				//v1.13
 	C_CLASS_MODTOK,				//v1.13
+	C_CLASS_READ,				//v1.16
+	C_CLASS_READ2,				//v1.16
+	C_CLASS_READSQM,			//v1.16
 	C_EXE_SPIG,					//v1.13
 	C_EXE_ADDONTEST,			//v1.13
 	C_EXE_WGET,					//v1.13
@@ -296,6 +299,9 @@ COMMANDS cmdsList[] = {
 	C_CLASS_TOKENS, "class token",				//v1.13
 	C_CLASS_MODIFY, "class modify",				//v1.13
 	C_CLASS_MODTOK, "class modtok",				//v1.13
+	C_CLASS_READ, "class read",					//v1.16
+	C_CLASS_READ2, "class read2",				//v1.16
+	C_CLASS_READSQM, "class readsqm",			//v1.16
 	C_EXE_SPIG, "spig exe",						//v1.13
 	C_EXE_ADDONTEST, "exe addontest",			//v1.13
 	C_EXE_WGET, "exe wget",						//v1.13
@@ -335,6 +341,9 @@ int newArgSystem[] = {
 	C_CLASS_TOKENS,
 	C_CLASS_MODIFY,
 	C_CLASS_MODTOK,
+	C_CLASS_READ,
+	C_CLASS_READ2,
+	C_CLASS_READSQM,
 	C_IGSE_WRITE,
 	C_IGSE_FIND,
 	C_IGSE_DB,
@@ -420,24 +429,45 @@ int MemCommandsDedicated[] = {
 	C_FILE_MODLIST
 };
 
+int MemCommands201[] = {
+	C_MEM_GETCURSOR,
+	C_MEM_SETCURSOR,
+	C_MEM_ERROR,
+	C_MEM_MODLIST,
+	C_MEM_MASTERSERVER,
+	C_MEM_HUD,
+	C_INPUT_MULTI,
+	C_INFO_STARTTIME,
+	C_EXE_WEBSITE,
+	C_FILE_MODLIST
+};
+
 char* strtok2(char* str);
 int matchCmd(char *cmd);
 void QWrite(char* str, HANDLE file);
 char* stripq(char *str);
 
 //1.16 Function modes (arguments to pass)
-enum {
+enum IGSE_LIST_OPTIONS 
+{
 	FILENAMES_AND_ATTRIBUTES,
 	FILENAMES_ONLY,
 	MODFOLDERS
 };
 
-enum {
-	RESTRICT_TO_MISSION_DIR,
-	ALLOW_GAME_ROOT_DIR
+enum VERIFY_PATH
+{
+	ILLEGAL_PATH,
+	LEGAL_PATH,
+	DOWNLOAD_DIR,
+	RESTRICT_TO_MISSION_DIR = 1,
+	ALLOW_GAME_ROOT_DIR = 2,
+	SUPPRESS_ERROR = 4,
+	SUPPRESS_CONVERSION = 8
 };
 
-enum IGSE_WRITE_MODES {
+enum IGSE_WRITE_MODES 
+{
 	IGSE_WRITE_REPLACE,
 	IGSE_WRITE_APPEND,
 	IGSE_WRITE_NEW,
@@ -449,14 +479,16 @@ enum IGSE_WRITE_MODES {
 	IGSE_WRITE_MOVEDOWN
 };
 
-enum IGSE_NEWFILE_MODES {
+enum IGSE_NEWFILE_MODES 
+{
 	IGSE_NEWFILE_CREATE,
 	IGSE_NEWFILE_DELETE,
 	IGSE_NEWFILE_RECREATE,
 	IGSE_NEWFILE_CHECK
 };
 
-enum IGSE_DB_MODES {
+enum IGSE_DB_MODES 
+{
 	IGSEDB_FILE,
 	IGSEDB_KEY,
 	IGSEDB_WRITE,
@@ -542,6 +574,10 @@ void ParseScript(char* com, FULLHANDLE file) {
 	{
 		//v1.11  Quit if command not allowed for the dedicated server
 		if (DedicatedServer  &&  !isMemDedicated)
+			return;
+
+		//v1.16 Quit if unsupported mem command
+		if (Game_Version==VER_201 && !IsNumberInArray(CommandID, MemCommands201, sizeof(MemCommands201) / sizeof(MemCommands201[0])))
 			return;
 
 		phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);

@@ -1,0 +1,31 @@
+
+_url      = _this select 0
+_variable = _this select 1
+
+? call Format ["count %1 != 0", _variable] : exit
+
+
+	; Start the program
+	_ok = call loadFile Format ["\:EXE WGET  %1", _url]
+	? !(_ok select 0) : goto "Exit"
+	_pid = _ok select 4
+	
+	
+	; Wait for the program to finish
+	#Wait
+	~0.01
+	_ok = call loadFile Format ["\:EXE WGET  check %1", _pid]
+	? _ok select 0 : goto "Wait"
+	
+	
+	; Check result file
+	_ok = call loadFile Format ["\:IGSE LOAD  file:..\fwatch\tmp\%1.pid  mode:execute  delete:true  wait:50", _pid]
+	if (Format ["%1",count _ok] == "bool") then {_ok=[9]}
+	_errorDescription = ["No problems occurred","Generic error code","Parse error","File I/O error","Network failure","SSL verification failure","Username/password authentication failure","Protocol errors","Server issued an error response","Failed to get exit code for download"]
+	_ok = [(_ok select 0) == 0, (if ((_ok select 0)!=0) then {8} else {0}), _ok select 0, _errorDescription select (_ok select 0)]
+
+
+	#Exit
+	call Format ["%1=_ok", _variable]
+
+

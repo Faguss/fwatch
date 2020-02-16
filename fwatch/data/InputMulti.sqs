@@ -1,0 +1,102 @@
+; Function supplied with Fwatch v1.13
+; Make calls to Fwatch for user input information
+
+; Usage:
+; [] exec "..\fwatch\data\InputMulti.sqs"
+; 0.05 exec "..\fwatch\data\InputMulti.sqs"
+
+; Optional argument is a time interval (0.01 to 2) between taking input
+
+; When necessary you can temporarily set FWATCH_INPUT_MULTI_INTERVAL to less than 0.001
+; and later bring back original value by increasing it
+
+; To get WINAPI joystick input set FWATCH_INPUT_MULTI_JOYID to -1 (search mode)
+; or to 0-15 for a specific joy
+; or to -2 to disable it
+
+; Set FWATCH_INPUT_MOUSE_ENABLED to true and the script will calculate mouse relative
+; movement and put it to FWATCH_INPUT_MX, FWATCH_INPUT_MY
+
+; Changelog:
+; 1.15
+; - variable FWATCH_INPUT_MULTI_JOYID can be set before executing the script
+; 1.14
+; - added code that calculates relative mouse movment and stores it in separate global vars
+
+
+
+
+
+
+
+
+? Format ["%1",FWATCH_INPUT_MULTI_INTERVAL] == "scalar bool array string 0xfcffffef" : FWATCH_INPUT_MULTI_INTERVAL=0.01
+? _this in [_this] : if (_this>=0.01 && _this<=2) then {FWATCH_INPUT_MULTI_INTERVAL=_this}
+
+? Format ["%1",FWATCH_INPUT_MULTI_ENABLED] != "scalar bool array string 0xfcffffef" : exit
+FWATCH_INPUT_MULTI_ENABLED = true
+
+? Format ["%1",FWATCH_INPUT_MOUSE_ENABLED] == "scalar bool array string 0xfcffffef" : FWATCH_INPUT_MOUSE_ENABLED=false
+
+_interval = FWATCH_INPUT_MULTI_INTERVAL
+_prev = _interval
+
+? Format ["%1",FWATCH_INPUT_MULTI_JOYID] == "scalar bool array string 0xfcffffef" : FWATCH_INPUT_MULTI_JOYID=-2
+_joyid = FWATCH_INPUT_MULTI_JOYID
+
+_resolution = []
+
+
+
+
+
+
+#Loop
+FWATCH_INPUT_MULTI = call loadFile Format [":input multi %1", _joyid]
+
+~_interval
+? _interval<0.01 && FWATCH_INPUT_MULTI_INTERVAL>_interval : _interval=_prev; FWATCH_INPUT_MULTI_INTERVAL=_prev
+? FWATCH_INPUT_MULTI_INTERVAL < _interval : if (FWATCH_INPUT_MULTI_INTERVAL>=0.001 && FWATCH_INPUT_MULTI_INTERVAL<=2) then {_prev=_interval; _interval=FWATCH_INPUT_MULTI_INTERVAL} else {FWATCH_INPUT_MULTI_INTERVAL=_interval}
+
+? FWATCH_INPUT_MULTI_JOYID!=-1  &&  FWATCH_INPUT_MULTI_JOYID!=_joyid : _joyid=FWATCH_INPUT_MULTI_JOYID;
+? FWATCH_INPUT_MULTI_JOYID==-1  &&  count (FWATCH_INPUT_MULTI select 5) >2  &&  _joyid==-1 : _joyid=((FWATCH_INPUT_MULTI select 5) select 5) select 0; 
+? FWATCH_INPUT_MULTI_JOYID==-1  &&  count (FWATCH_INPUT_MULTI select 5)==0  &&  _joyid!=-1 : _joyid=-1; 
+
+? !FWATCH_INPUT_MOUSE_ENABLED : goto "Loop"
+
+
+	; Initialize mouse input
+	? count _resolution == 0 : _resolution=call loadFile ":info resolution"; _fullscreen=(_resolution select 0) == ((_resolution select 2) select 2) && (_resolution select 1) == ((_resolution select 2) select 3) &&  ((_resolution select 2) select 0)==0 && ((_resolution select 2) select 1)==0; _prevX=0; _prevY=0; _nextTime=0
+
+	; Get mouse input
+	FWATCH_INPUT_MX = ((FWATCH_INPUT_MULTI select 3) select 0) - _prevX
+	FWATCH_INPUT_MY = ((FWATCH_INPUT_MULTI select 3) select 1) - _prevY
+	_prevX = (FWATCH_INPUT_MULTI select 3) select 0
+	_prevY = (FWATCH_INPUT_MULTI select 3) select 1
+
+	; Fullscreen mode - If cursor is on the edge of the screen then center it
+	? _fullscreen : if (_prevX<=1  ||  _prevX>=((_resolution select 0)-1)  ||  _prevY<=1  ||  _prevY>=((_resolution select 1)-1)) then {_prevX=(_resolution select 0)/2; _prevY=(_resolution select 1)/2; _i=0; loadfile Format [":input setmouse %1 %2", _prevX, _prevY]}; goto "Loop"
+	
+	
+
+	; Window mode
+	? _time > _nextTime : _resolution=call loadFile ":info resolution"; _nextTime=_time+2
+		
+	; Get game window coordinates
+	_posX = ((_resolution select 2) select 0)
+	_posY = ((_resolution select 2) select 1)
+	_posW = ((_resolution select 2) select 0) + ((_resolution select 2) select 2)
+	_posH = ((_resolution select 2) select 1) + ((_resolution select 2) select 3)
+
+	; If cursor goes out of bounds then place it back
+	_setX = (FWATCH_INPUT_MULTI select 3) select 0
+	_setY = (FWATCH_INPUT_MULTI select 3) select 1
+	? ((FWATCH_INPUT_MULTI select 3) select 0) < _posX : _setX=_posW
+	? ((FWATCH_INPUT_MULTI select 3) select 0) > _posW : _setX=_posX
+	? ((FWATCH_INPUT_MULTI select 3) select 1) < _posY : _setY=_posH
+	? ((FWATCH_INPUT_MULTI select 3) select 1) > _posH : _setY=_posY
+	? _setX!=((FWATCH_INPUT_MULTI select 3) select 0)  ||  _setY!=((FWATCH_INPUT_MULTI select 3) select 1) : _prevX=_setX; _prevY=_setY; loadfile Format [":input setmouse %1 %2", _setX, _setY]
+	goto "Loop"
+	
+	
+

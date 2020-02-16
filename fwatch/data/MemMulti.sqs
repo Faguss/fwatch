@@ -1,0 +1,34 @@
+; Function supplied with Fwatch v1.13
+; Make calls to Fwatch for information from the game memory
+
+; Usage:
+; [] exec "..\fwatch\data\MemMulti.sqs"
+; 0.05 exec "..\fwatch\data\MemMulti.sqs"
+
+; Optional argument is a time interval (0.01 to 2) between calls
+
+
+
+
+
+
+
+
+? Format ["%1",FWATCH_MEM_MULTI_INTERVAL] == "scalar bool array string 0xfcffffef" : FWATCH_MEM_MULTI_INTERVAL=0.01
+? _this in [_this] : if (_this>=0.01 && _this<=2) then {FWATCH_MEM_MULTI_INTERVAL=_this}
+
+? Format ["%1",FWATCH_MEM_MULTI_ENABLED] != "scalar bool array string 0xfcffffef" : exit
+FWATCH_MEM_MULTI_ENABLED = true
+
+_interval = FWATCH_MEM_MULTI_INTERVAL;
+
+
+
+
+
+#Loop
+FWATCH_MEM_MULTI = call loadFile ":mem multi"
+
+~_interval
+? FWATCH_MEM_MULTI_INTERVAL < _interval : if (FWATCH_MEM_MULTI_INTERVAL>=0.01 && FWATCH_MEM_MULTI_INTERVAL<=2) then {_interval=FWATCH_MEM_MULTI_INTERVAL} else {FWATCH_MEM_MULTI_INTERVAL=_interval}
+goto "Loop"

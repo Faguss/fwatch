@@ -9,7 +9,7 @@ case C_CLASS_LIST:
 {  // Return list of classes in a file
 
 	// Read arguments -------------------------------------------------
-	char *file			= "";
+	char *arg_filename  = "";
 	char *rawPath		= "";
 	int StartPos		= 0;
 	bool PassedStartPos	= false;
@@ -29,7 +29,7 @@ case C_CLASS_LIST:
 		char *val	= Trim(arg+pos+1);
 
 		if (strcmpi(arg,"file") == 0)
-			file = val;
+			arg_filename = val;
 
 		if (strcmpi(arg,"classpath") == 0) 
 			rawPath = stripq(val);
@@ -41,40 +41,23 @@ case C_CLASS_LIST:
 	
 
 	// File not specified
-	if (strcmpi(file,"") == 0)
+	if (strcmpi(arg_filename,"") == 0)
 	{
-		FWerror(107,0,CommandID,"file","",0,0,out);
+		FWerror(107,0,CommandID,"arg_filename","",0,0,out);
 		QWrite("0,[],[],[]]", out);
 		break;
 	};
 
 
-	// Allocate buffer for the file path
-	int File_name_len	= strlen(file) + 1;
-	char *File_name		= (char*) malloc (File_name_len);
-	char *WantedFile	= File_name;
+	// Verify and update path to the file
+	String buf_filename;
+	String_init(buf_filename);
+	char *ptr_filename = arg_filename;
 
-	if (File_name == NULL) 
-	{
-		FWerror(10,0,CommandID,"File_name","",File_name_len,0,out);
+	if (!VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out)) {
 		QWrite("0,[],[],[]]", out);
 		break;
-	};
-	strcpy(File_name, file);
-
-
-	// Mission dir path
-	if (isAllowedExternalPath(File_name,ALLOW_GAME_ROOT_DIR)) 
-		WantedFile = File_name + 3;
-	else
-		if (getMissionDir(&File_name, File_name_len, CommandID, out)) 
-			WantedFile = File_name;
-		else 
-		{
-			QWrite("0,[],[],[]]", out);
-			free(File_name);
-			break;
-		};
+	}
 
 
 	// Class path
@@ -97,12 +80,12 @@ case C_CLASS_LIST:
 
 	// Parse text -----------------------------------------------------
 	// Open file
-	FILE *f = fopen(WantedFile, "r");
+	FILE *f = fopen(ptr_filename, "r");
 	if (!f) 
 	{
-		FWerror(7,errno,CommandID,WantedFile,"",0,0,out);
+		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
 		QWrite("0,[],[],[]]", out);
-		free(File_name); 
+		String_end(buf_filename);
 		break;
 	};
 
@@ -145,7 +128,7 @@ case C_CLASS_LIST:
 		
 		FWerror(10,0,CommandID,failedBuf,"",failedBufL,0,out);
 		QWrite("0,[],[],[]]", out);
-		free(File_name); 
+		String_end(buf_filename);
 		free(line);
 		free(match);
 		free(classes);
@@ -190,7 +173,7 @@ case C_CLASS_LIST:
 	while(ret = fgets(line, lineLen ,f))
 	{
 		if (ferror(f)) 
-			FWerror(7,errno,CommandID,WantedFile,"",0,0,out), 
+			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out), 
 			error = true;
 
 		if (quit || error) 
@@ -480,7 +463,7 @@ case C_CLASS_LIST:
 		// If couldn't find classes that were in the class path
 		if (J <= K)
 		{
-			FWerror(250,0,CommandID,WantedFile,classpath[J],J,++K,out);
+			FWerror(250,0,CommandID,ptr_filename,classpath[J],J,++K,out);
 
 			char tmp[12] = ""; 
 			sprintf(tmp, "%d", J); 
@@ -513,7 +496,7 @@ case C_CLASS_LIST:
 		QWrite(",[],[],[]]", out);
 	};
 
-	free(File_name); 
+	String_end(buf_filename);
 	free(line); 
 	free(match); 
 	free(classes); 
@@ -537,7 +520,7 @@ case C_CLASS_TOKENS:
 { // Return all properties from a class
 
 	// Read arguments -------------------------------------------------
-	char *file			= "";
+	char *arg_filename	= "";
 	char *rawPath		= "";
 	char *Target		= "";
 	char *Wrap			= "";
@@ -560,7 +543,7 @@ case C_CLASS_TOKENS:
 		char *val	= Trim(arg+pos+1);
 
 		if (strcmpi(arg,"file") == 0) 
-			file = val;
+			arg_filename = val;
 
 		if (strcmpi(arg,"classpath") == 0) 
 			rawPath = stripq(val);
@@ -578,9 +561,9 @@ case C_CLASS_TOKENS:
 
 
 	// File not specified
-	if (strcmpi(file,"") == 0)
+	if (strcmpi(arg_filename,"") == 0)
 	{
-		FWerror(107,0,CommandID,"WantedFile","",0,0,out);
+		FWerror(107,0,CommandID,"arg_filename","",0,0,out);
 		QWrite("0,\"0\",[],[]]", out);
 		break;
 	};
@@ -596,32 +579,15 @@ case C_CLASS_TOKENS:
 		NoDoubleWrap = true;
 
 
-	// Allocate buffer for the file path
-	int File_name_len	= strlen(file) + 1;
-	char *File_name		= (char*) malloc (File_name_len);
-	char *WantedFile	= File_name;
+	// Verify and update path to the file
+	String buf_filename;
+	String_init(buf_filename);
+	char *ptr_filename = arg_filename;
 
-	if (File_name == NULL) 
-	{
-		FWerror(10,0,CommandID,"File_name","",File_name_len,0,out);
+	if (!VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out)) {
 		QWrite("0,\"0\",[],[]]", out);
 		break;
-	};
-	strcpy(File_name, file);
-
-
-	// Mission dir path
-	if (isAllowedExternalPath(File_name,ALLOW_GAME_ROOT_DIR)) 
-		WantedFile = File_name + 3;
-	else
-		if (getMissionDir(&File_name, File_name_len, CommandID, out)) 
-			WantedFile = File_name;
-		else 
-		{
-			QWrite("0,\"0\",[],[]]", out);
-			free(File_name); 
-			break;
-		};
+	}
 
 
 	// Class path
@@ -646,12 +612,12 @@ case C_CLASS_TOKENS:
 
 	// Parse text -----------------------------------------------------
 	// Open file
-	FILE *f = fopen(WantedFile, "r");
+	FILE *f = fopen(ptr_filename, "r");
 	if (!f) 
 	{
-		FWerror(7,errno,CommandID,WantedFile,"",0,0,out);
+		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
 		QWrite("0,\"0\",[],[]]", out);
-		free(File_name); 
+		String_end(buf_filename); 
 		break;
 	};
 
@@ -689,7 +655,7 @@ case C_CLASS_TOKENS:
 
 		FWerror(10,0,CommandID,failedBuf,"",failedBufL,0,out);
 		QWrite("0,\"0\",[],[]]", out);
-		free(File_name); 
+		String_end(buf_filename); 
 		free(line);
 		free(match);
 		free(names);
@@ -741,7 +707,7 @@ case C_CLASS_TOKENS:
 	while (ret = fgets(line, lineLen ,f))
 	{	
 		if (ferror(f)) 
-			FWerror(7,errno,CommandID,WantedFile,"",0,0,out), 
+			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out), 
 			error = true;
 
 		if (quit || error) 
@@ -1193,7 +1159,7 @@ case C_CLASS_TOKENS:
 		// If couldn't find classes that were in the class path
 		if (J <= K)
 		{
-			FWerror(250,0,CommandID,WantedFile,classpath[J],J,++K,out);
+			FWerror(250,0,CommandID,ptr_filename,classpath[J],J,++K,out);
 
 			char tmp[32] = ""; 
 			sprintf(tmp, "%d,\"%d\"", J,classOff);
@@ -1224,7 +1190,7 @@ case C_CLASS_TOKENS:
 		QWrite(",[],[]]", out);
 	};
 
-	free(File_name); 
+	String_end(buf_filename);
 	free(names); 
 	free(values); 
 	free(line); 
@@ -1248,7 +1214,7 @@ case C_CLASS_MODIFY:
 
 	// Read arguments -------------------------------------------------
 	int action		= 0;
-	char *file		= "";
+	char *arg_filename = "";
 	char *rawPath	= "";
 	char *Target	= "";
 	char *RenameDst = "";
@@ -1268,7 +1234,7 @@ case C_CLASS_MODIFY:
 		char *val	= Trim(arg+pos+1);
 
 		if (strcmpi(arg,"file") == 0) 
-			file = val;
+			arg_filename = val;
 
 		if (strcmpi(arg,"classpath") == 0) 
 			rawPath = stripq(val);
@@ -1291,9 +1257,9 @@ case C_CLASS_MODIFY:
 
 
 	// File not specified
-	if (strcmpi(file,"") == 0)
+	if (strcmpi(arg_filename,"") == 0)
 	{
-		FWerror(107,0,CommandID,"WantedFile","",0,0,out);
+		FWerror(107,0,CommandID,"arg_filename","",0,0,out);
 		QWrite("0]", out);
 		break;
 	};
@@ -1329,38 +1295,15 @@ case C_CLASS_MODIFY:
 	};
 
 
-	// Allocate buffer for the file path
-	int File_name_len	= strlen(file) + 1;
-	char *File_name		= (char*) malloc (File_name_len);
-	char *WantedFile	= File_name;
-
-	if (File_name == NULL) 
-	{
-		FWerror(10,0,CommandID,"File_name","",File_name_len,0,out);
-		QWrite("0,[],[],[]]", out);
+	// Verify and update path to the file
+	String buf_filename;
+	String_init(buf_filename);
+	char *ptr_filename = arg_filename;
+	
+	if (!VerifyPath(&ptr_filename, buf_filename, RESTRICT_TO_MISSION_DIR, CommandID, out)) {
+		QWrite("0]", out);
 		break;
-	};
-	strcpy(File_name, file);
-
-
-	// Mission dir path
-	if (isLeavingDir(File_name,0,RESTRICT_TO_MISSION_DIR,CommandID,out)) 
-	{
-		free(File_name); 
-		break;
-	};
-
-	if (isAllowedExternalPath(File_name,RESTRICT_TO_MISSION_DIR)) 
-		WantedFile = File_name + 3;
-	else
-		if (getMissionDir(&File_name, File_name_len, CommandID, out)) 
-			WantedFile = File_name;
-		else 
-		{ 
-			QWrite("0,[],[],[]]", out);
-			free(File_name);
-			break;
-		};
+	}
 
 
 	// Class path
@@ -1395,12 +1338,12 @@ case C_CLASS_MODIFY:
 
 
 	// Open file ------------------------------------------------------
-	FILE *f = fopen(WantedFile, "r");
+	FILE *f = fopen(ptr_filename, "r");
 	if (!f) 
 	{
-		FWerror(7,errno,CommandID,WantedFile,"",0,0,out);
+		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
 		QWrite("0]", out);
-		free(File_name); 
+		String_end(buf_filename); 
 		break;
 	};
 
@@ -1417,7 +1360,7 @@ case C_CLASS_MODIFY:
 	{
 		FWerror(10,0,CommandID,"buf","",fsize+70+(strlen(com)),0,out);
 		QWrite("0]", out);
-		free(File_name); 
+		String_end(buf_filename); 
 		fclose(f);
 		break;
 	};
@@ -1453,7 +1396,7 @@ case C_CLASS_MODIFY:
 
 		FWerror(10,0,CommandID,failedBuf,"",failedBufL,0,out);
 		QWrite("0]", out);
-		free(File_name);
+		String_end(buf_filename);
 		free(line);
 		free(line2);
 		free(match);
@@ -1487,7 +1430,7 @@ case C_CLASS_MODIFY:
 	while(ret = fgets(line, lineLen ,f))
 	{
 		if (ferror(f)) 
-			FWerror(7,errno,CommandID,WantedFile,"",0,0,out), 
+			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out), 
 			error = 1;
 
 		if (error) 
@@ -1912,11 +1855,11 @@ case C_CLASS_MODIFY:
 	{
 		// If couldn't find classes that were in the class path
 		if (J <= K)
-			FWerror(250,0,CommandID,WantedFile,classpath[J],J,++K,out);
+			FWerror(250,0,CommandID,ptr_filename,classpath[J],J,++K,out);
 		else 
 			// Couldn't remove/rename global class
 			if (action>1  &&  !jobDone) 
-				FWerror(252,0,CommandID,WantedFile,WantedClass,0,0,out);
+				FWerror(252,0,CommandID,ptr_filename,WantedClass,0,0,out);
 		else
 		{
 			// Add new global class
@@ -1935,32 +1878,32 @@ case C_CLASS_MODIFY:
 			};
 
 			// Rewrite the file
-			f = fopen(WantedFile, "w");
+			f = fopen(ptr_filename, "w");
 			if (f) 
 			{
 				fwrite(buf, 1, strlen(buf), f);
 
 				if (ferror(f)) 
-					FWerror(7,errno,CommandID,WantedFile,"",0,0,out);
+					FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
 				else
 					FWerror(0,0,CommandID,"","",0,0,out);
 
 				fclose(f);
 			}
 			else 
-				FWerror(7,errno,CommandID,WantedFile,"",0,0,out);
+				FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
 		};
 	};
 	
 
 	// Class already exists
 	if (error == 2) 
-		FWerror(251,0,CommandID,WantedFile,WantedClass,0,0,out);
+		FWerror(251,0,CommandID,ptr_filename,WantedClass,0,0,out);
 
 
 	// Couldn't find class
 	if (error == 3) 
-		FWerror(252,0,CommandID,WantedFile,WantedClass,0,0,out);
+		FWerror(252,0,CommandID,ptr_filename,WantedClass,0,0,out);
 
 
 	// Output position in the class path
@@ -1970,7 +1913,7 @@ case C_CLASS_MODIFY:
 
 
 	delete[] buf; 
-	free(File_name); 
+	String_end(buf_filename); 
 	free(line); 
 	free(line2); 
 	free(match);
@@ -1996,7 +1939,7 @@ case C_CLASS_MODTOK:
 	int ARRtargetID		= -1;
 	int ArrAppend		= 0;
 	int ArrDelete		= 0;
-	char *file			= "";
+	char *arg_filename	= "";
 	char *rawPath		= "";
 	char *WantedToken	= "";
 	char *WantedValue	= "";
@@ -2017,7 +1960,7 @@ case C_CLASS_MODTOK:
 		char *val	= Trim(arg+pos+1);
 
 		if (strcmpi(arg,"file") == 0) 
-			file = val;
+			arg_filename = val;
 
 		if (strcmpi(arg,"classpath") == 0) 
 			rawPath = stripq(val);
@@ -2056,7 +1999,7 @@ case C_CLASS_MODTOK:
 
 
 	// File not specified
-	if (strcmpi(file,"") == 0)
+	if (strcmpi(arg_filename,"") == 0)
 	{
 		FWerror(107,0,CommandID,"WantedFile","",0,0,out);
 		QWrite("0]", out);
@@ -2104,38 +2047,15 @@ case C_CLASS_MODTOK:
 	};
 
 
-	// Allocate buffer for the file path
-	int File_name_len	= strlen(file) + 1;
-	char *File_name		= (char*) malloc (File_name_len);
-	char *WantedFile	= File_name;
-
-	if (File_name == NULL) 
-	{
-		FWerror(10,0,CommandID,"File_name","",File_name_len,0,out);
-		QWrite("0,[],[],[]]", out);
+	// Verify and update path to the file
+	String buf_filename;
+	String_init(buf_filename);
+	char *ptr_filename = arg_filename;
+	
+	if (!VerifyPath(&ptr_filename, buf_filename, RESTRICT_TO_MISSION_DIR, CommandID, out)) {
+		QWrite("0]", out);
 		break;
-	};
-	strcpy(File_name, file);
-
-
-	// Mission dir path
-	if (isLeavingDir(File_name,0,RESTRICT_TO_MISSION_DIR,CommandID,out)) 
-	{
-		free(File_name); 
-		break;
-	};
-
-	if (isAllowedExternalPath(File_name,RESTRICT_TO_MISSION_DIR)) 
-		WantedFile = File_name + 3;
-	else
-		if (getMissionDir(&File_name, File_name_len, CommandID, out)) 
-			WantedFile = File_name;
-		else 
-		{
-			QWrite("0,[],[],[]]", out);
-			free(File_name);
-			break;
-		};
+	}
 		
 
 	// Class path
@@ -2179,12 +2099,12 @@ case C_CLASS_MODTOK:
 
 	// Parse text -----------------------------------------------------
 	// Open file
-	FILE *f = fopen(WantedFile, "r");
+	FILE *f = fopen(ptr_filename, "r");
 	if (!f) 
 	{
-		FWerror(7,errno,CommandID,WantedFile,"",0,0,out);
+		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
 		QWrite("0]", out);
-		free(File_name); 
+		String_end(buf_filename); 
 		break;
 	};
 
@@ -2201,7 +2121,7 @@ case C_CLASS_MODTOK:
 	{
 		FWerror(10,0,CommandID,"buf","",fsize+70+(strlen(com)),0,out);
 		QWrite("0]", out);
-		free(File_name); 
+		String_end(buf_filename); 
 		fclose(f);
 		break;
 	};
@@ -2236,7 +2156,7 @@ case C_CLASS_MODTOK:
 
 		FWerror(10,0,CommandID,failedBuf,"",failedBufL,0,out);	
 		QWrite("0]", out);
-		free(File_name);
+		String_end(buf_filename);
  		free(line);
 		free(line2);
 		free(match);
@@ -2281,7 +2201,7 @@ case C_CLASS_MODTOK:
 	while (ret = fgets(line, lineLen ,f))
 	{   
 		if (ferror(f)) 
-			FWerror(7,errno,CommandID,WantedFile,"",0,0,out), 
+			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out), 
 			error = 1;
 
 		if (error==1  ||  error>=3) 
@@ -3029,7 +2949,7 @@ case C_CLASS_MODTOK:
 	{
 		// If couldn't find classes that were in the class path
 		if (J <= K)
-			FWerror(250,0,CommandID,WantedFile,classpath[J],J,++K,out);
+			FWerror(250,0,CommandID,ptr_filename,classpath[J],J,++K,out);
 		else
 			// Add new global property
 			if (K==-1  &&  foundTokenPos<0  &&  (action==1 || action==4))
@@ -3054,33 +2974,33 @@ case C_CLASS_MODTOK:
 			{
 				// ...an item inside array
 				if (action==5  &&  ARRcurrent>0  &&  ARRcurrent<ARRtargetID)	
-					FWerror(254,0,CommandID,WantedFile,WantedToken,ARRtargetID,0,out);
+					FWerror(254,0,CommandID,ptr_filename,WantedToken,ARRtargetID,0,out);
 				else
 					 // not an array
 					if (action==5 && foundTokenPos>=0 && ARRcurrent<0)     
-						FWerror(255,0,CommandID,WantedFile,WantedToken,0,0,out);
+						FWerror(255,0,CommandID,ptr_filename,WantedToken,0,0,out);
 					else
 						// ...a property
-						FWerror(253,0,CommandID,WantedFile,WantedToken,0,0,out);	
+						FWerror(253,0,CommandID,ptr_filename,WantedToken,0,0,out);	
 			};
 
 		// Rewrite the file
 		if (!error)
 		{	
-			f = fopen(WantedFile, "w");
+			f = fopen(ptr_filename, "w");
 			if (f) 
 			{
 				fwrite(buf, 1, strlen(buf), f);
 
 				if (ferror(f)) 
-					FWerror(7,errno,CommandID,WantedFile,"",0,0,out);
+					FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
 				else
 					FWerror(0,0,CommandID,"","",0,0,out);
 
 				fclose(f);
 			}
 			else
-				FWerror(7,errno,CommandID,WantedFile,"",0,0,out);
+				FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
 		};
 	};
 
@@ -3091,9 +3011,1838 @@ case C_CLASS_MODTOK:
 
 
 	delete[] buf; 
-	free(File_name); 
+	String_end(buf_filename); 
 	free(line); 
 	free(line2); 
 	free(match);
 }
+break;
+
+
+
+
+
+
+
+
+
+
+
+
+case C_CLASS_READ:
+{
+	const int predefined_capacity = 8;
+
+	// Read arguments------------------------------------------------------------
+	char *arg_filename     = "";
+	char *arg_classpath    = "";
+	char *arg_wrap         = "";
+	char *arg_findproperty = "";
+	int arg_offset         = 0;
+	int arg_classpath_pos  = -1;
+	int arg_level          = predefined_capacity;
+
+	for (int i=2; i<numP; i++) {
+		char *arg = stripq(par[i]);
+		char *col = strchr(arg, ':');
+
+		if (col == NULL)
+			continue;
+
+		int pos   = col - arg;
+		arg[pos]  = '\0';
+		char *val = arg+pos+1;
+
+		if (strcmpi(arg,"file") == 0) {
+			arg_filename = val;
+			continue;
+		}
+
+		if (strcmpi(arg,"path") == 0) {
+			arg_classpath = val;
+			continue;
+		}
+		
+		if (strcmpi(arg,"offset") == 0) {
+			arg_offset = atoi(val);
+			continue;
+		}
+		
+		if (strcmpi(arg,"find") == 0) {
+			arg_findproperty          = val;
+			int arg_findproperty_last = strlen(arg_findproperty)-1;
+
+			if (arg_findproperty[0]=='[' && arg_findproperty[arg_findproperty_last]==']') {
+				arg_findproperty++;
+				arg_findproperty[arg_findproperty_last] = '\0';
+			}
+
+			continue;
+		}
+		if (strcmpi(arg,"wrap") == 0) {
+			arg_wrap = val;
+			continue;
+		}
+		
+		if (strcmpi(arg,"pathpos") == 0) {
+			arg_classpath_pos = atoi(val);
+			continue;
+		}
+		
+		if (strcmpi(arg,"maxlevel") == 0) {
+			arg_level = atoi(val);
+			continue;
+		}
+	}
+	
+	// File not specified
+	if (strcmpi(arg_filename, "") == 0) {
+		FWerror(107,0,CommandID,"file name","",0,0,out);
+		QWrite("[],[],0]", out);
+		break;
+	};
+
+	// Verify and update path to the file
+	String buf_filename;
+	String_init(buf_filename);
+	char *ptr_filename = arg_filename;
+
+	if (!VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out)) {
+		QWrite("[],[],0]", out);
+		break;
+	}
+
+
+	// Class path
+	int classpath_capacity = arg_level!=predefined_capacity ? arg_level : predefined_capacity;
+	int classpath_current  = 0;
+	int classpath_size     = 0;
+	char *classpath[predefined_capacity];
+	char *class_name = strtok(arg_classpath, "[,]");
+
+	//from ofp array to char array
+	while (class_name!=NULL  &&  classpath_size<classpath_capacity) {
+		classpath[classpath_size++] = stripq(class_name);
+		class_name                  = strtok(NULL, "[,]");
+	}
+
+	if (arg_offset > 0) {
+		classpath_current = classpath_size;
+		
+		if (arg_classpath_pos >= 0)
+			classpath_current = arg_classpath_pos+1;
+	} else
+		arg_offset = 0;
+
+
+	// Wrapping
+	enum WRAP {
+		NO_WRAP,
+		YES_WRAP,
+		NODOUBLE_WRAP
+	};
+	
+	int wrap = NODOUBLE_WRAP;
+	
+	if (strcmpi(arg_wrap,"no") == 0)
+		wrap = NO_WRAP;
+ 
+	if (strcmpi(arg_wrap,"yes") == 0)
+		wrap = YES_WRAP;
+		
+		
+	// Finding properties
+	const int properties_to_find_capacity = 64;
+	char *properties_to_find[properties_to_find_capacity];
+	int properties_to_find_size = 0;
+
+	if (arg_findproperty[0] == '-') {
+		arg_findproperty[0]     = '\0';
+		properties_to_find_size = -1;
+	} else {
+		char *property = strtok(arg_findproperty, ",");
+		while (property!=NULL  &&  properties_to_find_size<properties_to_find_capacity) {
+			properties_to_find[properties_to_find_size++] = stripq(property);
+			property                                      = strtok(NULL, ",");
+		}
+	}
+	//---------------------------------------------------------------------------
+	
+
+
+	// Open wanted file -----------------------------------------------------------------	
+	FILE *file = fopen(ptr_filename, "rb");
+	if (!file) {
+		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
+		QWrite("[],[],0]", out);
+		String_end(buf_filename);
+		break;
+	}
+
+	// Find file size
+	fseek(file, 0, SEEK_END);
+	int file_size = ftell(file) - arg_offset;
+
+	// Allocate buffer
+	String file_contents;
+	String_init(file_contents);
+	
+	int result = String_allocate(file_contents, file_size+1);
+	if (result != 0) {
+		FWerror(10,0,CommandID,"file_contents","",file_size,0,out);
+		QWrite("[],[],0]", out);
+		String_end(buf_filename);
+		break;
+	}
+
+	// Copy text to buffer
+	fseek(file, arg_offset, SEEK_SET);
+	result = fread(file_contents.pointer, 1, file_size, file);
+	file_contents.pointer[file_size] = '\0';
+
+	if (result != file_size) {		
+		if (ferror(file))
+			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out); 
+		else
+			FWerror(210,0,CommandID,ptr_filename,"",result,file_size,out);
+		
+		String_end(buf_filename);
+		String_end(file_contents);
+		QWrite("[],[],0]", out);
+		fclose(file);
+		break;
+	}
+
+	fclose(file);
+	
+
+
+
+	enum EXPECT {
+		PROPERTY,
+		EQUALITY,
+		VALUE,
+		SEMICOLON,
+		CLASS_NAME,
+		CLASS_INHERIT,
+		CLASS_COLON,
+		CLASS_BRACKET,
+		ENUM_BRACKET,
+		ENUM_CONTENT,
+		EXEC_BRACKET,
+		EXEC_CONTENT,
+		MACRO_CONTENT
+	};
+	
+	enum COMMENT {
+		NONE,
+		LINE,
+		BLOCK
+	};
+	
+	String output_class[predefined_capacity];
+	String output_inherit[predefined_capacity];
+	String output_bytes[predefined_capacity];
+	String output_property[predefined_capacity];
+	String output_value[predefined_capacity];
+	
+	String *all_output_strings[] = {
+		output_class,
+		output_inherit,
+		output_bytes,
+		output_property,
+		output_value
+	};
+	const int all_output_strings_num = sizeof(all_output_strings) / sizeof(all_output_strings[0]);
+	
+	for (i=0; i<classpath_capacity; i++)
+		for (int j=0; j<all_output_strings_num; j++) {
+			String_init(all_output_strings[j][i]);
+			String_append(all_output_strings[j][i],"[");
+		}
+		
+	String output_classpath_bytes;
+	String_init(output_classpath_bytes);
+	String_append(output_classpath_bytes, "[");
+  
+	int comment           = NONE;
+	int expect            = PROPERTY;
+	int word_start        = -1;
+	int class_level       = classpath_current;
+	int array_level       = 0;
+	int output_level      = 0;
+	int parenthesis_level = 0;
+	int property_start    = 0;
+	int property_end      = 0;
+	bool first_char       = true;
+	bool is_array         = false;
+	bool in_quote         = false;
+	bool macro            = false;
+	bool is_inherit       = false;
+	bool classpath_done   = false;
+	bool classpath_match  = false;
+	bool property_found   = false;
+	bool purge_comment    = false;
+	char separator        = ' ';
+	char *text            = file_contents.pointer;
+
+	for (i=0; i<file_size; i++) {
+		char c = text[i];
+
+		// Parse preprocessor comment
+		switch (comment) {
+			case NONE  : {
+				if (c == '/') {
+					char c2 = text[i+1];
+					
+					if (c2 == '/')
+						comment = LINE;
+					else 
+						if (c2 == '*')
+							comment = BLOCK;
+				}
+				
+				if (comment == NONE)
+					break;
+				else {
+					if (word_start>=0)
+						purge_comment = true;
+					
+					continue;
+				}
+			}
+			
+			case LINE  : {
+				if (c=='\r' || c=='\n')
+					comment = NONE;
+
+				continue;
+			}
+			
+			case BLOCK : {
+				if (i>0 && text[i-1]=='*' && c=='/')
+					comment = NONE;
+
+				continue;
+			}
+		}
+
+		// Parse preprocessor directives
+		if (!first_char && (c=='\r' || c=='\n')) {
+			first_char = true;
+			
+			if (macro && text[i-1] != '\\')
+				macro = false;
+		}
+		
+		if (!isspace(text[i])  &&  first_char) {
+			first_char = false;
+			
+			if (c == '#')
+				macro = true;
+		}
+		
+		if (macro)
+			continue;
+
+
+		// Parse classes
+		switch (expect) {
+			case SEMICOLON : {
+				if (c == ';') {
+					expect = PROPERTY;
+					continue;
+				} else 
+					if (!isspace(c))
+						expect = PROPERTY;
+			}
+			
+			case PROPERTY : {
+				if (c == '}') {
+					// End parsing when left the target class
+					if (classpath_current==classpath_size && class_level==classpath_current && !classpath_done) {
+						classpath_done = true;
+						i = file_size;
+						continue;
+					}
+					
+					// When left subclass within target class
+					if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+						int level = class_level - classpath_current;
+
+						for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
+							for (int k=0; k<all_output_strings_num; k++)
+								String_append(all_output_strings[k][j],"]");
+					}
+						
+					expect = SEMICOLON;
+					class_level--;
+
+					// End parsing when couldn't find wanted classes
+					if (class_level < classpath_current)
+						i = file_size;
+
+					continue;
+				}
+				
+				if (isalnum(c) || c=='_' || c=='[' || c==']') {
+					if (word_start == -1)
+						word_start = i;
+				} else
+					if (word_start >= 0) {
+						text[i] = '\0';
+	
+						if (strcmp(text+word_start,"class")==0) {
+							expect = CLASS_NAME;
+						} else 
+							if (strcmp(text+word_start,"enum")==0) {
+								expect    = ENUM_BRACKET;
+								separator = '{';
+							} else 
+								if (strcmp(text+word_start,"__EXEC")==0) {
+									expect    = EXEC_BRACKET;
+									separator = '(';
+								} else {
+									expect         = EQUALITY;
+									separator      = '=';
+									property_start = word_start;
+									property_end   = i;							
+									is_array       = text[i-2]=='[' && text[i-1]==']';
+								}
+
+						word_start = -1;
+					}
+				
+				if (separator == ' ')
+					break;
+			}
+			
+			case EQUALITY     : 
+			case ENUM_BRACKET : 
+			case EXEC_BRACKET : {
+				if (c == separator) {
+					expect++;
+					separator = ' ';
+				} else 
+					if (expect==EQUALITY && c=='(') {
+						expect            = MACRO_CONTENT;
+						separator         = ' ';
+						parenthesis_level = 1;
+					} else 
+						if (!isspace(c)) {	//ignore syntax error
+							i--;
+							separator = ' ';
+							expect    = SEMICOLON;
+						}
+				
+				break;
+			}
+			
+			case VALUE : {
+				if (c == '"')
+					in_quote = !in_quote;
+
+				if (!in_quote && c=='{')
+					array_level++;
+
+				if (!in_quote && c=='}')
+					array_level--;
+
+				if (!in_quote && c==';' && array_level>0)
+					text[i] = ',';
+
+				if (word_start == -1) {
+					if (!isspace(c))
+						word_start = i;
+				} else {
+					if (!in_quote && array_level==0 && (c==';' || c=='\r' || c=='\n')) {
+						text[i] = '\0';
+
+						char *property = text + property_start;
+						char *value    = text + word_start;
+
+						if (purge_comment) {
+							purge_comment = false;
+							PurgeComments(text, property_start, property_end);
+							PurgeComments(text, word_start    , i);
+						}
+
+						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+							bool found = properties_to_find_size == 0;
+
+							for (int j=0; j<properties_to_find_size && !found; j++)
+								if (strcmpi(property,properties_to_find[j]) == 0)
+									found = true;
+
+							if (found) {
+								property_found = true;
+								int level      = class_level - classpath_current;
+
+								if (level < classpath_capacity) {
+									// Add property name
+									String_append(output_property[level], "]+[\"");
+									String_append(output_property[level], property);
+									String_append(output_property[level], "\"");
+
+									// Add property value
+									String_append(output_value[level], "]+[");
+
+									if (wrap==YES_WRAP || wrap==NODOUBLE_WRAP && value[0]!='\"')
+										String_append(output_value[level], "\"");
+
+									// Convert arrays (square brackets) and strings (double quotes) so that "call" command in OFP can be used
+									if (is_array || wrap==YES_WRAP && value[0]=='\"') {
+										for (int j=word_start; j<i; j++) {
+											if (text[j] == '"')
+												in_quote = !in_quote;
+
+											if (text[j]=='{' && !in_quote && wrap==NO_WRAP)
+												String_append(output_value[level], "[");
+											else 
+												if (text[j]=='}' && !in_quote && wrap==NO_WRAP)
+													String_append(output_value[level], "]");
+												else 
+													if (text[j]=='"' && (wrap==YES_WRAP || wrap==NODOUBLE_WRAP))
+														String_append(output_value[level], "\"\"");
+													else {
+														char c[] = "a";
+														strncpy(c, text+j, 1);
+														String_append(output_value[level], c);
+													}
+										}
+									} else
+										String_append(output_value[level], value);
+									
+									if (wrap==YES_WRAP || wrap==NODOUBLE_WRAP && value[0]!='\"')
+										String_append(output_value[level], "\"");
+								}
+							}
+						}
+						
+						word_start = -1;
+						expect     = PROPERTY;
+					}
+				}
+				
+				break;
+			}
+			
+			case CLASS_NAME    :
+			case CLASS_INHERIT : {
+				if (isalnum(c) || c=='_') {
+					if (word_start == -1)
+						word_start = i;
+				} else
+					if (word_start >= 0) {
+						text[i] = '\0';
+						
+						if (purge_comment) {
+							purge_comment = false;
+							PurgeComments(text, word_start, i);
+						}
+						
+						if (expect==CLASS_NAME && classpath_size>0 && classpath_current<classpath_size && class_level==classpath_current && strcmpi(text+word_start,classpath[classpath_current])==0) {
+							classpath_current++;
+							classpath_match = true;
+						}
+
+						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+							String *output_array = expect==CLASS_NAME ? output_class : output_inherit;
+							int level            = class_level - classpath_current;
+
+							if (level < classpath_capacity && !classpath_done) {
+								String_append(output_array[level], "]+[\"");
+								String_append(output_array[level], text+word_start);
+								String_append(output_array[level], "\"");
+							}
+						}
+						
+						is_inherit = expect == CLASS_INHERIT;
+						word_start = -1;
+						expect     = expect==CLASS_NAME ? CLASS_COLON : CLASS_BRACKET;
+					}
+				
+				if (expect!=CLASS_COLON && expect!=CLASS_BRACKET)
+					break;
+			}
+			
+			case CLASS_COLON   :
+			case CLASS_BRACKET : {
+				if (expect==CLASS_COLON && c==':')
+					expect = CLASS_INHERIT;
+				else 
+					if (c == '{') {
+						if (!is_inherit) {
+							if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+								int level = class_level - classpath_current;
+								
+								if (level < classpath_capacity && !classpath_done)
+									String_append(output_inherit[level], "]+[\"\"");
+							}
+						}
+						
+						if (classpath_match) {
+							char temp[32] = "";
+							sprintf(temp, "]+[\"%d\"", i+1);
+							String_append(output_classpath_bytes, temp);
+							classpath_match = false;
+						}
+								
+						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+							int level     = class_level - classpath_current;
+
+							if (level < classpath_capacity) {
+								char temp[32] = "";
+								sprintf(temp, "]+[\"%d\"", i+1);
+								String_append(output_bytes[level], temp);
+							}
+						}
+						
+						class_level++;
+						expect = PROPERTY;
+							
+						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+							int level = class_level - classpath_current;
+							
+							if (level > output_level)
+								output_level = level;
+
+							for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
+								for (int k=0; k<all_output_strings_num; k++)
+									String_append(all_output_strings[k][j],"]+[[");
+						}
+					} else
+						if (!isspace(c)) {	//ignore syntax error
+							i--;
+							expect = SEMICOLON;
+						}
+				
+				break;
+			}
+			
+			case ENUM_CONTENT : 
+			case EXEC_CONTENT : {
+				if (expect==EXEC_CONTENT && c==')' || expect==ENUM_CONTENT && c=='}')
+					expect = SEMICOLON;
+
+				break;
+			}
+			
+			case MACRO_CONTENT : {
+				if (c == '"')
+					in_quote = !in_quote;
+					
+				if (!in_quote) {
+					if (c == '(')
+						parenthesis_level++;
+						
+					if (c == ')')
+						parenthesis_level--;
+						
+					if (parenthesis_level == 0)
+						expect = SEMICOLON;
+				}
+					
+				break;
+			}
+		}
+	}
+
+	//---------------------------------------------------------------------------
+	char output_strings_name[all_output_strings_num][16] = {
+		"class",
+		"inherit",
+		"bytes",
+		"property",
+		"value"
+	};
+
+	for (i=0; i<classpath_capacity && i<=output_level; i++) {
+		for (int j=0; j<all_output_strings_num; j++) {
+			String_append(all_output_strings[j][i],"]");
+			
+			char temp[32] = "";
+			sprintf(temp, "_output_%s%d=", output_strings_name[j], i);
+			
+			QWrite(temp, out);
+			QWrite(all_output_strings[j][i].pointer, out);
+			QWrite(";", out);
+			
+			String_end(all_output_strings[j][i]);
+		}
+	}
+	
+	if (classpath_current < classpath_size)
+		FWerror(250,0,CommandID,ptr_filename,classpath[classpath_current],classpath_current,++classpath_size,out);
+	else
+		if (properties_to_find_size>0 && !property_found)
+			FWerror(253,0,CommandID,ptr_filename,arg_findproperty,0,0,out);
+		else
+			FWerror(0,0,CommandID,"","",0,0,out);
+
+	QWrite("[", out);
+	
+	for (i=0; i<classpath_capacity && i<=output_level; i++) {
+		if (i == 0)
+			QWrite("[", out);
+		else
+			QWrite(",[", out);
+
+		for (int j=0; j<all_output_strings_num; j++) {
+			char temp[32] = "";
+			sprintf(temp, "%c_output_%s%d", (j==0 ? ' ' : ','), output_strings_name[j], i);
+			QWrite(temp, out);
+		}
+
+		QWrite("]", out);
+	}
+
+	QWrite("],", out);
+	String_append(output_classpath_bytes, "]");
+	QWrite(output_classpath_bytes.pointer, out);
+
+	char temp[32] = "";
+	sprintf(temp,",%d]",classpath_current);
+	QWrite(temp, out);
+
+	String_end(output_classpath_bytes);
+	String_end(file_contents);
+	String_end(buf_filename);
+};
+break;
+
+
+
+
+
+
+
+
+
+
+
+
+case C_CLASS_READ2:
+{
+	const int predefined_capacity = 8;
+
+	// Read arguments------------------------------------------------------------
+	char *arg_filename     = "";
+	char *arg_classpath    = "";
+	char *arg_wrap         = "";
+	char *arg_findproperty = "";
+	int arg_offset         = 0;
+	int arg_classpath_pos  = -1;
+	int arg_level          = predefined_capacity;
+	
+	for (int i=2; i<numP; i++) {
+		char *arg = stripq(par[i]);
+		char *col = strchr(arg, ':');
+
+		if (col == NULL)
+			continue;
+
+		int pos   = col - arg;
+		arg[pos]  = '\0';
+		char *val = arg+pos+1;
+
+		if (strcmpi(arg,"file") == 0) {
+			arg_filename = val;
+			continue;
+		}
+
+		if (strcmpi(arg,"path") == 0) {
+			arg_classpath = val;
+			continue;
+		}
+		
+		if (strcmpi(arg,"offset") == 0) {
+			arg_offset = atoi(val);
+			continue;
+		}
+		
+		if (strcmpi(arg,"find") == 0) {
+			arg_findproperty          = val;
+			int arg_findproperty_last = strlen(arg_findproperty)-1;
+			
+			if (arg_findproperty[0]=='[' && arg_findproperty[arg_findproperty_last]==']') {
+				arg_findproperty++;
+				arg_findproperty[arg_findproperty_last] = '\0';
+			}
+
+			continue;
+		}
+		if (strcmpi(arg,"wrap") == 0) {
+			arg_wrap = val;
+			continue;
+		}
+		
+		if (strcmpi(arg,"pathpos") == 0) {
+			arg_classpath_pos = atoi(val);
+			continue;
+		}
+		
+		if (strcmpi(arg,"maxlevel") == 0) {
+			arg_level = atoi(val);
+			continue;
+		}
+	}
+
+	// File not specified
+	if (strcmpi(arg_filename, "") == 0) {
+		FWerror(107,0,CommandID,"file name","",0,0,out);
+		QWrite("[],[],0]", out);
+		break;
+	};
+
+	// Verify and update path to the file
+	String buf_filename;
+	String_init(buf_filename);
+	char *ptr_filename = arg_filename;
+
+	if (!VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out)) {
+		QWrite("[],[],0]", out);
+		break;
+	}
+
+
+	// Class path
+	int classpath_capacity = arg_level!=predefined_capacity ? arg_level : predefined_capacity;
+	int classpath_current  = 0;
+	int classpath_size     = 0;
+	char *classpath[predefined_capacity];
+	char *class_name = strtok(arg_classpath, "[,]");
+
+	//from ofp array to char array
+	while (class_name!=NULL  &&  classpath_size<classpath_capacity) {
+		classpath[classpath_size++] = stripq(class_name);
+		class_name                  = strtok(NULL, "[,]");
+	}
+
+	if (arg_offset > 0) {
+		classpath_current = classpath_size;
+		
+		if (arg_classpath_pos >= 0)
+			classpath_current = arg_classpath_pos+1;
+	} else
+		arg_offset = 0;
+
+
+	// Wrapping
+	enum WRAP {
+		NO_WRAP,
+		YES_WRAP,
+		NODOUBLE_WRAP
+	};
+	
+	int wrap = NODOUBLE_WRAP;
+	
+	if (strcmpi(arg_wrap,"no") == 0)
+		wrap = NO_WRAP;
+ 
+	if (strcmpi(arg_wrap,"yes") == 0)
+		wrap = YES_WRAP;
+		
+		
+	// Finding properties
+	const int properties_to_find_capacity = 64;
+	char *properties_to_find[properties_to_find_capacity];
+	int properties_to_find_size = 0;
+	
+	if (arg_findproperty[0] == '-') {
+		arg_findproperty[0]     = '\0';
+		properties_to_find_size = -1;
+	} else {
+		char *property = strtok(arg_findproperty, ",");
+		while (property!=NULL  &&  properties_to_find_size<properties_to_find_capacity) {
+			properties_to_find[properties_to_find_size++] = stripq(property);
+			property                                      = strtok(NULL, ",");
+		}
+	}
+	//---------------------------------------------------------------------------
+	
+
+
+	// Open wanted file -----------------------------------------------------------------	
+	FILE *file = fopen(ptr_filename, "rb");
+	if (!file) {
+		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
+		QWrite("[],[],0]", out);
+		String_end(buf_filename);
+		break;
+	}
+
+	// Find file size
+	fseek(file, 0, SEEK_END);
+	int file_size = ftell(file) - arg_offset;
+
+	// Allocate buffer
+	String file_contents;
+	String_init(file_contents);
+	
+	int result = String_allocate(file_contents, file_size+1);
+	if (result != 0) {
+		FWerror(10,0,CommandID,"file_contents","",file_size,0,out);
+		QWrite("[],[],0]", out);
+		String_end(buf_filename);
+		break;
+	}
+
+	// Copy text to buffer
+	fseek(file, arg_offset, SEEK_SET);
+	result = fread(file_contents.pointer, 1, file_size, file);
+	file_contents.pointer[file_size] = '\0';
+
+	if (result != file_size) {		
+		if (ferror(file))
+			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out); 
+		else
+			FWerror(210,0,CommandID,ptr_filename,"",result,file_size,out);
+		
+		String_end(buf_filename);
+		String_end(file_contents);
+		QWrite("[],[],0]", out);
+		fclose(file);
+		break;
+	}
+
+	fclose(file);
+	
+
+
+
+	enum EXPECT {
+		PROPERTY,
+		EQUALITY,
+		VALUE,
+		SEMICOLON,
+		CLASS_NAME,
+		CLASS_INHERIT,
+		CLASS_COLON,
+		CLASS_BRACKET,
+		ENUM_BRACKET,
+		ENUM_CONTENT,
+		EXEC_BRACKET,
+		EXEC_CONTENT,
+		MACRO_CONTENT
+	};
+	
+	enum COMMENT {
+		NONE,
+		LINE,
+		BLOCK
+	};
+	
+	String output_class[predefined_capacity];
+	String output_inherit[predefined_capacity];
+	String output_bytes[predefined_capacity];
+	String output_property[predefined_capacity];
+	String output_value[predefined_capacity];
+	
+	String *all_output_strings[] = {
+		output_class,
+		output_inherit,
+		output_bytes,
+		output_property,
+		output_value
+	};
+	const int all_output_strings_num = sizeof(all_output_strings) / sizeof(all_output_strings[0]);
+
+	char output_strings_name[all_output_strings_num][16] = {
+		"class",
+		"inherit",
+		"bytes",
+		"property",
+		"value"
+	};
+
+	char temp[512] = "";
+	for (i=0; i<classpath_capacity; i++)
+		for (int j=0; j<all_output_strings_num; j++) {
+			String_init(all_output_strings[j][i]);
+			sprintf(temp, "_output_%s%d=[];", output_strings_name[j], i);
+			String_append(all_output_strings[j][i], temp);
+		}
+		
+	String output_classpath_bytes;
+	String_init(output_classpath_bytes);
+	String_append(output_classpath_bytes, "[");
+	
+	int subclass_count[predefined_capacity] = {0,0,0,0,0,0,0,0};
+	
+	int comment           = NONE;
+	int expect            = PROPERTY;
+	int word_start        = -1;
+	int class_level       = classpath_current;
+	int array_level       = 0;
+	int output_level      = 0;
+	int parenthesis_level = 0;
+	int property_start    = 0;
+	int property_end      = 0;
+	bool first_char       = true;
+	bool is_array         = false;
+	bool in_quote         = false;
+	bool macro            = false;
+	bool is_inherit       = false;
+	bool classpath_done   = false;
+	bool classpath_match  = false;
+	bool property_found   = false;
+	bool purge_comment    = false;
+	char separator        = ' ';
+	char *text            = file_contents.pointer;
+	
+	for (i=0; i<file_size; i++) {
+		char c = text[i];
+
+		// Parse preprocessor comment
+		switch (comment) {
+			case NONE  : {
+				if (c == '/') {
+					char c2 = text[i+1];
+					
+					if (c2 == '/')
+						comment = LINE;
+					else 
+						if (c2 == '*')
+							comment = BLOCK;
+				}
+				
+				if (comment == NONE)
+					break;
+				else {
+					if (word_start>=0)
+						purge_comment = true;
+					
+					continue;
+				}
+			}
+			
+			case LINE  : {
+				if (c=='\r' || c=='\n')
+					comment = NONE;
+
+				continue;
+			}
+			
+			case BLOCK : {
+				if (i>0 && text[i-1]=='*' && c=='/')
+					comment = NONE;
+
+				continue;
+			}
+		}
+
+		// Parse preprocessor directives
+		if (!first_char && (c=='\r' || c=='\n')) {
+			first_char = true;
+			
+			if (macro && text[i-1] != '\\')
+				macro = false;
+		}
+		
+		if (!isspace(text[i])  &&  first_char) {
+			first_char = false;
+			
+			if (c == '#')
+				macro = true;
+		}
+		
+		if (macro)
+			continue;
+
+
+		// Parse classes
+		switch (expect) {
+			case SEMICOLON : {
+				if (c == ';') {
+					expect = PROPERTY;
+					continue;
+				} else 
+					if (!isspace(c))
+						expect = PROPERTY;
+			}
+			
+			case PROPERTY : {
+				if (c == '}') {
+					// End parsing when left the target class
+					if (classpath_current==classpath_size && class_level==classpath_current && !classpath_done) {
+						classpath_done = true;
+						i              = file_size;
+						continue;
+					}
+					
+					// When left subclass within target class
+					if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+						int level = class_level - classpath_current;
+
+						for (int z=level; z<predefined_capacity; z++)
+							subclass_count[z]=0;
+							
+						if (level > 0)
+							subclass_count[level-1]++;
+					}
+					
+					expect = SEMICOLON;
+					class_level--;
+					
+					// End parsing when couldn't find wanted classes
+					if (class_level < classpath_current)
+						i = file_size;
+
+					continue;
+				}
+				
+				if (isalnum(c) || c=='_' || c=='[' || c==']') {
+					if (word_start == -1)
+						word_start = i;
+				} else
+					if (word_start >= 0) {
+						text[i] = '\0';
+	
+						if (strcmp(text+word_start,"class")==0) {
+							expect = CLASS_NAME;
+						} else 
+							if (strcmp(text+word_start,"enum")==0) {
+								expect    = ENUM_BRACKET;
+								separator = '{';
+							} else 
+								if (strcmp(text+word_start,"__EXEC")==0) {
+									expect    = EXEC_BRACKET;
+									separator = '(';
+								} else {
+									expect         = EQUALITY;
+									separator      = '=';
+									property_start = word_start;
+									property_end   = i;							
+									is_array       = text[i-2]=='[' && text[i-1]==']';
+								}
+
+						word_start = -1;
+					}
+				
+				if (separator == ' ')
+					break;
+			}
+			
+			case EQUALITY     : 
+			case ENUM_BRACKET : 
+			case EXEC_BRACKET : {
+				if (c == separator) {
+					expect++;
+					separator = ' ';
+				} else 
+					if (expect==EQUALITY && c=='(') {
+						expect            = MACRO_CONTENT;
+						separator         = ' ';
+						parenthesis_level = 1;
+					} else 
+						if (!isspace(c)) {	//ignore syntax error
+							i--;
+							separator = ' ';
+							expect    = SEMICOLON;
+						}
+				
+				break;
+			}
+			
+			case VALUE : {
+				if (c == '"')
+					in_quote = !in_quote;
+
+				if (!in_quote && c=='{')
+					array_level++;
+
+				if (!in_quote && c=='}')
+					array_level--;
+
+				if (!in_quote && c==';' && array_level>0)
+					text[i] = ',';
+
+				if (word_start == -1) {
+					if (!isspace(c))
+						word_start = i;
+				} else {
+					if (!in_quote && array_level==0 && (c==';' || c=='\r' || c=='\n')) {
+						text[i] = '\0';
+
+						char *property = text + property_start;
+						char *value    = text + word_start;
+
+						if (purge_comment) {
+							purge_comment = false;
+							PurgeComments(text, property_start, property_end);
+							PurgeComments(text, word_start    , i);
+						}
+
+						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+							bool found = properties_to_find_size == 0;
+
+							for (int j=0; j<properties_to_find_size && !found; j++)
+								if (strcmpi(property,properties_to_find[j]) == 0)
+									found = true;
+
+							if (found) {
+								property_found = true;
+								int level      = class_level - classpath_current;
+
+								if (level < classpath_capacity) {
+									// Add property name
+									String_append(output_property[level], Output_Nested_Array(temp, level, "property", level, subclass_count));
+									String_append(output_property[level], "\"");
+									String_append(output_property[level], property);
+									String_append(output_property[level], "\"];");
+
+									// Add property value
+									String_append(output_value[level], Output_Nested_Array(temp, level, "value", level, subclass_count));
+
+									if (wrap==YES_WRAP || wrap==NODOUBLE_WRAP && value[0]!='\"')
+										String_append(output_value[level], "\"");
+
+									// Convert arrays (square brackets) and strings (double quotes) so that "call" command in OFP can be used
+									if (is_array || wrap==YES_WRAP && value[0]=='\"') {
+										for (int j=word_start; j<i; j++) {											
+											if (text[j] == '"')
+												in_quote = !in_quote;
+
+											if (text[j]=='{' && !in_quote && wrap==NO_WRAP)
+												String_append(output_value[level], "[");
+											else 
+												if (text[j]=='}' && !in_quote && wrap==NO_WRAP)
+													String_append(output_value[level], "]");
+												else 
+													if (text[j]=='"' && (wrap==YES_WRAP || wrap==NODOUBLE_WRAP))
+														String_append(output_value[level], "\"\"");
+													else {
+														char c[] = "a";
+														strncpy(c, text+j, 1);
+														String_append(output_value[level], c);
+													}
+										}
+									} else
+										String_append(output_value[level], value);
+									
+									if (wrap==YES_WRAP || wrap==NODOUBLE_WRAP && value[0]!='\"')
+										String_append(output_value[level], "\"");
+										
+									String_append(output_value[level], "];");
+								}
+							}
+						}
+						
+						word_start = -1;
+						expect     = PROPERTY;
+					}
+				}
+				
+				break;
+			}
+			
+			case CLASS_NAME    :
+			case CLASS_INHERIT : {
+				if (isalnum(c) || c=='_') {
+					if (word_start == -1)
+						word_start = i;
+				} else
+					if (word_start >= 0) {
+						text[i] = '\0';
+						
+						if (purge_comment) {
+							purge_comment = false;
+							PurgeComments(text, word_start, i);
+						}
+						
+						if (expect==CLASS_NAME && classpath_size>0 && classpath_current<classpath_size && class_level==classpath_current && strcmpi(text+word_start,classpath[classpath_current])==0) {
+							classpath_current++;
+							classpath_match = true;
+						}
+
+						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+							String *output_array = expect==CLASS_NAME ? output_class : output_inherit;
+							int level            = class_level - classpath_current;
+
+							if (level < classpath_capacity && !classpath_done) {
+								char tempname[8] = "class";
+								if (expect != CLASS_NAME)
+									strcpy(tempname, "inherit");
+
+								String_append(output_array[level], Output_Nested_Array(temp, level, tempname, level, subclass_count));
+								String_append(output_array[level], "\"");
+								String_append(output_array[level], text+word_start);
+								String_append(output_array[level], "\"];");
+							}
+						}
+						
+						is_inherit = expect == CLASS_INHERIT;
+						word_start = -1;
+						expect     = expect==CLASS_NAME ? CLASS_COLON : CLASS_BRACKET;
+					}
+				
+				if (expect!=CLASS_COLON && expect!=CLASS_BRACKET)
+					break;
+			}
+			
+			case CLASS_COLON   :
+			case CLASS_BRACKET : {
+				if (expect==CLASS_COLON && c==':')
+					expect = CLASS_INHERIT;
+				else 
+					if (c == '{') {
+						if (!is_inherit) {
+							if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+								int level = class_level - classpath_current;
+								
+								if (level < classpath_capacity && !classpath_done) {
+									String_append(output_inherit[level], Output_Nested_Array(temp, level, "inherit", level, subclass_count));
+									strcpy(temp,"\"\"];");
+									String_append(output_inherit[level], temp);
+								}
+								
+							}
+						}
+
+						if (classpath_match) {
+							char temp[32] = "";
+							sprintf(temp, "]+[\"%d\"", i+1);
+							String_append(output_classpath_bytes, temp);
+							classpath_match = false;
+						}
+
+						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+							int level = class_level - classpath_current;
+
+							if (level < classpath_capacity) {
+								String_append(output_bytes[level], Output_Nested_Array(temp, level, "bytes", level, subclass_count));
+								sprintf(temp,"\"%d\"];", i+1);
+								String_append(output_bytes[level], temp);
+							}
+						}
+
+						class_level++;
+						expect = PROPERTY;
+						
+						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+							int level = class_level - classpath_current;
+							
+							if (level > output_level)
+								output_level = level;
+							
+							if (level > 0)
+							for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
+								for (int k=0; k<all_output_strings_num; k++) {								
+									String_append(all_output_strings[k][j], Output_Nested_Array(temp, level-1, output_strings_name[k], j, subclass_count));
+									String_append(all_output_strings[k][j], "[]");
+									String_append(all_output_strings[k][j], "];");
+								}
+						}
+					} else
+						if (!isspace(c)) {	//ignore syntax error
+							i--;
+							expect = SEMICOLON;
+						}
+				
+				break;
+			}
+			
+			case ENUM_CONTENT : 
+			case EXEC_CONTENT : {
+				if (expect==EXEC_CONTENT && c==')' || expect==ENUM_CONTENT && c=='}')
+					expect = SEMICOLON;
+
+				break;
+			}
+			
+			case MACRO_CONTENT : {
+				if (c == '"')
+					in_quote = !in_quote;
+					
+				if (!in_quote) {
+					if (c == '(')
+						parenthesis_level++;
+						
+					if (c == ')')
+						parenthesis_level--;
+						
+					if (parenthesis_level == 0)
+						expect = SEMICOLON;
+				}
+					
+				break;
+			}
+		}
+	}
+
+	//---------------------------------------------------------------------------
+	for (i=0; i<classpath_capacity && i<=output_level; i++) {
+		for (int j=0; j<all_output_strings_num; j++) {
+			QWrite(all_output_strings[j][i].pointer, out);
+			String_end(all_output_strings[j][i]);
+		}
+	}
+	
+	if (classpath_current < classpath_size)
+		FWerror(250,0,CommandID,ptr_filename,classpath[classpath_current],classpath_current,++classpath_size,out);
+	else
+		if (properties_to_find_size>0 && !property_found)
+			FWerror(253,0,CommandID,ptr_filename,arg_findproperty,0,0,out);
+		else
+			FWerror(0,0,CommandID,"","",0,0,out);
+
+	QWrite("[", out);
+	
+	for (i=0; i<classpath_capacity && i<=output_level; i++) {
+		if (i == 0)
+			QWrite("[", out);
+		else
+			QWrite(",[", out);
+
+		for (int j=0; j<all_output_strings_num; j++) {
+			char temp[32] = "";
+			sprintf(temp, "%c_output_%s%d", (j==0 ? ' ' : ','), output_strings_name[j], i);
+			QWrite(temp, out);
+		}
+
+		QWrite("]", out);
+	}
+
+	QWrite("],", out);
+	String_append(output_classpath_bytes, "]");
+	QWrite(output_classpath_bytes.pointer, out);
+
+	sprintf(temp,",%d]",classpath_current);
+	QWrite(temp, out);
+
+	String_end(output_classpath_bytes);
+	String_end(file_contents);
+	String_end(buf_filename);
+};
+break;
+
+
+
+
+
+
+
+
+
+
+
+
+case C_CLASS_READSQM:
+{
+	// Read arguments------------------------------------------------------------
+	char *arg_filename     = "";
+	
+	for (int i=2; i<numP; i++) {
+		char *arg = stripq(par[i]);
+		char *col = strchr(arg, ':');
+
+		if (col == NULL)
+			continue;
+
+		int pos   = col - arg;
+		arg[pos]  = '\0';
+		char *val = arg+pos+1;
+
+		if (strcmpi(arg,"file") == 0) {
+			arg_filename = val;
+			continue;
+		}
+	}
+
+	// File not specified
+	if (strcmpi(arg_filename, "") == 0) {
+		FWerror(107,0,CommandID,"file name","",0,0,out);
+		break;
+	};
+
+	// Verify and update path to the file
+	String buf_filename;
+	String_init(buf_filename);
+	char *ptr_filename = arg_filename;
+
+	if (!VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out))
+		break;
+	//---------------------------------------------------------------------------
+	
+
+
+	// Open wanted file -----------------------------------------------------------------	
+	FILE *file = fopen(ptr_filename, "rb");
+	if (!file) {
+		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
+		String_end(buf_filename);
+		break;
+	}
+
+	// Find file size
+	fseek(file, 0, SEEK_END);
+	int file_size = ftell(file);
+
+	// Allocate buffer
+	String file_content;
+	String_init(file_content);
+	
+	int result = String_allocate(file_content, file_size+1);
+	if (result != 0) {
+		FWerror(10,0,CommandID,"file_content","",file_size,0,out);
+		String_end(buf_filename);
+		break;
+	}
+
+	// Copy text to buffer
+	fseek(file, 0, SEEK_SET);
+	result = fread(file_content.pointer, 1, file_size, file);
+	file_content.pointer[file_size] = '\0';
+
+	if (result != file_size) {		
+		if (ferror(file))
+			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out); 
+		else
+			FWerror(210,0,CommandID,ptr_filename,"",result,file_size,out);
+		
+		String_end(buf_filename);
+		String_end(file_content);
+		fclose(file);
+		break;
+	}
+
+	fclose(file);
+
+	enum EXPECT {
+		PROPERTY,
+		EQUALITY,
+		VALUE,
+		SEMICOLON,
+		CLASS_NAME,
+		CLASS_INHERIT,
+		CLASS_COLON,
+		CLASS_BRACKET,
+		ENUM_BRACKET,
+		ENUM_CONTENT,
+		EXEC_BRACKET,
+		EXEC_CONTENT,
+		MACRO_CONTENT
+	};	
+
+	int expect            = PROPERTY;
+	int word_start        = -1;
+	int class_level       = 0;
+	int array_level       = 0;
+	int property_start    = 0;
+	int property_end      = 0;
+	int class_start       = 0;
+	int class_end         = 0;
+	int inside            = 0;
+	const int capacity    = 8;
+	bool is_array         = false;
+	bool in_quote         = false;
+	char separator        = ' ';
+	char *text            = file_content.pointer;
+	
+	int opened_classes[capacity];
+	memset(opened_classes, 0, sizeof opened_classes);
+
+	enum MISSION_SQM_CLASSES {
+		CLASS_MISSION   = 2,
+		CLASS_INTEL     = 4,
+		CLASS_GROUPS    = 8,
+		CLASS_ITEM      = 16,
+		CLASS_VEHICLES  = 32,
+		CLASS_WAYPOINTS = 64,
+		CLASS_EFFECTS   = 128,
+		CLASS_MARKERS   = 256,
+		CLASS_SENSORS   = 512
+	};
+	
+	char class_names[][16] = {
+		"Mission",
+		"Intel",
+		"Groups",
+		"Item",
+		"Vehicles",
+		"Waypoints",
+		"Effects",
+		"Markers",
+		"Sensors"
+	};
+	
+	int class_ids[] = {
+		CLASS_MISSION,
+		CLASS_INTEL,
+		CLASS_GROUPS,
+		CLASS_ITEM,
+		CLASS_VEHICLES,
+		CLASS_WAYPOINTS,
+		CLASS_EFFECTS,
+		CLASS_MARKERS,
+		CLASS_SENSORS
+	};
+	
+	int class_max = sizeof(class_ids) / sizeof(class_ids[0]);
+	
+	for (i=0; i<file_size; i++) {
+		char c = text[i];
+		
+		switch (expect) {
+			case SEMICOLON : {
+				if (c == ';') {
+					expect = PROPERTY;
+					continue;
+				} else 
+					if (!isspace(c))
+						expect = PROPERTY;
+			}
+			
+			case PROPERTY : {
+				if (c == '}') {
+					int closed = opened_classes[class_level];
+					
+					// Close double array for units
+					if (closed==CLASS_ITEM && inside & CLASS_GROUPS && ~inside & CLASS_VEHICLES && ~inside & CLASS_WAYPOINTS)
+						memcpy(text+i, "]]+", 3);
+										
+					// Close array for vehicles, markers and sensors
+					if (closed==CLASS_ITEM && (inside & (CLASS_SENSORS | CLASS_MARKERS) || inside & CLASS_VEHICLES && ~inside & CLASS_GROUPS))
+						memcpy(text+i+1, "]+", 2);
+
+					// Connection between units and waypoints in a group						
+					if (closed==CLASS_VEHICLES && inside & CLASS_GROUPS)
+						memcpy(text+i, "],", 2);
+						
+					// Last item in an array, remove last plus sign
+					if (closed==CLASS_GROUPS || closed==CLASS_WAYPOINTS || closed==CLASS_SENSORS || closed==CLASS_MARKERS || closed==CLASS_VEHICLES || closed==CLASS_ITEM && inside & CLASS_GROUPS && ~inside & CLASS_VEHICLES && ~inside & CLASS_WAYPOINTS) {
+						for (int z=i-1; z>0; z--) {
+							if (text[z]=='+') {
+								text[z] = ' ';
+								break;
+							} else
+								if (!isspace(text[z]))
+									break;
+						}
+						
+						text[i] = ']';
+					}
+									
+					// For classes inside mission class - remove brackets
+					if (closed==CLASS_GROUPS || closed==CLASS_VEHICLES && ~inside & CLASS_GROUPS || closed==CLASS_MARKERS || closed==CLASS_SENSORS)
+						text[i] = ' ';
+						
+					// Add comma between soldiers and between waypoints
+					if (closed==CLASS_ITEM && inside & CLASS_GROUPS && inside & (CLASS_VEHICLES | CLASS_WAYPOINTS))
+						text[i+1] = ',';
+						
+					// Last item in the array, remove last comma
+					if ((closed==CLASS_ITEM && ~inside & CLASS_VEHICLES || closed==CLASS_VEHICLES || closed==CLASS_WAYPOINTS) && inside & CLASS_GROUPS) {
+						for (int z=i-1; z>0; z--) {
+							if (text[z]==',') {
+								text[z] = ' ';
+								break;
+							} else
+								if (!isspace(text[z]))
+									break;
+						}
+					}
+					
+					// Remove semi-colon when finished waypoints
+					if (closed == CLASS_WAYPOINTS)
+						text[i+1] = ' ';
+					    
+					inside                     ^= opened_classes[class_level];
+					opened_classes[class_level] = 0;
+					class_level--;
+						
+					// End parsing when left the target class
+					if (~inside & CLASS_MISSION) {
+						text[i] = '\0';
+						i       = file_size;
+						continue;
+					}
+									
+					expect = SEMICOLON;
+					continue;
+				}
+				
+				if (isalnum(c) || c=='_' || c=='[' || c==']') {
+					if (word_start == -1)
+						word_start = i;
+				} else
+					if (word_start >= 0) {
+						text[i] = '\0';
+	
+						if (strcmp(text+word_start,"class")==0) {
+							property_start = word_start;
+							expect         = CLASS_NAME;
+							property_end   = i;
+						} else {
+							expect         = EQUALITY;
+							separator      = '=';
+							property_start = word_start;
+							property_end   = i;
+							is_array       = text[i-2]=='[' && text[i-1]==']';
+						}
+
+						text[i]    = c;
+						word_start = -1;
+					}
+				
+				if (separator == ' ')
+					break;
+			}
+			
+			case EQUALITY     : {
+				if (c == separator) {
+					expect++;
+					separator = ' ';
+				} else 
+					if (!isspace(c)) {	//ignore syntax error
+						i--;
+						separator = ' ';
+						expect    = SEMICOLON;
+					}
+				
+				break;
+			}
+			
+			case VALUE : {
+				if (c == '"')
+					in_quote = !in_quote;
+
+				if (!in_quote && c=='{')
+					array_level++;
+
+				if (!in_quote && c=='}')
+					array_level--;
+
+				if (!in_quote && c==';' && array_level>0)
+					text[i] = ',';
+
+				if (word_start == -1) {
+					if (!isspace(c))
+						word_start = i;
+				} else {
+					if (!in_quote && array_level==0 && (c==';' || c=='\r' || c=='\n')) {
+						int current = opened_classes[class_level];
+						
+						// Remove properties in these classes
+						if (current==CLASS_MISSION || current==CLASS_GROUPS || current==CLASS_VEHICLES || current==CLASS_SENSORS || current==CLASS_MARKERS || current==CLASS_WAYPOINTS) {
+							for (int z=property_start; z<(c==';' ? i+1 : i); z++)
+								text[z] = ' ';
+						} else 
+							// Remove property but keep value
+							if (inside & CLASS_GROUPS && current==CLASS_ITEM && ~inside & CLASS_VEHICLES && ~inside & CLASS_WAYPOINTS) {
+								for (int z=property_start; z<word_start; z++)
+									text[z] = ' ';
+									
+								if (c==';')
+									text[i] = ',';
+							} else {
+								// Convert to OFP variable
+								text[property_start-1] = '_';
+								
+								if (is_array) {
+									text[property_end-1] = ' ';
+									text[property_end-2] = ' ';
+									text[word_start]     = '[';
+									text[i-1]            = ']';
+								}
+							}
+						
+						word_start = -1;
+						expect     = PROPERTY;
+					}
+				}
+				
+				break;
+			}
+			
+			case CLASS_NAME    : {
+				if (isalnum(c) || c=='_') {
+					if (word_start == -1)
+						word_start = i;
+				} else
+					if (word_start >= 0) {
+						class_start = word_start;
+						class_end   = i;
+						word_start = -1;
+						expect     = CLASS_BRACKET;
+					}
+				
+				if (expect != CLASS_BRACKET)
+					break;
+			}
+			
+			case CLASS_BRACKET : {
+				if (c == '{') {
+					class_level++;
+					char backup     = text[class_end];
+					text[class_end] = '\0';
+					
+					for (int z=0; z<class_max; z++) {
+						if (strncmp(text+class_start,class_names[z],strlen(class_names[z])) == 0) {
+							int opened                  = class_ids[z];
+							opened_classes[class_level] = opened;
+							inside                     |= opened;
+    						
+							// Remove everything before Mission class
+							if (opened == CLASS_MISSION)
+								for (int z=0; z<=i; z++)
+									text[z] = ' ';
+							
+							// Turn classes inside Mission class into variables
+							if (opened==CLASS_INTEL || opened==CLASS_GROUPS || opened==CLASS_VEHICLES && class_level==2 || opened==CLASS_SENSORS || opened==CLASS_MARKERS || opened==CLASS_EFFECTS) {
+								for (int z=property_start; z<property_end; z++)	
+									text[z] = ' ';
+									
+								memcpy(text+class_start-1, text+class_start, class_end-class_start);
+								text[class_start-2] = '_';
+								text[class_end-1] = '=';
+							}
+							
+							// Remove class name	
+							if (opened==CLASS_ITEM || opened==CLASS_VEHICLES && inside & CLASS_GROUPS || opened==CLASS_WAYPOINTS)
+								for (int z=property_start; z<class_end; z++)
+									text[z] = ' ';
+							
+							// If "item" class then turn it into array with string
+							if (opened==CLASS_ITEM && (inside & (CLASS_SENSORS | CLASS_MARKERS) || inside & CLASS_VEHICLES && ~inside & CLASS_GROUPS))
+								memcpy(text+i, "[{", 2);
+																
+							// If "vehicles" or "waypoints" in a group then turn it into array
+							if (opened==CLASS_VEHICLES && inside & CLASS_GROUPS || opened==CLASS_WAYPOINTS)
+								text[i] = '[';
+								
+							// If group item then turn it into array containing an array
+							if (opened==CLASS_ITEM && inside & CLASS_GROUPS && ~inside & CLASS_VEHICLES && ~inside & CLASS_WAYPOINTS)
+								memcpy(text+i, "[[", 2);
+								
+							// For classes inside mission class - remove brackets
+							if (opened==CLASS_GROUPS || opened==CLASS_VEHICLES && ~inside & CLASS_GROUPS || opened==CLASS_MARKERS || opened==CLASS_SENSORS)
+								text[i] = ' ';
+
+							
+							break;
+						}
+					}
+
+					text[class_end] = backup;
+					expect          = PROPERTY;
+				} else
+					if (!isspace(c)) {	//ignore syntax error
+						i--;
+						expect = SEMICOLON;
+					}
+				
+				break;
+			}
+		}
+	}
+
+	//---------------------------------------------------------------------------
+	QWrite(file_content.pointer, out);
+	FWerror(0,0,CommandID,"","",0,0,out);
+
+	String_end(file_content);
+	String_end(buf_filename);
+};
 break;

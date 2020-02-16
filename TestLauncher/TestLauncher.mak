@@ -33,14 +33,14 @@ INTDIR=.\Release
 OutDir=.\..\ 
 # End Custom Macros
 
-ALL : "$(OUTDIR)\fwatchCWA.exe"
+ALL : "$(OUTDIR)\fwatch.exe"
 
 
 CLEAN :
 	-@erase "$(INTDIR)\script1.res"
 	-@erase "$(INTDIR)\TestLauncher.obj"
 	-@erase "$(INTDIR)\vc60.idb"
-	-@erase "$(OUTDIR)\fwatchCWA.exe"
+	-@erase "$(OUTDIR)\fwatch.exe"
 
 "$(OUTDIR)" :
     if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
@@ -90,13 +90,13 @@ BSC32_FLAGS=/nologo /o"$(OUTDIR)\TestLauncher.bsc"
 BSC32_SBRS= \
 	
 LINK32=link.exe
-LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib Ws2_32.lib /nologo /subsystem:windows /incremental:no /pdb:"$(OUTDIR)\fwatchCWA.pdb" /machine:I386 /out:"$(OUTDIR)\fwatchCWA.exe" 
+LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib Ws2_32.lib /nologo /subsystem:windows /incremental:no /pdb:"$(OUTDIR)\fwatch.pdb" /machine:I386 /out:"$(OUTDIR)\fwatch.exe" 
 LINK32_OBJS= \
 	"$(INTDIR)\TestLauncher.obj" \
 	"$(INTDIR)\script1.res" \
 	"..\fwatch.lib"
 
-"$(OUTDIR)\fwatchCWA.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+"$(OUTDIR)\fwatch.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
     $(LINK32) @<<
   $(LINK32_FLAGS) $(LINK32_OBJS)
 <<
@@ -128,7 +128,7 @@ CLEAN :
     if not exist "$(INTDIR)/$(NULL)" mkdir "$(INTDIR)"
 
 CPP=cl.exe
-CPP_PROJ=/nologo /MLd /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /Fp"$(INTDIR)\TestLauncher.pch" /YX /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /GZ /c 
+CPP_PROJ=/nologo /MT /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /Fp"$(INTDIR)\TestLauncher.pch" /YX /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /GZ /c 
 
 .c{$(INTDIR)}.obj::
    $(CPP) @<<
@@ -169,7 +169,7 @@ BSC32_FLAGS=/nologo /o"$(OUTDIR)\TestLauncher.bsc"
 BSC32_SBRS= \
 	
 LINK32=link.exe
-LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:windows /incremental:yes /pdb:"$(OUTDIR)\TestLauncher.pdb" /debug /machine:I386 /out:"$(OUTDIR)\TestLauncher.exe" /pdbtype:sept 
+LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib ws2_32.lib /nologo /subsystem:windows /incremental:yes /pdb:"$(OUTDIR)\TestLauncher.pdb" /debug /machine:I386 /out:"$(OUTDIR)\TestLauncher.exe" /pdbtype:sept 
 LINK32_OBJS= \
 	"$(INTDIR)\TestLauncher.obj" \
 	"$(INTDIR)\script1.res" \

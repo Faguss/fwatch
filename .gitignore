@@ -1,0 +1,15 @@
+*.dll
+*.exe
+*.exp
+*.lib
+*.bsc
+*.ilk
+*.pdb
+*.ncb
+*.opt
+*.obj
+*.pch
+*.idb
+*.sbr
+*.aps
+*.res

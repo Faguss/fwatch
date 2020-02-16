@@ -5,6 +5,7 @@
 	
 
 .\TestLauncher.cpp : \
+	"..\testdll\global_vars.h"\
 	"..\testdll\testdll.h"\
-	"c:\dxsdk\include\basetsd.h"\
+	"c:\program files\microsoft visual studio\vc98\include\basetsd.h"\
 	

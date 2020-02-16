@@ -854,28 +854,57 @@ void Transfer_Modfolder_Missions(char *mod, bool server)
 
 	FILE *f = fopen(filename,"a");
 	if (f) {
-		char source[2048]      = "";
-		char destination[2048] = "";
-		sprintf(source, "%s\\Missions", mod);
+		char source[2048]           = "";
+		char destination[2048]      = "";
+		wchar_t source_w[1024]      = L"";
+		wchar_t destination_w[1024] = L"";
+
+		sprintf(source     , "%s\\Missions", mod);
 		sprintf(destination, "Missions\\%s", mod);
 
 		if (MoveFileEx(source, destination, 0))
 			fprintf(f, "%s\n", source);
 
-		WIN32_FIND_DATA fd;
+		WIN32_FIND_DATAW fd;
 		HANDLE hFind = INVALID_HANDLE_VALUE;
-		sprintf(source, "%s\\MPMissions\\*.pbo", mod);
-		hFind = FindFirstFile(source, &fd);
+
+		size_t modlen = strlen(mod);
+		mbstowcs(source_w, mod, modlen+1);
+		wcscat(source_w     , L"\\MPMissions\\*");
+		wcscpy(destination_w, L"MPMissions\\");
+
+		hFind = FindFirstFileW(source_w, &fd);
 
 		if (hFind != INVALID_HANDLE_VALUE) {
 			do {
-				sprintf(source, "%s\\MPMissions\\%s", mod, fd.cFileName);
-				sprintf(destination, "MPMissions\\%s", fd.cFileName);
+				if (wcscmp(fd.cFileName,L".")==0 || wcscmp(fd.cFileName,L"...")==0)
+					continue;
+				
+				size_t filename_length = wcslen(fd.cFileName);
+				unsigned long dir      = fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
 
-				if (MoveFileEx(source, destination, 0))
-					fprintf(f, "%s\n", source);
+				if (filename_length<3 || filename_length>(1023-modlen-13))
+					continue;
+
+				int dots = 0;
+				wchar_t *dot = fd.cFileName;
+
+				while((dot=wcschr(dot,L'.')) != NULL && dots<2) {
+					dots++;
+					dot++;
+				}
+
+				if (dots>=1 && dir || !dir && dots>=2 && wcscmp(fd.cFileName+filename_length-4,L".pbo")==0) {
+					wcscpy(source_w+modlen+12, fd.cFileName);
+					wcscpy(destination_w+11, fd.cFileName);
+
+					if (MoveFileExW(source_w, destination_w, 0)) {
+						wcstombs(source, source_w, wcslen(source_w)+1);
+						fprintf(f, "%s\n", source);
+					}
+				}
 			} 
-			while (FindNextFile(hFind, &fd) != 0);
+			while (FindNextFileW(hFind, &fd) != 0);
 			FindClose(hFind);
 		}
 
@@ -912,25 +941,36 @@ void Return_Modfolder_Missions(bool server)
 		text_buffer[file_size] = '\0';
 
 
-		int i          = 0;
-		int word_start = 0;
-		
+		int i                       = 0;
+		int word_start              = 0;
+		wchar_t source_w[2048]      = L"";
+		wchar_t destination_w[2048] = L"";
+					
 		while (i < file_size) {
 			char *destination = Tokenize(text_buffer, "\r\n", i, file_size, false, false);
 			char *mission     = strrchr(destination,'\\');
 			bool remove_line  = false;
 			
 			if (mission != NULL) {
-				char source[2048] = "";
+				char source[1024] = "";
 
 				if (strcmpi(mission,"\\missions") == 0) {
 					strcpy(source, "missions\\");
 					memcpy(source+9, destination, mission - destination);
-				} else
+
+					if (MoveFileEx(source, destination, 0))
+						remove_line = true;
+				} else {
 					sprintf(source, "mpmissions%s", mission);
 
-				if (MoveFileEx(source, destination, 0))
-					remove_line = true;
+					size_t source_len      = strlen(source);
+					size_t destination_len = strlen(destination);
+					mbstowcs(source_w, source, source_len+1);
+					mbstowcs(destination_w, destination, destination_len+1);
+
+					if (MoveFileExW(source_w, destination_w, 0))
+						remove_line = true;
+				}
 			} else
 				remove_line = true;
 			

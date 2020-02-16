@@ -1,0 +1,251 @@
+; Script supplied with Fwatch v1.13
+; onScreenTyping 2.2
+; For simulating keyboard writing
+; Full documentation: http://ofp-faguss.com/files/onscreentyping.pdf
+
+; Example:
+; {_isRunning="OST_ISRUNNING"; _idc=10} exec "..\fwatch\data\onScreenTyping.sqs"
+
+
+
+
+
+
+
+
+; Define Variables
+
+	; Arrays for replacing keyboard keys with letters
+	_allowed 		= ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"]
+	_allowed2 		= ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"]
+	_read 			= ["SPACE","DIVIDE","SELECT","SUBTRACT","ADD","DECIMAL","NUMPAD0","NUMPAD1","NUMPAD2","NUMPAD3","NUMPAD4","NUMPAD5","NUMPAD6","NUMPAD7","NUMPAD8","NUMPAD9"]
+	_write 			= [" ","/","*","-","+",",","0","1","2","3","4","5","6","7","8","9"]
+	_readSHIFT 		= ["1","2","3","4","5","6","7","8","9","0","`","[", "]", ";", ",", ".", "/", "-", "=", "\", "'"]
+	_writeSHIFT 	= ["!","@","#","$","%","^","&","*","(",")","~","{", "}", ":", "<", ">", "?", "_", "+", "|", """"]	
+	_readCTRL 		= []
+	_writeCTRL		= []
+
+	; Initialize input arguments
+	_input 			= ""
+	_idc 			= -1
+	_outputSTR 		= ""
+	_workSTR		= ""
+	_isRunning 		= ""
+	_limit 			= -1
+	_displayLimit 	= -1
+	_cursor 		= "_"
+	_cursorBlink 	= 0.5
+	_allowMarking 	= true
+	_interval 		= 0.001
+	_notAllowed 	= []
+	_escapeKeys 	= ["ESC"]
+	_acceptKeys 	= ["ENTER"]
+	_suppress 		= "false"
+	_quit 			= "false"
+	_quitAndSave 	= "false"
+	_InfoArr 		= ""
+	_InfoMarkText 	= false
+	_key 			= []
+	_keySHIFT 		= []
+	_keyCTRL 		= []
+
+	; Parse input
+	call _this
+	_original 		= ""
+	
+	? call _quit  ||  call _quitAndSave : exit
+	? _isRunning != "" 					: if (Format ["%1",call _isRunning]=="true") then {exit}
+	? _idc != -1 						: _original=ctrlText _idc; _quit="!dialog"; _suppress="!ctrlVisible _idc"
+	? count _key > 0 					: _read=_read+(_key select 0); _write=_write+(_key select 1)
+	? count _keySHIFT > 0 				: _readSHIFT=_readSHIFT+(_keySHIFT select 0); _writeSHIFT=_writeSHIFT+(_keySHIFT select 1)
+	? count _keyCTRL > 0 				: _readCTRL=_readCTRL+(_keyCTRL select 0); _writeCTRL=_writeCTRL+(_keyCTRL select 1)
+	
+	if (_input in [_input]) then {if (Format ["%1",_input]!="") then {if (Format ["%1",_input] in [_input]) then {_original=_input} else {_original=ctrlText _input}}} else {"_original=_original+_x" forEach _input}
+	
+	_input 			= nil
+	_key 			= nil
+	_keySHIFT 		= nil
+	_keyCTRL 		= nil
+
+	; Script functionality vars
+	_string 		= _original
+	_mark 			= -1
+	_scroll 		= 0
+	_exit			= 0
+	_pressed 		= []
+	_ShowTime 		= 0
+	_ShowPos 		= true
+	_update 		= true
+	_updateMark 	= true
+	_markStart 		= 0
+	_markEnd 		= 0
+	_length 		= call loadFile Format ["\:STRING SIZE %1", _string]
+	_CurrPos 		= _length
+	_LastPos 		= -1
+	
+	; Load save state
+	? Format ["%1",count (call _InfoArr)] != "scalar" 	: if (count (call _InfoArr)>0 && _cursor!="") then {_CurrPos=(call _InfoArr) select 0}; if (count (call _InfoArr)>1) then {_scroll=(call _InfoArr) select 1}; if (count (call _InfoArr)>2) then {_displayLimit=(call _InfoArr) select 2}; if (count (call _InfoArr)>4) then {if ((call _InfoArr) select 2 == _CurrPos) then {_mark=(call _InfoArr) select 3}; if ((call _InfoArr) select 3 == _CurrPos) then {_mark=(call _InfoArr) select 2}}
+	? _InfoArr != "" 									: call (_InfoArr+"=[_CurrPos,_scroll,_displayLimit,_MarkStart,_MarkEnd,"""",_length]") 
+
+	; Functions
+	"inkeys" call preProcessFile "..\fwatch\data\InitFLib.sqf"
+	_DeleteMark = "if (_mark>=0 && _CurrPos!=_mark) then {_string=loadFile Format [""\:STRING CUT exclude:true start:%1 end:%2 text:%3"",_MarkStart,_MarkEnd,_string];_length=_length-(_MarkEnd-_MarkStart);_CurrPos=_MarkStart;_mark=-1;_wordList=nil;_updateMark=true};"
+
+	; Input frequency setting
+	_previous = 0.02
+	? Format ["%1",FWATCH_INPUT_MULTI_INTERVAL] != "scalar bool array string 0xfcffffef" : _previous=FWATCH_INPUT_MULTI_INTERVAL
+	_interval exec "..\fwatch\data\InputMulti.sqs"
+	@Format ["%1", count FWATCH_INPUT_MULTI] != "scalar"
+	@count (FWATCH_INPUT_MULTI select 1) == 0
+	goto "Output"
+
+
+
+
+
+
+; Main loop
+
+	#KeyCheck
+	~_interval
+
+	; Get keyboard input
+	_keys 	= FWATCH_INPUT_MULTI select 1
+	_keys2 	= FWATCH_INPUT_MULTI select 0
+	_shift 	= "LSHIFT" in _keys2 || "RSHIFT" in _keys2
+	_ctr 	= "LCTRL"  in _keys2 || "RCTRL"  in _keys2
+	_caps 	= (FWATCH_INPUT_MULTI select 2) select 1
+
+	; Quit and supression conditions
+	? call _quit 		: goto "Exit"
+	? call _quitAndSave : _exit=2; goto "Exit"
+	? call _suppress 	: goto "KeyCheck"
+	
+	; Cycle cursor display
+	? _cursorBlink>0  &&  (_time-_ShowTime)>_cursorBlink : _ShowPos=!_ShowPos; _ShowTime=_time; _update=true
+
+	; Check if properties were modified from the outside
+	? Format ["%1",count (call _InfoArr)] != "scalar" : if ((call _InfoArr) select 0 != _CurrPos) then {_CurrPos=(call _InfoArr) select 0; _update=true}; if ((call _InfoArr) select 1 != _scroll) then {_scroll=(call _InfoArr) select 1; _update=true}; if ((call _InfoArr) select 2 != _displayLimit) then {_displayLimit=(call _InfoArr) select 2; _update=true}; if ((call _InfoArr) select 3 != _MarkStart) then {_updateMark=true}; if ((call _InfoArr) select 4 != _MarkEnd) then {_updateMark=true}; if ((call _InfoArr) select 6 != _length) then {_string=call _workSTR; _wordList=nil; _length=(call _InfoArr) select 6; if (_CurrPos<0) then {_CurrPos=0}}; if (_CurrPos>_length) then {_CurrPos=_length}; goto "Output"}}
+
+	; Validate input
+	? count _keys == 0 	 : _pressed=[]; if (_update || _updateMark) then { goto "Output" } else { goto "KeyCheck" }
+	? count _pressed > 0 : "if (!(_x in _keys)) then {_pressed=_pressed-[_x]}" forEach _pressed
+	_i = count _keys -1
+
+
+		; For each key press in the array
+		#ForEachKey
+		_toWrite = _keys select _i
+
+		; Function keys
+		? "LEFT"  call FLIB_INKEYS  &&  _cursor!=""	: _updateMark=true; if (_ctr) then {goto "SkipToWord"} else {_CurrPos=_CurrPos-1; if (_CurrPos<0) then {_CurrPos=0}}
+		? "RIGHT" call FLIB_INKEYS  &&  _cursor!=""	: _updateMark=true; if (_ctr) then {goto "SkipToWord"} else {_CurrPos=_CurrPos+1; if (_CurrPos>_length) then {_CurrPos=_length}}
+		? "HOME"  call FLIB_INKEYS  &&  _cursor!=""	: _CurrPos=0; _updateMark=true
+		? "END"   call FLIB_INKEYS  &&  _cursor!=""	: _CurrPos=_length; _updateMark=true
+		? "BACKSPACE" call FLIB_INKEYS				: if (_mark>=0 && _CurrPos!=_mark) then {call _DeleteMark} else {if (_CurrPos>0) then {_string=loadFile Format ["\:STRING CUT exclude:true start:%1 end:%2 text:%3",_CurrPos-1,_CurrPos,_string]; _CurrPos=_CurrPos-1; _length=_length-1; _wordList=nil; _update=true}}
+		? "DELETE" call FLIB_INKEYS 				: if (_mark>=0 && _CurrPos!=_mark) then {call _DeleteMark} else {if (_CurrPos<_length) then {_string=loadFile Format ["\:STRING CUT exclude:true start:%1 end:%2 text:%3",_CurrPos,_CurrPos+1,_string]; _length=_length-1; _wordList=nil; _update=true}}
+		
+		; Exit keys
+		? _escapeKeys call FLIB_INKEYS : _update=true; _exit=1
+		? _acceptKeys call FLIB_INKEYS : _update=true; _exit=2
+
+		; Clipboard operations
+		? _ctr  &&  _mark!=-1  &&  _mark!=_CurrPos : if ("C" call FLIB_INKEYS) 											then {loadFile Format ["\:CLIP COPY text:%1", loadFile Format ["\:STRING CUT start:%1 end:%2 text:%3", _MarkStart,_MarkEnd,_string]]};
+		? _ctr 									   : if ("V" call FLIB_INKEYS  ||  _shift && "INSERT" call FLIB_INKEYS) then {call _DeleteMark; _string=loadFile Format ["\:STRING JOIN position:%1 text:%2merge:%3", _CurrPos, _string, loadFile ":CLIP GET"]; _length=call loadFile Format ["\:STRING SIZE %1", _string]; _wordList=nil; goto "Output"};
+
+		? _toWrite in _pressed : goto "SkipToNextKey"
+		_pressed = _pressed + [_toWrite]
+
+		; Keyboard key to letter
+		? !(_toWrite in _allowed)  &&  !(_toWrite in _read)  &&  !(_toWrite in _readSHIFT) : goto "SkipToNextKey"
+		_t=0; "if (_toWrite==_x) then {_toWrite=_write select _t}; _t=_t+1" forEach _read
+		? _ctr : _t=0; "if (_toWrite==_x) then {_toWrite=_writeCTRL select _t}; _t=_t+1" forEach _readCTRL
+
+		; Capital letters
+		? !_shift && !_caps  ||  _shift && _caps : if (_toWrite in _allowed) then {_t=0; while "_t<26" do "if (_toWrite==(_allowed select _t)) then {_toWrite=_allowed2 select _t;_t=26};_t=_t+1"}
+		? _shift 								 : _t=0; "if (_toWrite==_x) then {_toWrite=_writeSHIFT select _t}; _t=_t+1" forEach _readSHIFT
+
+		; Add letter to the string
+		? _toWrite in _notAllowed : goto "SkipToNextKey"
+		call _DeleteMark
+		_update 	= true
+		_string 	= if (_CurrPos == _length) then {_string+_toWrite} else { loadFile Format ["\:STRING JOIN position:%1 text:%2merge:%3", _CurrPos, _string, _toWrite]}
+		_CurrPos 	= _CurrPos + 1
+		_length 	= _length  + 1
+		_wordList 	= nil
+
+		#SkipToNextKey
+		? _i > 0 : _i=_i-1; goto "ForEachKey"
+
+	? !_update  &&  !_updateMark : goto "KeyCheck"
+
+	
+	
+	
+	
+; Update text for display
+
+	#Output
+	; Show cursor when holding keys
+	? count (_keys2-["LSHIFT","RSHIFT","LCTRL","RCTRL"]) > 0 : _ShowPos=true; _ShowTime=_time
+
+	; Limit text length
+	? _limit>=0  &&  _length>=_limit : _string=loadFile Format ["\:STRING CUT start:0 end:%1 text:%2",_limit,_string]; _length=_limit; _wordList=nil
+	
+	; Scrolling
+	? _displayLimit>0  &&  (_CurrPos < _scroll  ||  _CurrPos>_scroll+_displayLimit) : _dir=if (_scroll>_CurrPos) then {-1} else {1}; while "_dir!=0 && _CurrPos < _scroll || _Currpos>_scroll+_displayLimit" do "_scroll=_scroll+_dir; if (_scroll>_length) then {_scroll=_length-_displayLimit; _dir=0}; if (_scroll<0) then {_scroll=0; _dir=0}"
+
+	; Marking update
+	? _allowMarking  &&  (_LastPos!=_CurrPos || _updateMark) : if (_shift && _updateMark) then {if (_mark==-1) then {_mark=_LastPos}} else {_mark=-1}; _LastPos=_CurrPos; if (_mark!=-1 && _mark!=_CurrPos) then {if (_CurrPos>_mark) then {_MarkEnd=_CurrPos; _MarkStart=_mark} else {_MarkEnd=_mark; _MarkStart=_CurrPos}}
+	
+	; Info array update
+	? _InfoArr != "" : call Format ["%1=[_CurrPos,_scroll,_displayLimit,_MarkStart,_MarkEnd,(if (!_InfoMarkText) then {""""} else {loadFile Format [""\:STRING CUT start:%1 end:%2 text:%3"", _MarkStart,_MarkEnd,_string]}),_length];", _InfoArr]
+	
+	; Output string for display
+	_workString = _string
+	? _displayLimit > 0	: _workString=loadFile Format ["\:STRING CUT  start:%1  length:%2  text:%3", _scroll, _DisplayLimit, _workString];
+	? _cursor != ""		: _workString=loadFile Format ["\:STRING JOIN  position:%1  text:%2merge:%3", _CurrPos-_scroll, _workString, (if (_ShowPos) then {_cursor} else {" "})]
+	
+	? _idc       != -1	: ctrlSetText [_idc, _workString]
+	? _outputSTR != ""	: call (_outputSTR+"=_workString")
+	? _isRunning != ""	: call (_isRunning+"=true")
+	? _workSTR	 != ""  : call (_workSTR+"=_string")
+	
+	; If user finished editing
+	? _exit > 0	: goto "Exit"
+	
+	_update 	= false
+	_updateMark = false
+	goto "KeyCheck"
+
+
+
+
+
+
+; Skip to the next/prev word
+
+	#SkipToWord
+	? Format ["%1", count _wordList] == "scalar" : _wordList=call loadFile Format ["\:STRING WORDPOS text:%1", _string]; _wordList=_wordList+[_length]; _max=count _wordList
+	
+	_dir = if ("LEFT" in _keys) then {-1} else {1}
+	_j	 = if (_dir==1) then {-1} else {_max}
+	
+	while "_j=_j+_dir; _j>=0 && _j<_max" do "_c=(_wordList select _j); if (_dir==1 && _CurrPos<_c || _dir==-1 && _CurrPos>_c) then {_CurrPos=_c; _j=-2}"
+	goto "Output"
+
+
+
+
+
+
+
+; Save/revert and exit script
+
+	#Exit
+	? _idc       != -1 : ctrlSetText [_idc, (if (_exit==2) then {_string} else {_original})]
+	? _outputSTR != "" : call Format ["%1=%2", _outputSTR, (if (_exit==2) then {"_string"} else {"_original"})]
+	
+	FWATCH_INPUT_MULTI_INTERVAL = _previous;
+	~_previous
+	? _isRunning != "" : call (_isRunning+"=false")

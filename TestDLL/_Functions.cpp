@@ -375,49 +375,6 @@ bool checkActiveWindow(void) {
 
 
 
-//v1.1 Get path to mission directory for IGSE/SPIG commands
-bool getMissionDir(char** FileName, int &FileNameLength, int CommandID, HANDLE out)
-{
-	// Reallocate if necessary
-	int newLength = strlen(MissionPath) + strlen(*FileName) + 1;
-
-	if (newLength > FileNameLength)
-	{		
-		FileNameLength += newLength;
-
-		char *NewBuffer = (char*) realloc (*FileName, FileNameLength);
-		if (NewBuffer == NULL) 
-		{
-			FWerror(11,0,CommandID,"getMissionDir:FileName","",FileNameLength,0,out);
-			return false;
-		};
-
-		*FileName = NewBuffer;
-	};
-
-
-	// Insert mission path at the beginning of the buffer
-	char *FileNameCopy = (char*) malloc (FileNameLength);
-
-	if (FileNameCopy == NULL) 
-	{
-		FWerror(10,0,CommandID,"getMissionDir:FileNameCopy","",FileNameLength,0,out);
-		return false;
-	};
-
-	strcpy(FileNameCopy, *FileName);
-	strcpy(*FileName   , MissionPath);
-	strcat(*FileName   , FileNameCopy);
-
-	free(FileNameCopy);
-	return true;
-};
-
-
-
-
-
-
 
 
 
@@ -876,207 +833,6 @@ int findProcess(char* name)
 	
 	return pid;
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// v1.12 check if string is an allowed external path
-bool isAllowedExternalPath(char* dir, bool mode)
-{
-	// Two dots at the beginning indicate OFP root dir
-	if (strncmp(dir,"../",3)!=0  &&  strncmp(dir,"..\\",3)!=0) 
-		return false;
-
-	dir += 3;		// omit these dots
-
-
-	// List of accessible locations
-	static char allowedExternals[][40] = 
-	{
-		"in-game-script-editor",
-		"flashpointcutscenemaker",
-		"missioneditor3d",
-		"@addontest",
-		"fwatch\\idb",
-		"fwatch/idb",
-		"fwatch\\tmp",
-		"fwatch/tmp"
-	};
-
-	unsigned int max_loops = sizeof(allowedExternals) / sizeof(allowedExternals[0]);
-
-
-	// Check if given path is on the list
-	for (unsigned int i=0; i<max_loops; i++)
-		if (strncmpi(allowedExternals[i], dir, strlen(allowedExternals[i])) == 0) 
-			return true;
-
-
-	// Not on the list - is ofp root dir allowed for this command
-	if (mode == ALLOW_GAME_ROOT_DIR) 
-		return true; 
-	else 
-		return false;
-};
-
-
-
-
-
-
-
-
-
-// v1.12 check if path is going outside
-bool isLeavingDir (char* directory, bool isDownload, bool permissive, int CommandID, HANDLE out)
-{
-	// Make a copy of the string for tokenizing
-	int pathLength = strlen(directory) + 1;
-	char *path	   = (char*) malloc (pathLength);
-
-	if (path == NULL) 
-	{
-		FWerror(10,0,CommandID,"isLeavingDir:path","",pathLength,0,out);
-
-		if (!isDownload)
-			return true;	// buffer failed - for normal mode - assume it's leaving
-		else
-			return false;	// buffer failed - for "is download dir" mode - assume it's not download dir
-	};
-
-	strcpy(path, directory);
-
-
-	// Replace slashes with backslashes; count items
-	int items = 1;
-
-	for (int i=0; i<pathLength; i++) 
-	{
-		if (path[i] == '/') 
-			path[i] = '\\';
-
-		if (path[i] == '\\') 
-			items++; 
-	};
-
-
-	// If it's a special path then change some vars
-	int level	   = 0;
-	bool reachZero = false;
-	bool external  = isAllowedExternalPath(directory, permissive);
-
-	if (external) 
-	{
-		items--;
-
-		if (!permissive) 
-			level = -1;
-
-		reachZero = true;
-		strcpy(path, directory+3);
-
-		if (strncmpi("fwatch\\idb",path,10)==0  ||  strncmpi("fwatch\\tmp",path,10)==0)
-			level = -2;
-	};
-
-
-	// Tokenize on backslashes
-	i					= 0;
-	int fLev			= 0;
-	bool fwatchDir		= false;
-	bool downloadDir	= false;
-	bool restrictedDir	= false;
-	char *item			= strtok (path, "\\");
-
-	while (item != NULL)
-	{
-		i++;
-		
-		// If accessing fwatch\mdb or fwatch\data (they're restricted)
-		if (fwatchDir  &&  level==fLev  &&  i<items  &&  (strcmpi(item,"mdb")==0  ||  strcmpi(item,"data")==0)) 
-		{
-			restrictedDir = true; 
-			break;
-		};
-
-		// If fwatch\tmp
-		if (fwatchDir  &&  level==fLev  &&  i<items  &&  strcmpi(item,"tmp")==0) 
-			downloadDir = true;
-
-		// Indicate that path is leading to fwatch directory
-		if (strcmpi(item,"fwatch")==0  &&  external  &&  level<=0  &&  i<items) 
-			fLev      = level + 1, 
-			fwatchDir = true;
-
-		// Decrement / increment directory level
-		if (strcmp(item,"..") == 0) 
-			level--; 
-		else 
-			if (i < items) 
-				level++;
-
-		// Leaving fwatch directory
-		if (fwatchDir  &&  level<fLev) 
-			fwatchDir = false;
-
-		// If left root folder
-		if (level<0  &&  !reachZero) 
-			break;
-
-		if (level==0  &&  reachZero) 
-			reachZero = false;
-
-		item = strtok (NULL, "\\");
-	};
-	
-	free(path);
-
-
-	// If it's "Check for download dir" mode
-	if (isDownload)
-		if (fwatchDir  &&  downloadDir) 
-			return true; 
-		else 
-			return false;
-
-
-	// For :igse list command
-	if (permissive)
-		if (restrictedDir)
-		{
-			FWerror(108,0,CommandID,directory,"",pathLength,0,out);
-			return true;
-		}
-		else 
-			if (level < 0)
-			{
-				FWerror(105,0,CommandID,directory,"",pathLength,0,out);
-				return true;
-			}
-			else 
-				return false;
-
-
-	// Normal mode - level above zero means it stayed inside; otherwise return error
-	if (level>=0  &&  !restrictedDir) 
-		return false; 
-	else 
-	{
-		FWerror(105,0,CommandID,directory,"",pathLength,0,out);
-		return true;
-	};
-};
-
 
 
 
@@ -1806,7 +1562,8 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 				CommandID == C_IGSE_NEWFILE ||
 				CommandID == C_IGSE_RENAME ||
 				CommandID == C_IGSE_COPY ||
-				CommandID == C_MEM_ERROR
+				CommandID == C_MEM_ERROR ||
+				CommandID == C_CLASS_READSQM
 				) 
 				QWrite("\"]",out); 
 			else 
@@ -2496,7 +2253,7 @@ char* strtok3(char* str, int CommandID)
 					strncmpi(str+i,"text:"     ,j-i+1) == 0 ||
 					strncmpi(str+i,"text1:"    ,j-i+1) == 0 || 
 					strncmpi(str+i,"text2:"    ,j-i+1) == 0 || 
-					strncmpi(str+i,"find:"     ,j-i+1) == 0 ||
+					strncmpi(str+i,"find:"     ,j-i+1) == 0  && CommandID != C_CLASS_READ && CommandID != C_CLASS_READ2 ||
 					strncmpi(str+i,"replace:"  ,j-i+1) == 0 ||
 					strncmpi(str+i,"delimiter:",j-i+1) == 0 ||
 					strncmpi(str+i,"merge:"    ,j-i+1) == 0 ||
@@ -3132,187 +2889,276 @@ void String_end(String &str)
 		free(str.pointer);
 }
 
-//1.16 tokenize string
-char* Tokenize(char *string, char *delimiter, int &i, int string_length, char &save, bool square_brackets) {
-	int delimiter_len = strlen(delimiter);
-	bool in_brackets  = false;
+
+int VerifyPath(char **ptr_filename, String &str, int options, int CommandID, HANDLE out) 
+{
+	int i             = 0;
+	int item_start    = 0;
+	int item_index    = 0;
+	int level         = 0;
+	bool root_dir     = false;
+	bool fwatch_dir   = false;
+	bool illegal_dir  = false;
+	bool download_dir = false;
+	bool allowed_dir  = false;
+	char *path        = *ptr_filename;
 	
-	if (save != 0)
-		string[i-1] = save;
+	static char allowed_dirs[][32] = {
+		"in-game-script-editor",
+		"flashpointcutscenemaker",
+		"missioneditor3d",
+		"@addontest",
+		"set-pos-in-game"
+	};
+	int allowed_dirs_num = sizeof(allowed_dirs) / sizeof(allowed_dirs[0]);
 
-	for (int begin=-1; i<=string_length; i++) {
-		if (square_brackets && string[i] == '[')
-			in_brackets = true;
+	while(true) {
+		if (path[i]=='\\' || path[i]=='/' || path[i]=='\0') {
+			char backup = path[i];
+			path[i]     = '\0';
+			char *item  = path + item_start;
 
-		if (square_brackets && string[i] == ']')
-			in_brackets = false;
+			if (strcmp(item,"..") == 0) {
+				if (item_index == 0)
+					root_dir = true;
+				else {
+					level--;
 
-		bool is_delim = false;
-		for (int j=0; j<delimiter_len; j++)
-			if (string[i] == delimiter[j] && !in_brackets  ||  delimiter[j]==' ' && isspace(string[i])) {
-				is_delim = true;
+					if (level < 0) {
+						path[i] = backup;
+						break;
+					}
+					
+					if (root_dir) {
+						if (level == 0) {
+							fwatch_dir  = false;
+							allowed_dir = false;
+						}
+							
+						if (level < 2)
+							download_dir = false;
+					}
+				}
+			} else
+				if (backup != '\0')
+					level++;
+				
+			if (root_dir && level==1) {
+				if (strcmpi(item,"fwatch") == 0)
+					fwatch_dir = true;
+				else
+					for(int j=0; j<allowed_dirs_num; j++)
+						if (strcmpi(item,allowed_dirs[j]) == 0)
+							allowed_dir = true;
+			}
+
+			if (fwatch_dir && level==2) {
+				if (strcmpi(item,"data")==0 || strcmpi(item,"mdb")==0) {
+					illegal_dir = true;
+					path[i]     = backup;
+					break;
+				}
+
+				if (strcmpi(item,"tmp") == 0)
+					download_dir = true;
+			}
+			
+			path[i] = backup;
+			
+			if (path[i] == '\0') {
+				if (fwatch_dir && level==1)
+					illegal_dir = true;
+
 				break;
 			}
-
-		if (begin<0  &&  (!is_delim || i==string_length))
-			begin = i;
-
-		if (begin>=0  &&  (is_delim ||  i==string_length)) {
-			save      = string[i];
-			string[i] = '\0';
-			
-			if (i<string_length)
-				i++;
 				
-			return string+begin;
+			item_start = i + 1;
+			item_index++;
 		}
-	}
-
-	return "";
-};
-
-int VerifyPath(char *path, int mode) {
-/*	bool ofp_root_dir          = strncmp(path,"../",3)==0  &&  strncmp(path,"..\\",3)==0;
-	bool allowed_external_path = false;
-	
-	if (ofp_root_dir)
-		path += 3;
-
-	// Check if given path is on the list
-	for (unsigned int i=0; i<allowed_paths_num; i++)
-		if (strncmpi(path, allowed_paths[i], allowed_paths_len[i]) == 0) {
-			allowed_external_path = true;
-			break;
-		}
-
-	// If not then check if OFP root dir allowed for this command
-	return (mode == ALLOW_GAME_ROOT_DIR);
-	
-	int i      = 0;
-	char *save = 0;
-	int level  = 0;
-
-	while(i < str.current_length) {
-		char *file = Tokenize(str.pointer, "\\", i, str.current_length, save);
-
-	}
-
-
-
-	// If it's a special path then change some vars
-	int level	   = 0;
-	bool reachZero = false;
-	bool external  = isAllowedExternalPath(directory, permissive);
-
-	if (external) 
-	{
-		items--;
-
-		if (!permissive) 
-			level = -1;
-
-		reachZero = true;
-		strcpy(path, directory+3);
-
-		if (strncmpi("fwatch\\idb",path,10)==0  ||  strncmpi("fwatch\\tmp",path,10)==0)
-			level = -2;
-	};
-
-
-	// Tokenize on backslashes
-	i					= 0;
-	int fLev			= 0;
-	bool fwatchDir		= false;
-	bool downloadDir	= false;
-	bool restrictedDir	= false;
-	char *item			= strtok (path, "\\");
-
-	while (item != NULL)
-	{
-		i++;
 		
-		// If accessing fwatch\mdb or fwatch\data (they're restricted)
-		if (fwatchDir  &&  level==fLev  &&  i<items  &&  (strcmpi(item,"mdb")==0  ||  strcmpi(item,"data")==0)) 
-		{
-			restrictedDir = true; 
-			break;
-		};
-
-		// If fwatch\tmp
-		if (fwatchDir  &&  level==fLev  &&  i<items  &&  strcmpi(item,"tmp")==0) 
-			downloadDir = true;
-
-		// Indicate that path is leading to fwatch directory
-		if (strcmpi(item,"fwatch")==0  &&  external  &&  level<=0  &&  i<items) 
-			fLev      = level + 1, 
-			fwatchDir = true;
-
-		// Decrement / increment directory level
-		if (strcmp(item,"..") == 0) 
-			level--; 
-		else 
-			if (i < items) 
-				level++;
-
-		// Leaving fwatch directory
-		if (fwatchDir  &&  level<fLev) 
-			fwatchDir = false;
-
-		// If left root folder
-		if (level<0  &&  !reachZero) 
-			break;
-
-		if (level==0  &&  reachZero) 
-			reachZero = false;
-
-		item = strtok (NULL, "\\");
-	};
+		i++;
+	}
 	
-	free(path);
+	
 
+	if (illegal_dir) {
+		if (~options & SUPPRESS_ERROR)
+			FWerror(108,0,CommandID,path,"",0,0,out);
+	} else
+		if (root_dir && !fwatch_dir && !allowed_dir && options & RESTRICT_TO_MISSION_DIR) {
+			if (~options & SUPPRESS_ERROR)
+				FWerror(105,0,CommandID,path,"",0,0,out);
+		} else
+			if (level >= 0) {
+				if (~options & SUPPRESS_CONVERSION)
+					if (root_dir)
+						*ptr_filename += 3;
+					else {
+						String_append(str, MissionPath);
+						String_append(str, *ptr_filename);
+						*ptr_filename = str.pointer;
+					}
 
-	// If it's "Check for download dir" mode
-	if (isDownload)
-		if (fwatchDir  &&  downloadDir) 
-			return true; 
-		else 
-			return false;
-
-
-	// For :igse list command
-	if (permissive)
-		if (restrictedDir)
-		{
-			FWerror(108,0,CommandID,directory,"",pathLength,0,out);
-			return true;
-		}
-		else 
-			if (level < 0)
-			{
-				FWerror(105,0,CommandID,directory,"",pathLength,0,out);
-				return true;
+				return download_dir ? DOWNLOAD_DIR : LEGAL_PATH;
 			}
-			else 
-				return false;
 
-
-	// Normal mode - level above zero means it stayed inside; otherwise return error
-	if (level>=0  &&  !restrictedDir) 
-		return false; 
-	else 
-	{
-		FWerror(105,0,CommandID,directory,"",pathLength,0,out);
-		return true;
-	};*/
-
-return 0;
+	return ILLEGAL_PATH;
 };
 
 //https://stackoverflow.com/questions/11413860/best-string-hashing-function-for-short-filenames
-unsigned int fnv_hash (unsigned int hash, char* text, int text_length)
+unsigned int fnv_hash(unsigned int hash, char* text, int text_length)
 {
     for (int i=0; i<text_length; i++)
         hash = (hash*16777619) ^ text[i];
 
     return hash;
 };
+
+void PurgeComments(char *text, int string_start, int string_end) {
+	int comment_start = -1;
+	int comment_type  = 0;
+	int new_end       = string_end;
+	
+	for (int j=string_start; text[j]!='\0'; j++) {
+		if (comment_start == -1) {
+			if (text[j]=='/' && text[j+1]=='*') {
+				comment_start = j;
+				comment_type  = 2;
+			} else
+				if (text[j]=='/' && text[j+1]=='/') {
+					comment_start = j;
+					comment_type  = 1;
+				}
+		} else {
+			if (comment_type==2 && text[j]=='*' && text[j+1]=='/' || comment_type==1 && (text[j]=='\r' || text[j]=='\n')) {
+				if (comment_type == 2)
+					j += 2;
+					
+				memcpy(text+comment_start, text+j, new_end-j);
+				
+				new_end      -= j - comment_start;
+				j            -= j - comment_start;
+				text[new_end] = '\0';
+				comment_type  = 0;
+				comment_start = -1;
+			}
+		}
+	}
+}
+
+char* Output_Nested_Array(char *temp, int level, char *output_strings_name, int j, int *subclass_count) {
+	strcpy(temp,"");
+
+	for (int z=0; z<level; z++)
+		strcat(temp, "(");
+
+	sprintf(temp, "%s_output_%s%d", temp, output_strings_name, j);
+
+	for (z=0; z<level; z++)
+		sprintf(temp, "%s select %d)", temp, subclass_count[z]);
+
+	strcat(temp, " set[count ");
+
+	for (z=0; z<level; z++)
+		strcat(temp, "(");
+
+	sprintf(temp, "%s_output_%s%d", temp, output_strings_name, j);
+
+	for (z=0; z<level; z++)
+		sprintf(temp, "%s select %d)", temp, subclass_count[z]);
+
+	strcat(temp,",");
+
+	return temp;
+}
+
+	// Delete file or directory with its contents  http://stackoverflow.com/a/10836193
+int DeleteWrapper(char *refcstrRootDirectory)
+{
+	if (~GetFileAttributes(refcstrRootDirectory) & FILE_ATTRIBUTE_DIRECTORY)
+		if (DeleteFile(refcstrRootDirectory))
+			return 0;
+		else
+			return GetLastError();
+	
+	int             return_value = 0;
+	bool            bDeleteSubdirectories = true;
+	bool            bSubdirectory = false;       // Flag, indicating whether subdirectories have been found
+	HANDLE          hFile;                       // Handle to directory
+	String     	    strFilePath;                 // Filepath
+	String          strPattern;                  // Pattern
+	WIN32_FIND_DATA FileInformation;             // File information
+
+	String_init(strFilePath);
+	String_init(strPattern);
+	String_append(strFilePath, refcstrRootDirectory);
+	String_append(strFilePath, "\\");
+	String_append(strPattern, refcstrRootDirectory);
+	String_append(strPattern, "\\*.*");
+	
+	int saved_length = strFilePath.current_length;
+	hFile = FindFirstFile(strPattern.pointer, &FileInformation);
+	
+	if (hFile != INVALID_HANDLE_VALUE) {
+		do {
+			if (FileInformation.cFileName[0] != '.') {
+				strFilePath.current_length = saved_length;
+				String_append(strFilePath, FileInformation.cFileName);
+
+				if (FileInformation.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+					if (bDeleteSubdirectories) {
+						// Delete subdirectory
+						int result = DeleteWrapper(strFilePath.pointer);
+						if (result) {
+							return_value = result;
+							goto DeleteDirectory_return;
+						}
+					} else
+						bSubdirectory = true;
+				} else {
+					// Set file attributes
+					if (SetFileAttributes(strFilePath.pointer, FILE_ATTRIBUTE_NORMAL) == FALSE) {
+						return_value = GetLastError();
+						goto DeleteDirectory_return;
+					}
+
+					// Delete file
+					if (DeleteFile(strFilePath.pointer) == FALSE) {
+						return_value = GetLastError();
+						goto DeleteDirectory_return;
+					}
+				}
+			}
+		}
+		while (FindNextFile(hFile, &FileInformation) == TRUE);
+
+		// Close handle
+		FindClose(hFile);
+
+		DWORD dwError = GetLastError();
+		
+		if (dwError != ERROR_NO_MORE_FILES) {
+      		return_value = dwError;
+			goto DeleteDirectory_return;
+		} else {
+			if (!bSubdirectory) {
+				// Set directory attributes
+				if (SetFileAttributes(refcstrRootDirectory, FILE_ATTRIBUTE_NORMAL) == FALSE) {
+					return_value = GetLastError();
+					goto DeleteDirectory_return;
+				}
+
+				// Delete directory
+				if (RemoveDirectory(refcstrRootDirectory) == FALSE) {
+					return_value = GetLastError();
+					goto DeleteDirectory_return;
+				}
+			}
+		}
+	}
+
+DeleteDirectory_return:
+	String_end(strFilePath);
+	String_end(strPattern);
+	return return_value;
+}

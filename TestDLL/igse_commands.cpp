@@ -130,23 +130,13 @@ case C_IGSE_WRITE:
 		break;
 	}
 
-	// Cannot go to the parent dir
-	if (isLeavingDir(arg_filename,0,RESTRICT_TO_MISSION_DIR,CommandID,out))
-		break;
-
-	// Allocate buffer for the arg_filename path
+	// Verify and update path to the file
 	String buf_filename;
 	String_init(buf_filename);
 	char *ptr_filename = arg_filename;
-
-	// Mission dir path
-	if (isAllowedExternalPath(ptr_filename,RESTRICT_TO_MISSION_DIR))
-		ptr_filename = arg_filename + 3;
-	else {
-		String_append(buf_filename, MissionPath);
-		String_append(buf_filename, arg_filename);
-		ptr_filename = buf_filename.pointer;
-	}
+	
+	if (!VerifyPath(&ptr_filename, buf_filename, RESTRICT_TO_MISSION_DIR, CommandID, out))
+		break;
 	
 
 	// Does clipboard contains text
@@ -573,27 +563,18 @@ case C_IGSE_LIST:
 	}
 
 
-	// isLeavingDir function for this command will only check if the path is going to \fwatch\mdb or \fwatch\data\ directory
-	if (isLeavingDir(arg_path,0,ALLOW_GAME_ROOT_DIR,CommandID,out)) {
+	// Verify and update path to the file
+	String buf_path;
+	String_init(buf_path);
+	char *ptr_path = arg_path;
+	
+	if (!VerifyPath(&ptr_path, buf_path, ALLOW_GAME_ROOT_DIR, CommandID, out)) {
 		QWrite("[],[]]", out); 
 		break;
 	};
 
-	// Create full path
-	String path;
-	String_init(path);
-	char *ptr_path = arg_path;
-
-	if (isAllowedExternalPath(ptr_path,ALLOW_GAME_ROOT_DIR)) 
-		ptr_path = arg_path + 3;
-	else {
-		String_append(path, MissionPath);
-		String_append(path, arg_path);
-		ptr_path = path.pointer;
-	}	
-
 	listDirFiles(ptr_path, out, arg_edit_mode, arg_system_time, CommandID);
-	String_end(path);
+	String_end(buf_path);
 }
 break;
 
@@ -724,17 +705,15 @@ case C_IGSE_LOAD:
 	};
 
 
-	// Mission dir path
+	// Verify and update path to the file
 	String buf_filename;
 	String_init(buf_filename);
 	char *ptr_filename = arg_filename;
-	
-	if (isAllowedExternalPath(ptr_filename,ALLOW_GAME_ROOT_DIR)) 
-		ptr_filename = arg_filename + 3;
-	else {
-		String_append(buf_filename, MissionPath);
-		String_append(buf_filename, arg_filename);
-		ptr_filename = buf_filename.pointer;
+	int path_type      = VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out);
+
+	if (path_type == ILLEGAL_PATH) {
+		QWrite("[],0,false,false,\"\"]", out);
+		break;
 	}
 	// ------------------------------------------------------------------------------
 
@@ -1021,14 +1000,11 @@ case C_IGSE_LOAD:
 
 
 	// If user wants to delete the arg_filename after reading it
-	if (arg_delete_file) {
-		bool downloadDir = isLeavingDir(ptr_filename,1,RESTRICT_TO_MISSION_DIR,CommandID,out);
-
-		if (!downloadDir)
-			trashFile(ptr_filename,-1,NULL,0);
-		else
+	if (arg_delete_file)
+		if (path_type == DOWNLOAD_DIR)
 			remove(ptr_filename);
-	};
+		else
+			trashFile(ptr_filename,-1,NULL,0);
 
 	String_end(buf_filename);
 	SuppressNextError = false;
@@ -1115,23 +1091,15 @@ case C_IGSE_NEWFILE:
 	};
 
 
-	// Verify path
-	if (arg_edit_mode!=IGSE_NEWFILE_CHECK  &&  isLeavingDir(arg_filename,0,RESTRICT_TO_MISSION_DIR,CommandID,out))
-		break;
-
-	// Allocate buffer for the file path
+	// Verify and update path to the file
 	String buf_filename;
 	String_init(buf_filename);
 	char *ptr_filename = arg_filename;
-
-	// Mission dir path
-	if (isAllowedExternalPath(ptr_filename,arg_edit_mode==IGSE_NEWFILE_CHECK))
-		ptr_filename = arg_filename + 3;
-	else {
-		String_append(buf_filename, MissionPath);
-		String_append(buf_filename, arg_filename);
-		ptr_filename = buf_filename.pointer;
-	}	
+	int check_mode     = arg_edit_mode==IGSE_NEWFILE_CHECK ? ALLOW_GAME_ROOT_DIR : RESTRICT_TO_MISSION_DIR;
+	int path_type      = VerifyPath(&ptr_filename, buf_filename, check_mode, CommandID, out);
+	
+	if (path_type == ILLEGAL_PATH)
+		break;
 
 
 	// Choose what actions to take based on arguments
@@ -1187,26 +1155,27 @@ case C_IGSE_NEWFILE:
 
 	// Trash or delete
 	if (DeleteIt) {
-		bool downloadDir = isLeavingDir(ptr_filename,1,RESTRICT_TO_MISSION_DIR,CommandID,out);
-
 		// if the file doesn't exist then ignore error so that we can't delete it
 		int ErrorBehaviour = !ItExists ? 1 : 0;
 
 		// Default - trash it
-		if (!downloadDir) {
+		if (path_type != DOWNLOAD_DIR) {
 			if (trashFile(ptr_filename,CommandID,out,ErrorBehaviour))
 				FWerror(0,0,CommandID,"","",0,0,out);
 			else
 				CreateIt = false;
-		} else
+		} else {		
 			// ..\fwatch\tmp - delete it
-			if (remove(ptr_filename) == 0)
+			int result = DeleteWrapper(ptr_filename);
+
+			if (result == 0)
 				FWerror(0,0,CommandID,"","",0,0,out);
 			else
 				if (arg_edit_mode != IGSE_NEWFILE_RECREATE) {
 					CreateIt = false;
-					FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
+					FWerror(5,result,CommandID,ptr_filename,"",0,0,out);
 				}
+		}
 	};
 
 
@@ -1303,49 +1272,22 @@ case C_IGSE_COPY:
 	};
 
 
-	// Not allowed to rename files from outside
-	if (CommandID == C_IGSE_RENAME  &&  isLeavingDir(arg_source,0,RESTRICT_TO_MISSION_DIR,CommandID,out))
-		break;
-
-	// Check if path leads to restricted location
-	if (isLeavingDir(arg_dest,0,RESTRICT_TO_MISSION_DIR,CommandID,out)) 
-		break;
-
-
-	// Allocate buffers
+	// Verify and update path to the files
 	String source, dest;
 	String_init(source);
 	String_init(dest);
-	char *ptr_source = arg_source;
-	char *ptr_dest   = arg_dest;
+	char *ptr_source     = arg_source;
+	char *ptr_dest       = arg_dest;
+	int check_mode       = CommandID==C_IGSE_RENAME ? RESTRICT_TO_MISSION_DIR : ALLOW_GAME_ROOT_DIR;
+	int source_path_type = VerifyPath(&ptr_source, source, check_mode, CommandID, out);
+	int dest_path_type   = VerifyPath(&ptr_dest, dest, RESTRICT_TO_MISSION_DIR, CommandID, out);
 
-	// Mission dir path
-	if (isAllowedExternalPath(ptr_source,ALLOW_GAME_ROOT_DIR))
-		ptr_source = arg_source + 3;
-	else {
-		String_append(source, MissionPath);
-		String_append(source, arg_source);
-		ptr_source = source.pointer;
-	}
-
-	if (isAllowedExternalPath(ptr_dest,RESTRICT_TO_MISSION_DIR))
-		ptr_dest = arg_dest + 3;
-	else {
-		String_append(dest, MissionPath);
-		String_append(dest, arg_dest);
-		ptr_dest = dest.pointer;
-	}	
-
-
-	// Check if it's \fwatch\tmp\ dir
-	bool source_is_download_dir = isLeavingDir(arg_source,1,RESTRICT_TO_MISSION_DIR,CommandID,out);
-	bool dest_is_download_dir   = isLeavingDir(arg_dest,1,RESTRICT_TO_MISSION_DIR,CommandID,out);
-
+	if (!source_path_type || !dest_path_type)
+		break;
 
 	// Rename
 	if (CommandID == C_IGSE_RENAME) {
-		// Not allowed to move files to the download directory
-		if (!source_is_download_dir  &&  dest_is_download_dir)
+		if (source_path_type!=DOWNLOAD_DIR  &&  dest_path_type==DOWNLOAD_DIR)	// Not allowed to move files to the download directory
 			FWerror(202,0,CommandID,ptr_source,"",0,0,out);
 		else {
 			if (rename(ptr_source,ptr_dest) == 0) 
@@ -1355,13 +1297,10 @@ case C_IGSE_COPY:
 		};
 	// Copy
 	} else {
-		bool no_overwrite = !dest_is_download_dir;
-
-		// Overwrite means trashing before copying
-		if (arg_overwrite  &&  !dest_is_download_dir) 
+		if (arg_overwrite  &&  dest_path_type!=DOWNLOAD_DIR)	// Overwrite means trashing before copying
 			trashFile(ptr_dest,CommandID,out,0);
 
-		if (CopyFile((LPCTSTR)ptr_source, (LPCTSTR)ptr_dest, no_overwrite)) 
+		if (CopyFile((LPCTSTR)ptr_source, (LPCTSTR)ptr_dest, dest_path_type!=DOWNLOAD_DIR)) 
 			FWerror(0,0,CommandID,"","",0,0,out);
 		else 
 			FWerror(5,GetLastError(),CommandID,ptr_source,ptr_dest,0,0,out);
@@ -1488,18 +1427,14 @@ case C_IGSE_FIND:
 	};
 
 
-	// Allocate buffer
+	// Verify and update path to the file
 	String buf_filename;
 	String_init(buf_filename);
 	char *ptr_filename = SearchIn;
 
-	// Mission dir path
-	if (isAllowedExternalPath(ptr_filename,ALLOW_GAME_ROOT_DIR))
-		ptr_filename = SearchIn + 3;
-	else {
-		String_append(buf_filename, MissionPath);
-		String_append(buf_filename, SearchIn);
-		ptr_filename = buf_filename.pointer;
+	if (!VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out)) {
+		QWrite("0,[],[],\"0\",0]", out);
+		break;
 	}
 	//-------------------------------------------------------------------------
 
@@ -1940,25 +1875,15 @@ case C_IGSE_DB:
 	};
 
 
-	// Cannot go to the parent dir
-	if (isLeavingDir(arg_filename,0,RESTRICT_TO_MISSION_DIR,CommandID,out))
-		break;
-	
-	
-	// Allocate buffer for the file path
+	// Verify and update path to the file
 	String buf_filename;
 	String_init(buf_filename);
 	char *ptr_filename = arg_filename;
-
-	// Mission dir path
-	if (isAllowedExternalPath(ptr_filename,RESTRICT_TO_MISSION_DIR))
-		ptr_filename = arg_filename + 3;
-	else {
-		String_append(buf_filename, MissionPath);
-		String_append(buf_filename, arg_filename);
-		ptr_filename = buf_filename.pointer;
+	
+	if (!VerifyPath(&ptr_filename, buf_filename, RESTRICT_TO_MISSION_DIR, CommandID, out)) {
+		QWrite(",[],[]]", out);
+		break;
 	}
-
 
 	// Get number of keys from the selected arg_filename
 	FILE *file;
