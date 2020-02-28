@@ -2253,6 +2253,8 @@ char* strtok3(char* str, int CommandID)
 					strncmpi(str+i,"text:"     ,j-i+1) == 0 ||
 					strncmpi(str+i,"text1:"    ,j-i+1) == 0 || 
 					strncmpi(str+i,"text2:"    ,j-i+1) == 0 || 
+					strncmpi(str+i,"prefix:"   ,j-i+1) == 0 || 
+					strncmpi(str+i,"suffix:"   ,j-i+1) == 0 || 
 					strncmpi(str+i,"find:"     ,j-i+1) == 0  && CommandID != C_CLASS_READ && CommandID != C_CLASS_READ2 ||
 					strncmpi(str+i,"replace:"  ,j-i+1) == 0 ||
 					strncmpi(str+i,"delimiter:",j-i+1) == 0 ||
@@ -2604,14 +2606,10 @@ void RestoreMemValues(bool isMissionEditor)
 			}
 
 			if (pointer != 0) {
-				if (IsNumberInArray((i-RESTORE_HUD),hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0]))) {
+				if (IsNumberInArray((i-RESTORE_HUD),hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0])))
 					WriteProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i-RESTORE_HUD]), &RESTORE_HUD_INT[i-RESTORE_HUD], 4, &stBytes);
-					FILE *fd=fopen("fwatch_debug.txt","a"); fprintf(fd,"RESTOREINT 0x%x %i\n",(pointer+hud_offset[i-RESTORE_HUD]),RESTORE_HUD_INT[i-RESTORE_HUD]);fclose(fd);
-				}
-				else {
+				else
 					WriteProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i-RESTORE_HUD]), &RESTORE_HUD_FLT[i-RESTORE_HUD], 4, &stBytes);
-					FILE *fd=fopen("fwatch_debug.txt","a"); fprintf(fd,"RESTORE 0x%x %f\n",(pointer+hud_offset[i-RESTORE_HUD]),RESTORE_HUD_FLT[i-RESTORE_HUD]);fclose(fd);
-				}
 			}
 		}
 

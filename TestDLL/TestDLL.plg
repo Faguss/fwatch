@@ -6,17 +6,13 @@
 --------------------Configuration: TestDLL - Win32 Release--------------------
 </h3>
 <h3>Command Lines</h3>
-Creating temporary file "C:\DOCUME~1\Bart\USTAWI~1\Temp\RSP22.tmp" with contents
+Creating temporary file "C:\DOCUME~1\Bart\USTAWI~1\Temp\RSP18.tmp" with contents
 [
 /nologo /G6 /MT /W3 /Ox /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" /D "_USRDLL" /D "TESTDLL_EXPORTS" /FR"Release/" /Fp"Release/TestDLL.pch" /YX /Fo"Release/" /Fd"Release/" /FD /c 
-"D:\Gry\OFP\apihijack.cpp"
-"D:\Gry\OFP\TestDLL\chandler.cpp"
-"D:\Gry\OFP\TestDLL\dllmain.cpp"
-"D:\Gry\OFP\TestDLL\fdb.cpp"
 "D:\Gry\OFP\TestDLL\scripth.cpp"
 ]
-Creating command line "cl.exe @C:\DOCUME~1\Bart\USTAWI~1\Temp\RSP22.tmp" 
-Creating temporary file "C:\DOCUME~1\Bart\USTAWI~1\Temp\RSP23.tmp" with contents
+Creating command line "cl.exe @C:\DOCUME~1\Bart\USTAWI~1\Temp\RSP18.tmp" 
+Creating temporary file "C:\DOCUME~1\Bart\USTAWI~1\Temp\RSP19.tmp" with contents
 [
 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib shlwapi.lib Winmm.lib version.lib /nologo /dll /incremental:no /pdb:"..\fwatch.pdb" /machine:I386 /def:".\testdll.def" /out:"..\fwatch.dll" /implib:"..\fwatch.lib" 
 .\Release\apihijack.obj
@@ -25,13 +21,9 @@ kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32
 .\Release\fdb.obj
 .\Release\scripth.obj
 ]
-Creating command line "link.exe @C:\DOCUME~1\Bart\USTAWI~1\Temp\RSP23.tmp"
+Creating command line "link.exe @C:\DOCUME~1\Bart\USTAWI~1\Temp\RSP19.tmp"
 <h3>Output Window</h3>
 Compiling...
-apihijack.cpp
-chandler.cpp
-dllmain.cpp
-fdb.cpp
 scripth.cpp
 Linking...
    Creating library ..\fwatch.lib and object ..\fwatch.exp

@@ -50,50 +50,24 @@ case C_IGSE_WRITE:
 		}
 
 		if (strcmpi(arg,"mode") == 0) {
-			if (strcmp(val,"replace") == 0) {
-				arg_edit_mode = IGSE_WRITE_REPLACE;
-				continue;
-			}
+			char modes[][32] = {
+				"replace",
+				"append",
+				"new",
+				"insert",
+				"copy",
+				"delete",
+				"clear",
+				"moveup",
+				"movedown"
+			};
+			int modes_size = sizeof(modes) / sizeof(modes[0]);
 
-			if (strcmp(val,"append") == 0) {
-				arg_edit_mode = IGSE_WRITE_APPEND;
-				continue;
-			}
-
-			if (strcmp(val,"new") == 0) {
-				arg_edit_mode = IGSE_WRITE_NEW;
-				continue;
-			}
-
-			if (strcmp(val,"insert") == 0) {
-				arg_edit_mode = IGSE_WRITE_INSERT;
-				continue;
-			}
-
-			if (strcmp(val,"copy") == 0) {
-				arg_edit_mode = IGSE_WRITE_COPY;
-				continue;
-			}
-
-			if (strcmp(val,"delete") == 0) {
-				arg_edit_mode = IGSE_WRITE_DELETE;
-				continue;
-			}
-
-			if (strcmp(val,"clear") == 0) {
-				arg_edit_mode = IGSE_WRITE_CLEAR;
-				continue;
-			}
-
-			if (strcmp(val,"moveup") == 0) {
-				arg_edit_mode = IGSE_WRITE_MOVEUP;
-				continue;
-			}
-
-			if (strcmp(val,"movedown") == 0) {
-				arg_edit_mode = IGSE_WRITE_MOVEDOWN;
-				continue;
-			}
+			for (int j=0; j<modes_size; j++)
+				if (strcmpi(val,modes[j]) == 0) {
+					arg_edit_mode = j;
+					break;
+				}
 		}
 
 		if (strcmpi(arg,"text") == 0) {
@@ -214,7 +188,7 @@ case C_IGSE_WRITE:
 		if (strcmpi(arg_open_mode,"recreate") == 0)
 			strcpy(open_mode, "wb");
 	};
-	
+
 	FILE *file = fopen(ptr_filename, open_mode);
 	if (!file) {
 		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
@@ -233,6 +207,7 @@ case C_IGSE_WRITE:
 	// Find file size
 	fseek(file, 0, SEEK_END);
 	int file_size = ftell(file);
+	int original  = ftell(file);
 
 		// Quick append mode
 		if (arg_line_start == 0) {
@@ -257,7 +232,7 @@ case C_IGSE_WRITE:
 
 	// Allocate buffer
 	int new_line_len  = strlen(arg_txt);
-	int new_file_size = file_size * (arg_edit_mode==IGSE_WRITE_COPY ? 2 : 1) + new_line_len + 1;
+	int new_file_size = file_size * (arg_edit_mode==IGSE_WRITE_COPY ? 2 : 1) + new_line_len + 2;
 	int new_file_end  = 0;
 	int result        = 0;
 
@@ -501,7 +476,8 @@ case C_IGSE_WRITE:
 					FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
 				else
 					FWerror(210,0,CommandID,ptr_filename,"",result,file_size,out);
-			}
+			} else
+				FWerror(0,0,CommandID,"","",0,0,out);
 
 			fclose(file);
 		}

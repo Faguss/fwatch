@@ -6,6 +6,8 @@ Code to report listen server to the master server was taken from OFPReportListen
 
 Uses [natsort](https://github.com/sourcefrog/natsort) by Martin Pool.
 
+Binary download: https://ofp-faguss.com/fwatch/116test
+
 ## Compiling
 
 Project is compiled using Microsoft Visual C++ 6.0 on WinXP SP3

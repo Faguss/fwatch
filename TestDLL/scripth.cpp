@@ -348,7 +348,8 @@ int newArgSystem[] = {
 	C_IGSE_FIND,
 	C_IGSE_DB,
 	C_CLIPBOARD_COPY,
-	C_CLIPBOARD_GETLINE
+	C_CLIPBOARD_GETLINE,
+	C_CLIPBOARD_TOFILE
 };
 
 // 1.15 List of commands that aggregate other commands

@@ -278,7 +278,19 @@ case C_RESTART_CLIENT:
 			if (CommandID == C_EXE_UNPBO) {
 				String_append(param, " \"");
 				String_append(param, pwd);
-				String_append(param, "\\fwatch\\tmp\" ");
+
+				if (extra_option && numP>=6 || !extra_option && numP>=4) {
+					buf_filename.current_length = 0;
+					ptr_filename                = stripq(par[extra_option ? 5 : 3]);
+
+					if (VerifyPath(&ptr_filename, buf_filename, RESTRICT_TO_MISSION_DIR | SUPPRESS_ERROR | SUPPRESS_CONVERSION, CommandID, out)) {
+						String_append(param, "\\fwatch\\tmp\\");
+						String_append(param, ptr_filename);
+						String_append(param, "\" ");
+					} else
+						String_append(param, "\\fwatch\\tmp\" ");
+				} else
+					String_append(param, "\\fwatch\\tmp\" ");
 			} else {
 				if (numP>=6 || !strstr2(ptr_filename,"fwatch\\tmp",0,0)) {
 					String_append(param, " \"fwatch\\tmp");

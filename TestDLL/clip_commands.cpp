@@ -403,21 +403,91 @@ case C_CLIPBOARD_TOFILE:
 { // Paste clipboard content to file
 
 	// Read arguments
-	if (numP < 3) {
-		FWerror(100,0,CommandID,"","",numP,3,out);
-		break;
+	char *arg_filename = "";
+	char *arg_mode     = "nooverwrite";
+	char *arg_escape   = "";
+	char *arg_prefix   = "";
+	char *arg_suffix   = "";
+	
+	for (int i=2; i<numP; i++) {
+		char *arg = stripq(par[i]);
+		char *col = strchr(arg, ':');
+
+		if (col == NULL)
+			continue;
+
+		int pos   = col - arg;
+		arg[pos]  = '\0';
+		char *val = arg+pos+1;
+
+		if (strcmpi(arg,"file") == 0) {
+			arg_filename = val;
+			continue;
+		}
+
+		if (strcmpi(arg,"mode") == 0) {
+			arg_mode = val;
+			continue;
+		}
+
+		if (strcmpi(arg,"prefix") == 0) {
+			arg_prefix = val;
+			continue;
+		}
+
+		if (strcmpi(arg,"suffix") == 0) {
+			arg_suffix = val;
+			continue;
+		}
+
+		if (strcmpi(arg,"escape") == 0) {
+			arg_escape = val;
+			continue;
+		}
 	}
+
+	// File not specified
+	if (strcmpi(arg_filename, "") == 0) {
+		FWerror(107,0,CommandID,"file name","",0,0,out);
+		break;
+	};
+
+
+	// Replace \t and \n
+	char tmp[16]	 = "";
+	bool numberStart = false;
+	int quantity	 = -1;
+
+	for (i=0; arg_escape[i]!='\0'; i++) {
+		if (!numberStart  &&  isdigit(arg_escape[i]))
+			numberStart = true;
+
+		if (numberStart)
+			if (!isdigit(arg_escape[i])) {
+				numberStart = false;
+				quantity    = atoi(tmp);
+				strcpy(tmp, "");
+			} else
+				sprintf(tmp, "%s%c", tmp, arg_escape[i]);
+		
+		if (arg_escape[i] == 't') {
+			arg_prefix = EscSequences(arg_prefix, 0, quantity);
+			arg_suffix = EscSequences(arg_suffix, 0, quantity);
+			quantity = -1;
+		}
+
+		if (arg_escape[i] == 'n') {
+			arg_prefix = EscSequences(arg_prefix, 2, quantity);
+			arg_suffix = EscSequences(arg_suffix, 2, quantity);
+			quantity = -1;
+		}
+	};
 
 	bool overwrite = false;
-	char mode[]    = "wb";
+	char open_mode[] = "wb";
 
-	if (numP > 3) {
-		if (strcmpi(par[3],"a") == 0)
-			strcpy(mode, "ab");
-
-		if (strcmpi(par[3],"w") == 0)
-			overwrite = true;
-	}
+	if (strcmpi(arg_mode,"append")==0)
+		strcpy(open_mode, "ab");
 
 
 	// Open clipboard
@@ -425,7 +495,6 @@ case C_CLIPBOARD_TOFILE:
 		FWerror(20,GetLastError(),CommandID,"","",0,0,out);
 		break;
 	}
-	
 
 	// No text in clip
 	if (!::IsClipboardFormatAvailable(CF_TEXT)) {
@@ -434,18 +503,16 @@ case C_CLIPBOARD_TOFILE:
 		break;
 	};
 
-	
 	// Verify and update path to the file
 	String buf_filename;
 	String_init(buf_filename);
-	char *ptr_filename = stripq(par[2]);
+	char *ptr_filename = arg_filename;
 	int path_type      = VerifyPath(&ptr_filename, buf_filename, RESTRICT_TO_MISSION_DIR, CommandID, out);
 
 	if (path_type == ILLEGAL_PATH) {
 		CloseClipboard();
 		break;
 	}
-
 
 	// Check if file already exists
 	FILE *f     = fopen(ptr_filename, "r");
@@ -456,18 +523,16 @@ case C_CLIPBOARD_TOFILE:
 		fclose(f);
 	}
 
-
 	// Overwriting not allowed
-	if (exists  &&  !overwrite) {
+	if (exists  &&  strcmpi(arg_mode,"nooverwrite")==0) {
 		FWerror(207,0,CommandID,ptr_filename,"",0,0,out);
 		CloseClipboard();
 		String_end(buf_filename);
 		break;
 	}
 
-
 	// Mode "overwrite" means trashing existing file
-	if (exists  &&  overwrite) {
+	if (exists  &&  strcmpi(arg_mode,"overwrite")==0) {
 		if (path_type == DOWNLOAD_DIR) {	// Delete if it's \fwatch\download\ location
 			if (remove(ptr_filename) != 0) {
 				FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
@@ -486,7 +551,10 @@ case C_CLIPBOARD_TOFILE:
 
 
 	// Write file
-	if (f = fopen(ptr_filename, mode)) {
+	if (f = fopen(ptr_filename, open_mode)) {
+		if (strcmp(arg_prefix,"")!=0)
+			fprintf(f, arg_prefix);
+
 		HANDLE clipboard_data = GetClipboardData(CF_TEXT);
 		char *clipboard_text  = (char*)GlobalLock(clipboard_data);
 
@@ -494,8 +562,12 @@ case C_CLIPBOARD_TOFILE:
 
 		if (ferror(f)) 
 			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
-		else
+		else {
 			FWerror(0,0,CommandID,"","",0,0,out);
+
+			if (strcmp(arg_suffix,"")!=0)
+				fprintf(f, arg_suffix);
+		}
 
 		GlobalUnlock(clipboard_data);
 		fclose(f);
@@ -530,7 +602,7 @@ case C_CLIPBOARD_FROMFILE:
 	String_init(buf_filename);
 	char *ptr_filename = stripq(par[2]);
 
-	if (VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out))
+	if (!VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out))
 		break;
 
 

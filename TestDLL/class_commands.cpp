@@ -4779,7 +4779,7 @@ case C_CLASS_READSQM:
 					text[class_end] = '\0';
 					
 					for (int z=0; z<class_max; z++) {
-						if (strncmp(text+class_start,class_names[z],strlen(class_names[z])) == 0) {
+						if (strncmpi(text+class_start,class_names[z],strlen(class_names[z])) == 0) {
 							int opened                  = class_ids[z];
 							opened_classes[class_level] = opened;
 							inside                     |= opened;
