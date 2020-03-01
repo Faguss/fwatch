@@ -31,6 +31,7 @@ struct GLOBAL_VARIABLES
 	int current_mod_version_date;
 	int instructions_pos;
 	int instructions_max;
+	int saved_alias_array_size;
 	string gamerestart_arguments;
 	string downloaded_filename;
 	string current_mod;
@@ -62,6 +63,7 @@ struct GLOBAL_VARIABLES
 	false,
 	true,
 	-1,
+	0,
 	0,
 	0,
 	0,
@@ -2245,6 +2247,9 @@ void EndModVersion()
 	if (global.current_mod.empty())
 		return;
 		
+	if (global.current_mod_alias.size() > global.saved_alias_array_size)
+		global.current_mod_alias.erase(global.current_mod_alias.begin()+global.saved_alias_array_size, global.current_mod_alias.begin()+global.current_mod_alias.size());
+		
 	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_CLEANING]);
 		
 	// Remove downloaded files
@@ -2578,6 +2583,16 @@ int SCRIPT_StartMod(const vector<string> &arg)
 	global.current_mod_keepname = arg[3];
 	global.command_line_num     = 0;
 	global.current_mod_version  = "";
+	
+	// Make a list of mod aliases for the entire installation
+	vector<string> aliases;
+	Tokenize(arg[4], " ", aliases);
+	
+	for (int i=0; i<aliases.size(); i++)
+		global.current_mod_alias.push_back(aliases[i]);
+		
+	global.saved_alias_array_size = global.current_mod_alias.size();
+	
 	
 	// Find to which folder we should install the mod
 	for (int i=0;  i<global.mod_id.size(); i++)
@@ -3733,6 +3748,7 @@ int main(int argc, char *argv[])
 		"makepbo",			SCRIPT_MakePBO,
 		"extractpbo",		SCRIPT_ExtractPBO,
 		"unpackpbo",		SCRIPT_ExtractPBO,
+		"unpbo",			SCRIPT_ExtractPBO,
 		"edit",				SCRIPT_EditLine,
 		"begin_ver",		SCRIPT_StartVersion,
 		"alias",			SCRIPT_Alias
