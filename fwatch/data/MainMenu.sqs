@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2020,3,1,0,21,14,9,540,60,FALSE]
+	GS_FWATCH_MY_VERSION = [2020,3,4,3,19,23,15,622,60,FALSE]
 	GS_MY_VERSION = 0.53
 	GS_DEFAULT_URL = ["http://ofp-faguss.com/schedule/sqf.php"]
 
@@ -181,7 +181,7 @@
 	? _value == 207 : goto "FillListBox"
 	? _value == 208 : if (_install_hanged) then {loadFile ":IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  remove:savestate"; loadFile ":IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\install_progress.sqf"; _install_status=-1; _install_hanged=false; if (_server_uniqueid=="mod") then {goto "GetModfolders"} else {goto "Schedule"}} else {loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:abort"]}
 	? _value == 209 : loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:restart"]
-	? _value == 210 : _jump_to_server=_server_uniqueid; _install_status=-1; loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\install_progress.sqf"; call FUNCTION_REFRESH_MODLIST; if (_server_uniqueid=="mod") then {goto "GetModfolders"} else {goto "Schedule"}
+	? _value == 210 : _jump_to_server=_server_uniqueid; _install_status=-1; loadFile ":IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  remove:savestate"; loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\install_progress.sqf"; call FUNCTION_REFRESH_MODLIST; if (_server_uniqueid=="mod") then {goto "GetModfolders"} else {goto "Schedule"}
 	? _value == 211 : goto "CancelGameRestart"
 	? _value == 212 : goto "ServerOptions"
 	? _value == 213 : goto "AssignID_ForThisMod"
@@ -299,7 +299,7 @@
 	_all_modsURL = []
 	_update_available = false
 	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:url"
-		
+
 	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule"]
 	? !(_ok select 0) : titleText [Format[MAINMENU_STR select 13,_ok select 3],"PLAIN",1]; closeDialog 0; exit
 	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule  mode:check"]
@@ -358,7 +358,7 @@
 	_new_mods    = []
 	
 	"if ((_missing_mods_myversion select _i) != 0) then {_update_mods set [count _update_mods, [_i,_x]]} else {_new_mods set [count _new_mods, [_i,_x]]}; _i=_i+1" forEach _missing_mods
-	
+
 	_title = "===" + (loadFile Format ["\:STRING CUT text:%1start:1 end:-4", MAINMENU_STR select 48]) + "==="
 	? count _update_mods > 0 : lbSetColor [6657, lbAdd [6657, _title], [246/255, 40/255, 23/255, 1]]
 	"_index=lbAdd [6657,_missing_mods_name select (_x select 0)]; lbSetValue [6657, _index, 6]; lbSetData [6657, _index, Format[""%1"",_x select 1]]" forEach _update_mods
