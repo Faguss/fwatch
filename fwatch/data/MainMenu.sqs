@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2020,3,28,6,2,41,27,99,60,FALSE]
+	GS_FWATCH_MY_VERSION = [2020,3,28,6,11,35,51,112,60,FALSE]
 	GS_MY_VERSION = 0.54
 	GS_DEFAULT_URL = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -299,6 +299,10 @@
 	_all_modsID  = []
 	_all_modsURL = []
 	_update_available = false
+	_saved_version    = 0
+	
+	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:version"
+	? _saved_version < GS_MY_VERSION : 	loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\schedule.bin"
 	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:url"
 
 	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule"]
@@ -521,6 +525,7 @@
 	_access_code        = ""
 	_update_available   = false
 	_saved_modhash      = ""
+	_saved_version      = 0
 
 	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule"]
 	? !(_ok select 0) : titleText [Format[MAINMENU_STR select 13,_ok select 3],"PLAIN",1]; closeDialog 0; exit
@@ -528,6 +533,8 @@
 	? !(_ok select 0) : titleText [Format[MAINMENU_STR select 13,_ok select 3],"PLAIN",1]; closeDialog 0; exit
 
 	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  read:accesscode"
+	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:version"
+	? _saved_version < GS_MY_VERSION : 	loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\schedule.bin"
 	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:urlread:serversread:hash"
 
 	while "count _all_urldates < count _all_url" do {_all_urldates set [count _all_urldates, "0"]}
@@ -652,6 +659,7 @@
 		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlwrite:_all_url=" + (_all_url call FUNCTION_FORMAT_ARRAY) + ";_all_mirror=" + (_all_mirror call FUNCTION_FORMAT_ARRAY) + ";_all_urldates=" + (_all_urldates call FUNCTION_FORMAT_ARRAY) + Format[";_update_available=%1;GS_FWATCH_LAST_UPDATE=%2",_update_available,GS_FWATCH_LAST_UPDATE])
 		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlappend:;GS_VOICE=" + (GS_VOICE call FUNCTION_FORMAT_ARRAY))
 		loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:hashwrite:_saved_modhash=""%1""", FWATCH_MODLISTHASH]
+		loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:versionwrite:_saved_version=%1", GS_MY_VERSION]
 
 
 	; Display list of servers in a listbox
