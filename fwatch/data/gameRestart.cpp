@@ -1038,8 +1038,8 @@ int MoveFiles(string source, string destination, string new_name, bool is_move, 
 
 string Decrypt(string sentence) 
 {
-	int decrypt_key = 10333;
-	int modulus_key = 20131;
+	int decrypt_key = 0;
+	int modulus_key = 0;
 	vector<int> numbers;
 	vector<string> words;
 	Tokenize(sentence, "a", words);
@@ -1119,6 +1119,9 @@ int main(int argc, char *argv[])
 	string voice_server       = "";
 	string server_time        = "";
 	string update_resource    = "";
+	string username           = "";
+	string maxcustom          = "";
+
 	bool self_update		  = false;
 	bool server_equalmodreq   = false;
 	DWORD game_pid            = 0;
@@ -1248,6 +1251,16 @@ int main(int argc, char *argv[])
 			
 			if (Equals(name,"-voice")) {
 				voice_server = value;
+				continue;
+			}
+			
+			if (Equals(name,"-maxcustom")) {
+				maxcustom = value;
+				continue;
+			}
+			
+			if (Equals(name,"-plrname")) {
+				username = value;
 				continue;
 			}
 		}
@@ -1936,7 +1949,17 @@ int main(int argc, char *argv[])
 			return result;
 		}
 
-		result = Download("http://ofp-faguss.com/fwatch/download/fwatch_self_update.7z", error_text);
+		
+		vector<string> download_mirrors;
+		download_mirrors.push_back("http://ofp-faguss.com/fwatch/download/fwatch_self_update.7z");
+		download_mirrors.push_back("http://faguss.paradoxstudio.uk/fwatch/download/fwatch_self_update.7z");
+		
+		for (int i=0; i<download_mirrors.size(); i++) {
+			result = Download(download_mirrors[i], error_text);
+			if (result == 0)
+				break;
+		}
+		
 		if (result != 0) {
 			global.logfile << "Download failed\n\n--------------\n\n";
 			global.logfile.close();
@@ -2043,8 +2066,18 @@ int main(int argc, char *argv[])
 	if (update_resource != "") {
 		string error_text = "";
 		char url[]        = "http://ofp-faguss.com/fwatch/116test";
+		int result        = 0;
 		
-		int result = Download("http://ofp-faguss.com/fwatch/download/ofp_aspect_ratio207.7z", error_text);
+		vector<string> download_mirrors2;
+		download_mirrors2.push_back("http://ofp-faguss.com/fwatch/download/ofp_aspect_ratio207.7z");
+		download_mirrors2.push_back("http://faguss.paradoxstudio.uk/fwatch/download/ofp_aspect_ratio207.7z");
+		
+		for (int i=0; i<download_mirrors2.size(); i++) {
+			result = Download(download_mirrors2[i], error_text);
+			if (result == 0)
+				break;
+		}
+		
 		if (result != 0) {
 			global.logfile << "Download failed\n\n--------------\n\n";
 			global.logfile.close();
@@ -2136,7 +2169,120 @@ int main(int argc, char *argv[])
 		    Sleep(500);
 		}
 	}
+
+
+
+
+
 	
+	// Check if custom files are below limit -------------------
+	if (!maxcustom.empty() && !username.empty()) {
+		string path_to_cfg = "Users\\" + username + "\\UserInfo.cfg";
+		int face_offset    = 0;
+		char *face_ptr     = NULL;
+		FILE *f            = fopen(path_to_cfg.c_str(),"rb");
+		bool rewrite       = false;
+		int file_size      = 0;
+		double size_limit  = strtod(maxcustom.c_str(), NULL);
+		char *file_buffer;
+		HANDLE hFind;
+		WIN32_FIND_DATA fd;
+		
+		if (f) {
+			fseek(f, 0, SEEK_END);
+			file_size = ftell(f);
+			fseek(f, 0, SEEK_SET);
+			file_buffer	        = new char[file_size+1];
+			int result		    = fread(file_buffer, 1, file_size, f);
+			file_buffer[result] = '\0';
+			face_ptr            = strstr(file_buffer, "face=\"Custom\"");
+		}
+		
+		// Get custom face size
+		if (face_ptr != NULL) {
+			string path_to_face = "Users\\" + username + "\\face.paa";
+			double face_size    = 0;
+
+			hFind = FindFirstFile(path_to_face.c_str(), &fd);
+			if (hFind != INVALID_HANDLE_VALUE) {
+				face_size = fd.nFileSizeLow;
+				FindClose(hFind);
+			} else {
+				path_to_face = "Users\\" + username + "\\face.jpg";
+				hFind        = FindFirstFile(path_to_face.c_str(), &fd);
+				
+				if (hFind != INVALID_HANDLE_VALUE) {
+					face_size = fd.nFileSizeLow;
+					FindClose(hFind);
+				}
+			}
+			
+			if (f && face_size > size_limit && face_size <= 102400) {
+				memcpy(face_ptr, "face=\"Face52\"", 13);
+				rewrite = true;
+			}			
+		}
+		
+		if (f) {
+			if (rewrite) {
+				freopen(path_to_cfg.c_str(), "wb", f);
+				if (f) {
+					fwrite(file_buffer, 1, file_size, f);
+					global.logfile << "Changed custom face to a default one due to server file limit" << endl;
+				}
+			}
+			
+			delete[] file_buffer;
+			
+			if (f)
+				fclose(f);
+		}
+		
+		// Get custom sound size
+		string path_to_sound = "Users\\" + username + "\\sounds\\*.*";
+		hFind                = FindFirstFile(path_to_sound.c_str(), &fd);
+		bool rename          = false;
+		
+		if (hFind != INVALID_HANDLE_VALUE) {
+			do {
+				if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+					continue;
+
+				if (fd.nFileSizeLow > size_limit && fd.nFileSizeLow <= 51200) {
+					rename = true;
+					break;
+				}
+			}
+			while (FindNextFile(hFind, &fd) != 0);
+			
+			FindClose(hFind);
+		}
+		
+		if (rename) {
+			string rename_src  = "Users\\" + username + "\\sounds";
+			string rename_base = "Users\\" + username + "\\sounds_backup";
+			string rename_dst  = "";
+			int tries          = 1;
+			int last_error     = 0;
+			
+			do {
+				rename_dst = rename_base + (tries>1 ? Int2Str(tries) : "");
+				if (MoveFileEx(rename_src.c_str(), rename_dst.c_str(), 0))
+					last_error = 0;
+				else {
+					tries++;
+					last_error = GetLastError();
+					if (last_error != 183) {
+						global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << " - " << FormatError(last_error);
+						global.logfile.close();
+						return 7;
+					}
+				}
+			} while (last_error == 183);
+			
+			global.logfile << "Renamed " << rename_src << " to " << rename_dst << endl;
+		}
+	}
 
 
 

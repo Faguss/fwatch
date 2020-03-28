@@ -12,9 +12,9 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2020,3,4,3,19,23,15,622,60,FALSE]
-	GS_MY_VERSION = 0.53
-	GS_DEFAULT_URL = ["http://ofp-faguss.com/schedule/sqf.php"]
+	GS_FWATCH_MY_VERSION = [2020,3,28,6,2,41,27,99,60,FALSE]
+	GS_MY_VERSION = 0.54
+	GS_DEFAULT_URL = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
 
 	; Won't work with older version
@@ -218,8 +218,8 @@
 	FWATCH_MODLISTDATE = []
 	FWATCH_CUSTOMFILE  = "";
 	FWATCH_CUSTOMSIZE  = [];
-	FWATCH_MOD
-	ISTHASH = "";
+	FWATCH_MODLISTHASH = "";
+	FWATCH_USERNAME    = "";
 	FWATCH_CURRMOD     = call loadFile ":mem modlist"
 	call FUNCTION_REFRESH_MODLIST
 
@@ -294,6 +294,7 @@
 		? _install_status >= 0 : goto "InstallDisplay"
 	
 	_all_url  	 = +GS_DEFAULT_URL
+	_all_mirror  = []
 	_all_mods    = []
 	_all_modsID  = []
 	_all_modsURL = []
@@ -307,9 +308,11 @@
 	
 	_i          = 0
 	_done_url   = []
+	_mirror     = 0
 
 		#DownloadMods_ForEachURL
-		_url = _all_url select _i
+		_url = (_all_url select _i) select _mirror
+		_all_mirror set [_i, _mirror]
 		? [_url,_done_url] call FUNCTION_FIND_URL >= 0 : goto "DownloadMods_SkipURL"
 
 		((call loadFile Format ["\:STRING DOMAIN %1", _url]) select 3) call FUNCTION_MSG_LB
@@ -319,14 +322,8 @@
 		GS_DOWNLOAD_RESULT = []
 		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 --output-document=fwatch\tmp\schedule\schedule.sqf "+_url+"?mod=all&mode=mods"), "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
-		? !(GS_DOWNLOAD_RESULT select 0) : [MAINMENU_STR select 15,"downloadLog.txt"] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
-
-			; Read downloaded file
-			_fileContent = loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\schedule.sqf"
-			? _fileContent == "" : [MAINMENU_STR select 15,"downloadLog.txt"] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
-			_fileIntegrity = call _fileContent
-			_fileContent = nil
-			? Format ["%1",_fileIntegrity] != "true" : [MAINMENU_STR select 18,"schedule.sqf"] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
+			
+			"DownloadMods_ForEachURL" call FUNCTION_READ_DOWNLOADED_FILE
 			
 			if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="bool") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0}
 			? !_update_available && GS_VERSION != GS_MY_VERSION : [MAINMENU_STR select 20,""] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
@@ -336,7 +333,7 @@
 			"_all_modsURL set [count _all_modsURL, _i]; _all_modsID set [count _all_modsID,_x]; _all_mods set [count _all_mods,GS_MODS_INFO select _k]; _k=_k+1" forEach GS_MODS_ID
 
 		#DownloadMods_SkipURL
-		? _i < count _all_url-1 : _i=_i+1; goto "DownloadMods_ForEachURL"
+		? _i < count _all_url-1 : _i=_i+1; _mirror=0; goto "DownloadMods_ForEachURL"
 		
 	? _update_available : goto "DisplayUpdateInformation"
 	
@@ -510,6 +507,7 @@
 		? _install_status >= 0 : goto "InstallDisplay"
 
 	_all_url  		    = +GS_DEFAULT_URL
+	_all_mirror         = []
 	_all_urldates       = []
 	_all_servers        = []
 	_all_serverNames    = []
@@ -538,9 +536,12 @@
 	_i          = 0
 	_done_url   = []
 	_downloaded = 0
+	_mirror     = 0
 
 		#ForEachURL
-		_url = _all_url select _i
+		_url = (_all_url select _i) select _mirror
+		_all_mirror set [_i, _mirror]
+		loadFile Format ["\:IGSE WRITE file:..\fwatch\tmp\debug.txt text:%1",_url]
 		? [_url,_done_url] call FUNCTION_FIND_URL >= 0 : goto "SkipURL"
 
 		((call loadFile Format ["\:STRING DOMAIN %1", _url]) select 3) call FUNCTION_MSG_LB
@@ -550,9 +551,11 @@
 		GS_DOWNLOAD_RESULT = []
 		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 --output-document=fwatch\tmp\schedule\schedule.sqf "+_url+"?server=current&mode=lastmodified"+([""] call FUNCTION_BUILD_QUERY_STRING)), "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
-		? !(GS_DOWNLOAD_RESULT select 0) : [MAINMENU_STR select 15,"downloadLog.txt"] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
-	
-		if ((call loadFile "..\fwatch\tmp\schedule\schedule.sqf")==(_all_urldates select _i) && _saved_modhash==FWATCH_MODLISTHASH) then {goto "SkipURL"}
+		loadFile Format ["\:IGSE WRITE file:..\fwatch\tmp\debug.txt text:%1 %2",_url+"?server=current&mode=lastmodified", GS_DOWNLOAD_RESULT]
+		
+		"ForEachURL" call FUNCTION_READ_DOWNLOADED_FILE
+
+		if (GS_LAST_MODIFIED==(_all_urldates select _i) && _saved_modhash==FWATCH_MODLISTHASH) then {goto "SkipURL"}
 
 		; Download full info
 		(MAINMENU_STR select 16) call FUNCTION_MSG_LB
@@ -560,17 +563,11 @@
 		GS_DOWNLOAD_RESULT = []
 		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 --output-document=fwatch\tmp\schedule\schedule.sqf "+_url+Format["?server=current&language=%1",CURRENT_LANGUAGE]+(["modcheck",GS_MODS_ID,GS_MODS_VER] call FUNCTION_BUILD_QUERY_STRING)), "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
-		? !(GS_DOWNLOAD_RESULT select 0) : [MAINMENU_STR select 15,"downloadLog.txt"] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
 		
 		_done_url set [count _done_url, _url]
 		(MAINMENU_STR select 17) call FUNCTION_MSG_LB
 
-			; Read downloaded file
-			_fileContent = loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\schedule.sqf";
-			? _fileContent == "" : [MAINMENU_STR select 15,"downloadLog.txt"] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
-			_fileIntegrity = call _fileContent
-			_fileContent = nil
-			? Format ["%1",_fileIntegrity] != "true" : [MAINMENU_STR select 18,"schedule.sqf"] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
+			"ForEachURL" call FUNCTION_READ_DOWNLOADED_FILE
 			
 			_downloaded = _downloaded + 1
 			_all_urldates set [_i, GS_LAST_MODIFIED]
@@ -622,7 +619,7 @@
 
 				Format [MAINMENU_STR select 21, (if (_server_name!="") then {_server_name} else {_server_uniqueid})] call FUNCTION_MSG_LB
 				GS_DOWNLOAD_RESULT = []
-				[Format ["--output-document=fwatch\tmp\schedule\%1  %2 ", _filename, _server_logo], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+				[Format ["--tries=1 --output-document=fwatch\tmp\schedule\%1  %2 ", _filename, _server_logo], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 				@count GS_DOWNLOAD_RESULT != 0
 
 				if (GS_DOWNLOAD_RESULT select 0) then {_code_string=_code_string+Format[";_server_logo_local=""..\fwatch\tmp\schedule\%1"";true", _filename]; loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedulelogo.bin  key:%1write:_name=""%2""",_server_uniqueid,_tokens select (count _tokens-2)]} else {titleText [Format [MAINMENU_STR select 22,GS_DOWNLOAD_RESULT select 3], "PLAIN DOWN", 0.5]}
@@ -630,6 +627,7 @@
 
 
 				; Add server to the global list
+				? _server_uniqueid in _all_serverID : goto "NextServerString"
 				_all_servers     set [count _all_servers    , _code_string     ]
 				_all_serverNames set [count _all_serverNames, (if (_server_name!="") then {_server_name} else {_server_uniqueid})]
 				_all_serverID    set [count _all_serverID   , _server_uniqueid ]
@@ -643,7 +641,7 @@
 			"_fileIntegrity=call (GS_MODS_INFO select _k); if (!(_x in _all_modsID) && Format [""%1"",_fileIntegrity]==""true"") then {_all_modsURL set [count _all_modsURL, _i]; _all_modsID set [count _all_modsID,_x]; _all_mods set [count _all_mods,(GS_MODS_INFO select _k)]}; _k=_k+1" forEach GS_MODS_ID
 
 		#SkipURL
-		? _i < count _all_url-1 : _i=_i+1; goto "ForEachURL"
+		? _i < count _all_url-1 : _i=_i+1; _mirror=0; goto "ForEachURL"
 
 		; Save global list
 		? _downloaded == 0 : goto "SkipDownload"
@@ -651,7 +649,7 @@
 		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverswrite:_all_servers=" + (_all_servers call FUNCTION_FORMAT_ARRAY))
 		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serversappend:;_all_serverNames=" + (_all_serverNames call FUNCTION_FORMAT_ARRAY) + ";_all_serverID=" + (_all_serverID call FUNCTION_FORMAT_ARRAY))
 		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serversappend:;_all_mods=" + (_all_mods call FUNCTION_FORMAT_ARRAY) + ";_all_modsID=" + (_all_modsID call FUNCTION_FORMAT_ARRAY) + ";_all_serverURL=" + (_all_serverURL call FUNCTION_FORMAT_ARRAY) + ";_all_modsURL=" + (_all_modsURL call FUNCTION_FORMAT_ARRAY))
-		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlwrite:_all_url=" + (_all_url call FUNCTION_FORMAT_ARRAY) + ";_all_urldates=" + (_all_urldates call FUNCTION_FORMAT_ARRAY) + Format[";_update_available=%1;GS_FWATCH_LAST_UPDATE=%2",_update_available,GS_FWATCH_LAST_UPDATE])
+		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlwrite:_all_url=" + (_all_url call FUNCTION_FORMAT_ARRAY) + ";_all_mirror=" + (_all_mirror call FUNCTION_FORMAT_ARRAY) + ";_all_urldates=" + (_all_urldates call FUNCTION_FORMAT_ARRAY) + Format[";_update_available=%1;GS_FWATCH_LAST_UPDATE=%2",_update_available,GS_FWATCH_LAST_UPDATE])
 		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlappend:;GS_VOICE=" + (GS_VOICE call FUNCTION_FORMAT_ARRAY))
 		loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:hashwrite:_saved_modhash=""%1""", FWATCH_MODLISTHASH]
 
@@ -710,13 +708,15 @@
 	_server_game_times        = []
 	_server_modfolders	      = []
 	_server_maxcustomfilesize = []
+	_server_maxcustombytes    = ""
 	_server_encrypted         = true
 	
 	_i=-1; while "_i=_i+1; _i<9" do {ctrlSetText [(6470+10*_i), MAINMENU_STR select (65+_i)]}
 	_i=-1; while "_i=_i+1; _i<4" do {ctrlSetText [(6472+10*_i), MAINMENU_STR select (65+_i)]}
 
 	call (_all_servers select (call _data))
-	_url = _all_url select (_all_serverURL select (call _data))
+	_mirror = _all_mirror select (_all_serverURL select (call _data))
+	_url    = (_all_url select (_all_serverURL select (call _data))) select _mirror
 
 	_domain        = call loadFile Format ["\:STRING DOMAIN %1", _server_website]
 	_versionString = if (_server_version == 0) then {""} else {Format ["%1",_server_version]}

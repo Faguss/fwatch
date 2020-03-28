@@ -2620,7 +2620,7 @@ case C_MEM_GETNV:
 
 	if (CWA) 
 		pointer[0]	= 0x7A3128, 
-		modif[0]	= 0x784, 
+		modif[0]	= 0x78C, 
 		modif[2]	= 0x6D6;
 
 

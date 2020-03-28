@@ -584,7 +584,7 @@ void listDirFiles(char* path, HANDLE out, int mode, int systime, int CommandID)
 		hash = fnv_hash(hash,Versions.pointer,Versions.current_length);
 
 		char number[256] = "";
-		sprintf(number, "\",[%f,%f,%f],\"%u\"]", bytes, kilobytes, megabytes,hash);
+		sprintf(number, "\",[%f,%f,%f],\"%u\",\"%s\"]", bytes, kilobytes, megabytes,hash,path);
 		QWrite(number, out);
 	} else {
 		QWrite("]]", out);

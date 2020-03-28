@@ -1203,7 +1203,7 @@ int Download(string url, int options=0, string log_file_name="")
 	}
 
 	string arguments = options & OVERWRITE ? "" : " --no-clobber";
-	arguments += " --no-check-certificate --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ " + url;
+	arguments += " --tries=3 --no-check-certificate --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ " + url;
 	unlink("fwatch\\tmp\\schedule\\downloadLog.txt");
 
 

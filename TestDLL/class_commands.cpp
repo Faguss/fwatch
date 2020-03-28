@@ -3442,11 +3442,17 @@ case C_CLASS_READ:
 				if (c == '"')
 					in_quote = !in_quote;
 
-				if (!in_quote && c=='{')
+				if (!in_quote && (c=='{' || c=='['))
 					array_level++;
 
-				if (!in_quote && c=='}')
+				if (!in_quote && (c=='}' || c==']')) {
 					array_level--;
+
+					// Remove trailing commas
+					for (int z=i-1; z>0 && (isspace(text[z]) || text[z]==',' || text[z]=='}' || text[z]==']'); z--)
+						if (text[z]==',')
+							text[z] = ' ';
+				}
 
 				if (!in_quote && c==';' && array_level>0)
 					text[i] = ',';
@@ -4149,14 +4155,17 @@ case C_CLASS_READ2:
 				if (c == '"')
 					in_quote = !in_quote;
 
-				if (!in_quote && c=='{')
+				if (!in_quote && (c=='{' || c=='['))
 					array_level++;
 
-				if (!in_quote && c=='}')
+				if (!in_quote && (c=='}' || c==']')) {
 					array_level--;
 
-				if (!in_quote && c==';' && array_level>0)
-					text[i] = ',';
+					// Remove trailing commas
+					for (int z=i-1; z>0 && (isspace(text[z]) || text[z]==',' || text[z]=='}' || text[z]==']'); z--)
+						if (text[z]==',')
+							text[z] = ' ';
+				}
 
 				if (word_start == -1) {
 					if (!isspace(c))
@@ -4708,14 +4717,17 @@ case C_CLASS_READSQM:
 				if (c == '"')
 					in_quote = !in_quote;
 
-				if (!in_quote && c=='{')
+				if (!in_quote && (c=='{' || c=='['))
 					array_level++;
 
-				if (!in_quote && c=='}')
+				if (!in_quote && (c=='}' || c==']')) {
 					array_level--;
 
-				if (!in_quote && c==';' && array_level>0)
-					text[i] = ',';
+					// Remove trailing commas
+					for (int z=i-1; z>0 && (isspace(text[z]) || text[z]==',' || text[z]=='}' || text[z]==']'); z--)
+						if (text[z]==',')
+							text[z] = ' ';
+				}
 
 				if (word_start == -1) {
 					if (!isspace(c))

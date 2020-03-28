@@ -86,7 +86,7 @@ HANDLE WINAPI NewCreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD  dw
 		//v1.14 Get path to mission dir and save that info to a file
 		if (!strchr(lpFileName, ':'))
 		{
-			if (!strncmpi("init.sqs", lpFileName+len-8, 8))
+			if (!strncmpi("\\init.sqs", lpFileName+len-9, 9))
 				createPathSqf(lpFileName, len, -8);
 
 			if (!strncmpi(".html", lpFileName+len-5, 5))

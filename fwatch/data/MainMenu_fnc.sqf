@@ -336,7 +336,7 @@ FUNCTION_FORMAT_GAME_TIME = {
 
 
 FUNCTION_FIND_URL = {
-	private ["_i", "_break", "_cut", "_results", "_array","_find"];
+	private ["_i", "_break", "_cut", "_results", "_array", "_find", "_array_item"];
 	
 	_i     = 0;
 	_break = false; 
@@ -352,7 +352,9 @@ FUNCTION_FIND_URL = {
 			_cut   = loadFile Format ["\:STRING CUT start:%1  text:%2", _find select 0, _this select 0];
 			
 			// is domain inside other
-			_results = call loadFile Format ["\:STRING FIND text:%1find:%2", (_this select 1) select _i, _cut];
+			_array_item = (_this select 1) select _i;
+			if (_array_item in [_array_item]) then {} else {_array_item = ((_this select 1) select _i) select 0};
+			_results = call loadFile Format ["\:STRING FIND text:%1find:%2", _array_item, _cut];
 			
 			if (count _results > 0) then {
 				_break = true
@@ -452,7 +454,7 @@ FUNCTION_SERVERS_TO_LISTBOX = {
 
 FUNCTION_GET_EXECUTE_PARAMS = {
 	private ["_string", "_string2", "_ok", "_Input", "_add_param_name", "_modifier"];
-	_string = "";
+	_string  = "";
 	_string2 = "";
 	
 	if (_server_uniqueid != "mod") then {
@@ -464,6 +466,7 @@ FUNCTION_GET_EXECUTE_PARAMS = {
 		if (_server_password != "") then {_string=_string+Format[" -%1password=",_modifier]+_server_password};
 		if (_server_equalModReq) then {_string=_string+" -serverequalmodreq=true"};
 		if (_run_voice_program) then {_string=_string+Format[" -%1voice=",_modifier]+(_server_voice select 1)};
+		if (_server_maxcustombytes != "") then {_string=_string+Format[" -maxcustom=%1 ""-plrname=%2""",_server_maxcustombytes, FWATCH_USERNAME]};
 		
 		_add_param_name = true;
 		_string2 = "";
@@ -658,7 +661,8 @@ FUNCTION_REFRESH_MODLIST = {
 		FWATCH_MODLISTDATE = _ok select 7; 
 		FWATCH_CUSTOMFILE  = _ok select 8; 
 		FWATCH_CUSTOMSIZE  = _ok select 9; 
-		FWATCH_MODLISTHASH = _ok select 10
+		FWATCH_MODLISTHASH = _ok select 10;
+		FWATCH_USERNAME    = _ok select 11;
 	} else {
 		titleText [((MAINMENU_STR select 63)+(_ok select 3)),"PLAIN DOWN",0.1]
 	}
@@ -685,6 +689,41 @@ FUNCTION_DOWNLOAD_INFO = {
 	lbSetValue [6657, lbAdd [6657,MAINMENU_STR select 64], 223];
 };
 
+
+
+FUNCTION_READ_DOWNLOADED_FILE = {
+	private ["_error", "_fileContent","_fileIntegrity","_error_message","_file_name"];
+	_error         = !(GS_DOWNLOAD_RESULT select 0);
+	_error_message = MAINMENU_STR select 15;
+	_file_name     = "downloadLog.txt";
+				
+	if (GS_DOWNLOAD_RESULT select 0) then {
+		_fileContent   = loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\schedule.sqf";
+		_fileIntegrity = loadFile ("\:STRING CUT start:-5 text:" + _fileContent);
+		
+		if (_fileIntegrity == ";true") then {
+			call _fileContent
+		} else {
+			_error = true;
+			
+			if (_fileContent != "") then {
+				_error_message = MAINMENU_STR select 18;
+				_file_name     = "schedule.sqf";
+			};
+		};
+	};
+	
+	if (_error) then {
+		if (_mirror<count (_all_url select _i)-1) then {
+			lbSetValue [6657, lbAdd [6657,"["+_error_message+"]"], 0];
+			_mirror = _mirror + 1;
+			goto _this;
+		} else {
+			[_error_message,_file_name] call FUNCTION_DOWNLOAD_INFO;
+			goto "ResetLMB";
+		};		
+	};
+};
 
 
 FUNCTION_VOICE_URL_FIND = {
