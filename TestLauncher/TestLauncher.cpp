@@ -11,13 +11,13 @@ bool runOfp(LPSTR lpCmdLine, bool addNoMap);
 bool TestHook(void);
 void FwatchPresence(void *loop);				//v1.1
 int findProcess(char* name);					//v1.11
-int countThreads(unsigned int pid);  			//v1.11
 int findOFPwindow();							//v1.11
 void ListenServer(void *loop);					//v1.14
 void FixUIAspectRatio(void *loop);				//v1.15
-int Read_Config_Fwatch_HUD(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT);
-void Transfer_Modfolder_Missions(char *mod, bool server);
-void Return_Modfolder_Missions(bool server);
+void Read_Config_Fwatch_HUD(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT);	//v1.16
+void Transfer_Modfolder_Missions(char *mod, bool server);	//v1.16
+void Return_Modfolder_Missions(bool server);				//v1.16
+int strncmpi(const char *ps1, const char *ps2, int n);		//v1.16
 
 
 //v1.13 global variables for OFP and CWA
@@ -125,8 +125,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		return 1;
 	};
 
-	Return_Modfolder_Missions(false);
-	Return_Modfolder_Missions(true);
+	Return_Modfolder_Missions(0);
+	Return_Modfolder_Missions(1);
 	
 	//v1.16 save info about this instance to a file
 	FILE *fi = fopen("fwatch_info.sqf","w");
@@ -134,14 +134,14 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	//v1.13 arguments to change the master server
 	// Copy command line to a buffer
-	int lpCmdLine_size  = strlen(lpCmdLine);
-	bool nolaunch		= false;
-	bool listenServer	= false;
-	bool addNoMap		= true;
-	bool Steam			= false;
-	bool first_item     = true;
-	bool buffer_shift   = false;
-	char *command_line  = lpCmdLine;
+	int lpCmdLine_size = strlen(lpCmdLine);
+	bool nolaunch      = false;
+	bool listenServer  = false;
+	bool addNoMap      = true;
+	bool Steam         = false;
+	bool first_item    = true;
+	bool buffer_shift  = false;
+	char *command_line = lpCmdLine;
 
 	for (int i=0, begin=-1; i<=lpCmdLine_size; i++) {
 		bool complete_word = i == lpCmdLine_size;
@@ -153,7 +153,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			begin = i;
 
 		if (complete_word  &&  begin>=0) {
-			char *word   = lpCmdLine+begin;
+			char *word   = lpCmdLine + begin;
 			char prev    = lpCmdLine[i];
 			lpCmdLine[i] = '\0';
 
@@ -211,7 +211,58 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	fprintf(fi,"]]");
 	fclose(fi);
 
+
+
+	// v1.16 Read master server address from file if argument wasn't passed
+	if (strcmp(serv1,"") == 0) {
+		fi = fopen("fwatch\\idb\\MasterServers.sqf","rb");
+		if (fi) {
+			fseek(fi, 0, SEEK_END);
+			int file_size = ftell(fi);
+			fseek(fi, 0, SEEK_SET);
+
+			char *buffer = (char *) malloc(file_size + 1);
+
+			if (buffer) {
+				int result = fread(buffer, 1, file_size, fi);
+				if (result == file_size) {
+					buffer[result] = '\0';
+					int open[]  = {'\"','{'};
+					int close[] = {'\"','}'};
+
+					for (int i=0; i<2; i++) {
+						char *quote = strchr(buffer, open[i]);
+
+						if (quote != NULL) {
+							quote++;
+							char *quote_end = strchr(quote, close[i]);
+
+							if (quote_end != NULL) {
+								strncpy(serv1, quote, quote_end-quote);
+								break;
+							}
+						}
+					}
+				}
+				
+				free(buffer);
+			}
+			
+			fclose(fi);
+		} else
+			if (errno == 2) {
+				fi = fopen("fwatch\\idb\\MasterServers.sqf","w");
+				if (fi) {
+					strcpy(serv1, "master.ofpisnotdead.com");
+					fprintf(fi,"[\"master.ofpisnotdead.com\"]");
+					fclose(fi);
+				}
+			}
+	}
+
 	
+
+
 	// Check that all required files are in place
 	int x = 0;
 	char *f;
@@ -275,80 +326,34 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		_beginthread(FwatchPresence, 0, (void*) (2));	//v1.1
 
 			//1.15 launch steam
-			if (Steam)
-			{
-				Sleep(5000);
+			if (Steam) {
 				HKEY hKey			= 0;
-				char SteamPath[255] = {0};
-				char SteamExe[255]	= {0};
+				char SteamPath[512] = "";
+				char SteamExe[512]	= "";
 				DWORD dwType		= 0;
 				DWORD SteamPathSize	= sizeof(SteamPath);
 				DWORD SteamExeSize	= sizeof(SteamExe);
 
-				if (RegOpenKey(HKEY_CURRENT_USER,"Software\\Valve\\Steam",&hKey) == ERROR_SUCCESS)
-				{
-					dwType = REG_SZ;
-
+				if (RegOpenKey(HKEY_CURRENT_USER,"Software\\Valve\\Steam",&hKey) == ERROR_SUCCESS) {
+					dwType    = REG_SZ;
 					bool key1 = RegQueryValueEx(hKey, "SteamPath", 0, &dwType, (BYTE*)SteamPath, &SteamPathSize) == ERROR_SUCCESS;
-					bool key2 = RegQueryValueEx(hKey, "SteamExe", 0, &dwType, (BYTE*)SteamExe, &SteamExeSize)	 == ERROR_SUCCESS;
+					bool key2 = RegQueryValueEx(hKey, "SteamExe" , 0, &dwType, (BYTE*)SteamExe , &SteamExeSize)  == ERROR_SUCCESS;
 
-					if (key1 && key2)
-					{
-						/*PROCESS_INFORMATION pi2;
-						STARTUPINFO si2; 
-						memset(&si2, 0, sizeof(si2));
-						memset(&pi2, 0, sizeof(pi2));
-						si2.cb = sizeof(si2);
-						si2.dwFlags = STARTF_USESHOWWINDOW;
-						si2.wShowWindow = SW_SHOW;
+					if (key1 && key2) {
+						char *command_line = (char *) malloc(strlen(SteamExe) + strlen(lpCmdLine) + 50);
 
-						char *cmdLine = new char[strlen(SteamPath) + strlen(lpCmdLine) + 50];
-						sprintf(cmdLine, " \"%s\" -applaunch 65790 %s ", SteamPath, lpCmdLine);
-
-						if (addNoMap)
-							strcat(cmdLine, "-nomap ");
-
-						regFILE *fd=fopen("fwatch_steam.txt", "a");
-						fprintf(fd, "SteamExe:%s\nSteamPath:%s\ncmdLine:%s\n\n", SteamExe, SteamPath, cmdLine);
-						fclose(fd);
-
-						CreateProcess(SteamExe, cmdLine, NULL, NULL, false, 0, NULL,NULL,&si2,&pi2);
-						CloseHandle(pi2.hProcess);
-						CloseHandle(pi2.hThread); 
-						delete[] cmdLine;*/
-
-						char *cmdLine = new char[strlen(SteamExe) + strlen(lpCmdLine) + 50];
-						sprintf(cmdLine, " \"%s\" -applaunch 65790 %s%s ", SteamExe, addNoMap ? "-nomap " : "", lpCmdLine);
-
-						system(cmdLine);
-						delete[] cmdLine;
-					};
-				};
+						if (command_line) {
+							sprintf(command_line, " \"%s\" -applaunch 65790 %s%s ", SteamExe, addNoMap ? "-nomap " : "", lpCmdLine);
+							system(command_line);
+							free(command_line);
+						}
+					}
+				}
 
 				RegCloseKey(hKey);
+			}
 
-				/*
-				PROCESS_INFORMATION pi2;
-				STARTUPINFO si2; 
-				memset(&si2, 0, sizeof(si2));
-				memsetm(&pi2, 0, sizeof(pi2));
-				si2.cb = sizeof(si2);
-				si2.dwFlags = STARTF_USESHOWWINDOW;
-				si2.wShowWindow = SW_SHOW;
-
-				char *cmdLine = new char[strlen(lpCmdLine) + 50];
-				sprintf(cmdLine, " c:\\ %s ", lpCmdLine);
-
-				if (addNoMap)
-					strcat(cmdLine, "-nomap ");
-
-				CreateProcess("fwatch\\data\\launchsteam.exe", cmdLine, NULL, NULL, false, 0, NULL,NULL,&si2,&pi2);
-				CloseHandle(pi2.hProcess);
-				CloseHandle(pi2.hThread); 
-				delete[] cmdLine;*/
-			};
-
-		MessageBox( NULL, "Fwatch is now waiting for you to run the game and/or dedicated server\nWhen you're done playing press OK to exit.", "fwatch", MB_OK|MB_ICONINFORMATION );
+		MessageBox( NULL, "Fwatch is now waiting for you to run the game and/or dedicated server\nWhen you're done playing press OK to close Fwatch.", "fwatch", MB_OK|MB_ICONINFORMATION );
 	}
 
 
@@ -357,8 +362,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	// Remove hook
     RemoveHook();
-	Return_Modfolder_Missions(false);
-	Return_Modfolder_Missions(true);
+	Return_Modfolder_Missions(0);
+	Return_Modfolder_Missions(1);
 	unlink("fwatch_info.sqf");
     return 0;
 }
@@ -476,37 +481,6 @@ int findProcess(char* name)
 	return pid;
 };
 
-
-
-
-
-
-// v1.11 return number of threads in a process
-// http://msdn.microsoft.com/en-us/library/ms686852%28VS.85%29.aspx
-int countThreads(unsigned int pid)
-{
-	int threads = 0;
-	THREADENTRY32 te32;
-	HANDLE hThreadSnap = INVALID_HANDLE_VALUE;
- 
-	hThreadSnap = CreateToolhelp32Snapshot( TH32CS_SNAPTHREAD, 0 ); 
-	if( hThreadSnap == INVALID_HANDLE_VALUE ) return 0;
-	te32.dwSize = sizeof(THREADENTRY32 ); 
- 
-	if( !Thread32First( hThreadSnap, &te32 ) ) 
-	{
-		CloseHandle( hThreadSnap );
-		return 0;
-	};
-
-	do 
-		if( te32.th32OwnerProcessID == pid ) 
-			threads++;
-	while( Thread32Next(hThreadSnap, &te32 ) );
-
-    CloseHandle( hThreadSnap );    
-    return threads; 
-};
 
 
 
@@ -763,88 +737,135 @@ bool IsNumberInArray(int number, int* array, int max_loops)
 
 
 
+//v1.16 Compare characters of two strings case insensitive
+//http://my.fit.edu/~vkepuska/ece5527/sctk-2.3-rc1/src/rfilter1/include/strncmpi.c
+int strncmpi(const char *ps1, const char *ps2, int n)
+{
+	char *px1		= (char *)ps1;
+	char *px2		= (char *)ps2;
+	int indicator	= 9999;
+	int i			= 0;
 
-int Read_Config_Fwatch_HUD(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT)
+	while (indicator == 9999)
+	{
+		if (++i > n) 
+			indicator = 0;
+		else
+		{
+			if (*px1 == '\0')
+			{
+				if (*px2 == '\0') 
+					indicator = 0; 
+				else	
+					indicator = -1;
+			}
+			else
+			{
+				if (toupper((int)*px1)  <  toupper((int)*px2)) 
+					indicator = -1; 
+				else
+				{
+					if (toupper((int)*px1)  >  toupper((int)*px2)) 
+						indicator = 1; 
+					else 
+						px1 += 1, 
+						px2 += 1;
+				};
+			};
+		};
+	};
+
+	return indicator;
+};
+
+
+
+
+void Read_Config_Fwatch_HUD(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT)
 {
 	FILE *f = fopen(filename,"r");
-	if (f) {
-		memset(no_ar    , 0, ARRAY_SIZE*1);
-		memset(is_custom, 0, ARRAY_SIZE*1);
-		memset(custom   , 0, ARRAY_SIZE*4);
-		memset(customINT, 0, ARRAY_SIZE*4);
 
-		fseek(f, 0, SEEK_END);
-		int fsize = ftell(f);
-		fseek(f, 0, SEEK_SET);
+	if (!f)
+		return;
 
-		char *token		 = "";
-		char *settings	 = new char[fsize+1];
-		int result		 = fread(settings, 1, fsize, f);
-		settings[result] = '\0';
-		int settings_pos = 0;
-		int value_index  = -1;
-		
-		while (settings_pos < result) {
-			char *setting = Tokenize(settings, ";", settings_pos, result, true, false);
+	memset(no_ar    , 0, ARRAY_SIZE*1);
+	memset(is_custom, 0, ARRAY_SIZE*1);
+	memset(custom   , 0, ARRAY_SIZE*4);
+	memset(customINT, 0, ARRAY_SIZE*4);
 
-			char *equality = strchr(setting, '=');
-			if (equality == NULL)
-				continue;
+	fseek(f, 0, SEEK_END);
+	int file_size = ftell(f);
+	fseek(f, 0, SEEK_SET);
 
-			setting      = Trim(setting);
-			int pos      = equality - setting;
-			setting[pos] = '\0';
-			value_index  = -1;
-			int	max_loops = sizeof(hud_names) / sizeof(hud_names[0]);
+	char *settings = (char *) malloc(file_size + 1);
 
-			for (int i=0; i<max_loops; i++) {
-				if (strcmpi(setting,hud_names[i])==0) {
-					value_index = i;
-					break;
-				}
-			}
-			
-			if (value_index < 0)
-				continue;
+	if (settings == NULL)
+		return;
 
-			setting        = setting + pos + 1;
-			int values_len = strlen(setting);
-			int values_pos = 0;
+	char *token		 = "";
+	int result		 = fread(settings, 1, file_size, f);
+	settings[result] = '\0';
+	int settings_pos = 0;
+	int value_index  = -1;
+	
+	while (settings_pos < result) {
+		char *setting = Tokenize(settings, ";", settings_pos, result, true, false);
 
-			while (values_pos < values_len) {
-				char *value = Tokenize(setting, ",", values_pos, values_len, true, false);
-				value = Trim(value);
+		char *equality = strchr(setting, '=');
+		if (equality == NULL)
+			continue;
 
-				if (strcmpi(value, "noar")==0)
-					no_ar[value_index] = 1;
-				else {
-					is_custom[value_index] = 1;
-					int is_int = IsNumberInArray(i,hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0]));
-					if (is_int) {
-						if (IsNumberInArray(i,hud_color_list,sizeof(hud_color_list)/sizeof(hud_color_list[0]))) {
-							int index              = 0;
-							char *number           = strtok(value, "[,];");
-							unsigned char color[4] = {0,0,0,0};
+		setting      = Trim(setting);
+		int pos      = equality - setting;
+		setting[pos] = '\0';
+		value_index  = -1;
+		int	max_loops = sizeof(hud_names) / sizeof(hud_names[0]);
 
-							while (number != NULL  &&  index<4) {
-								color[index++] = (unsigned char)(atof(number) * 255);
-								number         = strtok(NULL, "[,];");
-							}
-
-							customINT[value_index] = ((color[3] << 24) | (color[0] << 16) | (color[1] << 8) | color[2]);
-						} else
-							customINT[value_index] = atoi(value);
-					} else
-						custom[value_index] = (float)atof(value);
-				}
+		for (int i=0; i<max_loops; i++) {
+			if (strcmpi(setting,hud_names[i])==0) {
+				value_index = i;
+				break;
 			}
 		}
+		
+		if (value_index < 0)
+			continue;
 
-		delete[] settings;
-		fclose(f);
+		setting        = setting + pos + 1;
+		int values_len = strlen(setting);
+		int values_pos = 0;
+
+		while (values_pos < values_len) {
+			char *value = Tokenize(setting, ",", values_pos, values_len, true, false);
+			value = Trim(value);
+
+			if (strcmpi(value, "noar")==0)
+				no_ar[value_index] = 1;
+			else {
+				is_custom[value_index] = 1;
+				int is_int = IsNumberInArray(i,hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0]));
+				if (is_int) {
+					if (IsNumberInArray(i,hud_color_list,sizeof(hud_color_list)/sizeof(hud_color_list[0]))) {
+						int index              = 0;
+						char *number           = strtok(value, "[,];");
+						unsigned char color[4] = {0,0,0,0};
+
+						while (number != NULL  &&  index<4) {
+							color[index++] = (unsigned char)(atof(number) * 255);
+							number         = strtok(NULL, "[,];");
+						}
+
+						customINT[value_index] = ((color[3] << 24) | (color[0] << 16) | (color[1] << 8) | color[2]);
+					} else
+						customINT[value_index] = atoi(value);
+				} else
+					custom[value_index] = (float)atof(value);
+			}
+		}
 	}
 
-	return 0;
+	free(settings);
+	fclose(f);
 };
 
 void Transfer_Modfolder_Missions(char *mod, bool server) 
@@ -862,50 +883,73 @@ void Transfer_Modfolder_Missions(char *mod, bool server)
 		sprintf(source     , "%s\\Missions", mod);
 		sprintf(destination, "Missions\\%s", mod);
 
+		for (int i=10; destination[i]!='\0'; i++)
+			if (destination[i]=='.')
+				destination[i]='_';
+
 		if (MoveFileEx(source, destination, 0))
-			fprintf(f, "%s\n", source);
+			fprintf(f, "%s?%s\n", source, destination);
 
 		WIN32_FIND_DATAW fd;
-		HANDLE hFind = INVALID_HANDLE_VALUE;
+		HANDLE hFind   = INVALID_HANDLE_VALUE;
+		size_t mod_len = strlen(mod);
 
-		size_t modlen = strlen(mod);
-		mbstowcs(source_w, mod, modlen+1);
-		wcscat(source_w     , L"\\MPMissions\\*");
-		wcscpy(destination_w, L"MPMissions\\");
+		char folder[][16] = {
+			"MPMissions",
+			"Templates",
+			"SPTemplates"
+		};
+		int folder_num       = sizeof(folder) / sizeof(folder[0]);
+		wchar_t folder_w[32] = L"";
 
-		hFind = FindFirstFileW(source_w, &fd);
+		for (i=0; i<folder_num; i++) {
+			size_t folder_len = strlen(folder[i]);
+			mbstowcs(folder_w, folder[i], folder_len+1);
+			
+			// Source path is: mod\MPMissions\*
+			mbstowcs(source_w, mod, mod_len+1);
+			wcscat(source_w  , L"\\");
+			wcscat(source_w  , folder_w);
+			wcscat(source_w  , L"\\*");
 
-		if (hFind != INVALID_HANDLE_VALUE) {
-			do {
-				if (wcscmp(fd.cFileName,L".")==0 || wcscmp(fd.cFileName,L"...")==0)
-					continue;
-				
-				size_t filename_length = wcslen(fd.cFileName);
-				unsigned long dir      = fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+			// Destination path is: MPMissions\ 
+			wcscpy(destination_w, folder_w);
+			wcscat(destination_w, L"\\");
 
-				if (filename_length<3 || filename_length>(1023-modlen-13))
-					continue;
+			hFind = FindFirstFileW(source_w, &fd);
 
-				int dots = 0;
-				wchar_t *dot = fd.cFileName;
+			if (hFind != INVALID_HANDLE_VALUE) {
+				do {
+					if (wcscmp(fd.cFileName,L".")==0 || wcscmp(fd.cFileName,L"..")==0)
+						continue;
+					
+					size_t filename_length = wcslen(fd.cFileName);
+					unsigned long dir      = fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
 
-				while((dot=wcschr(dot,L'.')) != NULL && dots<2) {
-					dots++;
-					dot++;
-				}
+					if (filename_length<3 || filename_length>(1023-mod_len-13))
+						continue;
 
-				if (dots>=1 && dir || !dir && dots>=2 && wcscmp(fd.cFileName+filename_length-4,L".pbo")==0) {
-					wcscpy(source_w+modlen+12, fd.cFileName);
-					wcscpy(destination_w+11, fd.cFileName);
+					int dots     = 0;
+					wchar_t *dot = fd.cFileName;
 
-					if (MoveFileExW(source_w, destination_w, 0)) {
-						wcstombs(source, source_w, wcslen(source_w)+1);
-						fprintf(f, "%s\n", source);
+					while((dot=wcschr(dot,L'.')) != NULL && dots<2) {
+						dots++;
+						dot++;
 					}
-				}
-			} 
-			while (FindNextFileW(hFind, &fd) != 0);
-			FindClose(hFind);
+
+					if (dots>=1 && dir || !dir && dots>=2 && wcscmp(fd.cFileName+filename_length-4,L".pbo")==0) {
+						wcscpy(source_w + mod_len + folder_len + 2, fd.cFileName);
+						wcscpy(destination_w + folder_len + 1     , fd.cFileName);
+
+						if (MoveFileExW(source_w, destination_w, 0)) {
+							wcstombs(source, source_w, wcslen(source_w)+1);
+							fprintf(f, "%s\n", source);
+						}
+					}
+				} 
+				while (FindNextFileW(hFind, &fd) != 0);
+				FindClose(hFind);
+			}
 		}
 
 		fclose(f);
@@ -924,6 +968,7 @@ void Return_Modfolder_Missions(bool server)
 		fseek(f, 0, SEEK_SET);
 
 		char *text_buffer = (char *) malloc(file_size + 1);
+
 		if (text_buffer == NULL) {
 			fclose(f);
 			return;
@@ -948,21 +993,23 @@ void Return_Modfolder_Missions(bool server)
 					
 		while (i < file_size) {
 			char *destination = Tokenize(text_buffer, "\r\n", i, file_size, false, false);
-			char *mission     = strrchr(destination,'\\');
+			char *source      = strchr(destination,'\\');
 			bool remove_line  = false;
 			
-			if (mission != NULL) {
-				char source[1024] = "";
+			if (source != NULL) {
+				source++;
 
-				if (strcmpi(mission,"\\missions") == 0) {
-					strcpy(source, "missions\\");
-					memcpy(source+9, destination, mission - destination);
-
+				if (strncmpi(source,"missions?",9) == 0) {
+					char *separator            = strchr(destination,'?');
+					int separator_pos          = separator - destination;
+					source                     = destination + separator_pos + 1;
+					destination[separator_pos] = '\0';
+					
 					if (MoveFileEx(source, destination, 0))
 						remove_line = true;
-				} else {
-					sprintf(source, "mpmissions%s", mission);
 
+					destination[separator_pos] = '?';
+				} else {
 					size_t source_len      = strlen(source);
 					size_t destination_len = strlen(destination);
 					mbstowcs(source_w, source, source_len+1);
@@ -1028,7 +1075,7 @@ void Return_Modfolder_Missions(bool server)
 // Poke STR_USRACT_CHEAT_1 value to indicate that Fwatch is enabled
 void FwatchPresence(void *loop)
 {
-	bool dedicated_server	 = (int)loop==2;
+	bool is_dedicated_server = (int)loop==2;
 	int sleep_rate           = 250;
 	bool transfered_missions = false;
 	int signal_action        = -1;
@@ -1043,7 +1090,7 @@ void FwatchPresence(void *loop)
 		Sleep(sleep_rate);
 
 		// Search for the OFP window
-		if (!dedicated_server)
+		if (!is_dedicated_server)
 			pid = findOFPwindow();
 		else {
 			int max_loops = sizeof(server_execs) / sizeof(server_execs[0]);
@@ -1078,7 +1125,7 @@ void FwatchPresence(void *loop)
 					case VER_201 : master_base1=Game_Exe_Address+0x6C9298; master_base2=Game_Exe_Address+0x6C9560; break;
 				}
 
-				if (!dedicated_server) {
+				if (!is_dedicated_server) {
 					if (master_base1!=0  &&  strcmp(serv1,"")!=0)
 						WriteProcessMemory(phandle, (LPVOID)master_base1, serv1, 64, &stBytes);
 
@@ -1117,7 +1164,7 @@ void FwatchPresence(void *loop)
 						case VER_201 : pointer[0]=Game_Exe_Address+0x6C9A60; break;
 					}
 
-					if (dedicated_server)
+					if (is_dedicated_server)
 						switch(Game_Version) {
 							case VER_196 : pointer[0]=0x754D78; break;
 							case VER_199 : pointer[0]=0x754E08; break;
@@ -1158,7 +1205,7 @@ void FwatchPresence(void *loop)
 
 				// If not found then do a general search
 				if (!found) {
-					for (int current=!dedicated_server ? 0x10000008 : 0x00D00008; current<0x7FFF0000; current+=0x10) {
+					for (int current=!is_dedicated_server ? 0x10000008 : 0x00D00008; current<0x7FFF0000; current+=0x10) {
 						ReadProcessMemory(phandle, (LPVOID)current, &buffer, 7, &stBytes);
 
 						if (strcmp(buffer,"Cheat 1")==0) {
@@ -1191,12 +1238,12 @@ void FwatchPresence(void *loop)
 								int baseOffset = 0;
 
 								char module_name[16] = "ifc22.dll";
-								if (dedicated_server)
+								if (is_dedicated_server)
 									strcpy(module_name, "ijl15.dll");
 
 								do {
 									if (lstrcmpi(xModule.szModule, (LPCTSTR)module_name) == 0) {
-										baseOffset = (int)xModule.modBaseAddr + (!dedicated_server ? 0x2C154 : 0x4FF20);
+										baseOffset = (int)xModule.modBaseAddr + (!is_dedicated_server ? 0x2C154 : 0x4FF20);
 										break;
 									}
 								} while(Module32Next(hSnap, &xModule));
@@ -1232,7 +1279,7 @@ void FwatchPresence(void *loop)
 
 										while (parameter_pos > 0) {
 											char *mod = Tokenize(parameter, ";", parameter_pos, parameter_len, false, true);
-											Transfer_Modfolder_Missions(mod, dedicated_server);
+											Transfer_Modfolder_Missions(mod, is_dedicated_server);
 										}
 									}
 								}
@@ -1249,7 +1296,7 @@ void FwatchPresence(void *loop)
 				// Check if there's a signal to restart the client/server
 				char file_name[64] = "fwatch\\data\\fwatch_client_restart.db";
 
-				if (dedicated_server)
+				if (is_dedicated_server)
 					strcpy(file_name, "fwatch\\data\\fwatch_server_restart.db");
 
 				if (signal_action == -1) {
@@ -1284,7 +1331,7 @@ void FwatchPresence(void *loop)
 					if (file_removed) {
 						char exe_name[64] = "fwatch\\data\\gameRestart.exe";
 
-						if (dedicated_server) {
+						if (is_dedicated_server) {
 							strcpy(exe_name, GameServerName);
 							TerminateProcess(phandle, 0);
 							CloseHandle(phandle);
@@ -1312,7 +1359,7 @@ void FwatchPresence(void *loop)
 		} else {
 			// If game window wasn't found
 			if (transfered_missions) {
-				Return_Modfolder_Missions(dedicated_server);
+				Return_Modfolder_Missions(is_dedicated_server);
 				transfered_missions = false;
 			}
 
@@ -1750,7 +1797,10 @@ void FixUIAspectRatio(void *loop)
 	si.cb			= sizeof(si);
 	si.dwFlags		= STARTF_USESHOWWINDOW;
 	si.wShowWindow	= SW_HIDE;
-	char *cmdLine	= new char[strlen(pwd)+64];
+	char *cmdLine   = (char *) malloc(strlen(pwd)+64);
+
+	if (cmdLine == NULL)
+		_endthread();
 
 	strcpy(cmdLine, "");
 	sprintf(cmdLine, "\"%s\" -nolog Aspect_Ratio.sqf Aspect_Ratio.sqf ", pwd);
@@ -1763,8 +1813,7 @@ void FixUIAspectRatio(void *loop)
 
 	// Wait for the program to end
 	DWORD st;
-	do 
-	{					
+	do {					
 		GetExitCodeProcess(pi.hProcess, &st);
 		Sleep(5);
 	} 
@@ -1772,7 +1821,7 @@ void FixUIAspectRatio(void *loop)
 
 	CloseHandle(pi.hProcess);
 	CloseHandle(pi.hThread); 
-	delete[] cmdLine;
+	free(cmdLine);
 	
 	
 	// Parse settings file
@@ -1782,12 +1831,18 @@ void FixUIAspectRatio(void *loop)
 		_endthread();
 
 	fseek(f, 0, SEEK_END);
-	int fsize = ftell(f);
+	int file_size = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
+	char *settings = (char *) malloc(file_size + 1);
+
+	if (settings == NULL) {
+		fclose(f);
+		return;
+	}
+
 	char *token			= "";
-	char *settings		= new char[fsize+1];
-	int result			= fread(settings, 1, fsize, f);
+	int result			= fread(settings, 1, file_size, f);
 	int AR_CENTERHUD	= 0;
 	float AR_modifX		= 0;
 	float AR_modifY		= 0;
@@ -1821,7 +1876,7 @@ void FixUIAspectRatio(void *loop)
 
 	fclose(f);
 	Sleep(100);
-	delete[] settings;
+	free(settings);
 
 	// Quit if there are no changes to be made
 	if (AR_CENTERHUD)
