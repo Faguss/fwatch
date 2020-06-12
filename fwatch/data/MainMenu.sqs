@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2020,3,28,6,11,35,51,112,60,FALSE]
+	GS_FWATCH_MY_VERSION = [2020,6,11,4,21,43,43,350,120,FALSE]
 	GS_MY_VERSION = 0.54
 	GS_DEFAULT_URL = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -171,7 +171,7 @@
 	; Master server options
 	? _value == 100 : _Label="MasterServerValidateInput"; _Input=""; _Input_Note=""; goto "INPUT"
 	? _value == 101 : titleText ["This is the current one!", "PLAIN DOWN", 0.1]; goto "ResetLMB"
-	? _value == 102 : loadFile Format ["\:mem masterserver set %1", _name]; goto "MasterServer"
+	? _value == 102 : loadFile Format ["\:mem masterserver set %1", _name]; _Input=_name; goto "MasterServerSave"
 	
 	; Game schedule options
 	? _value == 201 : goto "ServerOptions"
@@ -422,7 +422,8 @@
 	; if transitioning from input dialog then need to wait for the listbox to appear
 	@ctrlVisible 6657
 	
-	_current = (call loadFile ":MEM MASTERSERVER get") select 0 
+	_current = (call loadFile ":MEM MASTERSERVER get") select 0
+	? Format ["%1",_current] == "scalar bool array string 0xfcffffef" : titleText ["Can't read current master server", "PLAIN DOWN", 1.5]; closeDialog 0; exit
 	
 	lbClear 6657
 	lbSetCurSel [6657, -1]
@@ -438,7 +439,7 @@
 	_ok = call loadFile "\:IGSE NEW  file:..\fwatch\idb\MasterServers.sqf"
 	? !(_ok select 0) : titleText [_ok select 3, "PLAIN DOWN", 1.5]; goto "ResetLMB"
 	
-	loadFile "\:IGSE WRITE  file:..\fwatch\idb\MasterServers.sqf  line:1  escape:n  text:[\n]"
+	loadFile "\:IGSE WRITE  file:..\fwatch\idb\MasterServers.sqf  line:1  escape:n  text:[""master.ofpisnotdead.com""]"
 
 	
 	; Display from file
@@ -464,11 +465,11 @@
 	
 	; Save to file
 	#MasterServerSave
-	_Input = """" + _Input + """"
-	? count _servers > 0 : _Input=_Input+","
+	_index = [_Input, _servers] call FUNCTION_FIND
+	? _index >= 0 : _servers set [_index, objNull]; _servers=_servers-[objNull]
+	_servers = [_Input] + _servers;
 	
-	_ok      = call loadFile Format ["\:IGSE WRITE  file:..\fwatch\idb\MasterServers.sqf  line:1  mode:new  text:%1", _Input]
-	_servers = nil
+	loadFile Format ["\:IGSE WRITE  file:..\fwatch\idb\MasterServers.sqf  open:recreate  text:%1", _servers call FUNCTION_FORMAT_ARRAY]
 	goto "MasterServer"
 	;===================================================================================================================
 
@@ -548,7 +549,6 @@
 		#ForEachURL
 		_url = (_all_url select _i) select _mirror
 		_all_mirror set [_i, _mirror]
-		loadFile Format ["\:IGSE WRITE file:..\fwatch\tmp\debug.txt text:%1",_url]
 		? [_url,_done_url] call FUNCTION_FIND_URL >= 0 : goto "SkipURL"
 
 		((call loadFile Format ["\:STRING DOMAIN %1", _url]) select 3) call FUNCTION_MSG_LB
@@ -558,7 +558,6 @@
 		GS_DOWNLOAD_RESULT = []
 		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 --output-document=fwatch\tmp\schedule\schedule.sqf "+_url+"?server=current&mode=lastmodified"+([""] call FUNCTION_BUILD_QUERY_STRING)), "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
-		loadFile Format ["\:IGSE WRITE file:..\fwatch\tmp\debug.txt text:%1 %2",_url+"?server=current&mode=lastmodified", GS_DOWNLOAD_RESULT]
 		
 		"ForEachURL" call FUNCTION_READ_DOWNLOADED_FILE
 
