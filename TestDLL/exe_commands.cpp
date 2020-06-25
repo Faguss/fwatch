@@ -5,7 +5,7 @@
 case C_EXE_SPIG:
 { // Execute program from the SPIG directory
 
-	if (DedicatedServer) 
+	if (global.DedicatedServer) 
 		break;
 
 	if (numP < 3) {
@@ -37,7 +37,7 @@ case C_EXE_SPIG:
 	String buf_arguments;
 	String_init(buf_arguments);
 	String_append(buf_arguments, "\"");
-	String_append(buf_arguments, MissionPath);
+	String_append(buf_arguments, global.mission_path);
 	String_append(buf_arguments, "\" \"fwatch\\mdb\\");
 	String_append(buf_arguments, stripq(par[3]));
 	String_append(buf_arguments, "\" -silent");
@@ -96,7 +96,7 @@ break;
 case C_RESTART_SERVER:		
 { // signal fwatch.exe thread to restart server
 
-	if (!DedicatedServer) 
+	if (!global.DedicatedServer) 
 		break;
 	
 	FILE *fp = fopen("fwatch\\data\\fwatch_server_restart.db", "w");
@@ -136,7 +136,7 @@ case C_RESTART_CLIENT:
 	}
 
 	// Not allowed on the server
-	if (DedicatedServer  &&  CommandID==C_RESTART_CLIENT  &&  CommandID==C_EXE_ADDONTEST) 
+	if (global.DedicatedServer  &&  CommandID==C_RESTART_CLIENT  &&  CommandID==C_EXE_ADDONTEST) 
 		break;
 	
 
@@ -405,7 +405,7 @@ case C_RESTART_CLIENT:
 
 			String_append(param, " -pid=");
 			char tmp[64] = "";
-			sprintf(tmp, "%d \"-run=", pid);
+			sprintf(tmp, "%d \"-run=", global.pid);
 			String_append(param, tmp);
 			String_append(param, game_exe_ptr);
 			String_append(param, "\"");
@@ -467,7 +467,7 @@ case C_RESTART_CLIENT:
 		if (CommandID==C_EXE_UNPBO  ||  CommandID==C_EXE_WGET) {
 			// Remove temporary file
 			char filename[128] = "";
-			sprintf(filename, "fwatch\\tmp\\%d.pid", pid);
+			sprintf(filename, "fwatch\\tmp\\%d.pid", dwPid);
 			unlink(filename);
 
 			// Add process id number of the first program
@@ -475,7 +475,7 @@ case C_RESTART_CLIENT:
 			String_append(param, pwd);
 			String_append(param, " -pid=");
 			char tmp[32] = "";
-			sprintf(tmp, "%d ", pi.dwProcessId);
+			sprintf(tmp, "%d ", dwPid);
 			String_append(param, tmp);
 
 			// Launch
@@ -516,18 +516,14 @@ break;
 case C_EXE_WEBSITE:		
 { // open url in a browser
 
-	if (numP < 2)
+	if (numP < 2 || global.DedicatedServer)
 		break;
-
-	if (DedicatedServer)
-		break;
-
 
 	// Is it main menu
 	int	inMenuOff = 0;
 	int inMenu    = 0;
 
-	switch(Game_Version) {
+	switch(game_version) {
 		case VER_196 : inMenuOff=0x75E254; break;
 		case VER_199 : inMenuOff=0x74B58C; break;
 	}
@@ -546,9 +542,7 @@ case C_EXE_WEBSITE:
 		strncmpi(url,"http://",7)  != 0  &&
 		strncmpi(url,"ftp://",6)   != 0  &&
 		strncmpi(url,"www.",4)     != 0
-	) {
-		break;
-	}
+	) break;
 
 	ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 }

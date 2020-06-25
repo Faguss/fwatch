@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2020,6,11,4,21,43,43,350,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2020,6,25,4,21,0,38,415,120,FALSE]
 	GS_MY_VERSION = 0.54
 	GS_DEFAULT_URL = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 

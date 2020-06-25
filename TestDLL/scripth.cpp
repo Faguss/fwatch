@@ -22,8 +22,9 @@ You may use this source code for personal entertainment purposes only. Any comme
 #include <tlhelp32.h>	//v1.11 for traversing process modules
 #include "errno.h"		//v1.13 for errno constants
 #include "shlobj.h"		//v1.14 for copying files to the clipboard
-#include "global_vars.h"	//1.16
+#include "..\common_functions.cpp"	//1.16
 
+extern GLOBAL_VARIABLES_TESTDLL global;
 
 #define SCRIPT_VERSION	1.16		// Script engine version
 #define MAX_PARAMS		32			// Maximum parameters for commands		v1.15 increased to 32
@@ -531,112 +532,105 @@ static int allowed_paths_len[allowed_paths_num] = {
 
 
 // Parse a script command
-void ParseScript(char* com, FULLHANDLE file) {
-
-	HANDLE out = file.handle;
-
-	//v1.15  FWerror can see command line
-	com_ptr = com;
-
-
-	//v1.15  Figure out command name
-	const int CmdLen		= 32;
-	char CmdName[CmdLen]	= "";
+void ParseScript(char* com, FULLHANDLE file) 
+{
+	HANDLE out           = file.handle;
+	int game_version     = global_exe_version[global.exe_index];
+	global.com_ptr       = com;
+	const int CmdLen     = 32;
+	char CmdName[CmdLen] = "";
 	GetFirstTwoWords(com, CmdName, CmdLen);
-
 
 	//v1.13  Store command id in a separate var so it can be passed to the error function
 	int CommandID = matchCmd(CmdName);		
 
 
 	//v1.15  Returning error message before creating buffers
-	if (CommandID == -1)
-	{
+	if (CommandID == -1) {
 		QWrite("ERROR: Unknown command ", out);
 		QWrite(com,out);						//v1.13 additional info
 		return;
-	};
+	}
 
 
 	//v1.15  If there are special properties about this command that we need to know about
-	bool newArgumentSystem	= IsNumberInArray(CommandID, newArgSystem, sizeof(newArgSystem) / sizeof(newArgSystem[0]));
-	bool isMULTI			= IsNumberInArray(CommandID, multiCommands, sizeof(multiCommands) / sizeof(multiCommands[0]));
-	bool isMemCommand		= IsNumberInArray(CommandID, MemCommands, sizeof(MemCommands) / sizeof(MemCommands[0]));
-	bool isMemDedicated		= IsNumberInArray(CommandID, MemCommandsDedicated, sizeof(MemCommandsDedicated) / sizeof(MemCommandsDedicated[0]));
+	bool newArgumentSystem = IsNumberInArray(CommandID, newArgSystem, sizeof(newArgSystem) / sizeof(newArgSystem[0]));
+	bool isMULTI           = IsNumberInArray(CommandID, multiCommands, sizeof(multiCommands) / sizeof(multiCommands[0]));
+	bool isMemCommand      = IsNumberInArray(CommandID, MemCommands, sizeof(MemCommands) / sizeof(MemCommands[0]));
+	bool isMemDedicated    = IsNumberInArray(CommandID, MemCommandsDedicated, sizeof(MemCommandsDedicated) / sizeof(MemCommandsDedicated[0]));
 
 
 	//v1.1  If a memory command then open process
-	SIZE_T stBytes	= 0;
-	HANDLE phandle	= NULL;
-	DWORD pid		= GetCurrentProcessId();
+	SIZE_T stBytes  = 0;
+	HANDLE phandle  = NULL;
 	bool openedProc = false;
 
-	if (isMemCommand)
-	{
+	if (isMemCommand) {
 		//v1.11  Quit if command not allowed for the dedicated server
-		if (DedicatedServer  &&  !isMemDedicated)
+		if (global.DedicatedServer  &&  !isMemDedicated)
 			return;
 
 		//v1.16 Quit if unsupported mem command
-		if (Game_Version==VER_201 && !IsNumberInArray(CommandID, MemCommands201, sizeof(MemCommands201) / sizeof(MemCommands201[0])))
+		if (game_version==VER_201 && !IsNumberInArray(CommandID, MemCommands201, sizeof(MemCommands201) / sizeof(MemCommands201[0])))
 			return;
 
-		phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
-		if (phandle == 0)
-		{
+		phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, global.pid);
+
+		if (phandle == 0) {
 			if (CommandID == C_INFO_STARTTIME)
 				FWerror(0,GetLastError(),CommandID,"","",0,0,out);
 			else
 				QWrite("ERROR: Couldn't get a handle",out);
 
 			return;
-		};
+		}
 
-		if (Game_Version==VER_201  &&  Game_Exe_Address==0) {
-			HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
+		if (game_version==VER_201  &&  global.exe_address==0) {
+			HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, global.pid);
 			MODULEENTRY32 xModule;
 			memset (&xModule, 0, sizeof(xModule));
 			xModule.dwSize = sizeof(xModule);
  
 			if (hSnap != INVALID_HANDLE_VALUE) {
 				if (Module32First(hSnap, &xModule)) {
-					Game_Exe_Address = (int)xModule.modBaseAddr;
-				};
+					global.exe_address = (int)xModule.modBaseAddr;
+				}
 				
 				CloseHandle(hSnap);
 			}
 		}
 
 		openedProc = true;
-	};
+	}
 
 
 
 	
 
 	// Tokenize the string
-	int l = strlen(com);
+	int l     = strlen(com);
 	char *str = new char[l+1];
-	if (!str) return;
+
+	if (!str) 
+		return;
+
 	memcpy(str, com, l+1);
 
-	str = !newArgumentSystem ? strtok2(str) : strtok3(str,CommandID);
+	str       = !newArgumentSystem ? strtok2(str) : strtok3(str,CommandID);
 	char *pch = strtok(str, !newArgumentSystem ? "\n" : "\a");
 	char *par[MAX_PARAMS];
-	int numP = 0;
+	int numP  = 0;
 
 	while (pch != NULL && numP < MAX_PARAMS) {
 		par[numP] = pch;
-		pch = strtok(NULL, !newArgumentSystem ? "\n" : "\a");
+		pch       = strtok(NULL, !newArgumentSystem ? "\n" : "\a");
 		numP++;
 	}
 
 
 	firstErrorMSG = 1;
 
-	switch(CommandID) 
-	{
-		//v1.13 Moved all commands into different files for convenience
+	switch(CommandID) {
 		#include "info_commands.cpp"
 		#include "string_commands.cpp"
 		#include "file_commands.cpp"
@@ -650,7 +644,7 @@ void ParseScript(char* com, FULLHANDLE file) {
 		default:
 			QWrite("ERROR: Unknown command ", out); QWrite(com,out);	//v1.13 additional info
 			break;
-	};
+	}
 
 	if (openedProc) 
 		CloseHandle(phandle);	//v1.1 if a memory operation then close handle
@@ -659,10 +653,4 @@ void ParseScript(char* com, FULLHANDLE file) {
 	return;
 }
 
-
-
-	//v1.13 Moved all functions to a separate file for convenience
-	#include "_Functions.cpp"
-
-
-
+#include "_Functions.cpp"

@@ -364,7 +364,7 @@ char *formatKey(int c) {
 bool checkActiveWindow(void) {
 	char wn[128];
 	GetWindowText(GetForegroundWindow(), wn, 128);
-	if(!strcmp(wn, GameWindowName))
+	if(!strcmp(wn, global_exe_window[global.exe_index]))
 		return true;
 	else
 		return false;
@@ -804,45 +804,6 @@ char* str_replace(const char *strbuf, const char *strold, const char *strnew, in
 
 
 
-
-// v1.11 find process by exename by traversing the list; returns PID number
-int findProcess(char* name)
-{
-	int pid = 0;
-	PROCESSENTRY32 processInfo;
-	processInfo.dwSize = sizeof(processInfo);
-
-	HANDLE processesSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
-
-	if (processesSnapshot != INVALID_HANDLE_VALUE)
-	{
-		Process32First(processesSnapshot, &processInfo);
-
-		do
-		{
-			if (strcmpi(processInfo.szExeFile, name) == 0)
-			{
-				pid = processInfo.th32ProcessID;
-				break;
-			};
-		}
-		while (Process32Next(processesSnapshot, &processInfo));
-
-		CloseHandle(processesSnapshot);
-	};
-	
-	return pid;
-};
-
-
-
-
-
-
-
-
-
-
 //v1.13 Search for string insensitive
 //http://www.codeguru.com/cpp/cpp/string/article.php/c5641/Case-Insensitive-strstr.htm
 char *strstr2(const char *arg1, const char *arg2, int matchWord, int caseSens)
@@ -910,52 +871,6 @@ char *strstr2(const char *arg1, const char *arg2, int matchWord, int caseSens)
 	return(NULL);
 };
 
-
-
-
-
-
-
-//v1.13 Compare characters of two strings case insensitive
-//http://my.fit.edu/~vkepuska/ece5527/sctk-2.3-rc1/src/rfilter1/include/strncmpi.c
-int strncmpi(const char *ps1, const char *ps2, int n)
-{
-	char *px1		= (char *)ps1;
-	char *px2		= (char *)ps2;
-	int indicator	= 9999;
-	int i			= 0;
-
-	while (indicator == 9999)
-	{
-		if (++i > n) 
-			indicator = 0;
-		else
-		{
-			if (*px1 == '\0')
-			{
-				if (*px2 == '\0') 
-					indicator = 0; 
-				else	
-					indicator = -1;
-			}
-			else
-			{
-				if (toupper((int)*px1)  <  toupper((int)*px2)) 
-					indicator = -1; 
-				else
-				{
-					if (toupper((int)*px1)  >  toupper((int)*px2)) 
-						indicator = 1; 
-					else 
-						px1 += 1, 
-						px2 += 1;
-				};
-			};
-		};
-	};
-
-	return indicator;
-};
 
 
 
@@ -1196,21 +1111,6 @@ bool CopyToClip(char *txt, bool append, int CommandID, HANDLE out)
 		return false;
 };
 
-
-
-
-
-// v1.13 Trim whitespace
-char* Trim(char *txt)
-{
-	while (isspace(txt[0])) 
-		txt++;
-
-	for (int i=strlen(txt)-1;  i>=0 && isspace(txt[i]);  i--) 
-		txt[i] = '\0';
-
-	return txt;
-};
 
 
 
@@ -1575,17 +1475,17 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 
 
 	// Log errors
-	if (ErrorLog_Enabled  &&  code>0)
+	if (global.ErrorLog_Enabled  &&  code>0)
 	{
-		FILE *f			= fopen(!DedicatedServer ? "fwatch\\idb\\_errorLog.txt" : "fwatch\\idb\\_errorLogDedi.txt", "a");
+		FILE *f			= fopen(!global.DedicatedServer ? "fwatch\\idb\\_errorLog.txt" : "fwatch\\idb\\_errorLogDedi.txt", "a");
 		HANDLE phandle  = NULL;
 		SIZE_T stBytes  = 0;
 
 		phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
 
-		if (!ErrorLog_Started)
+		if (!global.ErrorLog_Started)
 		{
-			ErrorLog_Started = true;
+			global.ErrorLog_Started = true;
 
 			SYSTEMTIME st;
 			GetLocalTime(&st);
@@ -1622,14 +1522,14 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 			{
 				// mission name
 				char buffer[256] = "";
-				int base		 = !DedicatedServer ? (!CWA ? 0x7DD0E0 : 0x7CC0A0) : (!CWA ? 0x75A398 : 0x75A428);
+				int base		 = !global.DedicatedServer ? (!global.CWA ? 0x7DD0E0 : 0x7CC0A0) : (!global.CWA ? 0x75A398 : 0x75A428);
 				int pointer		 = 0;
 				ReadProcessMemory(phandle, (LPVOID)base, &buffer, 80, &stBytes);
 
 				// if packed pbo
 				if (strcmp(buffer,"__cur_sp")==0  ||  strcmp(buffer,"__cur_mp")==0)
 				{
-					base = !DedicatedServer ? (!CWA ? 0x7DD180 : 0x7CC140) : (!CWA ? 0x75A438 : 0x75A4C8);
+					base = !global.DedicatedServer ? (!global.CWA ? 0x7DD180 : 0x7CC140) : (!global.CWA ? 0x75A438 : 0x75A4C8);
 
 					ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
 
@@ -1640,20 +1540,20 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 				fprintf(f, "%s", buffer);
 
 				// island name
-				base = !DedicatedServer ? (!CWA ? 0x7DD130 : 0x7CC0F0) : (!CWA ? 0x75A3E8 : 0x75A478);
+				base = !global.DedicatedServer ? (!global.CWA ? 0x7DD130 : 0x7CC0F0) : (!global.CWA ? 0x75A3E8 : 0x75A478);
 				ReadProcessMemory(phandle, (LPVOID)base, &buffer, 80, &stBytes);
 				fprintf(f, ".%s\t", buffer);
 
 				// briefing title
 				strcpy(buffer, "");
-				base = !DedicatedServer ? (!CWA ? 0x78324C : 0x77233C) : (!CWA ? 0x7030AC : 0x7030FC);
+				base = !global.DedicatedServer ? (!global.CWA ? 0x78324C : 0x77233C) : (!global.CWA ? 0x7030AC : 0x7030FC);
 				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4,	 &stBytes);
 
 				if (pointer != 0) 
 					ReadProcessMemory(phandle, (LPVOID)(pointer+0x114), &buffer, 255, &stBytes);
 				else
 				{
-					base = !DedicatedServer ? (!CWA ? 0x786880 : 0x775968) : (!CWA ? 0x7066D8 : 0x706728);
+					base = !global.DedicatedServer ? (!global.CWA ? 0x786880 : 0x775968) : (!global.CWA ? 0x7066D8 : 0x706728);
 					ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4,	 &stBytes);
 
 					if (pointer != 0)
@@ -1664,13 +1564,13 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 		};
 
 		// output command input
-		fprintf(f, "\t%s\n", com_ptr);
+		fprintf(f, "\t%s\n", global.com_ptr);
 
 		// Get mission time
 		if (phandle != 0)
 		{
 			int missionTime = 0;
-			int base		= !DedicatedServer ? (!CWA ? 0x7DD028 : 0x7CBFE8) : (!CWA ? 0x75A2E0 : 0x75A370);
+			int base		= !global.DedicatedServer ? (!global.CWA ? 0x7DD028 : 0x7CBFE8) : (!global.CWA ? 0x75A2E0 : 0x75A370);
 			ReadProcessMemory(phandle, (LPVOID)base, &missionTime, 4, &stBytes);
 
 			int seconds = missionTime / 1000;
@@ -1788,30 +1688,27 @@ void SplitStringIntoParts(char *txt, int cut, bool addComma, HANDLE out)
 void ReadJoystick(char *data, int customJoyID)
 {
 	// If passed -2 then quit this function
-	if (customJoyID == -2) 
-	{
+	if (customJoyID == -2) {
 		strcat(data, "[]");
 		return;
-	};
+	}
 	
 	
 	JOYINFOEX joy;							// input
 	JOYCAPS joyCaps;						// device
-	joy.dwFlags = JOY_RETURNBUTTONS;		// enable dwButtons
-
-	int device		= 0;
-	int input		= 0; 
-	int joyID		= 0; 
-	int maxButtons	= 32;
+	joy.dwFlags     = JOY_RETURNBUTTONS;	// enable dwButtons
+	int device      = 0;
+	int input       = 0; 
+	int joyID       = 0; 
+	int maxButtons  = 32;
 	char POVtype[7] = "NOPOV";
 
-	if (customJoyID>=0  &&  customJoyID<=15) 		// Optional argument - joy ID
+	if (customJoyID>=0  &&  customJoyID<=15)	// Optional argument - joy ID
 		joyID = customJoyID;
 
 
-	//* Read input and device info starting from 0 to 15 *//
-	do
-	{
+	// Read input and device info starting from 0 to 15
+	do {
 		input = joyGetPosEx(joyID, &joy);
 
 		// read device after successfully read input
@@ -1827,9 +1724,8 @@ void ReadJoystick(char *data, int customJoyID)
 	while (input != 0);
 
 
-	//* Return error value *//
-	if (device!=JOYERR_NOERROR  ||  input!=JOYERR_NOERROR) 
-	{
+	// Return error value
+	if (device!=JOYERR_NOERROR  ||  input!=JOYERR_NOERROR) {
 		//strcat(data, "[\"couldn't find\"]");
 		char info[100] = "";
 
@@ -1850,22 +1746,20 @@ void ReadJoystick(char *data, int customJoyID)
 
 		sprintf(data, "%s[\"%s\",%d]", data, info, joyID);
 		return;
-	};
+	}
 
 
 	//* Device information *//
 	// Check type of POV and set a flag according to it
-	if (joyCaps.wCaps & JOYCAPS_POV4DIR)					// discrete values (digital POV)
-	{
+	if (joyCaps.wCaps & JOYCAPS_POV4DIR) {					// discrete values (digital POV)
 		joy.dwFlags = JOY_RETURNBUTTONS | JOY_RETURNPOV;
 		strcpy(POVtype, "DIGITAL");
-	};
+	}
 
-	if (joyCaps.wCaps & JOYCAPS_POVCTS)						// cts values (analog POV)
-	{
+	if (joyCaps.wCaps & JOYCAPS_POVCTS) {					// continuous values (analog POV)
 		joy.dwFlags = JOY_RETURNBUTTONS | JOY_RETURNPOVCTS;
 		strcpy(POVtype, "ANALOG");
-	};
+	}
 
 
 
@@ -1875,27 +1769,31 @@ void ReadJoystick(char *data, int customJoyID)
 	int Axes[6];
 	int count_axis = 2;
 
-	Axes[0] = joy.dwXpos;		// always read basic X,Y
+	Axes[0] = joy.dwXpos;	// always read basic X,Y
 	Axes[1] = joy.dwYpos;
 
 	strcat(data, "[[\"X\",\"Y\"");
 
 	// detect which axes joy has
-	if (joyCaps.wCaps & JOYCAPS_HASZ) 
-		strcat(data, ",\"Z\""),
+	if (joyCaps.wCaps & JOYCAPS_HASZ) {
+		strcat(data, ",\"Z\"");
 		Axes[count_axis++] = joy.dwZpos;
+	}
 
-	if (joyCaps.wCaps & JOYCAPS_HASR) 
-		strcat(data, ",\"R\""),
+	if (joyCaps.wCaps & JOYCAPS_HASR) {
+		strcat(data, ",\"R\"");
 		Axes[count_axis++] = joy.dwRpos;
+	}
 
-	if (joyCaps.wCaps & JOYCAPS_HASU) 
-		strcat(data, ",\"U\""),
-		Axes[count_axis++] = joy.dwUpos;		
+	if (joyCaps.wCaps & JOYCAPS_HASU) {
+		strcat(data, ",\"U\"");
+		Axes[count_axis++] = joy.dwUpos;
+	}
 
-	if (joyCaps.wCaps & JOYCAPS_HASV) 
-		strcat(data, ",\"V\""),
+	if (joyCaps.wCaps & JOYCAPS_HASV) {
+		strcat(data, ",\"V\"");
 		Axes[count_axis++] = joy.dwVpos;
+	}
 	// ================================================================================
 
 
@@ -1904,8 +1802,7 @@ void ReadJoystick(char *data, int customJoyID)
 
 	strcat(data, "],[");
 
-	for (int i=0; i<count_axis; i++)		// Loop each axis
-	{
+	for (int i=0; i<count_axis; i++) {		// Loop each axis
 		// format array
 		if (ADDcomma) 
 			strcat(data, ","); 
@@ -1913,7 +1810,7 @@ void ReadJoystick(char *data, int customJoyID)
 			ADDcomma = true;
 
 		sprintf(data, "%s%d", data, Axes[i]);
-	};
+	}
 	// ================================================================================
 
 
@@ -1926,41 +1823,37 @@ void ReadJoystick(char *data, int customJoyID)
 	ADDcomma = false;
 	int buts = joy.dwButtons;
 
-	for (i=0; i<maxButtons; i++)	// Loop each button
-	{
+	for (i=0; i<maxButtons; i++) {	// Loop each button
 		Buttons[i] = buts & (1 << i);
 
-		if (Buttons[i] > 0) 
-		{
+		if (Buttons[i] > 0) {
 			if (ADDcomma) 
 				strcat(data, ","); 
 			else 
 				ADDcomma = true;
 
 			sprintf(data, "%s\"JOY%d\"", data, i+1);
-		};
-	};
+		}
+	}
 	// ================================================================================
 
 
 	// POV ============================================================================
-	if (strcmp(POVtype,"NOPOV") != 0)
-	{
+	if (strcmp(POVtype,"NOPOV") != 0) {
 		if (joy.dwPOV!=65535  &&  ADDcomma) 
 			strcat(data, ",");
 
-		switch (joy.dwPOV)
-		{
-			case 0 : strcat(data, "\"JOYPOVUP\""); break;
-			case 4500 : strcat(data, "\"JOYPOVUPLEFT\""); break;
-			case 9000 : strcat(data, "\"JOYPOVLEFT\""); break;
+		switch (joy.dwPOV) {
+			case 0     : strcat(data, "\"JOYPOVUP\""); break;
+			case 4500  : strcat(data, "\"JOYPOVUPLEFT\""); break;
+			case 9000  : strcat(data, "\"JOYPOVLEFT\""); break;
 			case 13500 : strcat(data, "\"JOYPOVDOWNLEFT\""); break;
 			case 18000 : strcat(data, "\"JOYPOVDOWN\""); break;
 			case 22500 : strcat(data, "\"JOYPOVDOWNRIGHT\""); break;
 			case 27000 : strcat(data, "\"JOYPOVRIGHT\""); break;
 			case 31500 : strcat(data, "\"JOYPOVUPRIGHT\""); break;
-		};
-	};
+		}
+	}
 
 	sprintf(data, "%s],[\"%s\",%d]", data, POVtype, joy.dwPOV);
 	// ================================================================================
@@ -1969,7 +1862,7 @@ void ReadJoystick(char *data, int customJoyID)
 	// ARRAY WITH JOY INFORMATION =====================================================
 	sprintf(data, "%s,[%d,%d,%d]]", data, joyID, joyCaps.wMid, joyCaps.wPid);
 	// ================================================================================
-};
+}
 
 
 
@@ -1983,12 +1876,12 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset)
 	int ticks = GetTickCount();
 
 	// Don't write multiple times at once
-	if (ticks < PathSqfTime+1000)
+	if (ticks < global.mission_path_savetime+1000)
 		return;
 
-	PathSqfTime = ticks;	
+	global.mission_path_savetime = ticks;	
 	
-	FILE *f		 = fopen(!DedicatedServer ? "fwatch\\data\\path.sqf" : "fwatch\\data\\pathDedi.sqf", "w");
+	FILE *f      = fopen(!global.DedicatedServer ? "fwatch\\data\\path.sqf" : "fwatch\\data\\pathDedi.sqf", "w");
 	int pathType = -1;
 
 
@@ -1999,12 +1892,10 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset)
 	
 	
 	// Mission Editor
-	if (!strncmp("Users\\", lpFileName, 6))
-	{
+	if (!strncmp("Users\\", lpFileName, 6)) {
 		char *nextBackSlash = strchr(lpFileName+6, '\\');
 
-		if (nextBackSlash != NULL)
-		{
+		if (nextBackSlash != NULL) {
 			if (!strncmp("missions", nextBackSlash+1, 8)) 
 				pathType = 4;
 
@@ -2013,8 +1904,8 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset)
 
 			if (!strncmp("mpmissions", nextBackSlash+1, 10)) 
 				pathType = 0;
-		};
-	};
+		}
+	}
 
 
 	// SP
@@ -2034,14 +1925,13 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset)
 
 
 	// mission is PBO and briefing in wanted language
-	if (!strncmp(".pbo", lpFileName+len-4, 4))
-	{
+	if (!strncmp(".pbo", lpFileName+len-4, 4)) {
 		if (!strncmp("missions", lpFileName, 8)) 
 			pathType = 5;
 
 		if (!strncmp("mpmissions", lpFileName, 10)) 
 			pathType = 1;
-	};
+	}
 		
 
 	// Mission path length
@@ -2050,55 +1940,51 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset)
 	fprintf(f,"[%d,%d,[\"", pathType, len2);
 
 	// output mission path
-	strcpy(MissionPath, "");
+	strcpy(global.mission_path, "");
 
 	for (int i=0; i<len2; i++)
-		if (lpFileName[i]=='\\'  ||  lpFileName[i]=='/')
-		{
+		if (lpFileName[i]=='\\'  ||  lpFileName[i]=='/') {
 			if (i != len2-1)
 				fprintf(f, "\",\"");
 
-			strcat(MissionPath, "\\");
+			strcat(global.mission_path, "\\");
+		} else {
+			fprintf(f, "%c", lpFileName[i]);
+			sprintf(global.mission_path, "%s%c", global.mission_path, lpFileName[i]);
 		}
-		else
-			fprintf(f, "%c", lpFileName[i]),
-			sprintf(MissionPath, "%s%c", MissionPath, lpFileName[i]);
 
-
-	fprintf(f,"\"]]");
+	fprintf(f, "\"]]");
 	fclose(f);
 
 	
 	// Is this is a new mission?
-	if (strcmp(lastMissionPath,MissionPath) !=0 )
-		strcpy(lastMissionPath,MissionPath);
-	// Is this is a mission restart?
-	else
-	{
+	if (strcmp(global.mission_path_previous, global.mission_path) !=0)
+		strcpy(global.mission_path_previous, global.mission_path);
+	else {
+		// Is this is a mission restart?
 		// Check mission time
 		HANDLE phandle  = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
 
-		if (phandle != 0)
-		{
-			int base		= !DedicatedServer ? (!CWA ? 0x7DD028 : 0x7CBFE8) : (!CWA ? 0x75A2E0 : 0x75A370);
-			int missionTime = 0;
-			SIZE_T stBytes  = 0;
+		if (phandle != 0) {
+			int time_address = !global.DedicatedServer ? (!global.CWA ? 0x7DD028 : 0x7CBFE8) : (!global.CWA ? 0x75A2E0 : 0x75A370);
+			int time_value   = 0;
+			SIZE_T stBytes   = 0;
 
-			ReadProcessMemory(phandle, (LPVOID)base,	 &missionTime, 4, &stBytes);
+			ReadProcessMemory(phandle, (LPVOID)time_address, &time_value, 4, &stBytes);
 			CloseHandle(phandle);
 
-			if (missionTime > 500)
+			if (time_value > 500)
 				return;
 		}
-	};
+	}
 
 	// Reset error logging
-	ErrorLog_Enabled = false;
-	ErrorLog_Started = false;
+	global.ErrorLog_Enabled = false;
+	global.ErrorLog_Started = false;
 
 	// Restore what was modified by Fwatch commands
 	RestoreMemValues(pathType==3 || pathType==4);
-};
+}
 
 
 
@@ -2109,8 +1995,7 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset)
 // Check if string is empty
 bool IsWhiteSpace(char *txt)
 {
-	while (*txt != '\0') 
-	{
+	while (*txt != '\0') {
 		if (!isspace(*txt)) 
 			return false;
 
@@ -2118,7 +2003,7 @@ bool IsWhiteSpace(char *txt)
 	}
 
 	return true;
-};
+}
 
 
 
@@ -2131,8 +2016,7 @@ bool String2Bool(char *txt)
 {
 	txt = Trim(txt);
 
-	if (strcmpi(txt,"false") == 0 ||
-		strcmpi(txt,"")		 == 0)
+	if (strcmpi(txt,"false") == 0  ||  strcmpi(txt,"") == 0)
 		return false;
 
 	if (strcmpi(txt,"true") == 0)
@@ -2142,7 +2026,7 @@ bool String2Bool(char *txt)
 		return true;
 	else
 		return false;
-};
+}
 
 
 
@@ -2152,16 +2036,14 @@ bool String2Bool(char *txt)
 // Return first two words from a text line
 void GetFirstTwoWords(char* text, char *buffer, int maxSize)
 {
-	int words	  = 0;
+	int words     = 0;
 	int wordStart = -1;
-	int size	  = 0;
-	int length	  = strlen(text);
+	int size      = 0;
+	int length    = strlen(text);
 
 	for (int i=0;  i<=length && words<2;  i++)
-		if (isspace(text[i])  ||  i==length)
-		{			
-			if (wordStart >= 0)
-			{
+		if (isspace(text[i])  ||  i==length) {			
+			if (wordStart >= 0) {
 				if (size + i-wordStart + 1 >= maxSize)
 					break;
 
@@ -2173,15 +2055,14 @@ void GetFirstTwoWords(char* text, char *buffer, int maxSize)
 				size += i-wordStart + 1;
 				wordStart = -1;
 				words++;
-			};
-		}
-		else
+			}
+		} else
 			if (wordStart < 0)
 				wordStart = i;
 
 	for (int j=0;  j<maxSize; j++)
 		buffer[j] = tolower(buffer[j]);
-};
+}
 
 
 
@@ -2294,23 +2175,8 @@ char* strtok3(char* str, int CommandID)
 	while (str[y] != '\0');
 
 	return str;
-};
+}
 
-
-
-
-
-
-
-// Find integer in an integer array
-bool IsNumberInArray(int number, int* array, int max_loops)
-{
-	for (int i=0;  i<max_loops;  i++)
-		if (number == array[i])
-			return true;
-
-	return false;
-};
 
 
 
@@ -2347,7 +2213,7 @@ void CorrectStringPos(int *start, int *end, int length, bool endSet, bool length
 
 	if (*end > textSize)
 		*end = textSize;
-};
+}
 
 
 
@@ -2366,9 +2232,9 @@ int GetCharType(char c)
 	else
 		if (c>=0x80  ||  isalnum(c)  ||  c=='_')
 			return 2;
-	else
-		return 3;
-};
+		else
+			return 3;
+}
 
 
 
@@ -2379,120 +2245,112 @@ int GetCharType(char c)
 // Restore memory values that were changed in the game
 void RestoreMemValues(bool isMissionEditor)
 {
-	int max_loops	= (sizeof(RESTORE_MEM) / sizeof(RESTORE_MEM[0]));
-	HANDLE phandle  = NULL;
-	SIZE_T stBytes  = 0;
-	phandle			= OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
+	int max_loops  = (sizeof(global.restore_memory) / sizeof(global.restore_memory[0]));
+	HANDLE phandle = NULL;
+	SIZE_T stBytes = 0;
+	phandle        = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
 
 	if (phandle == NULL)
 		return;
 
-	for (int i=0; i<max_loops; i++)
-	{
-		if (!RESTORE_MEM[i])
+	for (int i=0; i<max_loops; i++) {
+		if (!global.restore_memory[i])
 			continue;
 
-		if (i == RESTORE_BRIGHTNESS)
-		{	
-			int base	= !CWA ? 0x789D88 : 0x778E80;
+		if (i == RESTORE_BRIGHTNESS) {	
+			int base    = !global.CWA ? 0x789D88 : 0x778E80;
 			int pointer = 0;
-			ReadProcessMemory(phandle, (LPVOID)base,			&pointer,					  4, &stBytes);
-			WriteProcessMemory(phandle,(LPVOID)(pointer+0x2C),  &RESTORE_FLT[FLT_BRIGHTNESS], 4, &stBytes);
-		};
 
-		if (i>=RESTORE_OSHADOWS  &&  i<=RESTORE_CLOUDLETS)
-		{
-			int base	= !CWA ? 0x79F8D0 : 0x78E9C8;
+			ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
+			WriteProcessMemory(phandle,(LPVOID)(pointer+0x2C),  &global.restore_float[FLOAT_BRIGHTNESS], 4, &stBytes);
+		}
+
+		if (i>=RESTORE_OBJECT_SHADOWS  &&  i<=RESTORE_CLOUDLETS) {
+			int base    = !global.CWA ? 0x79F8D0 : 0x78E9C8;
 			int	pointer = 0;
 			int offset  = 0;
 
-			if (i == RESTORE_VSHADOWS) 
+			if (i == RESTORE_VEHICLE_SHADOWS) 
 				offset = 1;
 
 			if (i == RESTORE_CLOUDLETS) 
 				offset = 2;
 
-			ReadProcessMemory(phandle, (LPVOID)base,					&pointer,						   4, &stBytes);
-			WriteProcessMemory(phandle, (LPVOID)(pointer+0x5B0+offset), &RESTORE_BYT[BYT_OSHADOWS+offset], 1, &stBytes);
-		};
+			ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
+			WriteProcessMemory(phandle, (LPVOID)(pointer+0x5B0+offset), &global.restore_byte[BYTE_OBJECT_SHADOWS+offset], 1, &stBytes);
+		}
 
-		if (i>=RESTORE_BULLETS  &&  i<RESTORE_CADET)
-		{
-			int offset[] =
-			{
-				!DedicatedServer ? (!CWA ? 0x71D518 : 0x710520) : (!CWA ? 0x6ABDE8 : 0x6ABDA8),	//gravity acceleration	9.8065996170043945
-				!DedicatedServer ? (!CWA ? 0x5F1570 : 0x5F818C) : (!CWA ? 0x5374B8 : 0x537671),	//bullet lifetime		3
-				!DedicatedServer ? (!CWA ? 0x5F16D2 : 0x5F7ACB) : (!CWA ? 0x534F9C : 0x53517D),	//shell  lifetime		20
-				!DedicatedServer ? (!CWA ? 0x5F1527 : 0x4857B3) : (!CWA ? 0x533A91 : 0x533C4A),	//rocket lifetime		10
-				!DedicatedServer ? (!CWA ? 0x5F147B : 0x487867) : (!CWA ? 0x5357C7 : 0x5359A8),	//bomb lifetime			120
-				!DedicatedServer ? (!CWA ? 0x5F178F : 0x487986) : (!CWA ? 0x5371A1 : 0x53735A),	//smoke lifetime		60
-				!DedicatedServer ? (!CWA ? 0x5F12AD : 0x5F7D5D) : (!CWA ? 0x536D09 : 0x536EEA),	//flare lifetime		17
-				!DedicatedServer ? (!CWA ? 0x7137A0 : 0x7067A0) : (!CWA ? 0x6A66C0 : 0x6A66C0),	//flare duration		15
-				!DedicatedServer ? (!CWA ? 0x5F14BF : 0x485820) : (!CWA ? 0x5345F9 : 0x5347DA),	//pipebomb lifetime		3.402823466E38 (7F7FFFFF)
-				!DedicatedServer ? (!CWA ? 0x5F1818 : 0x5F789B) : (!CWA ? 0x5347F7 : 0x5349D8)	//timebomb lifetime		20
+		if (i>=RESTORE_BULLETS  &&  i<RESTORE_CADET) {
+			int offset[] = {
+				!global.DedicatedServer ? (!global.CWA ? 0x71D518 : 0x710520) : (!global.CWA ? 0x6ABDE8 : 0x6ABDA8), //gravity acceleration	9.8065996170043945
+				!global.DedicatedServer ? (!global.CWA ? 0x5F1570 : 0x5F818C) : (!global.CWA ? 0x5374B8 : 0x537671), //bullet lifetime		3
+				!global.DedicatedServer ? (!global.CWA ? 0x5F16D2 : 0x5F7ACB) : (!global.CWA ? 0x534F9C : 0x53517D), //shell  lifetime		20
+				!global.DedicatedServer ? (!global.CWA ? 0x5F1527 : 0x4857B3) : (!global.CWA ? 0x533A91 : 0x533C4A), //rocket lifetime		10
+				!global.DedicatedServer ? (!global.CWA ? 0x5F147B : 0x487867) : (!global.CWA ? 0x5357C7 : 0x5359A8), //bomb lifetime		120
+				!global.DedicatedServer ? (!global.CWA ? 0x5F178F : 0x487986) : (!global.CWA ? 0x5371A1 : 0x53735A), //smoke lifetime		60
+				!global.DedicatedServer ? (!global.CWA ? 0x5F12AD : 0x5F7D5D) : (!global.CWA ? 0x536D09 : 0x536EEA), //flare lifetime		17
+				!global.DedicatedServer ? (!global.CWA ? 0x7137A0 : 0x7067A0) : (!global.CWA ? 0x6A66C0 : 0x6A66C0), //flare duration		15
+				!global.DedicatedServer ? (!global.CWA ? 0x5F14BF : 0x485820) : (!global.CWA ? 0x5345F9 : 0x5347DA), //pipebomb lifetime	3.402823466E38 (7F7FFFFF)
+				!global.DedicatedServer ? (!global.CWA ? 0x5F1818 : 0x5F789B) : (!global.CWA ? 0x5347F7 : 0x5349D8)  //timebomb lifetime	20
 			};
 
-			WriteProcessMemory(phandle, (LPVOID)offset[i-4], &RESTORE_FLT[i-3], 4, &stBytes);	
-		};
+			WriteProcessMemory(phandle, (LPVOID)offset[i-4], &global.restore_float[i-3], 4, &stBytes);	
+		}
 
-		if (i>=RESTORE_CADET  &&  i<RESTORE_RADAR)
-		{
-			int	offsets[][4]  =
-			{
+		if (i>=RESTORE_CADET  &&  i<RESTORE_RADAR) {
+			int	offsets[][4] = {
 				{0x7DD0C8, 0x7DD0D4, 0x75A380, 0x75A38C},	//ofp
 				{0x7CC088, 0x7CC094, 0x75A410, 0x75A41C}	//cwa
 			};
 
-			int j	 = !CWA ? 0 : 1;	// which game
-			int k	 = 0;				// which difficulty
+			int j    = !global.CWA ? 0 : 1;	// which game
+			int k    = 0;				// which difficulty
 			int base = RESTORE_CADET;
 
-			if (i >= RESTORE_VETERAN) 
-				k++,
+			if (i >= RESTORE_VETERAN) {
+				k++;
 				base = RESTORE_VETERAN;
+			}
 
-			if (DedicatedServer) 
+			if (global.DedicatedServer) 
 				k += 2;
 
 			int offset = offsets[j][k];
 
-			WriteProcessMemory(phandle, (LPVOID)(offset+i-base), &RESTORE_BYT[i-11],  1, &stBytes);
-		};
+			WriteProcessMemory(phandle, (LPVOID)(offset+i-base), &global.restore_byte[i-11],  1, &stBytes);
+		}
 
 		if (i == RESTORE_RADAR)
-			WriteProcessMemory(phandle,(LPVOID)(!CWA ? 0x7DD074 : 0x7CC034), &RESTORE_FLT[FLT_RADAR], 4, &stBytes);
+			WriteProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD074 : 0x7CC034), &global.restore_float[FLOAT_RADAR], 4, &stBytes);
 
-		if (i == RESTORE_MAXOBJ)
-			WriteProcessMemory(phandle,(LPVOID)(!CWA ? 0x7DD07C : 0x7CC03C), &RESTORE_INT[INT_MAXOBJ], 4, &stBytes);
+		if (i == RESTORE_MAX_OBJECTS)
+			WriteProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD07C : 0x7CC03C), &global.restore_int[INT_MAX_OBJECTS], 4, &stBytes);
 
 		if (i == RESTORE_TRACK1)
-			WriteProcessMemory(phandle,(LPVOID)(!CWA ? 0x7DD080 : 0x7CC040), &RESTORE_FLT[FLT_TRACK1], 4, &stBytes);
+			WriteProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD080 : 0x7CC040), &global.restore_float[FLOAT_TRACK1], 4, &stBytes);
 
 		if (i == RESTORE_TRACK2)
-			WriteProcessMemory(phandle,(LPVOID)(!CWA ? 0x7DD084 : 0x7CC044), &RESTORE_FLT[FLT_TRACK2], 4, &stBytes);
+			WriteProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD084 : 0x7CC044), &global.restore_float[FLOAT_TRACK2], 4, &stBytes);
 
-		if (i == RESTORE_MAXLIGHTS)
-			WriteProcessMemory(phandle,(LPVOID)(!CWA ? 0x7DD08C : 0x7CC04C), &RESTORE_INT[INT_MAXLIGHTS], 4, &stBytes);
+		if (i == RESTORE_MAX_LIGHTS)
+			WriteProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD08C : 0x7CC04C), &global.restore_int[INT_MAX_LIGHTS], 4, &stBytes);
 
-		if (i == RESTORE_TIDE)
-		{
-			int base = !DedicatedServer ? (!CWA ? 0x72F8E4 : 0x72295C) : (!CWA ? 0x6BE184 : 0x6BE144);
-			WriteProcessMemory(phandle,(LPVOID)base, &RESTORE_FLT[FLT_TIDE], 4, &stBytes);
-		};
+		if (i == RESTORE_TIDE) {
+			int base = !global.DedicatedServer ? (!global.CWA ? 0x72F8E4 : 0x72295C) : (!global.CWA ? 0x6BE184 : 0x6BE144);
+			WriteProcessMemory(phandle,(LPVOID)base, &global.restore_float[FLOAT_TIDE], 4, &stBytes);
+		}
 
-		if (i == RESTORE_WAVE)
-		{
-			int base = !DedicatedServer ? (!CWA ? 0x72F8E4 : 0x72295C) : (!CWA ? 0x6BE184 : 0x6BE144);
-			WriteProcessMemory(phandle,(LPVOID)(base+4), &RESTORE_FLT[FLT_WAVE], 4, &stBytes);
-		};
+		if (i == RESTORE_WAVE) {
+			int base = !global.DedicatedServer ? (!global.CWA ? 0x72F8E4 : 0x72295C) : (!global.CWA ? 0x6BE184 : 0x6BE144);
+			WriteProcessMemory(phandle,(LPVOID)(base+4), &global.restore_float[FLOAT_WAVE], 4, &stBytes);
+		}
 
-		if (i == RESTORE_EXTCAMPOS)
-		{
+		if (i == RESTORE_EXTCAMPOS) {
 			int pointer[]	= {0x7894A0,0,0};
 			int	modif[]		= {0x5C, 0x69C};
 			int	max_loops	= (sizeof(pointer) / sizeof(pointer[0])) - 1;
 
-			if (CWA) 
+			if (global.CWA) 
 				pointer[0] = 0x778590,
 				modif[1]   = 0x6A0;
 
@@ -2502,104 +2360,97 @@ void RestoreMemValues(bool isMissionEditor)
 				pointer[i+1] = pointer[i+1] + modif[i];
 			};
 			
-			WriteProcessMemory(phandle, (LPVOID)(extCamOffset+0), &RESTORE_FLT[FLT_EXTCAMX], 4, &stBytes);
-			WriteProcessMemory(phandle, (LPVOID)(extCamOffset+4), &RESTORE_FLT[FLT_EXTCAMZ], 4, &stBytes);
-			WriteProcessMemory(phandle, (LPVOID)(extCamOffset+8), &RESTORE_FLT[FLT_EXTCAMY], 4, &stBytes);
-		};
+			WriteProcessMemory(phandle, (LPVOID)(global.extCamOffset+0), &global.restore_float[FLOAT_EXTCAMX], 4, &stBytes);
+			WriteProcessMemory(phandle, (LPVOID)(global.extCamOffset+4), &global.restore_float[FLOAT_EXTCAMZ], 4, &stBytes);
+			WriteProcessMemory(phandle, (LPVOID)(global.extCamOffset+8), &global.restore_float[FLOAT_EXTCAMY], 4, &stBytes);
+		}
 
-		if (i == RESTORE_WAVESPEED)
-		{
-			int base	= !DedicatedServer ? (!CWA ? 0x7B3ACC : 0x7A2C0C) : (!CWA ? 0x73392C : 0x7339C4);
+		if (i == RESTORE_WAVE_SPEED) {
+			int base	= !global.DedicatedServer ? (!global.CWA ? 0x7B3ACC : 0x7A2C0C) : (!global.CWA ? 0x73392C : 0x7339C4);
 			int pointer = 0;
 
-			ReadProcessMemory (phandle, (LPVOID)base,			   &pointer,					4, &stBytes);
-			WriteProcessMemory(phandle, (LPVOID)(pointer+0x2059C), &RESTORE_FLT[FLT_WAVESPEED], 4, &stBytes);
-		};
+			ReadProcessMemory (phandle, (LPVOID)base, &pointer, 4, &stBytes);
+			WriteProcessMemory(phandle, (LPVOID)(pointer+0x2059C), &global.restore_float[FLOAT_WAVE_SPEED], 4, &stBytes);
+		}
 
-		if (!isMissionEditor)
-		{
-			if (i == RESTORE_FOVLEFT)
-			{
-				int base	= !CWA ? 0x789D88 : 0x778E80;
+		if (!isMissionEditor) {
+			if (i == RESTORE_FOVLEFT) {
+				int base    = !global.CWA ? 0x789D88 : 0x778E80;
 				int pointer = 0;
 
 				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
 				pointer += 0x40;
 
-				WriteProcessMemory(phandle,(LPVOID)pointer, &RESTORE_FLT[FLT_FOVLEFT], 4, &stBytes);
-			};
+				WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_FOVLEFT], 4, &stBytes);
+			}
 		
-			if (i == RESTORE_FOVTOP)
-			{
-				int base	= !CWA ? 0x789D88 : 0x778E80;
+			if (i == RESTORE_FOVTOP) {
+				int base    = !global.CWA ? 0x789D88 : 0x778E80;
 				int pointer = 0;
 
 				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
 				pointer += 0x40 + 4;
 
-				WriteProcessMemory(phandle,(LPVOID)pointer, &RESTORE_FLT[FLT_FOVTOP], 4, &stBytes);
-			};
+				WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_FOVTOP], 4, &stBytes);
+			}
 		
-			if (i == RESTORE_UITOPLEFTX)
-			{
-				int base	= !CWA ? 0x789D88 : 0x778E80;
+			if (i == RESTORE_UITOPLEFTX) {
+				int base    = !global.CWA ? 0x789D88 : 0x778E80;
 				int pointer = 0;
 
 				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
 				pointer += 0x40 + 8;
 
-				WriteProcessMemory(phandle,(LPVOID)pointer, &RESTORE_FLT[FLT_UITOPLEFTX], 4, &stBytes);
-			};
+				WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_UITOPLEFTX], 4, &stBytes);
+			}
 		
 			if (i == RESTORE_UITOPLEFTY)
 			{
-				int base	= !CWA ? 0x789D88 : 0x778E80;
+				int base    = !global.CWA ? 0x789D88 : 0x778E80;
 				int pointer = 0;
 
 				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
 				pointer += 0x40 + 12;
 
-				WriteProcessMemory(phandle,(LPVOID)pointer, &RESTORE_FLT[FLT_UITOPLEFTY], 4, &stBytes);
-			};
+				WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_UITOPLEFTY], 4, &stBytes);
+			}
 		
-			if (i == RESTORE_UIBOTTOMRIGHTX)
-			{
-				int base	= !CWA ? 0x789D88 : 0x778E80;
+			if (i == RESTORE_UIBOTTOMRIGHTX) {
+				int base    = !global.CWA ? 0x789D88 : 0x778E80;
 				int pointer = 0;
 
 				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
 				pointer += 0x40 + 16;
 
-				WriteProcessMemory(phandle,(LPVOID)pointer, &RESTORE_FLT[FLT_UIBOTTOMRIGHTX], 4, &stBytes);
-			};
+				WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_UIBOTTOMRIGHTX], 4, &stBytes);
+			}
 		
-			if (i == RESTORE_UIBOTTOMRIGHTY)
-			{
-				int base	= !CWA ? 0x789D88 : 0x778E80;
+			if (i == RESTORE_UIBOTTOMRIGHTY) {
+				int base    = !global.CWA ? 0x789D88 : 0x778E80;
 				int pointer = 0;
 
 				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
 				pointer += 0x40 + 20;
 
-				WriteProcessMemory(phandle,(LPVOID)pointer, &RESTORE_FLT[FLT_UIBOTTOMRIGHTY], 4, &stBytes);
-			};
-		};
+				WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_UIBOTTOMRIGHTY], 4, &stBytes);
+			}
+		}
 
 		if (i >= RESTORE_HUD) {
 			int pointer = 0;
 			
 			if ((i-RESTORE_HUD) >= CHAT_X) {
-				switch(Game_Version) {
+				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : pointer=0x7831B0; break;
 					case VER_199 : pointer=0x7722A0; break;
-					case VER_201 : pointer=Game_Exe_Address+0x6FFCC0; break;
+					case VER_201 : pointer=global.exe_address+0x6FFCC0; break;
 				}
 			} else {
-				switch(Game_Version) {
+				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : pointer=0x79F8D0; break;
 					case VER_199 : pointer=0x78E9C8; break;
-					case VER_201 : pointer=Game_Exe_Address+0x6D8240; break;
-				};
+					case VER_201 : pointer=global.exe_address+0x6D8240; break;
+				}
 
 				ReadProcessMemory(phandle, (LPVOID)(pointer+0x0), &pointer, 4, &stBytes);
 				ReadProcessMemory(phandle, (LPVOID)(pointer+0x8), &pointer, 4, &stBytes);
@@ -2607,18 +2458,18 @@ void RestoreMemValues(bool isMissionEditor)
 
 			if (pointer != 0) {
 				if (IsNumberInArray((i-RESTORE_HUD),hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0])))
-					WriteProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i-RESTORE_HUD]), &RESTORE_HUD_INT[i-RESTORE_HUD], 4, &stBytes);
+					WriteProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i-RESTORE_HUD]), &global.restore_hud_int[i-RESTORE_HUD], 4, &stBytes);
 				else
-					WriteProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i-RESTORE_HUD]), &RESTORE_HUD_FLT[i-RESTORE_HUD], 4, &stBytes);
+					WriteProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i-RESTORE_HUD]), &global.restore_hud_int[i-RESTORE_HUD], 4, &stBytes);
 			}
 		}
 
 		if (!isMissionEditor  ||  isMissionEditor && (i<RESTORE_FOVLEFT || i>RESTORE_UIBOTTOMRIGHTY))
-			RESTORE_MEM[i] = 0;
-	};
+			global.restore_memory[i] = 0;
+	}
 
 	CloseHandle(phandle);
-};
+}
 
 
 
@@ -2796,98 +2647,6 @@ strnatcasecmp(nat_char const *a, nat_char const *b) {
 }
 
 
-void String_init(String &str)
-{
-	memset(str.stack, 0, 512);
-	str.pointer        = str.stack;
-	str.current_length = 0;
-	str.maximal_length = 512;
-	str.heap           = false;
-	return;
-};
-
-int String_allocate(String &str, int new_maximal_length)
-{
-	if (str.maximal_length >= new_maximal_length)
-		return 0;
-
-	char *new_pointer;
-
-	if (!str.heap) {
-		new_pointer = (char *) malloc(new_maximal_length);
-
-		if (new_pointer == NULL)
-			return new_maximal_length;
-
-		memset(new_pointer, 0, new_maximal_length);
-		memcpy(new_pointer, str.pointer, str.current_length);
-		str.heap = true;
-	} else {
-		new_pointer = (char *) realloc(str.pointer, new_maximal_length);
-		if (new_pointer == NULL)
-			return new_maximal_length;
-	}
-
-	str.pointer        = new_pointer;
-	str.maximal_length = new_maximal_length;
-	return 0;
-};
-
-int String_append(String &str, char *text) 
-{
-	int text_length = strlen(text) + 1;
-	int new_length  = str.current_length + text_length;
-
-	if (new_length >= str.maximal_length) {
-		int new_maximal_length = str.current_length + (text_length<512 ? 512 : text_length);
-		if (String_allocate(str, new_maximal_length) != 0)
-			return new_maximal_length;
-	}
-
-	memcpy(str.pointer+str.current_length, text, text_length);
-	str.current_length = new_length - 1;
-
-	return 0;
-};
-
-int String_append_quotes(String &str, char *left, char *text, char *right)
-{
-	String_append(str, left);
-
-	char *quote = strchr(text, '\"');
-
-	if (quote == NULL) 
-		String_append(str, text); 
-	else {
-		int pos     = 0;
-		int lastPos = 0;
-		int len     = strlen(text);
-		
-		do {
-			pos       = quote - text;
-			text[pos] = '\0';
-			String_append(str, text+lastPos);
-			String_append(str, "\"\"");
-			text[pos] = '\"';
-			lastPos = pos + 1;
-		} while(quote = strchr(text+lastPos, '\"'));
-
-		if (lastPos < len)
-			String_append(str, text+lastPos);
-
-	};
-
-	String_append(str, right);
-	return 0;
-};
-
-void String_end(String &str)
-{
-	if (str.heap)
-		free(str.pointer);
-}
-
-
 int VerifyPath(char **ptr_filename, String &str, int options, int CommandID, HANDLE out) 
 {
 	int i             = 0;
@@ -2992,7 +2751,7 @@ int VerifyPath(char **ptr_filename, String &str, int options, int CommandID, HAN
 					if (root_dir)
 						*ptr_filename += 3;
 					else {
-						String_append(str, MissionPath);
+						String_append(str, global.mission_path);
 						String_append(str, *ptr_filename);
 						*ptr_filename = str.pointer;
 					}
@@ -3001,7 +2760,7 @@ int VerifyPath(char **ptr_filename, String &str, int options, int CommandID, HAN
 			}
 
 	return ILLEGAL_PATH;
-};
+}
 
 //https://stackoverflow.com/questions/11413860/best-string-hashing-function-for-short-filenames
 unsigned int fnv_hash(unsigned int hash, char* text, int text_length)
@@ -3010,7 +2769,7 @@ unsigned int fnv_hash(unsigned int hash, char* text, int text_length)
         hash = (hash*16777619) ^ text[i];
 
     return hash;
-};
+}
 
 void PurgeComments(char *text, int string_start, int string_end) {
 	int comment_start = -1;

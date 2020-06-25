@@ -670,7 +670,7 @@ case C_CLIPBOARD_CUTFILE:
 	GetCurrentDirectory(MAX_PATH, pwd);
 
 	int pwd_len          = strlen(pwd);
-	int all_files_length = strlen(com) + (pwd_len+strlen(MissionPath)+2) * (numP-2);
+	int all_files_length = strlen(com) + (pwd_len+strlen(global.mission_path)+2) * (numP-2);
 	int copied_files     = 0;
 	int check_mode       = SUPPRESS_ERROR | (CommandID==C_CLIPBOARD_COPYFILE ? ALLOW_GAME_ROOT_DIR : RESTRICT_TO_MISSION_DIR);
 
@@ -903,7 +903,7 @@ case C_CLIPBOARD_PASTEFILE:
 
 	int buf_dest_len = buf_destination.current_length;
 	int pwd_len      = strlen(pwd);
-	int mission_len  = strlen(MissionPath);
+	int mission_len  = strlen(global.mission_path);
 	int name_start   = 0;
 	ErrorWithinError = true;
 
@@ -933,7 +933,7 @@ case C_CLIPBOARD_PASTEFILE:
 				relative_path  = absolute_path;
 				is_game_dir    = true;
 
-				if (strncmpi(absolute_path, MissionPath, mission_len) == 0)
+				if (strncmpi(absolute_path, global.mission_path, mission_len) == 0)
 					relative_path += mission_len;
 				else {
 					memcpy(absolute_path-3, "..\\", 3);

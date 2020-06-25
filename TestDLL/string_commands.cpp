@@ -237,9 +237,9 @@ break;
 case C_STRING_LENGTH2:
 { // Return the number of characters in a string
 
-	char tmp[16] = "";
-	sprintf(tmp, "%d", strlen(com)-12);
-	QWrite(tmp, out);
+	char output[16] = "";
+	sprintf(output, "%d", strlen(com)-12);
+	QWrite(output, out);
 }
 break;
 
@@ -255,55 +255,54 @@ break;
 case C_STRING_REPLACE:
 { // Replace text in a given string
 
-	// Read arguments
-	char *text         = "";
-	char *find         = "";
-	char *replace      = "";
-	bool caseSensitive = false;
-	bool matchWord     = false;
+	char *source        = "";
+	char *to_find       = "";
+	char *replace_with  = "";
+	bool case_sensitive = false;
+	bool match_word     = false;
 
 	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+		char *name  = stripq(par[i]);
+		char *colon = strchr(name, ':');
 
-		if (pch == NULL) 
+		if (colon == NULL) 
 			continue;
 
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = arg + pos + 1;
+		int pos     = colon - name;
+		name[pos]   = '\0';
+		char *value = name + pos + 1;
 
-		if (strcmpi(arg,"text") == 0) {
-			text = val;
-			continue;
-		}
-
-		if (strcmpi(arg,"find") == 0) {
-			find = val;
+		if (strcmpi(name,"text") == 0) {
+			source = value;
 			continue;
 		}
 
-		if (strcmpi(arg,"replace") == 0) {
-			replace = val;
+		if (strcmpi(name,"find") == 0) {
+			to_find = value;
 			continue;
 		}
 
-		if (strcmpi(arg,"caseSensitive") == 0) {
-			caseSensitive = String2Bool(val);
+		if (strcmpi(name,"replace") == 0) {
+			replace_with = value;
 			continue;
 		}
 
-		if (strcmpi(arg,"matchWord") == 0) {
-			matchWord = String2Bool(val);
+		if (strcmpi(name, "caseSensitive") == 0) {
+			case_sensitive = String2Bool(value);
+			continue;
+		}
+
+		if (strcmpi(name, "matchWord") == 0) {
+			match_word = String2Bool(value);
 			continue;
 		}
 	}
 
-	char *rep = str_replace(text, find, replace, matchWord, caseSensitive);
+	char *result = str_replace(source, to_find, replace_with, match_word, case_sensitive);
 
-	if (rep != NULL) {
-		QWrite(rep, out);
-		free(rep);
+	if (result != NULL) {
+		QWrite(result, out);
+		free(result);
 	}
 }
 break;

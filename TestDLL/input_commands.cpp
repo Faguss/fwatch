@@ -242,10 +242,10 @@ case C_INPUT_MULTI:
 	// MEM GETCURSOR --------------------------------------------------------------------------------
 	float X=-1, Y=-1;
 	int offset = 0;
-	switch(Game_Version) {
+	switch(game_version) {
 		case VER_196 : offset=0x79E94C; break;
 		case VER_199 : offset=0x78DA44; break;
-		case VER_201 : offset=Game_Exe_Address+0x71611C; break;
+		case VER_201 : offset=global.exe_address+0x71611C; break;
 	}
 	if (offset != 0) {
 		ReadProcessMemory(phandle, (LPVOID)offset,	   &X, 4, &stBytes);
@@ -257,7 +257,7 @@ case C_INPUT_MULTI:
 	// MEM GETSCROLL --------------------------------------------------------------------------------
 	offset = 0; 
 	int scroll=0;
-	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
+	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, global.pid);
 	MODULEENTRY32 xModule;
  
 	if (hSnap != INVALID_HANDLE_VALUE)
@@ -283,9 +283,9 @@ case C_INPUT_MULTI:
 	//-----------------------------------------------------------------------------------------------
 
 	// MEM GETJOYSTICK ------------------------------------------------------------------------------
-	if (Game_Version != VER_201) {
+	if (game_version != VER_201) {
 		int i=0, but=0, pov=0, povAngle=65535,
-			base = !CWA ? 0x79E994 : 0x78DA8C;
+			base = !global.CWA ? 0x79E994 : 0x78DA8C;
 
 		float axisX=0, axisY=0, axisZ=0, axisR1=0, axisR2=0;
 		ReadProcessMemory(phandle, (LPVOID)base,	 &axisX, 4, &stBytes);
@@ -297,7 +297,7 @@ case C_INPUT_MULTI:
 		if (axisR1==0) axisR1=axisR2;
 		sprintf(tmp, "%s,[%.6f,%.6f,%.6f,%.6f,[", tmp,axisX,axisY,axisZ,axisR1);
 
-		base = !CWA ? 0x79E96C : 0x78DA64;
+		base = !global.CWA ? 0x79E96C : 0x78DA64;
 		for (i=0; i<8; i++)
 		{	
 			ReadProcessMemory(phandle, (LPVOID)base, &but, 1, &stBytes);
@@ -305,7 +305,7 @@ case C_INPUT_MULTI:
 			base += 4;
 		};
 
-		base = !CWA ? 0x79E95C : 0x78DA4C;
+		base = !global.CWA ? 0x79E95C : 0x78DA4C;
 		for (i=0; i<8; i++)
 		{
 			ReadProcessMemory(phandle,(LPVOID)(base+i),&pov,1,&stBytes);
@@ -338,13 +338,13 @@ case C_INPUT_MULTI:
 	//-----------------------------------------------------------------------------------------------
 
 	// MEM GETSPEEDKEY ------------------------------------------------------------------------------
-	if (Game_Version != VER_201) {
+	if (game_version != VER_201) {
 		int offset_[] = {0x0, 0x8, 0x4, 0xC}, 
 			weight[] = {3, 2, 1, -2}, 
 			max_loops = sizeof(offset_) / sizeof(offset_[0]),
 			speed=0, quantity=0, current=0;
 		
-		int base = !CWA ? 0x79E9C2 : 0x78DABA;
+		int base = !global.CWA ? 0x79E9C2 : 0x78DABA;
 
 		for (int i=0; i<max_loops; i++)
 		{

@@ -8,46 +8,24 @@
 #include <process.h>
 
 
-
-
-
-//v1.13 global variables to differentiate between OFP and CWA
-extern bool CWA;
-extern bool DedicatedServer;
-extern char GameWindowName[32];
-extern char GameServerName[32];
-extern char MissionPath[256];	//1.15
-extern bool ErrorLog_Enabled;	//1.15
-extern bool ErrorLog_Started;	//1.15
-extern char* com_ptr;			//v1.15
-extern int  RESTORE_INT[2];		//v1.15
-extern float RESTORE_FLT[26];	//v1.15
-extern bool RESTORE_BYT[27];	//v1.15
-extern bool RESTORE_MEM[105];	//v1.15 
-extern int PathSqfTime;			//v1.15
-extern char lastMissionPath[256];//v1.15
-extern int extCamOffset;		//v1.15
-extern int Game_Version;		//v1.16
-extern int Game_Exe_Address;	//v1.16
-
 static enum RESTORE_MEM_COMMANDS
 {
 	RESTORE_BRIGHTNESS,		//0
-	RESTORE_OSHADOWS,		//1
-	RESTORE_VSHADOWS,		//2
+	RESTORE_OBJECT_SHADOWS,	//1
+	RESTORE_VEHICLE_SHADOWS,//2
 	RESTORE_CLOUDLETS,		//3
 	RESTORE_BULLETS,		//4
 	RESTORE_CADET = 14,		//14
 	RESTORE_VETERAN = 26,	//26
 	RESTORE_RADAR = 38,		//38
-	RESTORE_MAXOBJ,			//39
+	RESTORE_MAX_OBJECTS,	//39
 	RESTORE_TRACK1,			//40
 	RESTORE_TRACK2,			//41
-	RESTORE_MAXLIGHTS,		//42
+	RESTORE_MAX_LIGHTS,		//42
 	RESTORE_TIDE,			//43
 	RESTORE_WAVE,			//44
 	RESTORE_EXTCAMPOS,		//45
-	RESTORE_WAVESPEED,		//46
+	RESTORE_WAVE_SPEED,		//46
 	RESTORE_FOVLEFT,		//47
 	RESTORE_FOVTOP,			//48
 	RESTORE_UITOPLEFTX,		//49
@@ -58,40 +36,40 @@ static enum RESTORE_MEM_COMMANDS
 };
 static enum RESTORE_MEM_INTEGERS
 {
-	INT_MAXOBJ,			//0
-	INT_MAXLIGHTS		//1
+	INT_MAX_OBJECTS,	//0
+	INT_MAX_LIGHTS		//1
 };
 static enum RESTORE_MEM_FLOATS
 {
-	FLT_BRIGHTNESS,		//0
-	FLT_BULLETS,		//1
-	FLT_RADAR = 11,		//11
-	FLT_TRACK1,			//12
-	FLT_TRACK2,			//13
-	FLT_TIDE,			//14
-	FLT_WAVE,			//15
-	FLT_EXTCAMX,		//16
-	FLT_EXTCAMY,		//17
-	FLT_EXTCAMZ,		//18
-	FLT_WAVESPEED,		//19
-	FLT_FOVLEFT,		//20
-	FLT_FOVTOP,			//21
-	FLT_UITOPLEFTX,		//22
-	FLT_UITOPLEFTY,		//23
-	FLT_UIBOTTOMRIGHTX,	//24
-	FLT_UIBOTTOMRIGHTY	//25
+	FLOAT_BRIGHTNESS,		//0
+	FLOAT_BULLETS,			//1
+	FLOAT_RADAR = 11,		//11
+	FLOAT_TRACK1,			//12
+	FLOAT_TRACK2,			//13
+	FLOAT_TIDE,				//14
+	FLOAT_WAVE,				//15
+	FLOAT_EXTCAMX,			//16
+	FLOAT_EXTCAMY,			//17
+	FLOAT_EXTCAMZ,			//18
+	FLOAT_WAVE_SPEED,		//19
+	FLOAT_FOVLEFT,			//20
+	FLOAT_FOVTOP,			//21
+	FLOAT_UITOPLEFTX,		//22
+	FLOAT_UITOPLEFTY,		//23
+	FLOAT_UIBOTTOMRIGHTX,	//24
+	FLOAT_UIBOTTOMRIGHTY	//25
 };
 static enum RESTORE_MEM_BYTES
 {
-	BYT_OSHADOWS,		//0
-	BYT_VSHADOWS,		//1
-	BYT_CLOUDLETS,		//2
-	BYT_CADET,			//3
-	BYT_VETERAN = 15	//15
+	BYTE_OBJECT_SHADOWS,	//0
+	BYTE_VEHICLE_SHADOWS,	//1
+	BYTE_CLOUDLETS,			//2
+	BYTE_CADET,				//3
+	BYTE_VETERAN = 15		//15
 };
 static enum GAME_VERSION 
 {
-	UNKNOWN,
+	VER_UNKNOWN,
 	VER_196,
 	VER_199,
 	VER_201
@@ -157,10 +135,242 @@ static enum UI_ELEMENTS
 	ARRAY_SIZE
 };
 
+static const char hud_names[][40] = 
+{
+	"ACTION_X",
+	"ACTION_Y",
+	"ACTION_W",
+	"ACTION_H",
+	"ACTION_ROWS",
+	"ACTION_COLORBACK",
+	"ACTION_COLORTEXT",
+	"ACTION_COLORSEL",
+	"ACTION_FONT",
+	"ACTION_SIZE",
+	"RADIOMENU_X",
+	"RADIOMENU_Y",
+	"RADIOMENU_W",
+	"RADIOMENU_H",
+	"TANK_X",
+	"TANK_Y",
+	"TANK_W",
+	"TANK_H",
+	"RADAR_X",
+	"RADAR_Y",
+	"RADAR_W",
+	"RADAR_H",
+	"COMPASS_X",
+	"COMPASS_Y",
+	"COMPASS_W",
+	"COMPASS_H",
+	"HINT_X",
+	"HINT_Y",
+	"HINT_W",
+	"HINT_H",
+	"LEADER_X",
+	"LEADER_Y",
+	"LEADER_W",
+	"LEADER_H",
+	"GROUPDIR_X",
+	"GROUPDIR_Y",
+	"GROUPDIR_W",
+	"GROUPDIR_H",
+	"CHAT_X",
+	"CHAT_Y",
+	"CHAT_W",
+	"CHAT_H",
+	"CHAT_ROWS",
+	"CHAT_COLORGLOBAL",
+	"CHAT_COLORSIDE",
+	"CHAT_COLORTEAM",
+	"CHAT_COLORVEHICLE",
+	"CHAT_COLORDIRECT",
+	"CHAT_COLORBACK",
+	"CHAT_FONT",
+	"CHAT_SIZE",
+	"CHAT_ENABLE"
+};
+
+static const int hud_int_list[] = 
+{
+	ACTION_ROWS,
+	ACTION_COLORBACK,
+	ACTION_COLORTEXT,
+	ACTION_COLORSEL,
+	ACTION_FONT,
+	CHAT_ROWS,
+	CHAT_COLORGLOBAL,
+	CHAT_COLORSIDE,
+	CHAT_COLORTEAM,
+	CHAT_COLORVEHICLE,
+	CHAT_COLORDIRECT,
+	CHAT_COLORBACK,
+	CHAT_FONT,
+	CHAT_ENABLE
+};
+
+static const int hud_color_list[] = 
+{
+	ACTION_COLORBACK,
+	ACTION_COLORTEXT,
+	ACTION_COLORSEL,
+	CHAT_COLORGLOBAL,
+	CHAT_COLORSIDE,
+	CHAT_COLORTEAM,
+	CHAT_COLORVEHICLE,
+	CHAT_COLORDIRECT,
+	CHAT_COLORBACK
+};
+
+static const int hud_offset[] = 
+{
+	0x368,
+	0x36C,
+	0x370,
+	0x374,
+	0x378,
+	0x37C,
+	0x380,
+	0x384,
+	0x388,
+	0x38C,
+	0x394,
+	0x398,
+	0x39C,
+	0x3A0,
+	0x3A4,
+	0x3A8,
+	0x3AC,
+	0x3B0,
+	0x3B4,
+	0x3B8,
+	0x3BC,
+	0x3C0,
+	0x3C4,
+	0x3C8,
+	0x3CC,
+	0x3D0,
+	0x3E4,
+	0x3E8,
+	0x3EC,
+	0x3F0,
+	0x3F4,
+	0x3F8,
+	0x3FC,
+	0x400,
+	0x404,
+	0x408,
+	0x40C,
+	0x410,
+	0x0, 
+	0x4, 
+	0x8,
+	0xC,
+	0x10,
+	0x14,
+	0x18,
+	0x1C,
+	0x20,
+	0x24,
+	0x28,
+	0x2C,
+	0x30,
+	0x34
+};
+
+static const int hud_offset_num = sizeof(hud_offset) / sizeof(hud_offset[0]);
+
+// Global variables used in TestDLL
+struct GLOBAL_VARIABLES_TESTDLL {
+	int exe_index;
+	int exe_address;
+	bool is_server;
+
+	bool restore_memory[105];
+	bool restore_byte[27];
+	bool nomap;
+	bool CWA;
+	bool DedicatedServer;
+	bool ErrorLog_Enabled;
+	bool ErrorLog_Started;
+
+	char *com_ptr;
+	char mission_path[256];
+	char mission_path_previous[256];
+	int mission_path_savetime;
+	DWORD pid;
+
+	int extCamOffset;
+	int restore_int[2];
+	float restore_float[26];
+	int restore_hud_int[ARRAY_SIZE];
+	float restore_hud_float[ARRAY_SIZE];
+};
+
+static const char global_exe_name[][32] = {
+	"armaresistance.exe",
+	"coldwarassault.exe",
+	"flashpointresistance.exe",
+	"ofp.exe",
+	"flashpointbeta.exe",
+	"operationflashpoint.exe",
+	"operationflashpointbeta.exe",
+	"armaresistance_server.exe",
+	"coldwarassault_server.exe",
+	"ofpr_server.exe"
+};
+
+static const char global_window_name[][32] = {
+	"ArmA Resistance",
+	"Cold War Assault",
+	"Operation Flashpoint",
+	"ArmA Resistance Console",
+	"Cold War Assault Console",
+	"Operation Flashpoint Console"
+};
+
+static const char *global_exe_window[] = {
+	global_window_name[0],
+	global_window_name[1],
+	global_window_name[2],
+	global_window_name[2],
+	global_window_name[2],
+	global_window_name[2],
+	global_window_name[2],
+	global_window_name[3],
+	global_window_name[4],
+	global_window_name[5]
+};
+
+static const int global_exe_version[] = {
+	VER_201,
+	VER_199,
+	VER_196,
+	VER_196,
+	VER_196,
+	VER_196,
+	VER_196,
+	VER_201,
+	VER_199,
+	VER_196
+};
+
+static const int global_exe_num    = sizeof(global_exe_version) / sizeof(global_exe_version[0]);
+static const int global_window_num = sizeof(global_window_name) / sizeof(global_window_name[0]);
+static const int global_client_num = global_exe_num - 3;
+
+static const int String_init_len = 512;
+
+struct String {
+	char *pointer;
+	char stack[String_init_len];
+	int current_length;
+	int maximal_length;
+	bool heap;
+};
 
 
-extern int RESTORE_HUD_INT[ARRAY_SIZE];
-extern float RESTORE_HUD_FLT[ARRAY_SIZE];
+
 
 
 
@@ -173,7 +383,7 @@ TESTDLL_API void RemoveHook();
 
 // for dllmain.cpp
 void DebugMessage(char *first, ...); 
-extern bool nomap;
+//extern bool nomap;
 
 #define WH_KEYBOARD_LL 13
 typedef struct {
@@ -218,7 +428,7 @@ void  fdbGet2(char* file, char* var, int CommandID, HANDLE out);							//v1.1
 void listDirFiles (char* path, HANDLE out, int mode, int systime, int CommandID);
 
 //1.11
-int findProcess(char* name);
+DWORD findProcess(const char* exe_name);
 
 //1.12
 char* str_replace(const char *strbuf, const char *strold, const char *strnew, int matchWord, int caseSens);
@@ -249,7 +459,9 @@ bool IsWhiteSpace(char *txt);
 bool String2Bool(char *txt);
 char* strtok3(char* str, int CommandID);
 void GetFirstTwoWords(char* text, char* buffer, int maxSize);
-bool IsNumberInArray(int number, int *array, int max_loops);
+
+// Find integer in an integer array
+bool IsNumberInArray(int number, const int* array, int array_size);
 void CorrectStringPos(int *start, int *end, int length, bool endSet, bool lengthSet, int textSize);
 int GetCharType(char c);
 void RestoreMemValues(bool isMissionEditor);
@@ -264,22 +476,15 @@ static int strnatcmp0(nat_char const *a, nat_char const *b, int fold_case);
 int strnatcmp(nat_char const *a, nat_char const *b);
 int strnatcasecmp(nat_char const *a, nat_char const *b);
 
-//1.16
-struct String {
-	char stack[512];
-	char *pointer;
-	int current_length;
-	int maximal_length;
-	bool heap;
-};
-
 void String_init(String &str);
-void String_end(String &str);
+int String_allocate(String &str, int new_maximal_length);
 int String_append(String &str, char *text);
 int String_append_quotes(String &str, char *left, char *text, char *right);
-int String_allocate(String &str, int new_maximal_length);
+void String_end(String &str);
+int String_readfile(String &str, char *path);
 int VerifyPath(char **ptr_filename, String &str, int mode, int CommandID, HANDLE out);
 unsigned int fnv_hash (unsigned int hash, char* text, int text_length);
 void PurgeComments(char *text, int string_start, int string_end);
 char* Output_Nested_Array(char *temp, int level, char *output_strings_name, int j, int *subclass_count);
 int DeleteWrapper(char *refcstrRootDirectory);
+

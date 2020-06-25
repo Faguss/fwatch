@@ -17,9 +17,9 @@ void __cdecl watchFile(void *p);
 // This function is called when OFP tries to access a filename starting with "scripts\:"
 // with the rest of the filename as the "command" parameter. It must return a file handle
 // for OFP to execute after finished.
-HANDLE HandleCommand(char *command) {
+HANDLE HandleCommand(char *command, bool nomap) {
 
-	if(nomap) {
+	if (nomap) {
 		// With -nomap parameter OFP uses createfile/readfile so a pipe works
 
 		// Create a pipe where all our stuff will be written on to, this is much faster than a temp file...

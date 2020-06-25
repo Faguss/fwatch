@@ -5,19 +5,19 @@
 case C_MEM_GETCURSOR:
 { // Get mouse cursor position from memory
 
-	float X    = -1;
-	float Y    = -1;
-	int offset = 0;
+	float X     = -1;
+	float Y     = -1;
+	int address = 0;
 
-	switch(Game_Version) {
-		case VER_196 : offset=0x79E94C; break;
-		case VER_199 : offset=0x78DA44; break;
-		case VER_201 : offset=Game_Exe_Address+0x71611C; break;
+	switch(game_version) {
+		case VER_196 : address=0x79E94C; break;
+		case VER_199 : address=0x78DA44; break;
+		case VER_201 : address=global.exe_address+0x71611C; break;
 	}
 
-	if (offset != 0) {
-		ReadProcessMemory(phandle, (LPVOID)offset,	   &X, 4, &stBytes);
-		ReadProcessMemory(phandle, (LPVOID)(offset+4), &Y, 4, &stBytes);
+	if (address != 0) {
+		ReadProcessMemory(phandle, (LPVOID)address,	    &X, 4, &stBytes);
+		ReadProcessMemory(phandle, (LPVOID)(address+4), &Y, 4, &stBytes);
 	}
 
 	char tmp[32] = "";
@@ -37,21 +37,21 @@ case C_MEM_SETCURSOR:
 	if (numP < 4) {
 		QWrite(":mem setcursor ERROR - not enough parameters", out);
 		break;
-	};
-
-	float X    = (float)atof(par[2]) * 2 - 1;
-	float Y    = (float)atof(par[3]) * 2 - 1;
-	int offset = 0;
-
-	switch(Game_Version) {
-		case VER_196 : offset=0x79E94C; break;
-		case VER_199 : offset=0x78DA44; break;
-		case VER_201 : offset=Game_Exe_Address+0x71611C; break;
 	}
 
-	if (offset != 0) {
-		WriteProcessMemory(phandle, (LPVOID)offset,		&X, 4, &stBytes);
-		WriteProcessMemory(phandle, (LPVOID)(offset+4), &Y, 4, &stBytes);
+	float X     = (float)atof(par[2]) * 2 - 1;
+	float Y     = (float)atof(par[3]) * 2 - 1;
+	int address = 0;
+
+	switch(game_version) {
+		case VER_196 : address=0x79E94C; break;
+		case VER_199 : address=0x78DA44; break;
+		case VER_201 : address=global.exe_address+0x71611C; break;
+	}
+
+	if (address != 0) {
+		WriteProcessMemory(phandle, (LPVOID)address,     &X, 4, &stBytes);
+		WriteProcessMemory(phandle, (LPVOID)(address+4), &Y, 4, &stBytes);
 	}
 }
 break;
@@ -64,29 +64,31 @@ break;
 case C_MEM_GETWORLD:
 { // Read island shortcut from memory
 
-	bool extended = false;
+	char island[80] = "";
+	int address     = 0;
+	
+	switch(game_version) {
+		case VER_196 : address=!global.DedicatedServer ? 0x7DD130 : 0x75A3E8;
+		case VER_199 : address=!global.DedicatedServer ? 0x7CC0F0 : 0x75A478;
+	}
 
-	if (numP > 2)
-		if (strcmpi(par[2],"extended")==0)
-			extended = true;
+	if (!address)
+		break;
 
-	char IslandShort[80] = "";
-	int offset			 = !DedicatedServer ? (!CWA ? 0x7DD130 : 0x7CC0F0) : (!CWA ? 0x75A3E8 : 0x75A478);
+	ReadProcessMemory(phandle, (LPVOID)address, &island, 80, &stBytes);
 
-	ReadProcessMemory(phandle, (LPVOID)offset, &IslandShort, 80, &stBytes);
-
-	if (!extended)
-		QWrite(IslandShort, out);
-	else
-	{
+	// Simple or extended info
+	if (numP<=2 || strcmpi(par[2],"extended")!=0)
+		QWrite(island, out);
+	else {
 		QWrite("[\"", out);
-		QWrite(IslandShort, out);
+		QWrite(island, out);
 
 		// Get island size
-		int base		= !CWA ? 0x7B3ACC : 0x7A2C0C;
-		int pointer		= 0;
-		int landSize	= 0;
-		char tmp[128]	= "";
+		int base      = !global.CWA ? 0x7B3ACC : 0x7A2C0C;
+		int pointer   = 0;
+		int landSize  = 0;
+		char tmp[128] = "";
 
 		ReadProcessMemory(phandle, (LPVOID)base,			&pointer, 4, &stBytes);
 		ReadProcessMemory(phandle, (LPVOID)(pointer+0x8),	&landSize, 4, &stBytes);
@@ -96,7 +98,7 @@ case C_MEM_GETWORLD:
 		float latitude  = 0;
 		float longitude = 0;
 
-		base = !DedicatedServer ? (!CWA ? 0x79F8D0 : 0x78E9C8) : (!CWA ? 0x71F738 : 0x71F788);
+		base = !global.DedicatedServer ? (!global.CWA ? 0x79F8D0 : 0x78E9C8) : (!global.CWA ? 0x71F738 : 0x71F788);
 		ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
 		pointer += 0x7DC;
 
@@ -105,7 +107,7 @@ case C_MEM_GETWORLD:
 
 		sprintf(tmp, "\",%d,%.6f,%.6f]", landSize, rad2deg(latitude), rad2deg(longitude));
 		QWrite(tmp, out);
-	};
+	}
 }
 break;
 
@@ -130,7 +132,7 @@ case C_MEM_SETMAP:
 	if (strcmpi(par[2],"false") == 0) 
 		strcpy(par[2], "0");
 
-	int base = !CWA ? 0x7B4028 : 0x7A3128;
+	int base = !global.CWA ? 0x7B4028 : 0x7A3128;
 	int	pointer = 0;
 	int	isMap = atoi(par[2]);
 
@@ -154,8 +156,8 @@ case C_MEM_GETGRAPHICS:
 { // Get graphic options values from memory
 
 	int pointer		= 0;
-	int base		= !CWA ? 0x789D88 : 0x778E80;
-	int resBase		= !CWA ? 0x7DCFB4 : 0x7CBF74;
+	int base		= !global.CWA ? 0x789D88 : 0x778E80;
+	int resBase		= !global.CWA ? 0x7DCFB4 : 0x7CBF74;
 	int resX		= 0;
 	int resY		= 0;
 	int refresh		= 0;
@@ -215,7 +217,7 @@ case C_MEM_GETGRAPHICS:
 
 
 	// Framerate, terrain detail, visual quality
-	base = !CWA ? 0x7B4028 : 0x7A3128;
+	base = !global.CWA ? 0x7B4028 : 0x7A3128;
 	ReadProcessMemory(phandle, (LPVOID)base,			&pointer, 4, &stBytes);
 	ReadProcessMemory(phandle, (LPVOID)(pointer+0x524), &frame,	4, &stBytes);
 	ReadProcessMemory(phandle, (LPVOID)(pointer+0x53C), &vqual,	4, &stBytes);
@@ -223,19 +225,19 @@ case C_MEM_GETGRAPHICS:
 
 
 	// Visibility
-	ReadProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD068 : 0x7CC028), &horizonz, 4, &stBytes);
-	ReadProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD06C : 0x7CC02C), &objectsz, 4, &stBytes);
-	ReadProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD06C : 0x7CC02C), &radarz, 4, &stBytes);
-	ReadProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD070 : 0x7CC030), &visibility, 4, &stBytes);
-	ReadProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD074 : 0x7CC034), &radarz, 4, &stBytes);
-	ReadProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD078 : 0x7CC038), &shadowsz, 4, &stBytes);
-	ReadProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD07C : 0x7CC03C), &maxobjects, 4, &stBytes);
-	ReadProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD080 : 0x7CC040), &tracktimetolive, 4, &stBytes);
-	ReadProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD084 : 0x7CC044), &invtracktimetolive, 4, &stBytes);
-	ReadProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD08C : 0x7CC04C), &maxlights, 4, &stBytes);
+	ReadProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD068 : 0x7CC028), &horizonz, 4, &stBytes);
+	ReadProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD06C : 0x7CC02C), &objectsz, 4, &stBytes);
+	ReadProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD06C : 0x7CC02C), &radarz, 4, &stBytes);
+	ReadProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD070 : 0x7CC030), &visibility, 4, &stBytes);
+	ReadProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD074 : 0x7CC034), &radarz, 4, &stBytes);
+	ReadProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD078 : 0x7CC038), &shadowsz, 4, &stBytes);
+	ReadProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD07C : 0x7CC03C), &maxobjects, 4, &stBytes);
+	ReadProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD080 : 0x7CC040), &tracktimetolive, 4, &stBytes);
+	ReadProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD084 : 0x7CC044), &invtracktimetolive, 4, &stBytes);
+	ReadProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD08C : 0x7CC04C), &maxlights, 4, &stBytes);
 
 	// Object shadows, Vehicle Shadows, Cloudlets
-	base = !CWA ? 0x79F8D0 : 0x78E9C8;
+	base = !global.CWA ? 0x79F8D0 : 0x78E9C8;
 	ReadProcessMemory(phandle, (LPVOID)base,			&pointer,4, &stBytes);
 	ReadProcessMemory(phandle, (LPVOID)(pointer+0x5B0), &oshad,	 1, &stBytes);
 	ReadProcessMemory(phandle, (LPVOID)(pointer+0x5B1), &vshad,	 1, &stBytes);
@@ -243,11 +245,11 @@ case C_MEM_GETGRAPHICS:
 
 
 	// Blood
-	base = !CWA ? 0x7DD0BB : 0x7CC07B;
+	base = !global.CWA ? 0x7DD0BB : 0x7CC07B;
 	ReadProcessMemory(phandle, (LPVOID)base, &blood, 1, &stBytes);
 
 	// Current terrain detail
-	base = !CWA ? 0x7B3ACC : 0x7A2C0C;
+	base = !global.CWA ? 0x7B3ACC : 0x7A2C0C;
 	ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
 	ReadProcessMemory(phandle, (LPVOID)(pointer+0x2C), &current_terrain_detail, 4, &stBytes);
 
@@ -307,9 +309,9 @@ case C_MEM_SETGRAPHICS:
 	int p1 = 0;
 	int	p2 = 0;
 	int	p3 = 0;
-	int b1 = !CWA ? 0x789D88 : 0x778E80;
-	int b2 = !CWA ? 0x7B4028 : 0x7A3128;
-	int b3 = !CWA ? 0x79F8D0 : 0x78E9C8;
+	int b1 = !global.CWA ? 0x789D88 : 0x778E80;
+	int b2 = !global.CWA ? 0x7B4028 : 0x7A3128;
+	int b3 = !global.CWA ? 0x79F8D0 : 0x78E9C8;
 
 	ReadProcessMemory(phandle, (LPVOID)b1, &p1, 4, &stBytes);
 	ReadProcessMemory(phandle, (LPVOID)b2, &p2, 4, &stBytes);
@@ -317,17 +319,16 @@ case C_MEM_SETGRAPHICS:
 
 
 	// Parse input
-	for (int i=2; i<numP; i++)
-	{
+	for (int i=2; i<numP; i++) {
 		char *arg = stripq(par[i]);
 		char *pch = strchr(arg, ':');
 
 		if (pch==NULL) 
 			continue;
 
-		int pos		= pch - arg;
-		arg[pos]	= '\0';
-		char *val	=	Trim(arg+pos+1);
+		int pos   = pch - arg;
+		arg[pos]  = '\0';
+		char *val =	Trim(arg+pos+1);
 
 		if (strcmpi(val, "true") == 0) 
 			strcpy(val, "1");
@@ -335,9 +336,9 @@ case C_MEM_SETGRAPHICS:
 		if (strcmpi(val, "false") == 0) 
 			strcpy(val,"0");
 
-		float val1	= (float)atof(val);
-		int val2	= atoi(val);
-		int val3	= val2;
+		float val1 = (float)atof(val);
+		int val2   = atoi(val);
+		int val3   = val2;
 
 		if (val2 < 0) 
 			val2 = 0;
@@ -347,175 +348,161 @@ case C_MEM_SETGRAPHICS:
 		
 
 		// Modify
-		if (strcmpi(arg,"brightness") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_BRIGHTNESS])
-			{
-				RESTORE_MEM[RESTORE_BRIGHTNESS] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(p1+0x2C), &RESTORE_FLT[FLT_BRIGHTNESS], 4, &stBytes);
-			};
-			WriteProcessMemory(phandle,(LPVOID)(p1+0x2C), &val1, 4, &stBytes);
-		};
+		if (strcmpi(arg,"brightness") == 0) {
+			if (!global.restore_memory[RESTORE_BRIGHTNESS]) {
+				global.restore_memory[RESTORE_BRIGHTNESS] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(p1+0x2C), &global.restore_float[FLOAT_BRIGHTNESS], 4, &stBytes);
+			}
 
-		/*if (strcmpi(arg,"gamma")==0 || strcmpi(arg,"g")==0)
+			WriteProcessMemory(phandle,(LPVOID)(p1+0x2C), &val1, 4, &stBytes);
+		}
+
+		/*game doesn't refresh gamma changes
+		if (strcmpi(arg,"gamma")==0 || strcmpi(arg,"g")==0)
 			WriteProcessMemory(phandle,(LPVOID)(p1+0x758), &val, 4, &stBytes);*/
 
 		if (strcmpi(arg,"visualquality") == 0)
 			WriteProcessMemory(phandle,(LPVOID)(p2+0x53C), &val1, 4, &stBytes);
 
-		if (strcmpi(arg,"objectshadows") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_OSHADOWS])
-			{
-				RESTORE_MEM[RESTORE_OSHADOWS] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(p3+0x5B0), &RESTORE_BYT[BYT_OSHADOWS], 1, &stBytes);
-			};
+		if (strcmpi(arg,"objectshadows") == 0) {
+			if (!global.restore_memory[RESTORE_OBJECT_SHADOWS]) {
+				global.restore_memory[RESTORE_OBJECT_SHADOWS] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(p3+0x5B0), &global.restore_byte[BYTE_OBJECT_SHADOWS], 1, &stBytes);
+			}
+
 			WriteProcessMemory(phandle, (LPVOID)(p3+0x5B0), &val2, 1, &stBytes);
-		};
+		}
 
-		if (strcmpi(arg,"vehicleshadows") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_VSHADOWS])
-			{
-				RESTORE_MEM[RESTORE_VSHADOWS] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(p3+0x5B1), &RESTORE_BYT[BYT_VSHADOWS], 1, &stBytes);
-			};
+		if (strcmpi(arg,"vehicleshadows") == 0) {
+			if (!global.restore_memory[RESTORE_VEHICLE_SHADOWS]) {
+				global.restore_memory[RESTORE_VEHICLE_SHADOWS] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(p3+0x5B1), &global.restore_byte[BYTE_VEHICLE_SHADOWS], 1, &stBytes);
+			}
+
 			WriteProcessMemory(phandle, (LPVOID)(p3+0x5B1), &val2, 1, &stBytes);
-		};
+		}
 
-		if (strcmpi(arg,"cloudlets") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_CLOUDLETS])
-			{
-				RESTORE_MEM[RESTORE_CLOUDLETS] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(p3+0x5B2), &RESTORE_BYT[BYT_CLOUDLETS], 1, &stBytes);
-			};
+		if (strcmpi(arg,"cloudlets") == 0) {
+			if (!global.restore_memory[RESTORE_CLOUDLETS]) {
+				global.restore_memory[RESTORE_CLOUDLETS] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(p3+0x5B2), &global.restore_byte[BYTE_CLOUDLETS], 1, &stBytes);
+			}
+
 			WriteProcessMemory(phandle, (LPVOID)(p3+0x5B2), &val2, 1, &stBytes);
-		};
+		}
 
 
 		if (strcmpi(arg,"landscapedistance") == 0)
-			WriteProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD068 : 0x7CC028), &val1, 4, &stBytes);
+			WriteProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD068 : 0x7CC028), &val1, 4, &stBytes);
 
 		if (strcmpi(arg,"objectsdistance") == 0)
-			WriteProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD06C : 0x7CC02C), &val1, 4, &stBytes);
+			WriteProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD06C : 0x7CC02C), &val1, 4, &stBytes);
 
 		if (strcmpi(arg,"viewdistance") == 0)
-			WriteProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD070 : 0x7CC030), &val1, 4, &stBytes);
+			WriteProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD070 : 0x7CC030), &val1, 4, &stBytes);
 
-		if (strcmpi(arg,"radardistance") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_RADAR])
-			{
-				RESTORE_MEM[RESTORE_RADAR] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(!CWA ? 0x7DD074 : 0x7CC034), &RESTORE_FLT[FLT_RADAR], 4, &stBytes);
-			};
-			WriteProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD074 : 0x7CC034), &val1, 4, &stBytes);
-		};
+		if (strcmpi(arg,"radardistance") == 0) {
+			if (!global.restore_memory[RESTORE_RADAR]) {
+				global.restore_memory[RESTORE_RADAR] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD074 : 0x7CC034), &global.restore_float[FLOAT_RADAR], 4, &stBytes);
+			}
+
+			WriteProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD074 : 0x7CC034), &val1, 4, &stBytes);
+		}
 
 		if (strcmpi(arg,"shadowsdistance") == 0)
-			WriteProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD078 : 0x7CC038), &val1, 4, &stBytes);
+			WriteProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD078 : 0x7CC038), &val1, 4, &stBytes);
 
-		if (strcmpi(arg,"maxobjects") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_MAXOBJ])
-			{
-				RESTORE_MEM[RESTORE_MAXOBJ] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(!CWA ? 0x7DD07C : 0x7CC03C), &RESTORE_INT[INT_MAXOBJ], 4, &stBytes);
-			};		
-			WriteProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD07C : 0x7CC03C), &val3, 4, &stBytes);
-		};
+		if (strcmpi(arg,"maxobjects") == 0) {
+			if (!global.restore_memory[RESTORE_MAX_OBJECTS]) {
+				global.restore_memory[RESTORE_MAX_OBJECTS] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD07C : 0x7CC03C), &global.restore_int[INT_MAX_OBJECTS], 4, &stBytes);
+			}
 
-		if (strcmpi(arg,"tracktime") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_TRACK1])
-			{
-				RESTORE_MEM[RESTORE_TRACK1] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(!CWA ? 0x7DD080 : 0x7CC040), &RESTORE_FLT[FLT_TRACK1], 4, &stBytes);
-			};	
-			WriteProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD080 : 0x7CC040), &val1, 4, &stBytes);
-		};
+			WriteProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD07C : 0x7CC03C), &val3, 4, &stBytes);
+		}
 
-		if (strcmpi(arg,"invtracktime") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_TRACK2])
-			{
-				RESTORE_MEM[RESTORE_TRACK2] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(!CWA ? 0x7DD084 : 0x7CC044), &RESTORE_FLT[FLT_TRACK2], 4, &stBytes);
-			};	
-			WriteProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD084 : 0x7CC044), &val1, 4, &stBytes);
-		};
+		if (strcmpi(arg,"tracktime") == 0) {
+			if (!global.restore_memory[RESTORE_TRACK1]) {
+				global.restore_memory[RESTORE_TRACK1] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD080 : 0x7CC040), &global.restore_float[FLOAT_TRACK1], 4, &stBytes);
+			}
 
-		if (strcmpi(arg,"maxlights") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_MAXLIGHTS])
-			{
-				RESTORE_MEM[RESTORE_MAXLIGHTS] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(!CWA ? 0x7DD08C : 0x7CC04C), &RESTORE_INT[INT_MAXLIGHTS], 4, &stBytes);
-			};	
-			WriteProcessMemory(phandle, (LPVOID)(!CWA ? 0x7DD08C : 0x7CC04C), &val3, 4, &stBytes);
-		};
+			WriteProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD080 : 0x7CC040), &val1, 4, &stBytes);
+		}
 
-		if (strcmpi(arg,"fovLeft") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_FOVLEFT])
-			{
-				RESTORE_MEM[RESTORE_FOVLEFT] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40), &RESTORE_FLT[FLT_FOVLEFT], 4, &stBytes);
-			};
+		if (strcmpi(arg,"invtracktime") == 0) {
+			if (!global.restore_memory[RESTORE_TRACK2]) {
+				global.restore_memory[RESTORE_TRACK2] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD084 : 0x7CC044), &global.restore_float[FLOAT_TRACK2], 4, &stBytes);
+			}
+
+			WriteProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD084 : 0x7CC044), &val1, 4, &stBytes);
+		}
+
+		if (strcmpi(arg,"maxlights") == 0) {
+			if (!global.restore_memory[RESTORE_MAX_LIGHTS]) {
+				global.restore_memory[RESTORE_MAX_LIGHTS] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD08C : 0x7CC04C), &global.restore_int[INT_MAX_LIGHTS], 4, &stBytes);
+			}
+
+			WriteProcessMemory(phandle, (LPVOID)(!global.CWA ? 0x7DD08C : 0x7CC04C), &val3, 4, &stBytes);
+		}
+
+		if (strcmpi(arg,"fovLeft") == 0) {
+			if (!global.restore_memory[RESTORE_FOVLEFT]) {
+				global.restore_memory[RESTORE_FOVLEFT] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40), &global.restore_float[FLOAT_FOVLEFT], 4, &stBytes);
+			}
+
 			WriteProcessMemory(phandle, (LPVOID)(p1+0x40), &val1, 4, &stBytes);
-		};
+		}
 
-		if (strcmpi(arg,"fovTop") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_FOVTOP])
-			{
-				RESTORE_MEM[RESTORE_FOVTOP] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+4), &RESTORE_FLT[FLT_FOVTOP], 4, &stBytes);
-			};
+		if (strcmpi(arg,"fovTop") == 0) {
+			if (!global.restore_memory[RESTORE_FOVTOP]) {
+				global.restore_memory[RESTORE_FOVTOP] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+4), &global.restore_float[FLOAT_FOVTOP], 4, &stBytes);
+			}
+
 			WriteProcessMemory(phandle, (LPVOID)(p1+0x40+4), &val1, 4, &stBytes);
-		};
+		}
 
-		if (strcmpi(arg,"uiTopLeftX") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_UITOPLEFTX])
-			{
-				RESTORE_MEM[RESTORE_UITOPLEFTX] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+8), &RESTORE_FLT[FLT_UITOPLEFTX], 4, &stBytes);
-			};
+		if (strcmpi(arg,"uiTopLeftX") == 0) {
+			if (!global.restore_memory[RESTORE_UITOPLEFTX]) {
+				global.restore_memory[RESTORE_UITOPLEFTX] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+8), &global.restore_float[FLOAT_UITOPLEFTX], 4, &stBytes);
+			}
+
 			WriteProcessMemory(phandle, (LPVOID)(p1+0x40+8), &val1, 4, &stBytes);
-		};
+		}
 
-		if (strcmpi(arg,"uiTopLeftY") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_UITOPLEFTY])
-			{
-				RESTORE_MEM[RESTORE_UITOPLEFTY] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+12), &RESTORE_FLT[FLT_UITOPLEFTY], 4, &stBytes);
-			};
+		if (strcmpi(arg,"uiTopLeftY") == 0) {
+			if (!global.restore_memory[RESTORE_UITOPLEFTY]) {
+				global.restore_memory[RESTORE_UITOPLEFTY] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+12), &global.restore_float[FLOAT_UITOPLEFTY], 4, &stBytes);
+			}
+
 			WriteProcessMemory(phandle, (LPVOID)(p1+0x40+12), &val1, 4, &stBytes);
-		};
+		}
 
-		if (strcmpi(arg,"uiBottomRightX") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_UIBOTTOMRIGHTX])
-			{
-				RESTORE_MEM[RESTORE_UIBOTTOMRIGHTX] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+16), &RESTORE_FLT[FLT_UIBOTTOMRIGHTX], 4, &stBytes);
-			};
+		if (strcmpi(arg,"uiBottomRightX") == 0) {
+			if (!global.restore_memory[RESTORE_UIBOTTOMRIGHTX]) {
+				global.restore_memory[RESTORE_UIBOTTOMRIGHTX] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+16), &global.restore_float[FLOAT_UIBOTTOMRIGHTX], 4, &stBytes);
+			}
+
 			WriteProcessMemory(phandle, (LPVOID)(p1+0x40+16), &val1, 4, &stBytes);
-		};
+		}
 
-		if (strcmpi(arg,"uiBottomRightY") == 0)
-		{
-			if (!RESTORE_MEM[RESTORE_UIBOTTOMRIGHTY])
-			{
-				RESTORE_MEM[RESTORE_UIBOTTOMRIGHTY] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+20), &RESTORE_FLT[FLT_UIBOTTOMRIGHTY], 4, &stBytes);
-			};
+		if (strcmpi(arg,"uiBottomRightY") == 0) {
+			if (!global.restore_memory[RESTORE_UIBOTTOMRIGHTY]) {
+				global.restore_memory[RESTORE_UIBOTTOMRIGHTY] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+20), &global.restore_float[FLOAT_UIBOTTOMRIGHTY], 4, &stBytes);
+			}
+
 			WriteProcessMemory(phandle, (LPVOID)(p1+0x40+20), &val1, 4, &stBytes);
-		};
-	};
+		}
+	}
 }
 break;
 
@@ -533,7 +520,7 @@ case C_MEM_GETJOYSTICK:
 	int but			= 0;
 	int pov			= 0;
 	int povAngle	= 65535;
-	int	base		= !CWA ? 0x79E994 : 0x78DA8C;
+	int	base		= !global.CWA ? 0x79E994 : 0x78DA8C;
 
 
 	// AXES --------------------------------------------------------
@@ -555,7 +542,7 @@ case C_MEM_GETJOYSTICK:
 	// -------------------------------------------------------------
 
 	// BUTTONS -----------------------------------------------------
-	base = !CWA ? 0x79E96C : 0x78DA64;
+	base = !global.CWA ? 0x79E96C : 0x78DA64;
 
 	for (i=0; i<8; i++)
 	{	
@@ -577,7 +564,7 @@ case C_MEM_GETJOYSTICK:
 
 	// POV CHECK ---------------------------------------------------
 	// one of the eight bytes indicates pov status
-	base = !CWA ? 0x79E95C : 0x78DA4C;
+	base = !global.CWA ? 0x79E95C : 0x78DA4C;
 
 	for (i=0; i<8; i++)
 	{
@@ -620,7 +607,7 @@ case C_MEM_GETSCROLL:
 { // Get mouse scroll counter value from memory
 
 	// Get list of modules under this game instance
-	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
+	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, global.pid);
 	MODULEENTRY32 xModule;
  
 	if (hSnap == INVALID_HANDLE_VALUE) 
@@ -691,7 +678,7 @@ case C_MEM_SETPLAYERANIM:
 	int pointer[4]	= {0x7B4028, 0, 0, 0};
 	int	modif[3]	= {0x788, 0x8, 0x708};
 
-	if (CWA) 
+	if (global.CWA) 
 		pointer[0]	= 0x7A3128, 
 		modif[0]	= 0x78C, 
 		modif[2]	= 0x718;
@@ -715,7 +702,7 @@ case C_MEM_SETPLAYERANIM:
 			i			= -1;
 			restartPath = true;
 
-			if (!CWA) 
+			if (!global.CWA) 
 				modif[0] = 0x784; 
 			else 
 				pointer[0]	= 0x78E9C8,
@@ -741,7 +728,7 @@ case C_MEM_GETCINEMABORDER:
 { // Get showCinemaBorder value from the memory
 
 	int cin		= 0;
-	int offset	= !CWA ? 0x76D1D0 : 0x755678;
+	int offset	= !global.CWA ? 0x76D1D0 : 0x755678;
 
 	ReadProcessMemory(phandle, (LPVOID)offset, &cin, 1, &stBytes);
 	QWrite(getBool(cin),out);
@@ -758,7 +745,7 @@ case C_MEM_GETRESPAWNTYPE:
 
 	int pointer		= 0;
 	int respawn		= 0;
-	int	base		= !DedicatedServer ? (!CWA ? 0x78337C : 0x77246C) : (!CWA ? 0x7031D8 : 0x703228);
+	int	base		= !global.DedicatedServer ? (!global.CWA ? 0x78337C : 0x77246C) : (!global.CWA ? 0x7031D8 : 0x703228);
 
 	ReadProcessMemory(phandle, (LPVOID)base,			&pointer,    4, &stBytes);
 	ReadProcessMemory(phandle, (LPVOID)(pointer+0x6C),	&respawn,    1, &stBytes);
@@ -785,7 +772,7 @@ case C_MEM_SETRESPAWNTYPE:
 
 	int pointer = 0;
 	int respawn = atoi(par[2]);
-	int base	= !CWA ? 0x78337C : 0x77246C;
+	int base	= !global.CWA ? 0x78337C : 0x77246C;
 		/*base = !DedicatedServer ? (!CWA ? 0x78337C : 0x77246C) : (!CWA ? 0x7031D8 : 0x703228);*/
 		
 	ReadProcessMemory (phandle, (LPVOID)base,			&pointer, 4, &stBytes);
@@ -803,7 +790,7 @@ case C_MEM_GETRESSIDE:
 
 	int west = 0;
 	int east = 0;
-	int	base = !DedicatedServer ? (!CWA ? 0x786850 : 0x775938 ) : (!CWA ? 0x7066A8 : 0x7066F8);
+	int	base = !global.DedicatedServer ? (!global.CWA ? 0x786850 : 0x775938 ) : (!global.CWA ? 0x7066A8 : 0x7066F8);
 
 	ReadProcessMemory(phandle, (LPVOID)base,     &east, 4, &stBytes);
 	ReadProcessMemory(phandle, (LPVOID)(base+4), &west, 4, &stBytes);
@@ -833,7 +820,7 @@ case C_MEM_GETDAYLIGHT:
 	float daybright = 0;
 	int pointer		= 0;
 	int pointer2	= 0;
-	int	base		= !DedicatedServer ? (!CWA ? 0x7B4028 : 0x7A3128 ) : (!CWA ? 0x733E88 : 0x733F20);
+	int	base		= !global.DedicatedServer ? (!global.CWA ? 0x7B4028 : 0x7A3128 ) : (!global.CWA ? 0x733E88 : 0x733F20);
 
 	ReadProcessMemory(phandle, (LPVOID)base,           &pointer,  4, &stBytes);
 	ReadProcessMemory(phandle, (LPVOID)(pointer+0xB0), &pointer2, 4, &stBytes);
@@ -867,11 +854,11 @@ case C_MEM_GETDATE:
 	int year	= 0;
 	int	off[] = 
 	{
-		!CWA ? 0x780608 : 0x76F7C8,
-		!CWA ? 0x7DD3FC : 0x7CC3BC, 
-		!CWA ? 0x7DD400 : 0x7CC3C0, 
-		!CWA ? 0x7DD408 : 0x7CC3C8, 
-		!CWA ? 0x7DD40C : 0x7CC3CC
+		!global.CWA ? 0x780608 : 0x76F7C8,
+		!global.CWA ? 0x7DD3FC : 0x7CC3BC, 
+		!global.CWA ? 0x7DD400 : 0x7CC3C0, 
+		!global.CWA ? 0x7DD408 : 0x7CC3C8, 
+		!global.CWA ? 0x7DD40C : 0x7CC3CC
 	};
 
 	ReadProcessMemory(phandle, (LPVOID)off[0], &year,    4, &stBytes);
@@ -904,7 +891,7 @@ case C_MEM_SETPLAYERVIEW:
 
 	int pointer = 0;
 	int mode	= -1;
-	int	base	= !CWA ? 0x7B4028 : 0x7A3128;
+	int	base	= !global.CWA ? 0x7B4028 : 0x7A3128;
 
 
 	// Convert string to number
@@ -944,10 +931,10 @@ case C_MEM_ERROR:
 	int modif[3]	= {0x68, 0x1C, 0};
 	int max_loops	= sizeof(pointer) / sizeof(pointer[0]) - 1;
 
-	switch(Game_Version) {
+	switch(game_version) {
 		case VER_196 : pointer[0]=0x789D88; break;
 		case VER_199 : pointer[0]=0x778E80; break;
-		case VER_201 : pointer[0]=Game_Exe_Address+0x6D6A10; break;
+		case VER_201 : pointer[0]=global.exe_address+0x6D6A10; break;
 	}
 
 	if (pointer[0] == 0)
@@ -1000,7 +987,7 @@ case C_MEM_SETPLAYERAIM:
 	int modif2[3]	= {0x784, 0x8, 0x474};
 	int max_loops	= sizeof(pointer) / sizeof(pointer[0]) - 1;
 
-	if (CWA) 
+	if (global.CWA) 
 		pointer[0]	= 0x78E9C8,
 		pointer2[0] = 0x7A3128,
 		modif[0]	= 0x8,
@@ -1011,7 +998,7 @@ case C_MEM_SETPLAYERAIM:
 	for (int i=0; i<max_loops; i++)
 	{
 		// There's one less loop in CWA version
-		if (!CWA  ||  CWA  &&  i<max_loops-1)
+		if (!global.CWA  ||  global.CWA  &&  i<max_loops-1)
 		{
 			ReadProcessMemory(phandle, (LPVOID)pointer[i], &pointer[i+1], 4, &stBytes);
 			pointer[i+1] = pointer[i+1] +  modif[i];
@@ -1024,7 +1011,7 @@ case C_MEM_SETPLAYERAIM:
 
 	// Parse input
 	i				= 0;
-	int j			= !CWA ? max_loops : max_loops-1;
+	int j			= !global.CWA ? max_loops : max_loops-1;
 	char *arguments = com+17;
 	char *pch		= strtok (arguments, "[,]\" ");
 
@@ -1097,21 +1084,18 @@ case C_MEM_MODLIST:
 //[[ifc22.dll + 0x2C154] + 0x0] + 0x0
 
 	// Get list of dll's
-	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
+	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, global.pid);
 
- 	if (hSnap == INVALID_HANDLE_VALUE) 
-	{
+ 	if (hSnap == INVALID_HANDLE_VALUE) {
 		QWrite("[]", out); 
 		break;
-	};
-
+	}
 	
 	MODULEENTRY32 xModule;
 	memset (&xModule, 0, sizeof(xModule));
 	xModule.dwSize = sizeof(xModule);
 
-	if (Module32First(hSnap, &xModule) == 0)
-	{
+	if (Module32First(hSnap, &xModule) == 0) {
 		CloseHandle(hSnap);
 		QWrite("[]", out);
 		break;
@@ -1123,10 +1107,8 @@ case C_MEM_MODLIST:
 	// Game arguments are stored in IFC22.dll - find it's address
 	int baseOffset = 0;
 
-	do 
-	{
-		if (lstrcmpi(xModule.szModule, (LPCTSTR)"ifc22.dll") == 0)
-		{
+	do {
+		if (lstrcmpi(xModule.szModule, (LPCTSTR)"ifc22.dll") == 0) {
 			// Read module base address
 			baseOffset = (int)xModule.modBaseAddr + 0x2C154;
 			break;
@@ -1229,115 +1211,100 @@ case C_MEM_SETDIFFICULTY:
 */
 
 	// Incorrect number of parameters
-	if (CommandID==C_MEM_GETDIFFICULTY  &&  numP<3) 
-	{
+	if (CommandID==C_MEM_GETDIFFICULTY  &&  numP<3) {
 		QWrite("[]", out); 
 		break;
-	};
+	}
 
-	if (CommandID==C_MEM_SETDIFFICULTY  &&  numP<4) 
-	{
+	if (CommandID==C_MEM_SETDIFFICULTY  &&  numP<4) {
 		QWrite("false", out); 
 		break;
-	};
+	}
 
 
 	bool SinglePlayer = strcmpi(par[2],"sp")==0 || strcmpi(par[2],"false")==0;
 	bool MultiPlayer  = strcmpi(par[2],"mp")==0 || strcmpi(par[2],"true")==0;
-	bool veteran	  = false;
-	int base		  = 0;
-	int pointer		  = 0;
-	int offset		  = 0;
-	int	offsets[][4]  =
-		{
-			{0x7DD0C8, 0x7DD0D4, 0x75A380, 0x75A38C},	//ofp
-			{0x7CC088, 0x7CC094, 0x75A410, 0x75A41C}	//cwa
-		};
+	bool veteran      = false;
+	int base          = 0;
+	int pointer       = 0;
+	int offset        = 0;
+	int	offsets[][4]  = 
+	{
+		{0x7DD0C8, 0x7DD0D4, 0x75A380, 0x75A38C},	//ofp
+		{0x7CC088, 0x7CC094, 0x75A410, 0x75A41C}	//cwa
+	};
 
 
 	// Select address from the array based on the arguments
-	if (SinglePlayer  ||  DedicatedServer)
-	{
-		if (CommandID==C_MEM_GETDIFFICULTY  &&  numP<4)		// not enough params
-		{
+	if (SinglePlayer  ||  global.DedicatedServer) {
+		if (CommandID==C_MEM_GETDIFFICULTY  &&  numP<4) {		// not enough params
 			QWrite("[]", out); 
 			break;
-		};
+		}
 
-		int i = !CWA ? 0 : 1;	// which game
+		int i = !global.CWA ? 0 : 1;	// which game
 		int j = 0;				// which difficulty
 
 		if (strcmpi(par[3],"veteran")==0  ||  strcmpi(par[3],"false")==0) 
 			veteran = true,
 			j++;
 
-		if (DedicatedServer) 
+		if (global.DedicatedServer) 
 			j += 2;
 
 		offset = offsets[i][j];
-	}
-	else 
-		if (MultiPlayer)
-		{
+	} else 
+		if (MultiPlayer) {
 			// player server
-			base = !CWA ? 0x783378 : 0x772468;
-			ReadProcessMemory(phandle, (LPVOID)base,			&pointer, 4, &stBytes);
-			ReadProcessMemory(phandle, (LPVOID)(pointer+0x60),	&offset,  4, &stBytes);
+			base = !global.CWA ? 0x783378 : 0x772468;
+			ReadProcessMemory(phandle, (LPVOID)base,           &pointer, 4, &stBytes);
+			ReadProcessMemory(phandle, (LPVOID)(pointer+0x60), &offset,  4, &stBytes);
 
 			// player client
-			if (offset == 0)
-			{
-				base = !CWA ? 0x78337C : 0x77246C;
+			if (offset == 0) {
+				base = !global.CWA ? 0x78337C : 0x77246C;
 				ReadProcessMemory(phandle, (LPVOID)base,			&pointer, 4, &stBytes);
 				ReadProcessMemory(phandle, (LPVOID)(pointer+0x60),	&offset,  4, &stBytes);
-			};
+			}
 
-			if (offset==0) 
-			{
+			if (offset==0) {
 				if (CommandID == C_MEM_GETDIFFICULTY)
 					QWrite("[]",out); 
 				else
 					QWrite("false",out);
 				break;
-			};
-		}
-		else 
-		{
+			}
+		} else {
 			if (CommandID == C_MEM_GETDIFFICULTY)
 				QWrite("[]",out); 
 			else
 				QWrite("false",out);
 			break;
-		};
+		}
 
 
 	// Now read memory
-	if (CommandID == C_MEM_GETDIFFICULTY)
-	{
+	if (CommandID == C_MEM_GETDIFFICULTY) {
 		// Read twelve bytes one by one
 		int setting = 0;
 		QWrite("[", out);
 
-		for (int i=0; i<12; i++)
-		{
+		for (int i=0; i<12; i++) {
 			ReadProcessMemory(phandle, (LPVOID)(offset+i), &setting,  1, &stBytes);
 
 			if (i > 0) 
 				QWrite(",",out);
 
 			QWrite(getBool(setting), out);
-		};
+		}
 
 		QWrite("]", out);
-	}
-	else
-	{
+	} else {
 		// Change twelve bytes one by one
-		int i		= 0;
-		char *pch	= strtok(par[4], "[,]\" ");
+		int i     = 0;
+		char *pch = strtok(par[4], "[,]\" ");
 
-		while (pch!=NULL  &&  i<12)
-		{
+		while (pch!=NULL  &&  i<12) {
 			int setting = -1;
 
 			if (strcmpi(pch,"false")==0  ||  strcmpi(pch,"0")==0) 
@@ -1346,24 +1313,22 @@ case C_MEM_SETDIFFICULTY:
 			if (strcmpi(pch,"true")==0  ||  strcmpi(pch,"1")==0) 
 				setting = 1;
 
-			if (setting >= 0) 
-			{
+			if (setting >= 0) {
 				int pos = veteran ? RESTORE_VETERAN : RESTORE_CADET;
-				int pos2= veteran ? BYT_VETERAN : BYT_CADET;
+				int pos2= veteran ? BYTE_VETERAN    : BYTE_CADET;
 
-				if ((SinglePlayer || DedicatedServer)  &&  !RESTORE_MEM[pos+i])
-				{	
-					RESTORE_MEM[pos+i] = 1;
-					ReadProcessMemory(phandle,(LPVOID)(offset+i), &RESTORE_BYT[pos2+i], 1, &stBytes);
-				};
+				if ((SinglePlayer || global.DedicatedServer)  &&  !global.restore_memory[pos+i]) {	
+					global.restore_memory[pos+i] = 1;
+					ReadProcessMemory(phandle,(LPVOID)(offset+i), &global.restore_byte[pos2+i], 1, &stBytes);
+				}
 
 				WriteProcessMemory(phandle, (LPVOID)(offset+i), &setting,  1, &stBytes);
-			};
+			}
 
 			pch = strtok(NULL, "[,]\" ");
 			i++;
-		};
-	};
+		}
+	}
 }
 break;
 
@@ -1378,7 +1343,7 @@ case C_MEM_SETRADIOBOX:
 	if (numP < 3) 
 		break;
 
-	int base		= !CWA ? 0x79F8D0 : 0x78E9C8;
+	int base		= !global.CWA ? 0x79F8D0 : 0x78E9C8;
 	int	pointer		= 0;
 	int pointer2	= 0;
 	int value		= 0;
@@ -1415,7 +1380,7 @@ case C_MEM_GETSPEEDKEY:
 	int	speed		= 0;
 	int quantity	= 0;
 	int current		= 0;
-	int	base		= !CWA ? 0x79E9C2 : 0x78DABA;
+	int	base		= !global.CWA ? 0x79E9C2 : 0x78DABA;
 		
 
 	// Read those four values
@@ -1499,7 +1464,7 @@ case C_MEM_SETSPEEDKEY:
 
 	int offset[]	= {0x0, 0x8, 0x4, 0xC};
 	int	max_loops	= sizeof(offset)/sizeof(offset[0]);
-	int	base		= !CWA ? 0x79E9C2 : 0x78DABA;
+	int	base		= !global.CWA ? 0x79E9C2 : 0x78DABA;
 	int	val			= 16256;
 	int	i			= -1;
 	
@@ -1554,7 +1519,7 @@ case C_MEM_GETPLAYERHATCH:
 	int	modif[3]	= {0x784, 0x8, 0x4CE};
 	int	max_loops	= sizeof(pointer) / sizeof(pointer[0]) - 1;
 
-	if (CWA) 
+	if (global.CWA) 
 		pointer[0]	= 0x7A3128, 
 		modif[2]	+= 0x10;
 
@@ -1636,7 +1601,7 @@ case C_MEM_SETPLAYERHATCH:
 	if (modif[2] == 0) 
 		break;
 
-	if (CWA) 
+	if (global.CWA) 
 		pointer[0]	= 0x7A3128, 
 		modif[2]	+= 0x10;
 
@@ -1696,7 +1661,7 @@ case C_MEM_GETPLAYERLADDER:
 	int	id			= -1;
 	float pos		= 0;
 
-	if (CWA) 
+	if (global.CWA) 
 		pointer[0]	= 0x775D88, 
 		modif[2]	= 0x750;
 
@@ -1736,7 +1701,7 @@ case C_MEM_SETPLAYERLADDER:
 	int	modif[3]	= {0x0, 0x8, 0x740};
 	int	max_loops	= sizeof(pointer) / sizeof(pointer[0]) - 1;
 
-	if (CWA) 
+	if (global.CWA) 
 		pointer[0]	= 0x775D88, 
 		modif[2]	= 0x750;
 
@@ -1794,10 +1759,10 @@ case C_MEM_MASTERSERVER:
 	int	inMenuOff    = 0;
 	int inMenu       = 0;
 
-	switch(Game_Version) {
+	switch(game_version) {
 		case VER_196 : master_base1=0x76EBC0; master_base2=0x775F58; inMenuOff=0x75E254; break;
 		case VER_199 : master_base1=0x756530; master_base2=0x75D7F0; inMenuOff=0x74B58C; break;
-		case VER_201 : master_base1=Game_Exe_Address+0x6C9298; master_base2=Game_Exe_Address+0x6C9560; break;
+		case VER_201 : master_base1=global.exe_address+0x6C9298; master_base2=global.exe_address+0x6C9560; break;
 	}
 
 	if (master_base1 == 0) {
@@ -1866,13 +1831,13 @@ case C_MEM_MISSIONINFO:
 
 	int offset[]=
 	{
-		!DedicatedServer ? (!CWA ? 0x7DD0E0 : 0x7CC0A0) : (!CWA ? 0x75A398 : 0x75A428),
-		!DedicatedServer ? (!CWA ? 0x7DD130 : 0x7CC0F0) : (!CWA ? 0x75A3E8 : 0x75A478),
-		!DedicatedServer ? (!CWA ? 0x7DD180 : 0x7CC140) : (!CWA ? 0x75A438 : 0x75A4C8),
-		!DedicatedServer ? (!CWA ? 0x78324C : 0x77233C) : (!CWA ? 0x7030AC : 0x7030FC),
-		!DedicatedServer ? (!CWA ? 0x786880 : 0x775968) : (!CWA ? 0x7066D8 : 0x706728),
-		!DedicatedServer ? (!CWA ? 0x786884 : 0x77596C) : (!CWA ? 0x7066DC : 0x70672C),
-		!CWA ? 0x786C30 : 0x775D18
+		!global.DedicatedServer ? (!global.CWA ? 0x7DD0E0 : 0x7CC0A0) : (!global.CWA ? 0x75A398 : 0x75A428),
+		!global.DedicatedServer ? (!global.CWA ? 0x7DD130 : 0x7CC0F0) : (!global.CWA ? 0x75A3E8 : 0x75A478),
+		!global.DedicatedServer ? (!global.CWA ? 0x7DD180 : 0x7CC140) : (!global.CWA ? 0x75A438 : 0x75A4C8),
+		!global.DedicatedServer ? (!global.CWA ? 0x78324C : 0x77233C) : (!global.CWA ? 0x7030AC : 0x7030FC),
+		!global.DedicatedServer ? (!global.CWA ? 0x786880 : 0x775968) : (!global.CWA ? 0x7066D8 : 0x706728),
+		!global.DedicatedServer ? (!global.CWA ? 0x786884 : 0x77596C) : (!global.CWA ? 0x7066DC : 0x70672C),
+		!global.CWA ? 0x786C30 : 0x775D18
 	};
 
 	int	modif[]=
@@ -1903,7 +1868,7 @@ case C_MEM_MISSIONINFO:
 			ReadProcessMemory(phandle, (LPVOID)offset[i], &nameSTR, 255, &stBytes);
 		else
 			// Otherwise read pointer
-			if (!DedicatedServer  || DedicatedServer && i<max_loops-1)
+			if (!global.DedicatedServer  || global.DedicatedServer && i<max_loops-1)
 			{
 				ReadProcessMemory(phandle, (LPVOID)offset[i], &temp, 4, &stBytes);	
 
@@ -1968,16 +1933,16 @@ case C_MEM_BULLETS:
 	};
 	int offset[] =
 	{
-		!DedicatedServer ? (!CWA ? 0x71D518 : 0x710520) : (!CWA ? 0x6ABDE8 : 0x6ABDA8),	//gravity acceleration	9.8065996170043945
-		!DedicatedServer ? (!CWA ? 0x5F1570 : 0x5F818C) : (!CWA ? 0x5374B8 : 0x537671),	//bullet lifetime		3
-		!DedicatedServer ? (!CWA ? 0x5F16D2 : 0x5F7ACB) : (!CWA ? 0x534F9C : 0x53517D),	//shell  lifetime		20
-		!DedicatedServer ? (!CWA ? 0x5F1527 : 0x4857B3) : (!CWA ? 0x533A91 : 0x533C4A),	//rocket lifetime		10
-		!DedicatedServer ? (!CWA ? 0x5F147B : 0x487867) : (!CWA ? 0x5357C7 : 0x5359A8),	//bomb lifetime			120
-		!DedicatedServer ? (!CWA ? 0x5F178F : 0x487986) : (!CWA ? 0x5371A1 : 0x53735A),	//smoke lifetime		60
-		!DedicatedServer ? (!CWA ? 0x5F12AD : 0x5F7D5D) : (!CWA ? 0x536D09 : 0x536EEA),	//flare lifetime		17
-		!DedicatedServer ? (!CWA ? 0x7137A0 : 0x7067A0) : (!CWA ? 0x6A66C0 : 0x6A66C0),	//flare duration		15
-		!DedicatedServer ? (!CWA ? 0x5F14BF : 0x485820) : (!CWA ? 0x5345F9 : 0x5347DA),	//pipebomb lifetime		3.402823466E38 (7F7FFFFF)
-		!DedicatedServer ? (!CWA ? 0x5F1818 : 0x5F789B) : (!CWA ? 0x5347F7 : 0x5349D8)	//timebomb lifetime		20
+		!global.DedicatedServer ? (!global.CWA ? 0x71D518 : 0x710520) : (!global.CWA ? 0x6ABDE8 : 0x6ABDA8),	//gravity acceleration	9.8065996170043945
+		!global.DedicatedServer ? (!global.CWA ? 0x5F1570 : 0x5F818C) : (!global.CWA ? 0x5374B8 : 0x537671),	//bullet lifetime		3
+		!global.DedicatedServer ? (!global.CWA ? 0x5F16D2 : 0x5F7ACB) : (!global.CWA ? 0x534F9C : 0x53517D),	//shell  lifetime		20
+		!global.DedicatedServer ? (!global.CWA ? 0x5F1527 : 0x4857B3) : (!global.CWA ? 0x533A91 : 0x533C4A),	//rocket lifetime		10
+		!global.DedicatedServer ? (!global.CWA ? 0x5F147B : 0x487867) : (!global.CWA ? 0x5357C7 : 0x5359A8),	//bomb lifetime			120
+		!global.DedicatedServer ? (!global.CWA ? 0x5F178F : 0x487986) : (!global.CWA ? 0x5371A1 : 0x53735A),	//smoke lifetime		60
+		!global.DedicatedServer ? (!global.CWA ? 0x5F12AD : 0x5F7D5D) : (!global.CWA ? 0x536D09 : 0x536EEA),	//flare lifetime		17
+		!global.DedicatedServer ? (!global.CWA ? 0x7137A0 : 0x7067A0) : (!global.CWA ? 0x6A66C0 : 0x6A66C0),	//flare duration		15
+		!global.DedicatedServer ? (!global.CWA ? 0x5F14BF : 0x485820) : (!global.CWA ? 0x5345F9 : 0x5347DA),	//pipebomb lifetime		3.402823466E38 (7F7FFFFF)
+		!global.DedicatedServer ? (!global.CWA ? 0x5F1818 : 0x5F789B) : (!global.CWA ? 0x5347F7 : 0x5349D8)	//timebomb lifetime		20
 	};
 	int max_loops = (sizeof(offset) / sizeof(offset[0]));
 
@@ -2012,10 +1977,10 @@ case C_MEM_BULLETS:
 		
 		if (set[i])
 		{
-			if (!RESTORE_MEM[RESTORE_BULLETS+i])
+			if (!global.restore_memory[RESTORE_BULLETS+i])
 			{
-				RESTORE_MEM[RESTORE_BULLETS+i] = 1;
-				ReadProcessMemory(phandle,(LPVOID)offset[i], &RESTORE_FLT[FLT_BULLETS+i], 4, &stBytes);
+				global.restore_memory[RESTORE_BULLETS+i] = 1;
+				ReadProcessMemory(phandle,(LPVOID)offset[i], &global.restore_float[FLOAT_BULLETS+i], 4, &stBytes);
 			};
 			
 			WriteProcessMemory(phandle, (LPVOID)offset[i], &value[i], 4, &stBytes);
@@ -2154,7 +2119,7 @@ case C_MEM_SETWEATHER:
 
 
 	int setIndex	= 0;
-	int base		= !DedicatedServer ? (!CWA ? 0x79F8D0 : 0x78E9C8) : (!CWA ? 0x71F738 : 0x71F788);
+	int base		= !global.DedicatedServer ? (!global.CWA ? 0x79F8D0 : 0x78E9C8) : (!global.CWA ? 0x71F738 : 0x71F788);
 	int pointer		= 0;
 	
 	// Find beginning of the weather values
@@ -2179,11 +2144,10 @@ case C_MEM_SETWEATHER:
 	int jump	= 0;
 	int value2	= 0;
 
-	base = !DedicatedServer ? (!CWA ? 0x7B3ACC : 0x7A2C0C) : (!CWA ? 0x73392C : 0x7339C4);
+	base = !global.DedicatedServer ? (!global.CWA ? 0x7B3ACC : 0x7A2C0C) : (!global.CWA ? 0x73392C : 0x7339C4);
 	ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
 
-	for (int offset=0x2054C;  offset<=0x2059C;  offset+=4, setIndex++)
-	{
+	for (int offset=0x2054C;  offset<=0x2059C;  offset+=4, setIndex++) {
 		// skip sky
 		if (offset == 0x20550)
 			offset += 4;
@@ -2192,22 +2156,18 @@ case C_MEM_SETWEATHER:
 		if (offset == 0x20594)
 			offset += 8;
 
-		if (set[setIndex])
-		{
+		if (set[setIndex]) {
 			// write floats
-			if (setIndex<16  ||  setIndex>20)
-			{
-				if (setIndex == 21)
-				{
-					if (!RESTORE_MEM[RESTORE_WAVESPEED])
-					{
-						RESTORE_MEM[RESTORE_WAVESPEED] = 1;
-						ReadProcessMemory(phandle,(LPVOID)(pointer+offset), &RESTORE_FLT[FLT_WAVESPEED], 4, &stBytes);
-					};
-				};
+			if (setIndex<16  ||  setIndex>20) {
+				if (setIndex == 21) {
+					if (!global.restore_memory[RESTORE_WAVE_SPEED]) {
+						global.restore_memory[RESTORE_WAVE_SPEED] = 1;
+						ReadProcessMemory(phandle,(LPVOID)(pointer+offset), &global.restore_float[FLOAT_WAVE_SPEED], 4, &stBytes);
+					}
+				}
 
 				WriteProcessMemory(phandle, (LPVOID)(pointer+offset), &valueFLT[setIndex], 4, &stBytes);
-			};
+			}
 
 			// write ints
 			if (setIndex == 16)
@@ -2220,50 +2180,48 @@ case C_MEM_SETWEATHER:
 				WriteProcessMemory(phandle, (LPVOID)(pointer+offset), &valueINT[2], 4, &stBytes);
 
 			// write float arrays
-			if (setIndex == 17)
-				WriteProcessMemory(phandle, (LPVOID)(pointer+offset),   &windSpeed[0], 4, &stBytes),
-				WriteProcessMemory(phandle, (LPVOID)(pointer+offset+4), &windSpeed[2], 4, &stBytes),
+			if (setIndex == 17) {
+				WriteProcessMemory(phandle, (LPVOID)(pointer+offset),   &windSpeed[0], 4, &stBytes);
+				WriteProcessMemory(phandle, (LPVOID)(pointer+offset+4), &windSpeed[2], 4, &stBytes);
 				WriteProcessMemory(phandle, (LPVOID)(pointer+offset+8), &windSpeed[1], 4, &stBytes);
+			}
 
-			if (setIndex == 19)
-				WriteProcessMemory(phandle, (LPVOID)(pointer+offset),   &gust[0], 4, &stBytes),
-				WriteProcessMemory(phandle, (LPVOID)(pointer+offset+4), &gust[2], 4, &stBytes),
+			if (setIndex == 19) {
+				WriteProcessMemory(phandle, (LPVOID)(pointer+offset),   &gust[0], 4, &stBytes);
+				WriteProcessMemory(phandle, (LPVOID)(pointer+offset+4), &gust[2], 4, &stBytes);
 				WriteProcessMemory(phandle, (LPVOID)(pointer+offset+8), &gust[1], 4, &stBytes);
-		};
+			}
+		}
 
 		// skip wind vectors
 		if (offset==0x20574  ||  offset==0x20584)
 			offset +=8;
-	};
+	}
 
 
 	// Tide and wave
 	DWORD old = 0;
-	base	  = !DedicatedServer ? (!CWA ? 0x72F8E4 : 0x72295C) : (!CWA ? 0x6BE184 : 0x6BE144);
+	base	  = !global.DedicatedServer ? (!global.CWA ? 0x72F8E4 : 0x72295C) : (!global.CWA ? 0x6BE184 : 0x6BE144);
 
-	if (set[22])
-	{
-		if (!RESTORE_MEM[RESTORE_TIDE])
-		{
-			RESTORE_MEM[RESTORE_TIDE] = 1;
-			ReadProcessMemory(phandle,(LPVOID)base, &RESTORE_FLT[FLT_TIDE], 4, &stBytes);
-		};
+	if (set[22]) {
+		if (!global.restore_memory[RESTORE_TIDE]) {
+			global.restore_memory[RESTORE_TIDE] = 1;
+			ReadProcessMemory(phandle,(LPVOID)base, &global.restore_float[FLOAT_TIDE], 4, &stBytes);
+		}
 
 		VirtualProtectEx(phandle, (LPVOID)base, 256, PAGE_EXECUTE_READWRITE, &old),
 		WriteProcessMemory(phandle, (LPVOID)base, &valueFLT[22], 4, &stBytes);
-	};
+	}
 
-	if (set[23])
-	{
-		if (!RESTORE_MEM[RESTORE_WAVE])
-		{
-			RESTORE_MEM[RESTORE_WAVE] = 1;
-			ReadProcessMemory(phandle,(LPVOID)(base+4), &RESTORE_FLT[FLT_WAVE], 4, &stBytes);
-		};
+	if (set[23]) {
+		if (!global.restore_memory[RESTORE_WAVE]) {
+			global.restore_memory[RESTORE_WAVE] = 1;
+			ReadProcessMemory(phandle,(LPVOID)(base+4), &global.restore_float[FLOAT_WAVE], 4, &stBytes);
+		}
 
 		VirtualProtectEx(phandle, (LPVOID)(base+4), 256, PAGE_EXECUTE_READWRITE, &old),
 		WriteProcessMemory(phandle, (LPVOID)(base+4), &valueFLT[23], 4, &stBytes);
-	};
+	}
 }
 break;
 
@@ -2323,7 +2281,7 @@ case C_MEM_SETCAM:
 			int	modif[]		= {0,0,0};
 			int	max_loops	= (sizeof(pointer) / sizeof(pointer[0])) - 1;
 
-			if (CWA) {
+			if (global.CWA) {
 				pointer[0] = multiplayer ? 0x38E93C : 0x7A3128;
 				modif[0]   = multiplayer ? 0x94     : 0xAC;
 				modif[1]   = multiplayer ? 0x4A8    : 0x31C;
@@ -2343,13 +2301,13 @@ case C_MEM_SETCAM:
 				pointer[i+1] = pointer[i+1] + modif[i];
 			};
 
-			if (!RESTORE_MEM[RESTORE_EXTCAMPOS])
+			if (!global.restore_memory[RESTORE_EXTCAMPOS])
 			{
-				RESTORE_MEM[RESTORE_EXTCAMPOS] = 1;
-				ReadProcessMemory(phandle,(LPVOID)(pointer[max_loops]),	  &RESTORE_FLT[FLT_EXTCAMX], 4, &stBytes);
-				ReadProcessMemory(phandle,(LPVOID)(pointer[max_loops]+4), &RESTORE_FLT[FLT_EXTCAMZ], 4, &stBytes);
-				ReadProcessMemory(phandle,(LPVOID)(pointer[max_loops]+8), &RESTORE_FLT[FLT_EXTCAMY], 4, &stBytes);
-				extCamOffset = pointer[max_loops];
+				global.restore_memory[RESTORE_EXTCAMPOS] = 1;
+				ReadProcessMemory(phandle,(LPVOID)(pointer[max_loops]),	  &global.restore_float[FLOAT_EXTCAMX], 4, &stBytes);
+				ReadProcessMemory(phandle,(LPVOID)(pointer[max_loops]+4), &global.restore_float[FLOAT_EXTCAMZ], 4, &stBytes);
+				ReadProcessMemory(phandle,(LPVOID)(pointer[max_loops]+8), &global.restore_float[FLOAT_EXTCAMY], 4, &stBytes);
+				global.extCamOffset = pointer[max_loops];
 			};
 
 			WriteProcessMemory(phandle, (LPVOID)(pointer[max_loops]),	&extcam[0], 4, &stBytes);
@@ -2419,10 +2377,10 @@ case C_MEM_HUD:
 		};
 	};
 
-	switch(Game_Version) {
+	switch(game_version) {
 		case VER_196 : ui_base=0x79F8D0; break;
 		case VER_199 : ui_base=0x78E9C8; break;
-		case VER_201 : ui_base=Game_Exe_Address+0x6D8240; break;
+		case VER_201 : ui_base=global.exe_address+0x6D8240; break;
 	};
 
 	ReadProcessMemory(phandle, (LPVOID)(ui_base+0x0), &ui_base, 4, &stBytes);
@@ -2432,10 +2390,10 @@ case C_MEM_HUD:
 		break;
 
 	// Chat has a different address
-	switch(Game_Version) {
+	switch(game_version) {
 		case VER_196 : chat_base=0x7831B0; break;
 		case VER_199 : chat_base=0x7722A0; break;
-		case VER_201 : chat_base=Game_Exe_Address+0x6FFCC0; break;
+		case VER_201 : chat_base=global.exe_address+0x6FFCC0; break;
 	}
 
 	int pointer = 0;
@@ -2451,13 +2409,13 @@ case C_MEM_HUD:
 		int is_int = IsNumberInArray(i,hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0]));
 
 		if (is_custom[i]) {	
-			if (!RESTORE_MEM[RESTORE_HUD+i] && (i<CHAT_X || i>CHAT_H)) {
-				RESTORE_MEM[RESTORE_HUD+i] = 1;
+			if (!global.restore_memory[RESTORE_HUD+i] && (i<CHAT_X || i>CHAT_H)) {
+				global.restore_memory[RESTORE_HUD+i] = 1;
 				if (is_int)
-					ReadProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i]), &RESTORE_HUD_INT[i], 4, &stBytes);
+					ReadProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i]), &global.restore_hud_int[i], 4, &stBytes);
 				else
-					ReadProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i]), &RESTORE_HUD_FLT[i], 4, &stBytes);
-			};
+					ReadProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i]), &global.restore_hud_float[i], 4, &stBytes);
+			}
 
 			if (is_int)
 				WriteProcessMemory(phandle, (LPVOID)(pointer+hud_offset[i]), &currentINT[i], 4, &stBytes);
@@ -2514,14 +2472,14 @@ case C_MEM_GETCAM:
 	int plr			= 1;
 	int off[]		= 
 	{
-		!CWA ? 0x788434 : 0x77751C,
-		!CWA ? 0x788450 : 0x777538, 
-		!CWA ? 0x788458 : 0x777540, 
-		!CWA ? 0x78845C : 0x777544, 
-		!CWA ? 0x788460 : 0x777548, 
-		!CWA ? 0x7884F8 : 0x7775E0, 
-		!CWA ? 0x78864C : 0x777614, 
-		!CWA ? 0x79DFCC : 0x78D0C3		//if this one fails then C4
+		!global.CWA ? 0x788434 : 0x77751C,
+		!global.CWA ? 0x788450 : 0x777538, 
+		!global.CWA ? 0x788458 : 0x777540, 
+		!global.CWA ? 0x78845C : 0x777544, 
+		!global.CWA ? 0x788460 : 0x777548, 
+		!global.CWA ? 0x7884F8 : 0x7775E0, 
+		!global.CWA ? 0x78864C : 0x777614, 
+		!global.CWA ? 0x79DFCC : 0x78D0C3		//if this one fails then C4
 	};
 
 
@@ -2551,7 +2509,7 @@ case C_MEM_GETCAM:
 	int	modif[]		= {0x5C, 0x69C};
 	int	max_loops	= (sizeof(pointer) / sizeof(pointer[0])) - 1;
 
-	if (CWA) 
+	if (global.CWA) 
 		pointer[0] = 0x778590,
 		modif[1]   = 0x6A0;
 
@@ -2587,7 +2545,7 @@ if (!isMULTI)
 case C_MEM_GETMAP:
 { // Get 2D map state from memory
 
-	int base	= !CWA ? 0x7B4028 : 0x7A3128;
+	int base	= !global.CWA ? 0x7B4028 : 0x7A3128;
 	int	pointer = 0;
 	int	isMapOn = 0;
 	
@@ -2618,7 +2576,7 @@ case C_MEM_GETNV:
 	int	max_loops	= (sizeof(pointer) / sizeof(pointer[0])) - 1;
 
 
-	if (CWA) 
+	if (global.CWA) 
 		pointer[0]	= 0x7A3128, 
 		modif[0]	= 0x78C, 
 		modif[2]	= 0x6D6;
@@ -2656,7 +2614,7 @@ case C_MEM_GETPLAYERVIEW:
 	int display		= 0;
 	int toggle		= 0;
 	int *a			= &display;
-	int	base		= !CWA ? 0x7B4028 : 0x7A3128;
+	int	base		= !global.CWA ? 0x7B4028 : 0x7A3128;
 
 
 	ReadProcessMemory(phandle, (LPVOID)base,			&pointer, 4, &stBytes);
@@ -2733,7 +2691,7 @@ case C_MEM_GETPLAYERAIM:
 	int max_loops	= sizeof(pointer) / sizeof(pointer[0]) - 1;
 
 
-	if (CWA) 
+	if (global.CWA) 
 		pointer[0]	= 0x78E9C8, 
 		pointer2[0] = 0x7A3128, 
 		modif[0]	= 0x8, 
@@ -2744,7 +2702,7 @@ case C_MEM_GETPLAYERAIM:
 	for (int i=0; i<max_loops; i++)
 	{
 		// There's one less loop in CWA version
-		if (!CWA  ||  CWA  &&  i<max_loops-1)
+		if (!global.CWA  ||  global.CWA  &&  i<max_loops-1)
 		{
 			ReadProcessMemory(phandle, (LPVOID)pointer[i], &pointer[i+1], 4, &stBytes);
 			pointer[i+1] = pointer[i+1] +  modif[i];
@@ -2766,14 +2724,14 @@ case C_MEM_GETPLAYERAIM:
 	float g_vlH = 0;
 	float g_pit2 = 0;
 
-	if (CWA) 
+	if (global.CWA) 
 		max_loops--;
 
 	ReadProcessMemory(phandle, (LPVOID)pointer[max_loops],     &m_sin, 4, &stBytes);
 	ReadProcessMemory(phandle, (LPVOID)(pointer[max_loops]+4), &m_pit, 4, &stBytes);
 	ReadProcessMemory(phandle, (LPVOID)(pointer[max_loops]+8), &m_cos, 4, &stBytes);
 
-	if (CWA) 
+	if (global.CWA) 
 		max_loops++;
 
 	ReadProcessMemory(phandle, (LPVOID)(pointer2[max_loops]),   &g_off, 4, &stBytes);
@@ -2836,7 +2794,7 @@ case C_MEM_GETPLAYERANIM:
 	int	max_loops	 = (sizeof(pointer) / sizeof(pointer[0])) - 1; // number of loops = items in the array - 1
 	bool restartPath = false;
 
-	if (CWA) 
+	if (global.CWA) 
 		pointer[0]	= 0x7A3128, 
 		modif[0]	= 0x78C, 
 		modif[2]	= 0x718;
@@ -2854,7 +2812,7 @@ case C_MEM_GETPLAYERANIM:
 			i			= -1; 
 			restartPath = true;
 
-			if (!CWA) 
+			if (!global.CWA) 
 				modif[0]	= 0x784; 
 			else 
 				pointer[0]	= 0x78E9C8,
@@ -2890,7 +2848,7 @@ case C_MEM_ISDIALOG:
 { // Return number of dialogs
 
 	int i	 = 0;
-	int base = !CWA ? 0x79E9E0 : 0x78DAD8;
+	int base = !global.CWA ? 0x79E9E0 : 0x78DAD8;
 
 	ReadProcessMemory(phandle, (LPVOID)base, &i, 4, &stBytes);
 
@@ -2913,7 +2871,7 @@ else
 case C_MEM_GETRADIOBOX:
 { // Is radio options box displayed
 
-	int base	 = !CWA ? 0x79F8D0 : 0x78E9C8;
+	int base	 = !global.CWA ? 0x79F8D0 : 0x78E9C8;
 	int	pointer  = 0;
 	int pointer2 = 0;
 	int value	 = 0;
@@ -2943,7 +2901,7 @@ case C_MEM_GETWEATHER:
 
 	float weather[8];
 	char tmp[128]	= "";
-	int base		= !DedicatedServer ? (!CWA ? 0x79F8D0 : 0x78E9C8) : (!CWA ? 0x71F738 : 0x71F788);
+	int base		= !global.DedicatedServer ? (!global.CWA ? 0x79F8D0 : 0x78E9C8) : (!global.CWA ? 0x71F738 : 0x71F788);
 	int pointer		= 0;
 	int	max_loops	= (sizeof(weather) / sizeof(weather[0])) - 1; 
 	
@@ -2970,7 +2928,7 @@ case C_MEM_GETWEATHER:
 
 	// Get mission time
 	int missionTime = 0;
-	base = !DedicatedServer ? (!CWA ? 0x7DD028 : 0x7CBFE8) : (!CWA ? 0x75A2E0 : 0x75A370);
+	base = !global.DedicatedServer ? (!global.CWA ? 0x7DD028 : 0x7CBFE8) : (!global.CWA ? 0x75A2E0 : 0x75A370);
 
 	ReadProcessMemory(phandle, (LPVOID)base, &missionTime, 4, &stBytes);
 	sprintf(tmp, "%d,", missionTime);
@@ -2982,7 +2940,7 @@ case C_MEM_GETWEATHER:
 	int jump	= 0;
 	int value2	= 0;
 
-	base = !DedicatedServer ? (!CWA ? 0x7B3ACC : 0x7A2C0C) : (!CWA ? 0x73392C : 0x7339C4);
+	base = !global.DedicatedServer ? (!global.CWA ? 0x7B3ACC : 0x7A2C0C) : (!global.CWA ? 0x73392C : 0x7339C4);
 	ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
 
 	for (int offset=0x2054C;  offset<=0x2059C;  offset+=4)
@@ -3027,7 +2985,7 @@ case C_MEM_GETWEATHER:
 
 	
 	// Get tide and wave values
-	base			= !DedicatedServer ? (!CWA ? 0x72F8E4 : 0x72295C) : (!CWA ? 0x6BE184 : 0x6BE144);
+	base			= !global.DedicatedServer ? (!global.CWA ? 0x72F8E4 : 0x72295C) : (!global.CWA ? 0x6BE184 : 0x6BE144);
 	float maxTide	= 0;
 	float maxWave	= 0;
 

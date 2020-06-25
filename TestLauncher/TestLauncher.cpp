@@ -2,111 +2,44 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "..\testdll\testdll.h"
-#include <tlhelp32.h>							//v1.11 for process search
-#include "winsock2.h"							//v1.14 for reporting server
-#include "..\testdll\global_vars.h"	//1.16
+#include "..\testdll\testdll.h"		// sharing global vars, enums, structs with dll
+#include <tlhelp32.h>				// for findProcess()
+#include "winsock2.h"				// for reporting server
+#include "..\common_functions.cpp"	// sharing functions with dll
 
-bool runOfp(LPSTR lpCmdLine, bool addNoMap);
-bool TestHook(void);
-void FwatchPresence(void *loop);				//v1.1
-int findProcess(char* name);					//v1.11
-int findOFPwindow();							//v1.11
-void ListenServer(void *loop);					//v1.14
-void FixUIAspectRatio(void *loop);				//v1.15
-void Read_Config_Fwatch_HUD(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT);	//v1.16
-void Transfer_Modfolder_Missions(char *mod, bool server);	//v1.16
-void Return_Modfolder_Missions(bool server);				//v1.16
-int strncmpi(const char *ps1, const char *ps2, int n);		//v1.16
-
-
-//v1.13 global variables for OFP and CWA
-int Game_Version		= 0;
-char GameWindowName[32]	= "";
-char GameServerName[32]	= "";
-bool ErrorLog_Enabled	= 0;					//v1.15 save error messages to text file
-bool ErrorLog_Started	= 0;					//v1.15 is this the first entry in the log
-int Game_Exe_Address    = 0;
-
-
-
-
-
-char reqfiles[][256] = {
-	"fwatch/data/wget.exe",
-	"fwatch/data/true.sqf",
-	"fwatch/data/fwatch_check.sqf",
-
-	"fwatch/data/gameRestart.exe",			//v1.11
-
-	"fwatch/data/ConvertKeyString.sqf",		//v1.13
-	"fwatch/data/CurrentLanguage.sqf",		//v1.13
-	"fwatch/data/DateDifference.sqf",		//v1.13
-	"fwatch/data/DateDifferenceInDays.sqf",	//v1.13
-	"fwatch/data/FormatDate.sqf",			//v1.13
-	"fwatch/data/InitFLib.sqf",				//v1.13
-	"fwatch/data/inKeys.sqf",				//v1.13
-	"fwatch/data/InputMulti.sqs",			//v1.13
-	"fwatch/data/MainMenu.sqs",				//v1.13
-	"fwatch/data/MeasureTime.sqf",			//v1.13
-	"fwatch/data/MemMulti.sqs",				//v1.13
-	"fwatch/data/ModifyDate.sqf",			//v1.13
-	"fwatch/data/onScreenTyping.sqs",		//v1.13
-
-	"fwatch/data/getAspectRatio.sqf",		//v1.14
-	"fwatch/data/DePbo.dll",				//v1.14
-	"fwatch/data/ExtractPbo.exe",			//v1.14
-	"fwatch/data/getExitCode.exe",			//v1.14
-	"fwatch/data/preproc.exe",				//v1.14
-
-	"fwatch/data/Download.sqs",				//v1.16
-	"fwatch/data/MainMenu_fnc.sqf",			//v1.16
-	"fwatch/data/addonInstaller.exe",		//v1.16
-	"fwatch/data/7z.dll",					//v1.16
-	"fwatch/data/7z.exe",					//v1.16
-	"fwatch/data/MakePbo.exe",				//v1.16
-
-	NULL,
+struct ThreadArguments {
+	bool is_dedicated_server;
+	bool is_custom_master1;
+	bool is_custom_master2;
 };
 
-char game_execs[][40] = {
-	"armaresistance.exe",
-	"coldwarassault.exe",
-	"flashpointresistance.exe",
-	"ofp.exe",
-	"flashpointbeta.exe",
-	"operationflashpoint.exe",
-	"operationflashpointbeta.exe"
+struct GLOBAL_VARIABLES_TESTLAUNCHER {	// variables shared between threads
+	int listen_server_port;
+	char master_server1[64];
+	char master_server2[32];
+} global = {
+	-1,
+	"",
+	""
 };
 
-char server_execs[][40] = {
-	"armaresistance_server.exe",
-	"coldwarassault_server.exe",
-	"ofpr_server.exe"
+enum GAME_TYPES {
+	GAME_CLIENT,
+	GAME_SERVER
 };
 
-//v1.13 global chars for master servers names
-char serv1[64] = "";
-char serv2[19] = "";
+unsigned long GetIP(char *host);
+char* Tokenize(char *string, char *delimiter, int &i, int string_length, bool square_brackets, bool reverse);
+void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT);
+int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server);
+void ModfolderMissionsReturn(bool is_dedicated_server);
 
-//v1.14 global variables to share between threads
-int ListenServerPort  = -1;
-char master_serv1[64] = "";
-char master_serv2[64] = ""; 
+void FwatchPresence(ThreadArguments *arg);
+void ListenServer(ThreadArguments *arg);
 
-//v1.15 global variables for a pipe
-HANDLE hPipe;
-char pipe_buffer[1024];
-DWORD dwRead;
 
-//v1.16
-char run_exe_name[256] = "";
 
-enum CHAT_STATES {
-	CHAT_MISSION,
-	CHAT_BRIEFINGLOBBY,
-	CHAT_CUSTOM
-};
+
 
 
 
@@ -119,151 +52,51 @@ int APIENTRY WinMain(HINSTANCE hInstance,
                      LPSTR     lpCmdLine,
                      int       nCmdShow)
 {
-	// Fwatch duplication check v1.11
 	if (findProcess("fwatch.exe")) {
 		MessageBox( NULL, "Do not duplicate fwatch processes.", "fwatch", MB_OK|MB_ICONSTOP );
 		return 1;
-	};
-
-	Return_Modfolder_Missions(0);
-	Return_Modfolder_Missions(1);
-	
-	//v1.16 save info about this instance to a file
-	FILE *fi = fopen("fwatch_info.sqf","w");
-	fprintf(fi,"[%d,[",GetCurrentProcessId());
-
-	//v1.13 arguments to change the master server
-	// Copy command line to a buffer
-	int lpCmdLine_size = strlen(lpCmdLine);
-	bool nolaunch      = false;
-	bool listenServer  = false;
-	bool addNoMap      = true;
-	bool Steam         = false;
-	bool first_item    = true;
-	bool buffer_shift  = false;
-	char *command_line = lpCmdLine;
-
-	for (int i=0, begin=-1; i<=lpCmdLine_size; i++) {
-		bool complete_word = i == lpCmdLine_size;
-
-		if (isspace(lpCmdLine[i]))
-			complete_word = true;
-
-		if (!complete_word  &&  begin<0)
-			begin = i;
-
-		if (complete_word  &&  begin>=0) {
-			char *word   = lpCmdLine + begin;
-			char prev    = lpCmdLine[i];
-			lpCmdLine[i] = '\0';
-
-			if (strncmp(word,"-nolaunch",9) == 0) {
-				nolaunch     = true;	//v1.13 -nolaunch moved here
-				buffer_shift = true;
-			}
-
-			if (strncmp(word,"-gamespy=",9) == 0) {
-				strncpy(serv1, word+9, 64);
-				buffer_shift = true;
-			}
-
-			if (strncmp(word,"-udpsoft=",9) == 0) {
-				strncpy(serv2, word+9, 18);
-				buffer_shift = true;
-			}
-
-			if (strncmp(word,"-reporthost",11) == 0) {
-				listenServer = true;
-				buffer_shift = true;
-			}
-
-			if (strncmp(word,"-removenomap",12) == 0) {
-				addNoMap     = false;
-				buffer_shift = true;
-			}
-
-			if (strncmp(word,"-steam",6) == 0) {
-				nolaunch     = true;
-				Steam        = true;
-				buffer_shift = true;
-			}
-
-			if (strncmp(word,"-run=",5) == 0) {
-				strncpy(run_exe_name, word+5, 255);
-				buffer_shift = true;
-			}
-
-			fprintf(fi,"%s\"%s\"",first_item ? "" : ",", word);
-			first_item   = false;
-			lpCmdLine[i] = prev;
-
-			if (buffer_shift) {
-				memcpy(lpCmdLine+begin, lpCmdLine+i, lpCmdLine_size-i+1);
-				lpCmdLine_size -= (i - begin);
-				i               = begin - 1;
-				buffer_shift    = false;
-			}
-
-			begin = -1;
-		}
-	};
-
-	fprintf(fi,"]]");
-	fclose(fi);
-
-
-
-	// v1.16 Read master server address from file if argument wasn't passed
-	if (strcmp(serv1,"") == 0) {
-		fi = fopen("fwatch\\idb\\MasterServers.sqf","rb");
-		if (fi) {
-			fseek(fi, 0, SEEK_END);
-			int file_size = ftell(fi);
-			fseek(fi, 0, SEEK_SET);
-
-			char *buffer = (char *) malloc(file_size + 1);
-
-			if (buffer) {
-				int result = fread(buffer, 1, file_size, fi);
-				if (result == file_size) {
-					buffer[result] = '\0';
-					int open[]  = {'\"','{'};
-					int close[] = {'\"','}'};
-
-					for (int i=0; i<2; i++) {
-						char *quote = strchr(buffer, open[i]);
-
-						if (quote != NULL) {
-							quote++;
-							char *quote_end = strchr(quote, close[i]);
-
-							if (quote_end != NULL) {
-								strncpy(serv1, quote, quote_end-quote);
-								break;
-							}
-						}
-					}
-				}
-				
-				free(buffer);
-			}
-			
-			fclose(fi);
-		} else
-			if (errno == 2) {
-				fi = fopen("fwatch\\idb\\MasterServers.sqf","w");
-				if (fi) {
-					strcpy(serv1, "master.ofpisnotdead.com");
-					fprintf(fi,"[\"master.ofpisnotdead.com\"]");
-					fclose(fi);
-				}
-			}
 	}
 
-	
+
+
+	ModfolderMissionsReturn(GAME_CLIENT);
+	ModfolderMissionsReturn(GAME_SERVER);
+
 
 
 	// Check that all required files are in place
+	char reqfiles[][256] = {
+		"fwatch/data/wget.exe",
+		"fwatch/data/true.sqf",
+		"fwatch/data/fwatch_check.sqf",
+		"fwatch/data/gameRestart.exe",
+		"fwatch/data/ConvertKeyString.sqf",
+		"fwatch/data/CurrentLanguage.sqf",
+		"fwatch/data/DateDifference.sqf",
+		"fwatch/data/DateDifferenceInDays.sqf",
+		"fwatch/data/FormatDate.sqf",
+		"fwatch/data/InitFLib.sqf",
+		"fwatch/data/inKeys.sqf",
+		"fwatch/data/InputMulti.sqs",
+		"fwatch/data/MainMenu.sqs",
+		"fwatch/data/MeasureTime.sqf",
+		"fwatch/data/MemMulti.sqs",
+		"fwatch/data/ModifyDate.sqf",
+		"fwatch/data/onScreenTyping.sqs",
+		"fwatch/data/getAspectRatio.sqf",
+		"fwatch/data/DePbo.dll",
+		"fwatch/data/ExtractPbo.exe",
+		"fwatch/data/getExitCode.exe",
+		"fwatch/data/preproc.exe",
+		"fwatch/data/Download.sqs",
+		"fwatch/data/MainMenu_fnc.sqf",
+		"fwatch/data/addonInstaller.exe",
+		"fwatch/data/7z.dll",
+		"fwatch/data/7z.exe",
+		"fwatch/data/MakePbo.exe",
+		NULL,
+	};
+
 	int x = 0;
 	char *f;
 	while((f = reqfiles[x])[0] != NULL) {
@@ -281,89 +114,267 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 
 
+	// Save info about this instance to a file
+	FILE *fi = fopen("fwatch_info.sqf","w");
+	if (fi)
+		fprintf(fi, "[%d,[", GetCurrentProcessId());
 
 
 
-	// Install hook
-    InstallHook();
-	
+	// Handle exe arguments
+	// Remove the ones meant for Fwatch and pass the rest to the game
+	int lpCmdLine_size         = strlen(lpCmdLine);
+	bool launch_client         = true;
+	bool listen_server         = false;
+	bool add_nomap             = true;
+	bool launch_steam          = false;
+	bool first_item            = true;
+	bool buffer_shift          = false;
+	int custom_exe             = -1;
+	ThreadArguments client_arg = {false, false, false};
 
+	for (int i=0, begin=-1; i<=lpCmdLine_size; i++) {
+		bool complete_word = i == lpCmdLine_size;
 
-	// Make sure the hooks work	
-	int res;
-	do {
-		res = IDOK;
-		if(!TestHook()) {
-			Sleep(500); // Wait a while and automatically retry once
-			if(!TestHook()) {
-				res = MessageBox(NULL, "Self test failed, Fwatch hooks do not appear to be working.\n", "fwatch error", MB_ABORTRETRYIGNORE|MB_ICONSTOP);			
-				if(res == IDABORT)
-					exit(0);
+		if (isspace(lpCmdLine[i]))
+			complete_word = true;
+
+		if (!complete_word  &&  begin<0)
+			begin = i;
+
+		if (complete_word  &&  begin>=0) {
+			char *word   = lpCmdLine + begin;
+			char prev    = lpCmdLine[i];
+			lpCmdLine[i] = '\0';
+
+			if (strncmp(word,"-nomap",6) == 0)
+				add_nomap = false;
+
+			if (strncmp(word,"-nolaunch",9) == 0) {
+				launch_client = false;
+				buffer_shift  = true;
 			}
-		}
-	} while(res == IDRETRY);
 
+			if (strncmp(word,"-gamespy=",9) == 0) {
+				strncpy(global.master_server1, word+9, 64);
+				client_arg.is_custom_master1 = true;
+				buffer_shift = true;
+			}
 
+			if (strncmp(word,"-udpsoft=",9) == 0) {
+				strncpy(global.master_server2, word+9, 18);
+				client_arg.is_custom_master2 = true;
+				buffer_shift = true;
+			}
 
+			if (strncmp(word,"-reporthost",11) == 0) {
+				listen_server = true;
+				buffer_shift  = true;
+			}
 
-	// Launch thread for listen server
-	if (listenServer)
-		_beginthread(ListenServer, 0, (void*) (0));
+			if (strncmp(word,"-removenomap",12) == 0) {
+				add_nomap    = false;
+				buffer_shift = true;
+			}
 
-	// Launch thread for modifying UI
-	_beginthread(FixUIAspectRatio, 0, (void*) (0));
+			if (strncmp(word,"-steam",6) == 0) {
+				launch_client = false;
+				launch_steam  = true;
+				buffer_shift  = true;
+			}
 
-
-
-	if(!nolaunch) {
-		_beginthread(FwatchPresence, 0, (void*) (0));	//v1.1
-		// Attempt to run OFP
-		if(!runOfp(lpCmdLine, addNoMap))
-			MessageBox(NULL, "Could not run the game!\n\nEnsure fwatch.exe is located in your game directory,\nor run fwatch with -nolaunch parameter and then run the game manually.", "fwatch error", MB_OK|MB_ICONSTOP);
-	} else {
-		// Just sit and wait here
-		_beginthread(FwatchPresence, 0, (void*) (1));	//v1.1
-		_beginthread(FwatchPresence, 0, (void*) (2));	//v1.1
-
-			//1.15 launch steam
-			if (Steam) {
-				HKEY hKey			= 0;
-				char SteamPath[512] = "";
-				char SteamExe[512]	= "";
-				DWORD dwType		= 0;
-				DWORD SteamPathSize	= sizeof(SteamPath);
-				DWORD SteamExeSize	= sizeof(SteamExe);
-
-				if (RegOpenKey(HKEY_CURRENT_USER,"Software\\Valve\\Steam",&hKey) == ERROR_SUCCESS) {
-					dwType    = REG_SZ;
-					bool key1 = RegQueryValueEx(hKey, "SteamPath", 0, &dwType, (BYTE*)SteamPath, &SteamPathSize) == ERROR_SUCCESS;
-					bool key2 = RegQueryValueEx(hKey, "SteamExe" , 0, &dwType, (BYTE*)SteamExe , &SteamExeSize)  == ERROR_SUCCESS;
-
-					if (key1 && key2) {
-						char *command_line = (char *) malloc(strlen(SteamExe) + strlen(lpCmdLine) + 50);
-
-						if (command_line) {
-							sprintf(command_line, " \"%s\" -applaunch 65790 %s%s ", SteamExe, addNoMap ? "-nomap " : "", lpCmdLine);
-							system(command_line);
-							free(command_line);
-						}
+			if (strncmp(word,"-run=",5) == 0) {
+				for (int i=0; i<global_client_num; i++) {
+					if (strcmpi(global_exe_name[i], word+5) == 0) {
+						custom_exe = i;
+						break;
 					}
 				}
 
-				RegCloseKey(hKey);
+				buffer_shift = true;
 			}
 
+			if (fi)
+				fprintf(fi, "%s\"%s\"", (first_item ? "" : ","), word);
+
+			first_item   = false;
+			lpCmdLine[i] = prev;
+
+			if (buffer_shift) {
+				memcpy(lpCmdLine+begin, lpCmdLine+i, lpCmdLine_size-i+1);
+				lpCmdLine_size -= (i - begin);
+				i               = begin - 1;
+				buffer_shift    = false;
+			}
+
+			begin = -1;
+		}
+	}
+
+	if (fi) {
+		fprintf(fi,"]]");
+		fclose(fi);
+	}
+
+
+
+	// Read master server address from the file if an argument wasn't passed
+	if (!client_arg.is_custom_master1) {
+		String ip_list;
+		int result = String_readfile(ip_list, "fwatch\\idb\\MasterServers.sqf");
+
+		if (result == 0) {
+			int open[]  = {'\"', '{'};
+			int close[] = {'\"', '}'};
+
+			for (int i=0; i<2; i++) {
+				char *quote = strchr(ip_list.pointer, open[i]);
+
+				if (quote != NULL) {
+					quote++;
+					char *quote_end = strchr(quote, close[i]);
+
+					if (quote_end != NULL) {
+						client_arg.is_custom_master1 = true;
+						strncpy(global.master_server1, quote, quote_end-quote);
+						break;
+					}
+				}
+			}
+		} else
+			if (result == 2) {
+				fi = fopen("fwatch\\idb\\MasterServers.sqf","w");
+				if (fi) {
+					strcpy(global.master_server1, "master.ofpisnotdead.com");
+					client_arg.is_custom_master1 = true;
+					fprintf(fi,"[\"master.ofpisnotdead.com\"]");
+					fclose(fi);
+				}
+			}
+
+		String_end(ip_list);
+	}
+
+
+
+	// Install file hook and make sure it works
+    InstallHook();
+	int user_choice = 0;
+
+	do {
+		bool result = false;
+		
+		// Test it twice
+		for (int i=0; i<2; i++) {
+			if (i > 0)
+				Sleep(500);
+
+			HANDLE filu = CreateFile("scripts\\:info version", GENERIC_READ, 0, NULL, OPEN_EXISTING, 128, NULL);
+
+			if (filu != INVALID_HANDLE_VALUE) {
+				CloseHandle(filu);
+				result = true;
+				break;
+			}
+		}
+		
+		if (result)
+			user_choice = IDOK;
+		else {
+			user_choice = MessageBox(NULL, "Self test failed, Fwatch hooks do not appear to be working.\n", "fwatch error", MB_ABORTRETRYIGNORE|MB_ICONSTOP);
+
+			if (user_choice == IDABORT)
+				exit(0);
+		}
+	} while (user_choice == IDRETRY);
+
+
+
+	// Run threads and the game
+	if (listen_server)
+		_beginthread((void(*)(void*))ListenServer, 0, &client_arg);
+
+	if (launch_client) {
+		PROCESS_INFORMATION pi;
+		STARTUPINFO si; 
+		memset(&si, 0, sizeof(si));
+		si.cb = sizeof(si);
+
+		DWORD dwExitCode = STILL_ACTIVE;
+		bool launched    = false;
+
+		String command_line;
+		String_init(command_line);
+		String_append(command_line, " ");
+		String_append(command_line, (add_nomap ? "-nomap " : ""));
+		String_append(command_line, lpCmdLine);
+
+		for (int i=0; i<global_client_num; i++) {
+			if (custom_exe!=-1 && custom_exe!=i)
+				continue;
+
+			if (CreateProcess(global_exe_name[i], command_line.pointer, NULL, NULL, false, 0, NULL,NULL,&si,&pi)) {
+				launched = true;
+				break;
+			}
+		}
+		
+		String_end(command_line);
+
+		if (launched) {
+			_beginthread((void(*)(void*))FwatchPresence, 0, &client_arg);
+
+			while(dwExitCode == STILL_ACTIVE) {
+				GetExitCodeProcess(pi.hProcess, &dwExitCode);
+				Sleep(1000);
+			}
+		} else
+			MessageBox(NULL, "Could not run the game!\n\nEnsure fwatch.exe is located in your game directory,\nor run fwatch with -nolaunch parameter and then run the game manually.", "fwatch error", MB_OK|MB_ICONSTOP);		
+	} else {
+		ThreadArguments server_arg = client_arg;
+		server_arg.is_dedicated_server = true;
+		
+		_beginthread((void(*)(void*))FwatchPresence, 0, &client_arg);
+		_beginthread((void(*)(void*))FwatchPresence, 0, &server_arg);
+
+		// Launch the game through Steam
+		if (launch_steam) {
+			HKEY hKey			= 0;
+			char SteamPath[512] = "";
+			char SteamExe[512]	= "";
+			DWORD dwType		= 0;
+			DWORD SteamPathSize	= sizeof(SteamPath);
+			DWORD SteamExeSize	= sizeof(SteamExe);
+
+			if (RegOpenKey(HKEY_CURRENT_USER,"Software\\Valve\\Steam",&hKey) == ERROR_SUCCESS) {
+				dwType = REG_SZ;
+				bool key1 = RegQueryValueEx(hKey, "SteamPath", 0, &dwType, (BYTE*)SteamPath, &SteamPathSize) == ERROR_SUCCESS;
+				bool key2 = RegQueryValueEx(hKey, "SteamExe" , 0, &dwType, (BYTE*)SteamExe , &SteamExeSize)  == ERROR_SUCCESS;
+
+				if (key1 && key2) {
+					String command_line;
+					String_init(command_line);
+					String_append(command_line, SteamExe);
+					String_append(command_line, " -applaunch 65790 ");
+					String_append(command_line, (add_nomap ? "-nomap " : ""));
+					String_append(command_line, lpCmdLine);
+					system(command_line.pointer);
+					String_end(command_line);
+				}
+			}
+
+			RegCloseKey(hKey);
+		}
+
+		// Just sit and wait here
 		MessageBox( NULL, "Fwatch is now waiting for you to run the game and/or dedicated server\nWhen you're done playing press OK to close Fwatch.", "fwatch", MB_OK|MB_ICONINFORMATION );
 	}
 
 
 
-
-
-	// Remove hook
     RemoveHook();
-	Return_Modfolder_Missions(0);
-	Return_Modfolder_Missions(1);
+	ModfolderMissionsReturn(GAME_CLIENT);
+	ModfolderMissionsReturn(GAME_SERVER);
 	unlink("fwatch_info.sqf");
     return 0;
 }
@@ -382,297 +393,30 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 // **** FUNCTIONS ***************************************************************************************
 
-
-bool runOfp(LPSTR lpCmdLine, bool addNoMap) {
-	PROCESS_INFORMATION pi;
-    STARTUPINFO si; 
-	DWORD dwExitCode = STILL_ACTIVE;
-
-    memset(&si,0,sizeof(si));
-    si.cb= sizeof(si);
-
-	//1.13 check if -nomap is there
-	int extraSize = 0;
-	if (!strstr(lpCmdLine,"-nomap")) 
-		extraSize = 7;
-
-	// Duh, need an extra space in the beginning of the command line for it to work
-	char *cmdLine = new char[strlen(lpCmdLine)+2+extraSize];
-	cmdLine[0] = ' ';
-	strcpy(cmdLine+1, lpCmdLine);
-
-	//1.13 add -nomap
-	if (extraSize>0 && addNoMap) 
-		strcat(cmdLine, " -nomap");
-
-
-	//1.11 loop launching exe
-	int max_loops = sizeof(game_execs) / sizeof(game_execs[0]), 
-		ok = 0;
-
-	for (int i=0; i<max_loops; i++) {
-		if (strcmp(run_exe_name,"")!=0  &&  strcmpi(game_execs[i],run_exe_name)!=0)
-			continue;
-
-		if (CreateProcess(game_execs[i], cmdLine, NULL, NULL, false, 0, NULL,NULL,&si,&pi)) {
-			ok = 1;
-			break;
-		};
-	}
-	
-	delete[] cmdLine;
-
-	if (!ok) 
-		return false;
-
-	// Wait until the process has terminated
-	while(dwExitCode == STILL_ACTIVE) {
-		GetExitCodeProcess(pi.hProcess, &dwExitCode);
-		Sleep(1000);
-	}
-
-	return true;
-}
-
-
-
-
-
-
-bool TestHook() {
-	HANDLE filu = CreateFile("scripts\\:info version", GENERIC_READ, 0, NULL, OPEN_EXISTING, 128, NULL);
-	if(filu == INVALID_HANDLE_VALUE)
-		return false;
-	
-	CloseHandle(filu);
-	return true;
-}
-
-
-
-
-
-
-// v1.11 find process by exename by traversing the list; returns PID number
-int findProcess(char* name)
-{
-	PROCESSENTRY32 processInfo;
-	processInfo.dwSize = sizeof(processInfo);
-	int pid = 0,
-		currPID = GetCurrentProcessId();
-
-	HANDLE processesSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
-	if ( processesSnapshot != INVALID_HANDLE_VALUE )
-	{
-		Process32First(processesSnapshot, &processInfo);
-		do
-		{
-			int tempPID = processInfo.th32ProcessID;
-			if (strcmpi(processInfo.szExeFile,name)==0 && tempPID != currPID) {
-				pid = tempPID;
-				break;
-			};
-		}
-		while (Process32Next(processesSnapshot, &processInfo));
-
-		CloseHandle(processesSnapshot);
-	};
-
-	return pid;
-};
-
-
-
-
-
-
-
-
-// v1.11 find OFP window by traversing the list; returns PID number
-// checks if exe name is OFP
-int findOFPwindow()
-{
-	HWND hwnd = NULL;
-	hwnd = GetTopWindow(hwnd);
-	if (!hwnd) 
-		return 0;
-
-	char windowName[1024];
-	DWORD pid=0;
-
-	while(hwnd)
-	{
-		GetWindowText(hwnd, windowName, 1024);
-		
-		// If window has game name
-		if (strcmpi(windowName, "Operation Flashpoint")==0  ||  strcmpi(windowName, "Cold War Assault")==0  ||  strcmpi(windowName, "ArmA Resistance")==0)
-		{
-			GetWindowThreadProcessId(hwnd, &pid);
-
-
-			// Get first module
-			HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
-			MODULEENTRY32 xModule;
- 
-			if (hSnap == INVALID_HANDLE_VALUE) return 0;
-			xModule.dwSize = sizeof(MODULEENTRY32);
-			if (Module32First(hSnap, &xModule) == 0) {
-				CloseHandle(hSnap);
-				return 0;
-			};
-
-			Game_Exe_Address = (int)xModule.modBaseAddr;
-
-
-			// Check if window exe name is OFP exe
-			int max_loops = sizeof(game_execs) / sizeof(game_execs[0]);
-
-			for (int i=0; i<max_loops; i++)
-				if (lstrcmpi(xModule.szModule, (LPCTSTR)game_execs[i]) == 0) 
-				{
-					CloseHandle(hSnap);
-					if (strcmpi(windowName, "Operation Flashpoint")==0)
-						Game_Version = VER_196;
-					else 
-						if (strcmpi(windowName, "Cold War Assault")==0)
-							Game_Version = VER_199;
-						else
-							if (strcmpi(windowName, "ArmA Resistance")==0)
-								Game_Version = VER_201;
-							else
-								Game_Version = 0;
-
-					return pid;
-				};
-		};
-		hwnd = GetNextWindow(hwnd, GW_HWNDNEXT);
-	};
-
-	return 0;
-};
-
-
-
-
-
-
-
-// v1.13 searches string with custom length (for skipping middle \0)
-char *strstr2(const char *arg1, const char *arg2, int matchWord, int caseSens, unsigned int len)
-{
-	const char *a, *b;
-	bool cond=0;
-	unsigned int pos=0;
-
-	// For each letter in arg1
-	for(unsigned int i=0 ; i<len; i++, *arg1++, pos++)
-	{
-		a = arg1;
-		b = arg2;
-		if (caseSens) cond=*a++ == *b++; else cond=(*a++ | 32) == (*b++ | 32);
-
-		// Run a comparison with arg2
-		while (cond)
-		{
-			// If got to the end
-			if (!*b)
-			{
-				// If matching word - occurrence musn't be surrounded by alphanum chars
-				bool LeftEmpty=false, RightEmpty=false;
-				if (matchWord)
-				{
-					if (pos==0) LeftEmpty=true; else if (!isalnum(arg1[-1]) && arg1[-1]!='_') LeftEmpty=true;
-					if (pos+strlen(arg2) >= len) RightEmpty=true; else if (!isalnum(arg1[strlen(arg2)]) && arg1[strlen(arg2)]!='_') RightEmpty=true;
-				};
-			
-				// Return pointer to the occurence
-				if (!matchWord || matchWord && LeftEmpty && RightEmpty) return ((char *)arg1);
-				
-				// If failed to match word then move forward
-				if (pos+strlen(arg2) < len) arg1+=strlen(arg2), pos+=strlen(arg2);
-			};
-
-			if (caseSens) cond=*a++ == *b++; else cond=(*a++ | 32) == (*b++ | 32);
-		};
-	}
-
-	return(NULL);
-};
-
-
-
-
-
-
-
-// v1.14 Recognize if game is displaying error message box
-// OFP process has two windows ("operation flashpoint" and "diemwin")
-// if the latter is missing then probably error is present
-bool IsOfpError(DWORD pid)
-{
-	int loop=0;
-	while (true)
-	{
-		HWND hwnd = NULL;
-		hwnd = GetTopWindow(hwnd);
-		if (!hwnd) return true;
-
-		char windowName[24] = "";
-		DWORD CurrentPID = 0;
-
-		// find windows with given process id number
-		while (hwnd)
-		{
-			GetWindowText(hwnd, windowName, 24);
-			GetWindowThreadProcessId(hwnd, &CurrentPID);	
-
-			if (CurrentPID==pid  &&  strcmpi(windowName,"diemwin")==0)
-				return false;
-  
-			hwnd = GetNextWindow(hwnd, GW_HWNDNEXT);
-		};
-
-		// when the game starts it may take a while for the "diemwin" to appear
-		// loop to make sure
-		if (loop<3) 
-		{
-			loop++;
-			Sleep(500);
-			continue;
-		};
-
-		return true;
-	};
-};
-
-
-
-
-
-
-
-// v1.14 domain to IP address
-unsigned long resolv(char *host) 
+// Convert domain name to IP address
+unsigned long GetIP(char *host) 
 {
     struct hostent *hp;
     unsigned long host_ip = inet_addr(host);
     
-    if (host_ip == htonl(INADDR_NONE)) 
-    {
+    if (host_ip == htonl(INADDR_NONE)) {
         hp = gethostbyname(host);
+
         if (hp) 
             host_ip = *(unsigned long *)(hp->h_addr);
         else 
             return INADDR_NONE;
-    };
+    }
     
     return host_ip;
-};
+}
 
 
 
 
-char* Tokenize(char *string, char *delimiter, int &i, int string_length, bool square_brackets, bool reverse) {
+// Split string by given characters; each call returns the next part; must supply current pos and length
+char* Tokenize(char *string, char *delimiter, int &i, int string_length, bool square_brackets, bool reverse) 
+{
 	int delimiter_len = strlen(delimiter);
 	bool in_brackets  = false;
 
@@ -684,16 +428,19 @@ char* Tokenize(char *string, char *delimiter, int &i, int string_length, bool sq
 			in_brackets = false;
 
 		bool is_delim = false;
+
+		// Check if current character is a delimiter
 		for (int j=0; j<delimiter_len; j++)
 			if (string[i] == delimiter[j] && !in_brackets  ||  delimiter[j]==' ' && isspace(string[i])) {
 				is_delim = true;
 				break;
 			}
 
-		if (begin<0  &&  (!is_delim || (!reverse && i==string_length || reverse && i==-1))) {
+		// Mark beginning of the word
+		if (begin<0  &&  (!is_delim || (!reverse && i==string_length || reverse && i==-1)))
 			begin = i + (!reverse ? 0 : 1);
-		}
 
+		// End the word
 		if (begin>=0  &&  (is_delim ||  (!reverse && i==string_length || reverse && i==-1))) {
 			string[(!reverse ? i : begin)] = '\0';
 			
@@ -705,111 +452,29 @@ char* Tokenize(char *string, char *delimiter, int &i, int string_length, bool sq
 	}
 
 	return "";
-};
+}
 
 
 
 
-char* Trim(char *txt)
+// Parse Fwatch modfolder configuration and fill arrays with new values
+void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT)
 {
-	while (isspace(txt[0])) 
-		txt++;
-
-	for (int i=strlen(txt)-1;  i>=0 && isspace(txt[i]);  i--) 
-		txt[i] = '\0';
-
-	return txt;
-};
-
-
-
-
-// Find integer in an integer array
-bool IsNumberInArray(int number, int* array, int max_loops)
-{
-	for (int i=0;  i<max_loops;  i++)
-		if (number == array[i])
-			return true;
-
-	return false;
-};
-
-
-
-
-//v1.16 Compare characters of two strings case insensitive
-//http://my.fit.edu/~vkepuska/ece5527/sctk-2.3-rc1/src/rfilter1/include/strncmpi.c
-int strncmpi(const char *ps1, const char *ps2, int n)
-{
-	char *px1		= (char *)ps1;
-	char *px2		= (char *)ps2;
-	int indicator	= 9999;
-	int i			= 0;
-
-	while (indicator == 9999)
-	{
-		if (++i > n) 
-			indicator = 0;
-		else
-		{
-			if (*px1 == '\0')
-			{
-				if (*px2 == '\0') 
-					indicator = 0; 
-				else	
-					indicator = -1;
-			}
-			else
-			{
-				if (toupper((int)*px1)  <  toupper((int)*px2)) 
-					indicator = -1; 
-				else
-				{
-					if (toupper((int)*px1)  >  toupper((int)*px2)) 
-						indicator = 1; 
-					else 
-						px1 += 1, 
-						px2 += 1;
-				};
-			};
-		};
-	};
-
-	return indicator;
-};
-
-
-
-
-void Read_Config_Fwatch_HUD(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT)
-{
-	FILE *f = fopen(filename,"r");
-
-	if (!f)
+	String config;
+	if (String_readfile(config, filename) != 0)
 		return;
 
-	memset(no_ar    , 0, ARRAY_SIZE*1);
-	memset(is_custom, 0, ARRAY_SIZE*1);
-	memset(custom   , 0, ARRAY_SIZE*4);
-	memset(customINT, 0, ARRAY_SIZE*4);
+	memset(no_ar    , 0, sizeof(no_ar));
+	memset(is_custom, 0, sizeof(is_custom));
+	memset(custom   , 0, sizeof(custom));
+	memset(customINT, 0, sizeof(customINT));
 
-	fseek(f, 0, SEEK_END);
-	int file_size = ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	char *settings = (char *) malloc(file_size + 1);
-
-	if (settings == NULL)
-		return;
-
-	char *token		 = "";
-	int result		 = fread(settings, 1, file_size, f);
-	settings[result] = '\0';
-	int settings_pos = 0;
-	int value_index  = -1;
+	char *token		= "";
+	int config_pos  = 0;
+	int value_index = -1;
 	
-	while (settings_pos < result) {
-		char *setting = Tokenize(settings, ";", settings_pos, result, true, false);
+	while (config_pos < config.current_length) {
+		char *setting = Tokenize(config.pointer, ";", config_pos, config.current_length, true, false);
 
 		char *equality = strchr(setting, '=');
 		if (equality == NULL)
@@ -843,8 +508,8 @@ void Read_Config_Fwatch_HUD(char *filename, bool *no_ar, bool *is_custom, float 
 				no_ar[value_index] = 1;
 			else {
 				is_custom[value_index] = 1;
-				int is_int = IsNumberInArray(i,hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0]));
-				if (is_int) {
+
+				if (IsNumberInArray(i,hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0]))) {
 					if (IsNumberInArray(i,hud_color_list,sizeof(hud_color_list)/sizeof(hud_color_list[0]))) {
 						int index              = 0;
 						char *number           = strtok(value, "[,];");
@@ -864,16 +529,20 @@ void Read_Config_Fwatch_HUD(char *filename, bool *no_ar, bool *is_custom, float 
 		}
 	}
 
-	free(settings);
-	fclose(f);
-};
+	String_end(config);
+}
 
-void Transfer_Modfolder_Missions(char *mod, bool server) 
+
+
+
+// Move mission files from the selected modfolder to the game missions folder
+int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server)
 {
+	int file_count    = 0;
 	char filename[64] = "fwatch\\data\\sortMissions";
-	strcat(filename, server ? "_server.txt" : ".txt");
+	strcat(filename, is_dedicated_server ? "_server.txt" : ".txt");
 
-	FILE *f = fopen(filename,"a");
+	FILE *f = fopen(filename, "a");
 	if (f) {
 		char source[2048]           = "";
 		char destination[2048]      = "";
@@ -887,8 +556,10 @@ void Transfer_Modfolder_Missions(char *mod, bool server)
 			if (destination[i]=='.')
 				destination[i]='_';
 
-		if (MoveFileEx(source, destination, 0))
+		if (MoveFileEx(source, destination, 0)) {
 			fprintf(f, "%s?%s\n", source, destination);
+			file_count++;
+		}
 
 		WIN32_FIND_DATAW fd;
 		HANDLE hFind   = INVALID_HANDLE_VALUE;
@@ -944,6 +615,7 @@ void Transfer_Modfolder_Missions(char *mod, bool server)
 						if (MoveFileExW(source_w, destination_w, 0)) {
 							wcstombs(source, source_w, wcslen(source_w)+1);
 							fprintf(f, "%s\n", source);
+							file_count++;
 						}
 					}
 				} 
@@ -954,100 +626,85 @@ void Transfer_Modfolder_Missions(char *mod, bool server)
 
 		fclose(f);
 	}
+
+	return file_count;
 }
 
-void Return_Modfolder_Missions(bool server) 
+
+
+
+// Move mission files from the game missions folder back to the modfolders
+void ModfolderMissionsReturn(bool is_dedicated_server) 
 {
-	char filename[64]      = "fwatch\\data\\sortMissions";
-	strcat(filename, server ? "_server.txt" : ".txt");
+	char filename[64] = "fwatch\\data\\sortMissions";
+	strcat(filename, is_dedicated_server ? "_server.txt" : ".txt");
 
-	FILE *f = fopen(filename,"rb");
-	if (f) {
-		fseek(f, 0, SEEK_END);
-		int file_size = ftell(f);
-		fseek(f, 0, SEEK_SET);
+	String mission_list;
+	if (String_readfile(mission_list, filename) != 0)
+		return;
 
-		char *text_buffer = (char *) malloc(file_size + 1);
-
-		if (text_buffer == NULL) {
-			fclose(f);
-			return;
-		}
-
-		memset(text_buffer, 0, file_size);
-
-		int result = fread(text_buffer, 1, file_size, f);
-		fclose(f);
-		if (result != file_size) {
-			free(text_buffer);
-			return;
-		}
-
-		text_buffer[file_size] = '\0';
-
-
-		int i                       = 0;
-		int word_start              = 0;
-		wchar_t source_w[2048]      = L"";
-		wchar_t destination_w[2048] = L"";
-					
-		while (i < file_size) {
-			char *destination = Tokenize(text_buffer, "\r\n", i, file_size, false, false);
-			char *source      = strchr(destination,'\\');
-			bool remove_line  = false;
-			
-			if (source != NULL) {
-				source++;
-
-				if (strncmpi(source,"missions?",9) == 0) {
-					char *separator            = strchr(destination,'?');
-					int separator_pos          = separator - destination;
-					source                     = destination + separator_pos + 1;
-					destination[separator_pos] = '\0';
-					
-					if (MoveFileEx(source, destination, 0))
-						remove_line = true;
-
-					destination[separator_pos] = '?';
-				} else {
-					size_t source_len      = strlen(source);
-					size_t destination_len = strlen(destination);
-					mbstowcs(source_w, source, source_len+1);
-					mbstowcs(destination_w, destination, destination_len+1);
-
-					if (MoveFileExW(source_w, destination_w, 0))
-						remove_line = true;
-				}
-			} else
-				remove_line = true;
-			
-			if (i>0)
-				text_buffer[i-1] = '\r';
+	int i                       = 0;
+	int word_start              = 0;
+	wchar_t source_w[2048]      = L"";
+	wchar_t destination_w[2048] = L"";
 				
-			if (remove_line) {
-				if (text_buffer[i] == '\n') 
-					i++;
-					
-				memcpy(text_buffer+word_start, text_buffer+i, file_size-i);
-				
-				int len    = i - word_start;
-				i         -= len;
-				file_size -= len;
-			}
-
-			word_start = i;
-		}
-
-		text_buffer[file_size] = '\0';
+	while (i < mission_list.current_length) {
+		char *destination = Tokenize(mission_list.pointer, "\r\n", i, mission_list.current_length, false, false);
+		char *source      = strchr(destination,'\\');
+		bool remove_line  = false;
 		
-		f = fopen(filename, "wb");
-		if (f) {
-			result = fwrite(text_buffer, 1, file_size, f);
-			fclose(f);
+		if (source != NULL) {
+			source++;
+
+			if (strncmpi(source,"missions?",9) == 0) {
+				char *separator            = strchr(destination,'?');
+				int separator_pos          = separator - destination;
+				source                     = destination + separator_pos + 1;
+				destination[separator_pos] = '\0';
+				
+				if (MoveFileEx(source, destination, 0))
+					remove_line = true;
+
+				destination[separator_pos] = '?';
+			} else {
+				size_t source_len      = strlen(source);
+				size_t destination_len = strlen(destination);
+				mbstowcs(source_w, source, source_len+1);
+				mbstowcs(destination_w, destination, destination_len+1);
+
+				if (MoveFileExW(source_w, destination_w, 0))
+					remove_line = true;
+			}
+		} else
+			remove_line = true;
+		
+		if (i > 0)
+			mission_list.pointer[i-1] = '\r';
+		
+		// Cut text in the middle of the buffer and close the gap
+		if (remove_line) {
+			if (mission_list.pointer[i] == '\n') 
+				i++;
+				
+			memcpy(mission_list.pointer+word_start, mission_list.pointer+i, mission_list.current_length-i);
+			
+			int len                      = i - word_start;
+			i                           -= len;
+			mission_list.current_length -= len;
 		}
 
-		free(text_buffer);
+		word_start = i;
 	}
+
+	mission_list.pointer[mission_list.current_length] = '\0';
+	
+	FILE *f = fopen(filename, "wb");
+	if (f) {
+		fwrite(mission_list.pointer, 1, mission_list.current_length, f);
+		fclose(f);
+	}
+
+	String_end(mission_list);
 }
 // ******************************************************************************************************
 
@@ -1071,300 +728,640 @@ void Return_Modfolder_Missions(bool server)
 
 // **** THREADS *****************************************************************************************
 
-//v1.1
-// Poke STR_USRACT_CHEAT_1 value to indicate that Fwatch is enabled
-void FwatchPresence(void *loop)
+// While the game is running access its memory, move mission files, handle signals from dll
+void FwatchPresence(ThreadArguments *arg)
 {
-	bool is_dedicated_server = (int)loop==2;
-	int sleep_rate           = 250;
-	bool transfered_missions = false;
-	int signal_action        = -1;
-	char *signal_buffer      = "";
-	SIZE_T stBytes           = 0;
-	DWORD pid		         = 0;
-	DWORD pid_last	         = 0;
 	HANDLE phandle;
+	SIZE_T stBytes      = 0;
+	DWORD game_pid      = 0;
+	DWORD game_pid_last = 0;
+
+	int game_exe_address            = 0;
+	int game_param_address          = 0;
+	int game_exe_index              = 0;
+	int game_mods_num               = 0;
+	const int game_mods_max         = 32;
+	const int game_param_max        = 512;
+	char game_param[game_param_max] = "";
+	char *game_mods[game_mods_max]  = {0};
+
+	int master_server1_address = 0;
+	int master_server2_address = 0;
+	int transfered_missions    = 0;
+	int signal_action          = -1;
+	char *signal_buffer        = "";
+	char error_msg_last[512]   = "";
+	bool error_log_enabled     = false;
+
+	bool ui_change_enabled     = false;
+	bool ui_portrait_mode      = false;
+	bool ui_apply_change       = true;
+	bool ui_portrait_calculate = false;
+	bool ui_move_tank_down     = false;
+	int ui_address             = 0;
+	int ui_address_chat        = 0;
+	int ui_chat_state          = 0;
+	int ui_chat_state_last     = -1;
+	float ui_shift_x           = 0;
+	float ui_shift_y           = 0;
+	float ui_move_tank_down_y  = 0;
+	float ui_current[ARRAY_SIZE];
+	float ui_written[ARRAY_SIZE];
+	float ui_custom[ARRAY_SIZE];
+	bool ui_no_ar[ARRAY_SIZE];
+	bool ui_is_custom[ARRAY_SIZE];
+	int ui_currentINT[ARRAY_SIZE];
+	int ui_writtenINT[ARRAY_SIZE];
+	int ui_customINT[ARRAY_SIZE];
+
+	enum UI_CHAT_STATES {
+		UI_CHAT_MISSION,
+		UI_CHAT_BRIEFINGLOBBY,
+		UI_CHAT_CUSTOM
+	};
+
+
+	// Prepare necessary data for fixing UI on game client - 
+	// Generate settings file, preprocess it and then parse it
+	if (!arg->is_dedicated_server) {
+		FILE *f = fopen("Aspect_Ratio.sqf","w");
+		if (f) {
+			fprintf(f, "#include \"Aspect_Ratio.hpp\"\n#ifdef AR_CENTERHUD\nar_center=1;\n#else\nar_center=0;\n#endif\nar_modifx=AR_modifX;ar_modify=AR_modifY;ar_modifx_2ndmon=AR_modifX_2NDMON;true");
+			fclose(f);
+
+			TCHAR pwd[MAX_PATH];
+			GetCurrentDirectory(MAX_PATH, pwd);
+
+			PROCESS_INFORMATION pi;
+			STARTUPINFO si; 
+			memset(&si, 0, sizeof(si));
+			memset(&pi, 0, sizeof(pi));
+			si.cb          = sizeof(si);
+			si.dwFlags     = STARTF_USESHOWWINDOW;
+			si.wShowWindow = SW_HIDE;
+
+			char cmdLine[MAX_PATH+64] = "";
+			sprintf(cmdLine, "\"%s\" -nolog Aspect_Ratio.sqf Aspect_Ratio.sqf ", pwd);
+
+			if (CreateProcess("fwatch\\data\\preproc.exe", cmdLine, NULL, NULL, false, 0, NULL, NULL, &si, &pi)) {
+				DWORD st;
+
+				do {					
+					GetExitCodeProcess(pi.hProcess, &st);
+					Sleep(5);
+				} while (st == STILL_ACTIVE);
+
+				CloseHandle(pi.hProcess);
+				CloseHandle(pi.hThread); 
+
+
+				String config;
+				if (String_readfile(config, "Aspect_Ratio.sqf") == 0) {
+					char *token = strtok(config.pointer, ";\n\t ");
+
+					while (token != NULL) {
+						char *eq = strchr(token, '=');
+
+						if (eq != NULL) {
+							int pos   = eq - token;
+							char *val = token + pos + 1;
+
+							if (strncmp(token,"ar_modifx",pos) == 0) {
+								ui_shift_x       = (float)atof(val);
+								ui_portrait_mode = ui_shift_x < 0;
+							}
+
+							if (strncmp(token,"ar_modify",pos) == 0) 
+								ui_shift_y = (float)atof(val);
+
+							if (strncmp(token,"ar_center",pos) == 0)
+								ui_change_enabled = atoi(val) == 0;
+						}
+
+						token = strtok (NULL, ";\n\t ");
+					}
+				}
+
+				String_end(config);
+			}
+		}
+	}
+
+
+
 
 
 	while (true) {
-		Sleep(sleep_rate);
+		Sleep(250);
 
-		// Search for the OFP window
-		if (!is_dedicated_server)
-			pid = findOFPwindow();
-		else {
-			int max_loops = sizeof(server_execs) / sizeof(server_execs[0]);
+		// Search for the game window
+		HWND hwnd = NULL;
+		hwnd      = GetTopWindow(hwnd);
+		game_pid  = 0;
 
-			for (int i=0; i<max_loops; i++) {
-				pid = findProcess(server_execs[i]);	
+		while (hwnd && game_pid==0) {
+			char current_window_name[32] = "";
+			GetWindowText(hwnd, current_window_name, 32);
 
-				if (pid != 0) {
-					strcpy(GameServerName, server_execs[i]);
+			for (int i=0; i<global_window_num && game_pid==0; i++) {
+				if (strncmp(current_window_name, global_window_name[i], strlen(global_window_name[i])) == 0) {
+					DWORD pid = 0;
+					GetWindowThreadProcessId(hwnd, &pid);
+					HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
+ 
+					if (hSnap != INVALID_HANDLE_VALUE) {
+						MODULEENTRY32 xModule;
+						memset (&xModule, 0, sizeof(xModule));
+						xModule.dwSize = sizeof(xModule);
+
+						// First process module must match game executable name
+						if (Module32First(hSnap, &xModule) != 0) {
+							for (int i=0; i<global_exe_num && game_pid==0; i++)
+								if (lstrcmpi(xModule.szModule, (LPCTSTR)global_exe_name[i]) == 0) {
+									game_exe_address = (int)xModule.modBaseAddr;
+									game_exe_index   = i;
+									game_pid         = pid;
+
+									// If this a new game instance then also get address for exe parameters
+									if (game_pid != game_pid_last) {
+										char module_name[16] = "ifc22.dll";
+
+										if (arg->is_dedicated_server)
+											strcpy(module_name, "ijl15.dll");
+
+										do {
+											if (lstrcmpi(xModule.szModule, (LPCTSTR)module_name) == 0) {
+												game_param_address = (int)xModule.modBaseAddr + (!arg->is_dedicated_server ? 0x2C154 : 0x4FF20);
+												break;
+											}
+										} while(Module32Next(hSnap, &xModule));
+									}
+								}
+						}
+
+						CloseHandle(hSnap);
+					}
+				}
+			}
+
+			if (game_pid == 0)
+				hwnd = GetNextWindow(hwnd, GW_HWNDNEXT);
+		}
+
+		// If there's no game
+		if (game_pid == 0) {
+			if (transfered_missions > 0) {
+				transfered_missions = 0;
+				ModfolderMissionsReturn(arg->is_dedicated_server);
+			}
+
+			continue;
+		}
+
+		phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, game_pid);
+
+		if (phandle == 0) 
+			continue;
+
+		// If this is a new game instance
+		if (game_pid != game_pid_last) {
+			if (!arg->is_dedicated_server) {
+				// Reset UI state
+				memset(ui_current    , 0, sizeof(ui_current));
+				memset(ui_currentINT , 0, sizeof(ui_currentINT));
+				memset(ui_written    , 0, sizeof(ui_written));
+				memset(ui_writtenINT , 0, sizeof(ui_writtenINT));
+				memset(ui_custom     , 0, sizeof(ui_custom));
+				memset(ui_customINT  , 0, sizeof(ui_customINT));
+				memset(ui_no_ar      , 0, sizeof(ui_no_ar));
+				memset(ui_is_custom  , 0, sizeof(ui_is_custom));
+
+				ReadUIConfig((global_exe_version[game_exe_index]==VER_196 ? "Res\\bin\\config_fwatch_hud.cfg" : "bin\\config_fwatch_hud.cfg"), ui_no_ar, ui_is_custom, ui_custom, ui_customINT);
+
+				// Find where UI coordinates are stored
+				ui_address      = 0;
+				ui_address_chat = 0;
+
+				switch(global_exe_version[game_exe_index]) {
+					case VER_196 : ui_address=0x79F8D0; break;
+					case VER_199 : ui_address=0x78E9C8; break;
+					case VER_201 : ui_address=game_exe_address+0x6D8240; break;
+				}
+
+				ReadProcessMemory(phandle, (LPVOID)(ui_address+0x0), &ui_address, 4, &stBytes);
+				ReadProcessMemory(phandle, (LPVOID)(ui_address+0x8), &ui_address, 4, &stBytes);
+
+				if (ui_address != 0) {
+					// Chat has a different address than the rest of UI
+					switch(global_exe_version[game_exe_index]) {
+						case VER_196 : ui_address_chat=0x7831B0; break;
+						case VER_199 : ui_address_chat=0x7722A0; break;
+						case VER_201 : ui_address_chat=game_exe_address+0x6FFCC0; break;
+					}
+				} else {
+					// Wait until game fills that memory
+					CloseHandle(phandle);
+					continue;
+				}
+
+				if (ui_portrait_mode)
+					ui_portrait_calculate = true;
+			}
+
+
+			// Get list of arguments passed to the game executable
+			ReadProcessMemory(phandle, (LPVOID)game_param_address, &game_param_address, 4, &stBytes);
+			ReadProcessMemory(phandle, (LPVOID)game_param_address, &game_param_address, 4, &stBytes);
+			ReadProcessMemory(phandle, (LPVOID)game_param_address, &game_param        , game_param_max, &stBytes);
+
+			int word_start = -1;
+			game_mods_num  = 0;
+
+			// Copy mod names into array
+			for (int i=0; i<game_param_max; i++)
+				if (game_param[i] == '\0') {
+					if (strncmp(game_param+word_start,"-mod=",5) == 0) {
+						char *value   = game_param + word_start + 5;
+						int value_len = strlen(value);
+						int value_pos = 0;
+
+						while (value_pos < value_len)
+							if (game_mods_num < game_mods_max)
+								game_mods[game_mods_num++] = Tokenize(value, ";", value_pos, value_len, false, false);
+					}
+
+					if (game_param[i+1]=='\0') 
+						break;
+				} else {
+					if (word_start != -1)
+						word_start = i;
+				}
+
+			// Read fwatch configuration from each mod in normal order
+			for (i=0; i<game_mods_num; i++)
+				if (strlen(game_mods[i]) < 485) {
+					char filename[512] = "";
+					sprintf(filename, "%s\\bin\\config_fwatch_hud.cfg", game_mods[i]);
+					ReadUIConfig(filename, ui_no_ar, ui_is_custom, ui_custom, ui_customINT);
+				}
+
+			// Transfer mission files from each mod in reverse order
+			for (i=game_mods_num-1; i>0; i--)
+				transfered_missions += ModfolderMissionsTransfer(game_mods[i], arg->is_dedicated_server);
+
+
+
+			// Change master servers
+			switch(global_exe_version[game_exe_index]) {
+				case VER_196 : master_server1_address=0x76EBC0; master_server2_address=0x775F58; break;
+				case VER_199 : master_server1_address=0x756530; master_server2_address=0x75D7F0; break;
+				case VER_201 : master_server1_address=game_exe_address+0x6C9298; master_server2_address=game_exe_address+0x6C9560; break;
+			}
+
+			if (!arg->is_dedicated_server) {
+				if (master_server1_address!=0  &&  arg->is_custom_master1)
+					WriteProcessMemory(phandle, (LPVOID)master_server1_address, global.master_server1, 64, &stBytes);
+
+				if (master_server2_address!=0  &&  arg->is_custom_master2)
+					WriteProcessMemory(phandle, (LPVOID)master_server2_address, global.master_server2, 19, &stBytes);
+			}
+
+
+			// Find listen server port
+			int listen_server_port_address = 0;
+
+			switch(global_exe_version[game_exe_index]) {
+				case VER_196 : listen_server_port_address=0x778794; break;
+				case VER_199 : listen_server_port_address=0x75F960; break;
+				case VER_201 : listen_server_port_address=game_exe_address+0x6C9610; break;
+			}
+
+			if (listen_server_port_address != 0)
+				ReadProcessMemory(phandle, (LPVOID)listen_server_port_address, &global.listen_server_port, 4, &stBytes);
+
+
+			// Find 'Cheat 1' string and replace it with 'FWATCH'
+			bool found     = false;
+			int pointer[4] = {0,0,0,0};
+			int modif[3]   = {0x434, 0x9C, 0x8};
+			int max_loops  = sizeof(pointer) / sizeof(pointer[0]) - 1;
+			char buffer[8] = "";
+
+			for (int j=0; j<14 && game_pid_last==0; j++) {
+				if (!arg->is_dedicated_server) {
+					switch(global_exe_version[game_exe_index]) {
+						case VER_196 : pointer[0]=0x7D5280; break;
+						case VER_199 : pointer[0]=0x7C4248; break;
+						case VER_201 : pointer[0]=game_exe_address+0x6C9A60; break;
+					}
+				} else {
+					switch(global_exe_version[game_exe_index]) {
+						case VER_196 : pointer[0]=0x754D78; break;
+						case VER_199 : pointer[0]=0x754E08; break;
+						case VER_201 : pointer[0]=game_exe_address+0x5C08A0; break;
+					}
+				}
+						
+				// prefedefined memory locations
+				switch (j) {
+					case 0 : modif[0]=0x434; modif[1]=0x9C; break;
+					case 1 : modif[0]=0x434; modif[1]=0x94; break;
+					case 2 : modif[0]=0x3B4; modif[1]=0x44; break;
+					case 3 : modif[0]=0x434; modif[1]=0xAC; break;
+					case 4 : modif[0]=0x3B4; modif[1]=0x3C; break;
+					case 5 : modif[0]=0x1C4; modif[1]=0x70; modif[2]=0x68; break;
+					case 6 : modif[0]=0x374; modif[1]=0x46C; modif[2]=0x8; break;
+					case 7 : modif[0]=0x7F4; modif[1]=0x46C; modif[2]=0x8; break;
+					case 8 : modif[0]=0x6F4; modif[1]=0x364; modif[2]=0x8; break;
+					case 9 : modif[0]=0x1C4; modif[1]=0x68; modif[2]=0x68; break;
+					case 10: modif[0]=0x3B4; modif[1]=0x2C; modif[2]=0x8; break; //armaresistance.exe
+					case 11: modif[0]=0x3B4; modif[1]=0x34; modif[2]=0x8; break; //armaresistance.exe
+					case 12: pointer[0]=0x7B4A54; modif[0]=0x74; modif[1]=0x1C4; modif[2]=0x8; break;
+					case 13: pointer[0]=0x7D52A8; modif[1]=0x7C4; modif[2]=0x8; max_loops--; break;
+				}
+
+				for (int i=0; i<max_loops; i++) {
+					ReadProcessMemory(phandle, (LPVOID)pointer[i], &pointer[i+1], 4, &stBytes);
+					pointer[i+1] = pointer[i+1] +  modif[i];
+				}
+
+				ReadProcessMemory(phandle, (LPVOID)pointer[max_loops], &buffer, 8, &stBytes);
+
+				if (strcmpi(buffer,"Cheat 1") == 0) {
+					WriteProcessMemory(phandle, (LPVOID)pointer[max_loops], "FWATCH", 7, &stBytes);
+					found = true;
 					break;
 				}
 			}
-		}
 
-		// If found
-		if (pid != 0) {
-			// If a new game window
-			if (pid != pid_last) {
-				HANDLE phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
+			// If not found then do a broad search
+			if (!found) {
+				for (int current=!arg->is_dedicated_server ? 0x10000008 : 0x00D00008; current<0x7FFF0000; current+=0x10) {
+					ReadProcessMemory(phandle, (LPVOID)current, &buffer, 7, &stBytes);
 
-				if (phandle == 0) 
-					continue;
-
-
-				// Change master servers
-				int master_base1 = 0;
-				int master_base2 = 0;
-
-				switch(Game_Version) {
-					case VER_196 : master_base1=0x76EBC0; master_base2=0x775F58; break;
-					case VER_199 : master_base1=0x756530; master_base2=0x75D7F0; break;
-					case VER_201 : master_base1=Game_Exe_Address+0x6C9298; master_base2=Game_Exe_Address+0x6C9560; break;
-				}
-
-				if (!is_dedicated_server) {
-					if (master_base1!=0  &&  strcmp(serv1,"")!=0)
-						WriteProcessMemory(phandle, (LPVOID)master_base1, serv1, 64, &stBytes);
-
-					if (master_base1!=0  &&  strcmp(serv2,"")!=0)
-						WriteProcessMemory(phandle, (LPVOID)master_base2, serv2, 19, &stBytes);
-				};
-
-				ReadProcessMemory(phandle, (LPVOID)master_base1, &master_serv1, 64, &stBytes);
-				ReadProcessMemory(phandle, (LPVOID)master_base2, &master_serv2, 19, &stBytes);
-
-
-				// Find listen server port
-				int listen_server_port_address = 0;
-
-				switch(Game_Version) {
-					case VER_196 : listen_server_port_address=0x778794; break;
-					case VER_199 : listen_server_port_address=0x75F960; break;
-					case VER_201 : listen_server_port_address=Game_Exe_Address+0x6C9610; break;
-				}
-
-				if (listen_server_port_address != 0)
-					ReadProcessMemory(phandle, (LPVOID)listen_server_port_address, &ListenServerPort, 4, &stBytes);
-
-
-				// Find 'Cheat 1' string and replace it with 'FWATCH'
-				bool found     = false;
-				int pointer[4] = {0,0,0,0};
-				int modif[3]   = {0x434, 0x9C, 0x8};
-				int max_loops  = sizeof(pointer) / sizeof(pointer[0]) - 1;
-				char buffer[8] = "";
-
-				for (int j=0; j<14 && pid_last==0; j++) {
-					switch(Game_Version) {
-						case VER_196 : pointer[0]=0x7D5280; break;
-						case VER_199 : pointer[0]=0x7C4248; break;
-						case VER_201 : pointer[0]=Game_Exe_Address+0x6C9A60; break;
-					}
-
-					if (is_dedicated_server)
-						switch(Game_Version) {
-							case VER_196 : pointer[0]=0x754D78; break;
-							case VER_199 : pointer[0]=0x754E08; break;
-							case VER_201 : pointer[0]=Game_Exe_Address+0x5C08A0; break;
-						}
-							
-					// prefedefined memory locations
-					switch (j) {
-						case 0 : modif[0]=0x434; modif[1]=0x9C; break;
-						case 1 : modif[0]=0x434; modif[1]=0x94; break;
-						case 2 : modif[0]=0x3B4; modif[1]=0x44; break;
-						case 3 : modif[0]=0x434; modif[1]=0xAC; break;
-						case 4 : modif[0]=0x3B4; modif[1]=0x3C; break;
-						case 5 : modif[0]=0x1C4; modif[1]=0x70; modif[2]=0x68; break;
-						case 6 : modif[0]=0x374; modif[1]=0x46C; modif[2]=0x8; break;
-						case 7 : modif[0]=0x7F4; modif[1]=0x46C; modif[2]=0x8; break;
-						case 8 : modif[0]=0x6F4; modif[1]=0x364; modif[2]=0x8; break;
-						case 9 : modif[0]=0x1C4; modif[1]=0x68; modif[2]=0x68; break;
-						case 10: modif[0]=0x3B4; modif[1]=0x2C; modif[2]=0x8; break; //armaresistance.exe
-						case 11: modif[0]=0x3B4; modif[1]=0x34; modif[2]=0x8; break; //armaresistance.exe
-						case 12: pointer[0]=0x7B4A54; modif[0]=0x74; modif[1]=0x1C4; modif[2]=0x8; break;
-						case 13: pointer[0]=0x7D52A8; modif[1]=0x7C4; modif[2]=0x8; max_loops--; break;
-					};
-
-					for (int i=0; i<max_loops; i++) {
-						ReadProcessMemory(phandle, (LPVOID)pointer[i], &pointer[i+1], 4, &stBytes);
-						pointer[i+1] = pointer[i+1] +  modif[i];
-					}
-
-					ReadProcessMemory(phandle, (LPVOID)pointer[max_loops], &buffer, 8, &stBytes);
-
-					if (strcmpi(buffer,"Cheat 1") == 0) {
-						WriteProcessMemory(phandle, (LPVOID)pointer[max_loops], "FWATCH", 7, &stBytes);
-						found = true;
+					if (strcmp(buffer,"Cheat 1")==0) {
+						WriteProcessMemory(phandle, (LPVOID)current, "FWATCH", 7, &stBytes);
 						break;
 					}
 				}
+			}
 
-				// If not found then do a general search
-				if (!found) {
-					for (int current=!is_dedicated_server ? 0x10000008 : 0x00D00008; current<0x7FFF0000; current+=0x10) {
-						ReadProcessMemory(phandle, (LPVOID)current, &buffer, 7, &stBytes);
+			ui_apply_change = true;
+			game_pid_last   = game_pid;
+		} else {
+			// If it's a game instance that we have accessed before
+			// Refresh master servers (user can change them in the main menu)
+			ReadProcessMemory(phandle, (LPVOID)master_server1_address, &global.master_server1, 64, &stBytes);
+			ReadProcessMemory(phandle, (LPVOID)master_server2_address, &global.master_server2, 19, &stBytes);
 
-						if (strcmp(buffer,"Cheat 1")==0) {
-							WriteProcessMemory(phandle, (LPVOID)current, "FWATCH", 7, &stBytes);
-							break;
+			// Check for game scripting error
+			if (error_log_enabled) {
+				int pointers[] = {0, 0, 0, 0};
+				int modif[]	   = {0x68, 0x1C, 0};
+				int last       = sizeof(pointers) / sizeof(pointers[0]) - 1;
+
+				switch(global_exe_version[game_exe_index]) {
+					case VER_196 : pointers[0]=0x789D88; break;
+					case VER_199 : pointers[0]=0x778E80; break;
+					case VER_201 : pointers[0]=game_exe_address+0x6D6A10; break;
+				}
+
+				for (int i=0; i<last; i++) {
+					ReadProcessMemory(phandle, (LPVOID)pointers[i], &pointers[i+1], 4, &stBytes);
+					pointers[i+1] = pointers[i+1] +  modif[i];
+				}
+
+				// Save message if different from the last one
+				if (pointers[last] != 0) {
+					char error_msg[512] = "";
+					ReadProcessMemory(phandle, (LPVOID)pointers[last], &error_msg, 512, &stBytes);
+
+					if (strcmp(error_msg,error_msg_last) != 0) {
+						strcpy(error_msg_last, error_msg);
+						FILE *f = fopen("fwatch\\idb\\_errorLog.txt", "a");
+
+						if (f) {
+							fprintf(f, "%s\n", error_msg);
+							fclose(f);
+						}
+					}
+				}
+			}
+
+			if (ui_change_enabled) {
+				// Read position of UI elements
+				for (int i=0; i<hud_offset_num; i++) {			
+					int address = i<CHAT_X ? ui_address : ui_address_chat;
+
+					if (IsNumberInArray(i,hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0])))
+						ReadProcessMemory(phandle, (LPVOID)(address+hud_offset[i]), &ui_currentINT[i], 4, &stBytes);
+					else
+						ReadProcessMemory(phandle, (LPVOID)(address+hud_offset[i]), &ui_current[i], 4, &stBytes);
+				}
+
+				if (ui_currentINT[CHAT_ROWS]==4  &&  ui_current[CHAT_X]==0.05f  &&  (ui_current[CHAT_Y]==0.02f || ui_current[CHAT_Y]==0.90f)  &&  ui_current[CHAT_W]==0.9f  &&  ui_current[CHAT_H]==0.02f)
+					ui_chat_state = UI_CHAT_BRIEFINGLOBBY;
+				else 
+					if (ui_currentINT[CHAT_ROWS]==6  &&  ui_current[CHAT_X]==0.05f  &&  ui_current[CHAT_Y]==0.68f  &&  ui_current[CHAT_W]==0.7f  &&  ui_current[CHAT_H]==0.02f)
+						ui_chat_state = UI_CHAT_MISSION;
+					else
+						ui_chat_state = UI_CHAT_CUSTOM;
+
+
+				// Run calculation for the portrait mode
+				if (ui_portrait_calculate) {
+					ui_portrait_calculate = false;
+
+					float tank_x    = ui_current[TANK_X]    + (ui_current[TANK_X]<0.5 ? -1 : 1)    * ui_shift_x;
+					float tank_y    = ui_current[TANK_Y]    + (ui_current[TANK_Y]<0.5 ? -1 : 1)    * ui_shift_y;
+					float radar_y	= ui_current[RADAR_Y]   + (ui_current[RADAR_Y]<0.5 ? -1 : 1)   * ui_shift_y;
+					float compass_y = ui_current[COMPASS_Y] + (ui_current[COMPASS_Y]<0.5 ? -1 : 1) * ui_shift_y;	
+
+					if (ui_portrait_mode && 
+						tank_x + ui_current[TANK_W] > ui_current[RADAR_X]  &&
+						tank_y + ui_current[TANK_H] >= radar_y) 
+					{
+						ui_move_tank_down   = true;
+						ui_move_tank_down_y = (radar_y + ui_shift_y) + ui_current[RADAR_H];
+					} else
+						if (ui_portrait_mode &&
+							tank_x + ui_current[TANK_W] > ui_current[COMPASS_X]  &&
+							tank_y + ui_current[TANK_H] >= compass_y) 
+						{
+							ui_move_tank_down   = true;
+							ui_move_tank_down_y = (compass_y + ui_shift_y) + ui_current[COMPASS_H];
+						}
+				}
+
+
+				// Modify HUD position
+				for (i=0; i<hud_offset_num; i++) {
+					int is_int = IsNumberInArray(i,hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0]));
+
+					// Write new position once per game instance
+					// Except for the chat because its position keeps changing throughout the game
+					//if (first_check  ||  (!is_int && current[i]!=written[i])  ||  (is_int  && currentINT[i]!=writtenINT[i]))
+					if (ui_apply_change  ||  i>=CHAT_X && ui_chat_state!=ui_chat_state_last) {
+						if (ui_is_custom[i] && (i<CHAT_X || i>=CHAT_X && ui_chat_state==UI_CHAT_MISSION))
+							if (is_int)
+								ui_currentINT[i] = ui_customINT[i];
+							else
+								ui_current[i] = ui_custom[i];
+						
+						if (ui_no_ar[i]) {
+							if (is_int)
+								ui_writtenINT[i] = ui_currentINT[i];
+							else
+								ui_written[i] = ui_current[i];
+						} else
+							switch (i) {
+								// move to the left
+								case ACTION_X	 :
+								case TANK_X		 :	
+								case GROUPDIR_X  : ui_written[i] = ui_current[i] + (ui_current[i]<0.5 ? -1 : 1) * ui_shift_x; break;
+
+								// move up (but compensate for portrait)
+								case RADIOMENU_Y :
+								case TANK_Y		 : ui_written[i] = ui_current[i] + (ui_current[i]<0.5 ? -1 : 1) * ui_shift_y + ui_move_tank_down_y; break;
+
+								// move up/down
+								case ACTION_Y	 :
+								case LEADER_Y	 :
+								case GROUPDIR_Y  :
+								case RADAR_Y	 :
+								case HINT_Y		 : 
+								case COMPASS_Y	 : ui_written[i] = ui_current[i] + (ui_current[i]<0.5 ? -1 : 1) * ui_shift_y; break;
+
+								// move left on portrait
+								case RADIOMENU_X : {
+									if (ui_move_tank_down)
+										ui_written[i] = ui_current[i] + (ui_current[i]<0.5 ? -1 : 1) * ui_shift_x;
+									else
+										ui_written[i] = ui_current[i];
+								}
+								break;
+
+								// extend on widescreen
+								case RADIOMENU_W : ui_written[i] = ui_current[i] + (!ui_move_tank_down ? ui_shift_x : 0); break; 
+
+								// shrink on portrait
+								case LEADER_X : ui_written[i] = ui_current[i] - ui_shift_x; break;
+								case LEADER_W : ui_written[i] = ui_current[i] + ui_shift_x*2; break;
+								/*{
+									if (portrait)
+									{
+										if (i == LEADER_X)
+											written[i] = current[i] + (current[i]<0.5 ? -1 : 1) * AR_modifX;
+										else
+											written[i] = current[i] + AR_modifX*2;
+									}
+									else
+										written[i] = current[i];
+								}
+								break;*/
+
+								case CHAT_X : ui_written[i] = ui_current[i] - ui_shift_x; break;
+								case CHAT_Y : ui_written[i] = ui_current[i] + (ui_current[i]<0.5 ? -ui_shift_y : ui_shift_y); break;
+								case CHAT_W : {
+									if (ui_portrait_mode) {
+										if (ui_current[CHAT_X] + ui_current[i] > 1 + ui_shift_x*2)
+											ui_written[i] = ui_current[i] + ui_shift_x*2;
+									} else
+										ui_written[CHAT_W] = ui_current[CHAT_W] + ui_shift_x*2;
+								}
+								break;
+
+								default: {
+									if (is_int)
+										ui_writtenINT[i] = ui_currentINT[i];
+									else
+										ui_written[i] = ui_current[i];								
+								}
+								break;
+									
+							}
+
+						int address = i<CHAT_X ? ui_address : ui_address_chat;
+						
+						if (is_int) {
+							//fprintf(fd,"%s: 0x%x %d %d\n",hud_names[i],pointer+hud_offset[i],currentINT[i],writtenINT[i]);
+							WriteProcessMemory(phandle, (LPVOID)(address+hud_offset[i]), &ui_writtenINT[i], 4, &stBytes);
+						} else {
+							//fprintf(fd,"%s: 0x%x %f %f\n",hud_names[i],pointer+hud_offset[i],current[i],written[i]);
+							WriteProcessMemory(phandle, (LPVOID)(address+hud_offset[i]), &ui_written[i], 4, &stBytes);
 						}
 					}
 				}
 
-				CloseHandle(phandle);
+				ui_apply_change    = false;
+				ui_chat_state_last = UI_CHAT_CUSTOM;
+			}
 
-				sleep_rate = 500;
-				pid_last   = pid;
-			} else {
-				// If it's a game that we accessed before
-				// Get active modfolders
-				if (!transfered_missions) {
-					phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
+			// Check if there's a signal to restart the client/server
+			char file_name[64] = "fwatch\\data\\fwatch_client_restart.db";
 
-					if (phandle) {
-						HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
-							
- 						if (hSnap != INVALID_HANDLE_VALUE) {
-							MODULEENTRY32 xModule;
-							memset (&xModule, 0, sizeof(xModule));
-							xModule.dwSize = sizeof(xModule);
+			if (arg->is_dedicated_server)
+				strcpy(file_name, "fwatch\\data\\fwatch_server_restart.db");
 
-							if (Module32First(hSnap, &xModule)) {
-								xModule.dwSize = sizeof(MODULEENTRY32);
-								int baseOffset = 0;
+			if (signal_action == -1) {
+				FILE *fp = fopen(file_name, "r");					 
+				if (fp) {
+					fseek(fp, 0, SEEK_END);
+					int buffer_size = ftell(fp);
+					signal_buffer   = (char*) malloc (buffer_size+1);
 
-								char module_name[16] = "ifc22.dll";
-								if (is_dedicated_server)
-									strcpy(module_name, "ijl15.dll");
+					if (signal_buffer) {
+						fseek(fp, 0, SEEK_SET);
+						fread(signal_buffer, 1, buffer_size, fp);
+						signal_buffer[buffer_size] = '\0';
+						signal_action = 1;
+					}
+				
+					fclose(fp);
+				}
+			} 
 
-								do {
-									if (lstrcmpi(xModule.szModule, (LPCTSTR)module_name) == 0) {
-										baseOffset = (int)xModule.modBaseAddr + (!is_dedicated_server ? 0x2C154 : 0x4FF20);
-										break;
-									}
-								} while(Module32Next(hSnap, &xModule));
+			if (signal_action == 1) {
+				bool file_removed = false;
 
-								transfered_missions = true;
-								char parameters[512] = "";
-								ReadProcessMemory(phandle, (LPVOID)baseOffset, &baseOffset, 4, &stBytes);
-								ReadProcessMemory(phandle, (LPVOID)baseOffset, &baseOffset, 4, &stBytes);
-								ReadProcessMemory(phandle, (LPVOID)baseOffset, &parameters, 512, &stBytes);
+				if (remove(file_name) == 0) {
+					file_removed = true;
+				} else {
+					if (errno == 2) {
+						file_removed = true;
+					}
+				}
 
-								int emptyChars = 0;
-								for (int i=0; i<512; i++)
-									if (parameters[i] == '\0') {
-										emptyChars++;
+				if (file_removed) {
+					char exe_name[64] = "fwatch\\data\\gameRestart.exe";
 
-										if (emptyChars == 2) 
-											break;
-
-										parameters[i] = ' ';
-									} else 
-										emptyChars = 0;
-
-								int parameters_len = strlen(parameters);
-								int parameters_pos = parameters_len - 1;
-
-								while (parameters_pos > 0) {
-									char *parameter = Tokenize(parameters, " ", parameters_pos, parameters_len, false, true);
-
-									if (strncmp(parameter,"-mod=",5) == 0) {
-										parameter += 5;
-										int parameter_len = strlen(parameter);
-										int parameter_pos = parameter_len - 1;
-
-										while (parameter_pos > 0) {
-											char *mod = Tokenize(parameter, ";", parameter_pos, parameter_len, false, true);
-											Transfer_Modfolder_Missions(mod, is_dedicated_server);
-										}
-									}
-								}
-							}
-						
-							CloseHandle(hSnap);
-						}
-
+					if (arg->is_dedicated_server) {
+						strcpy(exe_name, global_exe_name[game_exe_index]);
+						TerminateProcess(phandle, 0);
 						CloseHandle(phandle);
 					}
-				}
 
+					// Run program
+					STARTUPINFO si;
+					PROCESS_INFORMATION pi;
+					ZeroMemory(&si, sizeof(si));
+					si.cb = sizeof(si);
+					si.dwFlags = STARTF_USESHOWWINDOW;
+					si.wShowWindow = SW_HIDE;
+					ZeroMemory(&pi, sizeof(pi));
 
-				// Check if there's a signal to restart the client/server
-				char file_name[64] = "fwatch\\data\\fwatch_client_restart.db";
-
-				if (is_dedicated_server)
-					strcpy(file_name, "fwatch\\data\\fwatch_server_restart.db");
-
-				if (signal_action == -1) {
-					FILE *fp = fopen(file_name, "r");					 
-					if (fp) {
-						fseek(fp, 0, SEEK_END);
-						int buffer_size = ftell(fp);
-						signal_buffer   = (char*) malloc (buffer_size+1);
-
-						if (signal_buffer) {
-							fseek(fp, 0, SEEK_SET);
-							fread(signal_buffer, 1, buffer_size, fp);
-							signal_buffer[buffer_size] = '\0';
-							signal_action = 1;
-						}
-					
-						fclose(fp);
-					}
-				} 
-
-				if (signal_action == 1) {
-					bool file_removed = false;
-
-					if (remove(file_name) == 0) {
-						file_removed = true;
-					} else {
-						if (errno == 2) {
-							file_removed = true;
-						}
+					if (CreateProcess(exe_name, signal_buffer, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
+						CloseHandle(pi.hProcess);
+						CloseHandle(pi.hThread); 
 					}
 
-					if (file_removed) {
-						char exe_name[64] = "fwatch\\data\\gameRestart.exe";
-
-						if (is_dedicated_server) {
-							strcpy(exe_name, GameServerName);
-							TerminateProcess(phandle, 0);
-							CloseHandle(phandle);
-						}
-
-						// Run program
-						STARTUPINFO si;
-						PROCESS_INFORMATION pi;
-						ZeroMemory(&si, sizeof(si));
-						si.cb = sizeof(si);
-						si.dwFlags = STARTF_USESHOWWINDOW;
-						si.wShowWindow = SW_HIDE;
-						ZeroMemory(&pi, sizeof(pi));
-
-						if (CreateProcess(exe_name, signal_buffer, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
-							CloseHandle(pi.hProcess);
-							CloseHandle(pi.hThread); 
-						}
-
-						signal_action = -1;
-						free(signal_buffer);
-					}
+					signal_action = -1;
+					free(signal_buffer);
 				}
 			}
-		} else {
-			// If game window wasn't found
-			if (transfered_missions) {
-				Return_Modfolder_Missions(is_dedicated_server);
-				transfered_missions = false;
-			}
-
-			sleep_rate = 250;
 		}
+
+		CloseHandle(phandle);
 	}
 
 	_endthread();
@@ -1377,9 +1374,9 @@ void FwatchPresence(void *loop)
 
 
 
-//v1.14 report listen server to the master server
-//Original code by Pulverizer http://pulverizer.pp.fi/ewe/c/OFPReportListenServer.c
-void ListenServer(void *loop)
+// Report listen server to the master server
+// Adapted from code by Pulverizer http://pulverizer.pp.fi/ewe/c/OFPReportListenServer.c
+void ListenServer(ThreadArguments *arg)
 {	
 	WSADATA wsaData;
 	SOCKET reportSocket;
@@ -1401,12 +1398,6 @@ void ListenServer(void *loop)
 		localAddrSize = sizeof(localAddr),
 		remoteAddrSize = sizeof(remoteAddr),
 		tempAddrSize = sizeof(tempAddr);
-
-	switch(Game_Version) {
-		case VER_196 : actualVersion=196; break;
-		case VER_199 : actualVersion=199; break;
-		case VER_201 : actualVersion=201; break;
-	}
 
     short int password = 0,
 			  equalMod = 0;
@@ -1438,9 +1429,11 @@ void ListenServer(void *loop)
 	
 
 	// Wait for the other thread to read port from the memory
-	while (ListenServerPort < 0)
+	while (global.listen_server_port < 0)
 		Sleep(1000);
-	localPort = ListenServerPort + 1;
+
+	initsocket:
+	localPort = global.listen_server_port + 1;
 
 	// INIT SOCKET
 	if (WSAStartup(MAKEWORD(2,2),&wsaData) != 0)
@@ -1466,7 +1459,13 @@ void ListenServer(void *loop)
 	// **** MAIN LOOP ********************************
 	while (true)
 	{	
-		localPort = ListenServerPort + 1; //update port var
+		// check if port changed
+		if (localPort != global.listen_server_port + 1) {
+			closesocket(reportSocket);
+			WSACleanup();
+			goto initsocket;
+		}
+		
 		ticks = GetTickCount();
 
 		// LANQUERY gstate etc from the game
@@ -1616,12 +1615,12 @@ void ListenServer(void *loop)
         // REPORTING aka Heartbeat
         if( (bSettingsChanged || (ticks - lastHeartbeat)>300000))
         {		
-			// By default don't allow to report to defunct gamespy unless set by user
-			if (strcmpi(master_serv1,"master.gamespy.com")!=0 || strcmp(serv1,"")!=0)
+			// By default don't allow to report to the defunct GameSpy unless set by user
+			if (arg->is_custom_master1 || strcmpi(global.master_server1,"master.gamespy.com")!=0)
 			{	
 				remoteAddr.sin_family = AF_INET; // gamespy
 				remoteAddr.sin_port = htons(27900);
-				remoteAddr.sin_addr.s_addr = resolv(master_serv1);
+				remoteAddr.sin_addr.s_addr = GetIP(global.master_server1);
 
 				if(bSettingsChanged)
 					sprintf(TempBuf, "\\heartbeat\\%d\\gamename\\opflashr\\statechanged\\1\0", localPort);
@@ -1637,12 +1636,12 @@ void ListenServer(void *loop)
 				}
 			};
 
-			// By default don't allow to report to defunct all-seeing eye unless set by user
-			if (strcmpi(master_serv2,"master.udpsoft.com")!=0 || strcmp(serv2,"")!=0)
+			// By default don't allow to report to the defunct All-Seeing Eye unless set by user
+			if (arg->is_custom_master2 || strcmpi(global.master_server2,"master.udpsoft.com")!=0)
 			{
 				remoteAddr.sin_family = AF_INET; // all seeing eye
 				remoteAddr.sin_port = htons(27900);
-				remoteAddr.sin_addr.s_addr = resolv(master_serv2);
+				remoteAddr.sin_addr.s_addr = GetIP(global.master_server2);
 
 				if (bSettingsChanged)
 					sprintf(TempBuf, "\\heartbeat\\%d\\gamename\\opflashr\\statechanged\\1\0", localPort);
@@ -1762,489 +1761,5 @@ void ListenServer(void *loop)
 
 	closesocket(reportSocket);
 	WSACleanup();
-	_endthread();
-};
-
-
-
-
-
-
-
-
-//v1.15 modify hardcoded ui elements
-void FixUIAspectRatio(void *loop)
-{	
-	Sleep(100);
-
-	// Write settings file
-	FILE *f = fopen("Aspect_Ratio.sqf","w");
-	if (!f)
-		_endthread();
-
-	fprintf(f, "#include \"Aspect_Ratio.hpp\"\n#ifdef AR_CENTERHUD\nar_center=1;\n#else\nar_center=0;\n#endif\nar_modifx=AR_modifX;ar_modify=AR_modifY;ar_modifx_2ndmon=AR_modifX_2NDMON;true");
-	fclose(f);
-
-
-	// Set up vars to execute program
-	TCHAR pwd[MAX_PATH];
-	GetCurrentDirectory(MAX_PATH, pwd);
-
-	PROCESS_INFORMATION pi;
-	STARTUPINFO si; 
-	memset(&si, 0, sizeof(si));
-	memset(&pi, 0, sizeof(pi));
-	si.cb			= sizeof(si);
-	si.dwFlags		= STARTF_USESHOWWINDOW;
-	si.wShowWindow	= SW_HIDE;
-	char *cmdLine   = (char *) malloc(strlen(pwd)+64);
-
-	if (cmdLine == NULL)
-		_endthread();
-
-	strcpy(cmdLine, "");
-	sprintf(cmdLine, "\"%s\" -nolog Aspect_Ratio.sqf Aspect_Ratio.sqf ", pwd);
-
-	// Preprocess settings file
-	if (!CreateProcess("fwatch\\data\\preproc.exe", cmdLine, NULL, NULL, false, 0, NULL, NULL, &si, &pi))
-		_endthread();
-
-
-
-	// Wait for the program to end
-	DWORD st;
-	do {					
-		GetExitCodeProcess(pi.hProcess, &st);
-		Sleep(5);
-	} 
-	while (st == STILL_ACTIVE);
-
-	CloseHandle(pi.hProcess);
-	CloseHandle(pi.hThread); 
-	free(cmdLine);
-	
-	
-	// Parse settings file
-	Sleep(100);
-	f = fopen("Aspect_Ratio.sqf","r");
-	if (!f)
-		_endthread();
-
-	fseek(f, 0, SEEK_END);
-	int file_size = ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	char *settings = (char *) malloc(file_size + 1);
-
-	if (settings == NULL) {
-		fclose(f);
-		return;
-	}
-
-	char *token			= "";
-	int result			= fread(settings, 1, file_size, f);
-	int AR_CENTERHUD	= 0;
-	float AR_modifX		= 0;
-	float AR_modifY		= 0;
-	bool portrait		= 0;
-
-	settings[result] = '\0';
-	token			 = strtok(settings, ";\n\t ");
-
-	while (token != NULL)
-	{	
-		char *eq = strchr(token, '=');
-
-		if (eq != NULL) 
-		{
-			int pos   = eq - token;
-			char *val = token + pos + 1;
-
-			if (strncmp(token,"ar_modifx",pos) == 0) 
-				AR_modifX = (float)atof(val),
-				portrait  = AR_modifX < 0;
-
-			if (strncmp(token,"ar_modify",pos) == 0) 
-				AR_modifY = (float)atof(val);
-
-			if (strncmp(token,"ar_center",pos) == 0) 
-				AR_CENTERHUD = atoi(val);
-		};
-
-		token = strtok (NULL, ";\n\t ");
-	};
-
-	fclose(f);
-	Sleep(100);
-	free(settings);
-
-	// Quit if there are no changes to be made
-	if (AR_CENTERHUD)
-		_endthread();
-
-
-	// Variables for process handling
-	HANDLE phandle;
-	SIZE_T stBytes			= 0;
-	DWORD pid				= 0;
-	DWORD lastpid			= -1;
-	char lastErrorMSG[512]	= "";
-
-	int	max_loops = sizeof(hud_offset) / sizeof(hud_offset[0]);
-
-	float current[ARRAY_SIZE];
-	float written[ARRAY_SIZE];
-	float custom[ARRAY_SIZE];
-	bool no_ar[ARRAY_SIZE];
-	bool is_custom[ARRAY_SIZE];
-
-	int currentINT[ARRAY_SIZE];
-	int writtenINT[ARRAY_SIZE];
-	int customINT[ARRAY_SIZE];
-
-
-	bool doOnce			= portrait;
-	bool moveTankDown	= false;
-	float moveTankDownY = 0;
-	bool read_mods      = true;
-	bool read_base      = true;
-	bool first_check    = true;
-	int pointer		    = 0;
-	int ui_base         = 0;
-	int chat_base       = 0;
-	int last_chat_state = -1;
-	int current_chat_state = 0;
-	
-	while (true)
-	{
-		Sleep(500);
-		
-		// Search for the OFP window ------------------------------
-		pid = findOFPwindow();
-
-		if (pid == 0)
-			continue;
-
-		if (pid != lastpid) {
-			read_base   = true;
-			read_mods   = true;
-			first_check = true;
-			lastpid     = pid;
-		}
-
-
-		// Open process --------------------------------------------
-		phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
-
-		if (phandle == 0) 
-			continue;
-
-		// Check error
-		if (ErrorLog_Enabled)
-		{
-			// Base address and offsets
-			int pointers[]	 = {0, 0, 0, 0};
-			int modif[]		 = {0x68, 0x1C, 0};
-			int pointer_size = sizeof(pointers) / sizeof(pointers[0]) - 1;
-
-			switch(Game_Version) {
-				case VER_196 : pointers[0]=0x789D88; break;
-				case VER_199 : pointers[0]=0x778E80; break;
-				case VER_201 : pointers[0]=Game_Exe_Address+0x6D6A10; break;
-			}
-
-			// Read values
-			for (int i=0; i<pointer_size; i++) {
-				ReadProcessMemory(phandle, (LPVOID)pointers[i], &pointers[i+1], 4, &stBytes);
-				pointers[i+1] = pointers[i+1] +  modif[i];
-			};
-
-			// if went nowhere
-			if (pointers[pointer_size]==0) 
-				break;
-	
-			char errorMSG[512] = "";
-			ReadProcessMemory(phandle, (LPVOID)pointers[pointer_size], &errorMSG, 512, &stBytes);
-
-			if (strcmp(errorMSG,lastErrorMSG) != 0) {
-				strcpy(lastErrorMSG, errorMSG);
-				FILE *f1 = fopen("fwatch\\idb\\_errorLog.txt", "a");
-				fprintf(f1, "%s\n", errorMSG);
-				fclose(f1);
-			};
-		};
-
-		// Read mods ui settings
-		if (read_mods) {
-			memset(current    , 0, ARRAY_SIZE*4);
-			memset(currentINT , 0, ARRAY_SIZE*4);
-			memset(written    , 0, ARRAY_SIZE*4);
-			memset(writtenINT , 0, ARRAY_SIZE*4);
-			memset(custom     , 0, ARRAY_SIZE*4);
-			memset(customINT  , 0, ARRAY_SIZE*4);
-			memset(no_ar      , 0, ARRAY_SIZE*1);
-			memset(is_custom  , 0, ARRAY_SIZE*1);
-
-			Read_Config_Fwatch_HUD((Game_Version==VER_196 ? "Res\\bin\\config_fwatch_hud.cfg" : "bin\\config_fwatch_hud.cfg"), no_ar, is_custom, custom, customINT);
-
-			HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
-
- 			if (hSnap != INVALID_HANDLE_VALUE) {
-				MODULEENTRY32 xModule;
-				memset (&xModule, 0, sizeof(xModule));
-				xModule.dwSize = sizeof(xModule);
-
-				if (Module32First(hSnap, &xModule)) {
-					xModule.dwSize = sizeof(MODULEENTRY32);
-					int baseOffset = 0;
-
-					do {
-						if (lstrcmpi(xModule.szModule, (LPCTSTR)"ifc22.dll") == 0) {
-							baseOffset = (int)xModule.modBaseAddr + 0x2C154;
-							break;
-						}
-					} while(Module32Next(hSnap, &xModule));
-
-					char parameters[512] = "";
-					ReadProcessMemory(phandle, (LPVOID)baseOffset, &baseOffset, 4, &stBytes);
-					ReadProcessMemory(phandle, (LPVOID)baseOffset, &baseOffset, 4, &stBytes);
-					ReadProcessMemory(phandle, (LPVOID)baseOffset, &parameters, 512, &stBytes);
-
-					int emptyChars = 0;
-					for (int i=0; i<512; i++)
-						if (parameters[i] == '\0') {
-							emptyChars++;
-
-							if (emptyChars == 2) 
-								break;
-
-							parameters[i] = ' ';
-						} else 
-							emptyChars = 0;
-
-					int parameters_len = strlen(parameters);
-					int parameters_pos = 0;
-
-					while (parameters_pos < parameters_len) {
-						char *parameter = Tokenize(parameters, " ", parameters_pos, parameters_len, false, false);
-
-						if (strncmp(parameter,"-mod=",5) == 0) {
-							parameter += 5;
-							int parameter_len = strlen(parameter);
-							int parameter_pos = 0;
-
-							while (parameter_pos < parameter_len) {
-								char *mod = Tokenize(parameter, ";", parameter_pos, parameter_len, false, false);
-								char filename[512] = "";
-								sprintf(filename, "%s\\bin\\config_fwatch_hud.cfg", mod);
-								Read_Config_Fwatch_HUD(filename, no_ar, is_custom, custom, customINT);
-							}
-						}
-					}
-				}
-	
-				CloseHandle(hSnap);
-			}
-
-			read_mods = false;
-		}
-
-
-		// Find where UI coordinates are stored
-		if (read_base) {
-			if (first_check)
-				Sleep(1000);
-			
-			ui_base   = 0;
-			chat_base = 0;
-
-			switch(Game_Version) {
-				case VER_196 : ui_base=0x79F8D0; break;
-				case VER_199 : ui_base=0x78E9C8; break;
-				case VER_201 : ui_base=Game_Exe_Address+0x6D8240; break;
-			};
-
-			ReadProcessMemory(phandle, (LPVOID)(ui_base+0x0), &ui_base, 4, &stBytes);
-			ReadProcessMemory(phandle, (LPVOID)(ui_base+0x8), &ui_base, 4, &stBytes);
-
-			if (ui_base == 0)
-				continue;
-			else
-				read_base = false;
-
-			// Chat has a different address
-			switch(Game_Version) {
-				case VER_196 : chat_base=0x7831B0; break;
-				case VER_199 : chat_base=0x7722A0; break;
-				case VER_201 : chat_base=Game_Exe_Address+0x6FFCC0; break;
-			};
-		}
-
-		// Read position of UI elements
-		for (int i=0; i<max_loops; i++) {			
-			if (i >= CHAT_X)
-				pointer = chat_base;
-			else
-				pointer = ui_base;
-
-			int is_int = IsNumberInArray(i,hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0]));
-			if (is_int)
-				ReadProcessMemory(phandle, (LPVOID)(pointer+hud_offset[i]), &currentINT[i], 4, &stBytes);
-			else
-				ReadProcessMemory(phandle, (LPVOID)(pointer+hud_offset[i]), &current[i], 4, &stBytes);
-		}
-
-		if (currentINT[CHAT_ROWS]==4  &&  current[CHAT_X]==0.05f  &&  (current[CHAT_Y]==0.02f || current[CHAT_Y]==0.90f)  &&  current[CHAT_W]==0.9f  &&  current[CHAT_H]==0.02f)
-			current_chat_state = CHAT_BRIEFINGLOBBY;
-		else 
-			if (currentINT[CHAT_ROWS]==6  &&  current[CHAT_X]==0.05f  &&  current[CHAT_Y]==0.68f  &&  current[CHAT_W]==0.7f  &&  current[CHAT_H]==0.02f)
-				current_chat_state = CHAT_MISSION;
-			else
-				if (first_check && currentINT[CHAT_ROWS]==0  &&  current[CHAT_X]==0  &&  current[CHAT_Y]==0  &&  current[CHAT_W]==0  &&  current[CHAT_H]==0)
-					continue;
-				else
-					current_chat_state = CHAT_CUSTOM;
-
-
-
-
-		// Run calculation for portrait mode
-		if (doOnce)
-		{
-			doOnce			= false;
-			float tank_x    = current[TANK_X]    + (current[TANK_X]<0.5 ? -1 : 1)    * AR_modifX;
-			float tank_y    = current[TANK_Y]    + (current[TANK_Y]<0.5 ? -1 : 1)    * AR_modifY;
-			float radar_y	= current[RADAR_Y]   + (current[RADAR_Y]<0.5 ? -1 : 1)   * AR_modifY;
-			float compass_y = current[COMPASS_Y] + (current[COMPASS_Y]<0.5 ? -1 : 1) * AR_modifY;	
-
-			if (portrait && 
-				tank_x + current[TANK_W] > current[RADAR_X]  &&
-				tank_y + current[TANK_H] >= radar_y
-				)
-				moveTankDown = true,
-				moveTankDownY = (radar_y + AR_modifY) + current[RADAR_H];
-			else
-				if (portrait &&
-					tank_x + current[TANK_W] > current[COMPASS_X]  &&
-					tank_y + current[TANK_H] >= compass_y
-					)
-					moveTankDown = true,
-					moveTankDownY = (compass_y + AR_modifY) + current[COMPASS_H];
-		};
-
-
-
-		for (i=0; i<max_loops; i++) {
-			int is_int = IsNumberInArray(i,hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0]));
-
-			// Change if it's different from the last one
-			//if (first_check  ||  (!is_int && current[i]!=written[i])  ||  (is_int  && currentINT[i]!=writtenINT[i]))
-			if (first_check  ||  i>=CHAT_X && current_chat_state!=last_chat_state)
-			{			
-				if (is_custom[i] && (i<CHAT_X || i>=CHAT_X && current_chat_state==CHAT_MISSION))
-					if (is_int)
-						currentINT[i] = customINT[i];
-					else
-						current[i] = custom[i];
-				
-				if (no_ar[i]) {
-					if (is_int)
-						writtenINT[i] = currentINT[i];
-					else
-						written[i] = current[i];
-				} else
-					switch (i) {
-						// move to the left
-						case ACTION_X	 :
-						case TANK_X		 :	
-						case GROUPDIR_X  : written[i] = current[i] + (current[i]<0.5 ? -1 : 1) * AR_modifX; break;
-
-						// move up (but compensate for portrait)
-						case RADIOMENU_Y :
-						case TANK_Y		 : written[i] = current[i] + (current[i]<0.5 ? -1 : 1) * AR_modifY + moveTankDownY; break;
-
-						// move up/down
-						case ACTION_Y	 :
-						case LEADER_Y	 :
-						case GROUPDIR_Y  :
-						case RADAR_Y	 :
-						case HINT_Y		 : 
-						case COMPASS_Y	 : written[i] = current[i] + (current[i]<0.5 ? -1 : 1) * AR_modifY; break;
-
-						// move left on portrait
-						case RADIOMENU_X : 
-						{
-							if (moveTankDown)
-								written[i] = current[i] + (current[i]<0.5 ? -1 : 1) * AR_modifX;
-							else
-								written[i] = current[i];
-						}
-						break;
-
-						// extend on widescreen
-						case RADIOMENU_W : written[i] = current[i] + (!moveTankDown ? AR_modifX : 0); break; 
-
-						// shrink on portrait
-						case LEADER_X : written[i] = current[i] - AR_modifX; break;
-						case LEADER_W : written[i] = current[i] + AR_modifX*2; break;
-						/*{
-							if (portrait)
-							{
-								if (i == LEADER_X)
-									written[i] = current[i] + (current[i]<0.5 ? -1 : 1) * AR_modifX;
-								else
-									written[i] = current[i] + AR_modifX*2;
-							}
-							else
-								written[i] = current[i];
-						}
-						break;*/
-
-						case CHAT_X : {written[i] = current[i] - AR_modifX;} break;
-						case CHAT_Y : written[i] = current[i] + (current[i]<0.5 ? -AR_modifY : AR_modifY); break;
-						case CHAT_W : 
-						{
-							if (portrait) {
-								if (current[CHAT_X] + current[i] > 1 + AR_modifX*2)
-									written[i] = current[i] + AR_modifX*2;
-							} else
-								written[CHAT_W] = current[CHAT_W] + AR_modifX*2;
-						}
-						break;
-
-						default: {
-							if (is_int)
-								writtenINT[i] = currentINT[i];
-							else
-								written[i] = current[i];								
-						}
-						break;
-							
-					};
-
-				if (i >= CHAT_X)
-					pointer = chat_base;
-				else
-					pointer = ui_base;
-				
-				if (is_int) {
-					//fprintf(fd,"%s: 0x%x %d %d\n",hud_names[i],pointer+hud_offset[i],currentINT[i],writtenINT[i]);
-					WriteProcessMemory(phandle, (LPVOID)(pointer+hud_offset[i]), &writtenINT[i], 4, &stBytes);
-				} else {
-					//fprintf(fd,"%s: 0x%x %f %f\n",hud_names[i],pointer+hud_offset[i],current[i],written[i]);
-					WriteProcessMemory(phandle, (LPVOID)(pointer+hud_offset[i]), &written[i], 4, &stBytes);
-				}
-			}
-		}
-
-		if (first_check)
-			first_check = false;
-
-		if (last_chat_state != current_chat_state)
-			last_chat_state = CHAT_CUSTOM;
-
-		CloseHandle(phandle);
-	}
-
 	_endthread();
 };

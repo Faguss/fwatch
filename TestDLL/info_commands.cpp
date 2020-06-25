@@ -5,54 +5,46 @@
 case C_INFO_VERSION:
 { // Return version
 
-	//v1.13 extended - return global vars
-	char tmp[32]	= "";
-	bool extended	= false;
+	char output[64] = "";
 
-	if (numP > 2) 
-		if (strcmpi(par[2],"extended") == 0)
-			extended = true;
-
-	if (!extended)
-		sprintf(tmp, "%.2f", SCRIPT_VERSION);
-	else
-	{
-		int major = 0;
-		int build = 0;
-		char gameexe[256];
-
-        GetModuleFileName( GetModuleHandle( NULL ), gameexe, sizeof(gameexe) );
-
-		// Read game version from game exe
-		//	http://stackoverflow.com/questions/940707/how-do-i-programatically-get-the-version-of-a-dll-or-exe-file
+	if (numP <= 2  ||  strcmpi(par[2],"extended") != 0)
+		sprintf(output, "%.2f", SCRIPT_VERSION);
+	else {
+		// Read version from the game executable
+		// http://stackoverflow.com/questions/940707/how-do-i-programatically-get-the-version-of-a-dll-or-exe-file
+		int major        = 0;
+		int build        = 0;;
 		DWORD  verHandle = NULL;
 		UINT   size      = 0;
 		LPBYTE lpBuffer  = NULL;
-		DWORD  verSize   = GetFileVersionInfoSize( gameexe, &verHandle);
+		DWORD  verSize   = GetFileVersionInfoSize((char*)global_exe_name[global.exe_index], &verHandle);
 
-		if (verSize != NULL)
-		{
-			LPSTR verData = new char[verSize];
+		if (verSize != NULL) {
+			String buffer;
+			String_init(buffer);
+			String_allocate(buffer, verSize);
 
-			if (GetFileVersionInfo( gameexe, verHandle, verSize, verData))
-				if (VerQueryValue(verData,"\\",(VOID FAR* FAR*)&lpBuffer,&size))
-					if (size)
-					{
+			LPSTR verData = buffer.pointer;
+
+			if (GetFileVersionInfo((char*)global_exe_name[global.exe_index], verHandle, verSize, verData))
+				if (VerQueryValue(verData, "\\", (VOID FAR* FAR*)&lpBuffer, &size))
+					if (size) {
 						VS_FIXEDFILEINFO *verInfo = (VS_FIXEDFILEINFO *)lpBuffer;
 
-						if (verInfo->dwSignature == 0xfeef04bd)
-							major = HIWORD(verInfo->dwFileVersionMS),
+						if (verInfo->dwSignature == 0xfeef04bd) {
+							major = HIWORD(verInfo->dwFileVersionMS);
 							build = verInfo->dwFileVersionLS;
+						}
 					}
 
-			delete[] verData;
+			String_end(buffer);
 		}
 
 		QWrite("_fwatch_test_version=2;", out);
-		sprintf(tmp, "[%.2f,%s,%s,false,%d.%s%d]", SCRIPT_VERSION, getBool(CWA), getBool(DedicatedServer),major,(build<10 ? "0" : ""),build);
-	};
+		sprintf(output, "[%.2f,%s,%s,false,%d.%s%d]", SCRIPT_VERSION, getBool(global.CWA), getBool(global.DedicatedServer), major, (build<10 ? "0" : ""), build);
+	}
 
-	QWrite(tmp, out);
+	QWrite(output, out);
 }
 break;
 
@@ -83,72 +75,56 @@ case C_INFO_DATE:
 { // Return date and time information
 
 	SYSTEMTIME st;
-	bool getCurrent = true;
-	bool systime	= false;
+	bool get_current     = true;
+	bool get_system_time = false;
 
 
 	// Optional arguments
-	if (numP > 2)
-	{
+	if (numP > 2) {
 		if (strcmpi(par[2],"systime") == 0) 
-			systime = true;
+			get_system_time = true;
 
-		// If an array was passed
+		// If an array was passed - tokenize it
 		int l = strlen(par[2]) - 1;
 
-		if (par[2][0]=='['  &&  par[2][l]==']')
-		{
-			// Tokenize array
-			int i		= 0;
-			char *pch	= strtok(par[2], "[,]");
+		if (par[2][0]=='['  &&  par[2][l]==']') {
+			int index  = 0;
+			char *item = strtok(par[2], "[,]");
 
-			while (pch != NULL)
-			{
+			while (pch != NULL) {
 				// From ofp date array to systemtime structure
-				switch (i)
-				{
-					case 0: st.wYear		= atoi(pch); break;
-					case 1: st.wMonth		= atoi(pch); break;
-					case 2: st.wDay			= atoi(pch); break;
-					case 4: st.wHour		= atoi(pch); break;
-					case 5: st.wMinute		= atoi(pch); break;
-					case 6: st.wSecond		= atoi(pch); break;
-					case 7: st.wMilliseconds= atoi(pch); break;
-
-					case 9: 
-					{
-						if (strcmpi(pch,"true") == 0) 
-							systime = true; 
-						else 
-							systime = false;
-					}; 
-					break;
-				};
+				switch (index) {
+					case 0: st.wYear         = atoi(item); break;
+					case 1: st.wMonth        = atoi(item); break;
+					case 2: st.wDay          = atoi(item); break;
+					case 4: st.wHour         = atoi(item); break;
+					case 5: st.wMinute       = atoi(item); break;
+					case 6: st.wSecond       = atoi(item); break;
+					case 7: st.wMilliseconds = atoi(item); break;
+					case 9: get_system_time  = strcmpi(pch,"true") == 0; break;
+				}
 				
-				i++;
-				pch = strtok (NULL, "[,]");
-			};
+				index++;
+				item = strtok (NULL, "[,]");
+			}
 
 			FILETIME ft;
-			SystemTimeToFileTime( &st, &ft );
-			FileTimeToSystemTime( &ft, &st );
-			getCurrent = false;
-		};
-	};
+			SystemTimeToFileTime(&st, &ft);
+			FileTimeToSystemTime(&ft, &st);
+			get_current = false;
+		}
+	}
 
 
-	// Current date
-	if (getCurrent)
-		if (!systime) 
+	if (get_current)
+		if (!get_system_time) 
 			GetLocalTime(&st); 
 		else 
 			GetSystemTime(&st);
 
-
-	// Return data
-	char tmp[64] = "";
-	FormatTime(st, systime, tmp);
-	QWrite(tmp, out);
+	char output[64] = "";
+	FormatTime(st, get_system_time, output);
+	QWrite(output, out);
 }
 break;
 
@@ -166,54 +142,33 @@ break;
 case C_INFO_RESOLUTION:
 { // Get desktop and game resolution
 
-	RECT desktop;
-	RECT window;
-	RECT game;
-	HWND hwnd = NULL;
+	RECT desktop = {0,0,0,0};
+	RECT window  = {0,0,0,0};
+	RECT game    = {0,0,0,0};
+	HWND hwnd    = NULL;
 
-
-	// Default values
-	window.left		= 0; 
-	window.right	= 0; 
-	window.top		= 0; 
-	window.bottom	= 0;
-	game.left		= 0; 
-	game.right		= 0; 
-	game.top		= 0; 
-	game.bottom		= 0;
-
-
-	// Get windows desktop size
 	GetWindowRect(GetDesktopWindow(), &desktop);
 
-
 	// Find game window
-	if (hwnd = GetTopWindow(hwnd)) 
-	{
-		DWORD thisPID		= 0;
-		char windowName[64] = "";
+	if (hwnd = GetTopWindow(hwnd)) {
+		DWORD pid            = 0;
+		char window_name[32] = "";
 		
-		do
-		{
-			// Compare process id
-			GetWindowText(hwnd, windowName, 64);
-			GetWindowThreadProcessId(hwnd, &thisPID);
+		do {
+			GetWindowText(hwnd, window_name, 32);
+			GetWindowThreadProcessId(hwnd, &pid);
 
-			if (pid==thisPID  &&  strcmpi(windowName,GameWindowName)==0) 
-			{
-				// Get sizes		
+			if (global.pid==pid  &&  strcmpi(window_name,global_exe_window[global.exe_index])==0) {
 				GetWindowRect(hwnd, &window);
 				GetClientRect(hwnd, &game);
 				break;
-			};
-		}
-		while (hwnd = GetNextWindow(hwnd, GW_HWNDNEXT));
-		
-	};
+			}
+		} while (hwnd = GetNextWindow(hwnd, GW_HWNDNEXT));
+	}
 
-	char tmp[64] = "";
+	char output[64] = "";
 
-	sprintf(tmp, "[%d,%d,[%d,%d,%d,%d],[%d,%d,%d,%d]]", 
+	sprintf(output, "[%d,%d,[%d,%d,%d,%d],[%d,%d,%d,%d]]", 
 		desktop.right, 
 		desktop.bottom, 
 		window.left,  
@@ -223,9 +178,10 @@ case C_INFO_RESOLUTION:
 		game.left,  
 		game.top,  
 		game.right - game.left,  
-		game.bottom - game.top);
+		game.bottom - game.top
+	);
 
-	QWrite(tmp, out);
+	QWrite(output, out);
 }
 break;
 
@@ -241,30 +197,25 @@ break;
 
 
 case C_INFO_STARTTIME:
-{ // Return process creation date
+{ // Return game process creation date
 
 	FILETIME ct;
 	FILETIME et;
 	FILETIME kt;
 	FILETIME ut;
-	int systime = false;
+	int get_system_time = numP>2  &&  strcmpi(par[2],"systime")==0;
 
-	if (numP > 2)
-		if (strcmpi(par[2],"systime") == 0) 
-			systime = true;
-
-	if (!GetProcessTimes(phandle, &ct, &et, &kt, &ut))
-	{
+	if (!GetProcessTimes(phandle, &ct, &et, &kt, &ut)) {
 		FWerror(5,GetLastError(),CommandID,"","",0,0,out);
 		QWrite("[]]", out);
 		break;
-	};
+	}
 
 	FWerror(0,0,CommandID,"","",0,0,out);
 
-	char tmp[64] = "";
-	FormatFileTime(ct, systime, tmp);
-	QWrite(tmp, out);
+	char output[64] = "";
+	FormatFileTime(ct, get_system_time, output);
+	QWrite(output, out);
 	QWrite("]",out);
 }
 break;
@@ -283,9 +234,9 @@ break;
 case C_INFO_TICK:
 { // Get tick count
 
-	char tmp[32] = "";
-	sprintf(tmp, "%d", GetTickCount() - PathSqfTime);
-	QWrite(tmp, out);
+	char output[32] = "";
+	sprintf(output, "%d", GetTickCount() - global.mission_path_savetime);
+	QWrite(output, out);
 }
 break;
 
@@ -305,8 +256,8 @@ case C_INFO_ERRORLOG:
 
 	// If argument passed then enable / disable
 	if (numP > 2)
-		ErrorLog_Enabled = String2Bool(par[2]);
+		global.ErrorLog_Enabled = String2Bool(par[2]);
 
-	QWrite(getBool(ErrorLog_Enabled), out);
+	QWrite(getBool(global.ErrorLog_Enabled), out);
 }
 break;

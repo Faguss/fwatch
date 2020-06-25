@@ -204,7 +204,7 @@ case C_FILE_WGET:
 	// TODO: maybe should return some sort of error message for OFP...
 
 	HANDLE pipe;
-	if(nomap)
+	if(global.nomap)
 		// Create a named pipe for wget to write into					
 		pipe = CreateNamedPipe(file.filename, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
 								PIPE_UNLIMITED_INSTANCES, PIPEBUFSIZE, PIPEBUFSIZE, NMPWAIT_USE_DEFAULT_WAIT, NULL);
@@ -226,7 +226,7 @@ case C_FILE_WGET:
 	delete[] cline;
 	lastWget = GetTickCount();
 				
-	if(nomap) {
+	if(global.nomap) {
 		// Wait for wget to do its thing
 		char *buf = new char[PIPEBUFSIZE+1];
 		if(!buf)
@@ -346,11 +346,11 @@ case C_FILE_MODLIST:
 	int pointer       = 0;
 	char username[30] = "";
 
-	if (!DedicatedServer) {
-		switch(Game_Version) {
+	if (!global.DedicatedServer) {
+		switch(game_version) {
 			case VER_196 : base=0x7DD184; break;
 			case VER_199 : base=0x7CC144; break;
-			case VER_201 : base=Game_Exe_Address+0x714C10; break;
+			case VER_201 : base=global.exe_address+0x714C10; break;
 		}
 
 		if (base != 0) {
