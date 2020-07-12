@@ -357,7 +357,6 @@ static const int global_exe_version[] = {
 
 static const int global_exe_num    = sizeof(global_exe_version) / sizeof(global_exe_version[0]);
 static const int global_window_num = sizeof(global_window_name) / sizeof(global_window_name[0]);
-static const int global_client_num = global_exe_num - 3;
 
 static const int String_init_len = 512;
 

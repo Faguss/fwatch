@@ -184,7 +184,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			}
 
 			if (strncmp(word,"-run=",5) == 0) {
-				for (int i=0; i<global_client_num; i++) {
+				for (int i=0; i<global_exe_num; i++) {
 					if (strcmpi(global_exe_name[i], word+5) == 0) {
 						custom_exe = i;
 						break;
@@ -309,8 +309,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		String_append(command_line, (add_nomap ? "-nomap " : ""));
 		String_append(command_line, lpCmdLine);
 
-		for (int i=0; i<global_client_num; i++) {
-			if (custom_exe!=-1 && custom_exe!=i)
+		for (int i=0; i<global_exe_num; i++) {
+			if (custom_exe!=-1 && custom_exe!=i || strstr(global_exe_name[i],"_server.exe"))
 				continue;
 
 			if (CreateProcess(global_exe_name[i], command_line.pointer, NULL, NULL, false, 0, NULL,NULL,&si,&pi)) {
@@ -340,34 +340,30 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		// Launch the game through Steam
 		if (launch_steam) {
 			HKEY hKey			= 0;
-			char SteamPath[512] = "";
 			char SteamExe[512]	= "";
-			DWORD dwType		= 0;
-			DWORD SteamPathSize	= sizeof(SteamPath);
+			DWORD dwType		= REG_SZ;
 			DWORD SteamExeSize	= sizeof(SteamExe);
 
 			if (RegOpenKey(HKEY_CURRENT_USER,"Software\\Valve\\Steam",&hKey) == ERROR_SUCCESS) {
-				dwType = REG_SZ;
-				bool key1 = RegQueryValueEx(hKey, "SteamPath", 0, &dwType, (BYTE*)SteamPath, &SteamPathSize) == ERROR_SUCCESS;
-				bool key2 = RegQueryValueEx(hKey, "SteamExe" , 0, &dwType, (BYTE*)SteamExe , &SteamExeSize)  == ERROR_SUCCESS;
-
-				if (key1 && key2) {
+				if (RegQueryValueEx(hKey, "SteamExe" , 0, &dwType, (BYTE*)SteamExe , &SteamExeSize) == ERROR_SUCCESS) {
 					String command_line;
 					String_init(command_line);
+					String_append(command_line, "\"\"");
 					String_append(command_line, SteamExe);
-					String_append(command_line, " -applaunch 65790 ");
+					String_append(command_line, "\" -applaunch 65790 ");
 					String_append(command_line, (add_nomap ? "-nomap " : ""));
 					String_append(command_line, lpCmdLine);
+					String_append(command_line, "\"");
 					system(command_line.pointer);
 					String_end(command_line);
 				}
-			}
 
-			RegCloseKey(hKey);
+				RegCloseKey(hKey);
+			}
 		}
 
 		// Just sit and wait here
-		MessageBox( NULL, "Fwatch is now waiting for you to run the game and/or dedicated server\nWhen you're done playing press OK to close Fwatch.", "fwatch", MB_OK|MB_ICONINFORMATION );
+		MessageBox( NULL, "Fwatch is now waiting for you to run the game and/or dedicated server.\nDon't forget to add -nomap\n\nWhen you're done playing press OK to close Fwatch.", "fwatch", MB_OK|MB_ICONINFORMATION );
 	}
 
 
@@ -850,7 +846,6 @@ void FwatchPresence(ThreadArguments *arg)
 
 
 
-
 	while (true) {
 		Sleep(250);
 
@@ -875,22 +870,23 @@ void FwatchPresence(ThreadArguments *arg)
 						xModule.dwSize = sizeof(xModule);
 
 						// First process module must match game executable name
-						if (Module32First(hSnap, &xModule) != 0) {
+						if (Module32First(hSnap, &xModule)) {							
 							for (int i=0; i<global_exe_num && game_pid==0; i++)
-								if (lstrcmpi(xModule.szModule, (LPCTSTR)global_exe_name[i]) == 0) {
-									game_exe_address = (int)xModule.modBaseAddr;
-									game_exe_index   = i;
-									game_pid         = pid;
+								if ((!arg->is_dedicated_server && !strstr(global_exe_name[i],"_server.exe") || arg->is_dedicated_server && strstr(global_exe_name[i],"_server.exe")) && lstrcmpi(xModule.szModule, (LPCTSTR)global_exe_name[i]) == 0) {
+									game_pid = pid;
 
 									// If this a new game instance then also get address for exe parameters
 									if (game_pid != game_pid_last) {
+										game_exe_address     = (int)xModule.modBaseAddr;
+										game_exe_index       = i;
+										game_param_address   = 0;
 										char module_name[16] = "ifc22.dll";
 
 										if (arg->is_dedicated_server)
 											strcpy(module_name, "ijl15.dll");
 
 										do {
-											if (lstrcmpi(xModule.szModule, (LPCTSTR)module_name) == 0) {
+											if (lstrcmpi(xModule.szModule, (LPCTSTR)module_name) == 0) {	
 												game_param_address = (int)xModule.modBaseAddr + (!arg->is_dedicated_server ? 0x2C154 : 0x4FF20);
 												break;
 											}
@@ -909,7 +905,7 @@ void FwatchPresence(ThreadArguments *arg)
 		}
 
 		// If there's no game
-		if (game_pid == 0) {
+		if (game_pid==0 || game_param_address==0) {
 			if (transfered_missions > 0) {
 				transfered_missions = 0;
 				ModfolderMissionsReturn(arg->is_dedicated_server);
@@ -920,7 +916,7 @@ void FwatchPresence(ThreadArguments *arg)
 
 		phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, game_pid);
 
-		if (phandle == 0) 
+		if (phandle == 0)
 			continue;
 
 		// If this is a new game instance
@@ -978,37 +974,34 @@ void FwatchPresence(ThreadArguments *arg)
 			game_mods_num  = 0;
 
 			// Copy mod names into array
-			for (int i=0; i<game_param_max; i++)
+			for (int i=0; i<game_param_max; i++) {
 				if (game_param[i] == '\0') {
 					if (strncmp(game_param+word_start,"-mod=",5) == 0) {
 						char *value   = game_param + word_start + 5;
 						int value_len = strlen(value);
 						int value_pos = 0;
 
-						while (value_pos < value_len)
-							if (game_mods_num < game_mods_max)
-								game_mods[game_mods_num++] = Tokenize(value, ";", value_pos, value_len, false, false);
+						while (value_pos < value_len  &&  game_mods_num < game_mods_max)
+							game_mods[game_mods_num++] = Tokenize(value, ";", value_pos, value_len, false, false);
 					}
 
-					if (game_param[i+1]=='\0') 
+					if (game_param[i+1] == '\0')
 						break;
-				} else {
-					if (word_start != -1)
+
+					word_start = -1;
+				} else
+					if (word_start == -1)
 						word_start = i;
-				}
+			}
 
-			// Read fwatch configuration from each mod in normal order
-			for (i=0; i<game_mods_num; i++)
-				if (strlen(game_mods[i]) < 485) {
-					char filename[512] = "";
-					sprintf(filename, "%s\\bin\\config_fwatch_hud.cfg", game_mods[i]);
-					ReadUIConfig(filename, ui_no_ar, ui_is_custom, ui_custom, ui_customINT);
-				}
-
-			// Transfer mission files from each mod in reverse order
-			for (i=game_mods_num-1; i>0; i--)
-				transfered_missions += ModfolderMissionsTransfer(game_mods[i], arg->is_dedicated_server);
-
+			// Read fwatch configuration from each mod
+			if (!arg->is_dedicated_server)
+				for (i=0; i<game_mods_num; i++)
+					if (strlen(game_mods[i]) < 485) {
+						char filename[512] = "";
+						sprintf(filename, "%s\\bin\\config_fwatch_hud.cfg", game_mods[i]);
+						ReadUIConfig(filename, ui_no_ar, ui_is_custom, ui_custom, ui_customINT);
+					}
 
 
 			// Change master servers
@@ -1110,6 +1103,11 @@ void FwatchPresence(ThreadArguments *arg)
 			game_pid_last   = game_pid;
 		} else {
 			// If it's a game instance that we have accessed before
+			// Transfer mission files from each mod
+			if (transfered_missions==0 && game_mods_num>0)			
+				for (int i=game_mods_num-1; i>=0; i--)
+					transfered_missions += ModfolderMissionsTransfer(game_mods[i], arg->is_dedicated_server);
+
 			// Refresh master servers (user can change them in the main menu)
 			ReadProcessMemory(phandle, (LPVOID)master_server1_address, &global.master_server1, 64, &stBytes);
 			ReadProcessMemory(phandle, (LPVOID)master_server2_address, &global.master_server2, 19, &stBytes);

@@ -168,7 +168,7 @@ BOOL APIENTRY DllMain( HINSTANCE hModule, DWORD fdwReason, LPVOID lpReserved )
 			if (stricmp(exe_name, global_exe_name[i]) == 0) {
 				global.CWA             = global_exe_version[i]==VER_199 || global_exe_version[i]==VER_201;
 				global.exe_index       = i;
-				global.is_server       = i >= global_client_num;
+				global.is_server       = strstr(global_exe_name[i],"_server.exe") != NULL;
 				global.DedicatedServer = global.is_server;
 				global.pid             = GetCurrentProcessId();
 

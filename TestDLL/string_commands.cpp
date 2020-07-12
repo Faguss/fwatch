@@ -319,51 +319,50 @@ break;
 case C_STRING_COMPARE:
 { // Compare two strings with each other
 
-	// Read arguments
-	char *text1        = "";
-	char *text2        = "";
-	bool caseSensitive = false;
-	bool natural       = false;
-	bool reverseCase   = false;
+	char *text1         = "";
+	char *text2         = "";
+	bool case_sensitive = false;
+	bool natural_sort   = false;
+	bool reverse_case   = false;
 
 	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+		char *name  = stripq(par[i]);
+		char *colon = strchr(name, ':');
 
-		if (pch == NULL) 
+		if (colon == NULL) 
 			continue;
 
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = arg + pos + 1;
+		int pos     = pch - name;
+		name[pos]   = '\0';
+		char *value = name + pos + 1;
 
-		if (strcmpi(arg,"text1") == 0) {
-			text1 = val;
-			continue;
-		}
-
-		if (strcmpi(arg,"text2") == 0) {
-			text2 = val;
+		if (strcmpi(name,"text1") == 0) {
+			text1 = value;
 			continue;
 		}
 
-		if (strcmpi(arg,"caseSensitive") == 0) {
-			caseSensitive = String2Bool(val);
+		if (strcmpi(name,"text2") == 0) {
+			text2 = value;
 			continue;
 		}
 
-		if (strcmpi(arg,"natural") == 0) {
-			natural = String2Bool(val);
+		if (strcmpi(name,"caseSensitive") == 0) {
+			case_sensitive = String2Bool(value);
 			continue;
 		}
 
-		if (strcmpi(arg,"reversecase") == 0) {
-			reverseCase = String2Bool(val);
+		if (strcmpi(name,"natural") == 0) {
+			natural_sort = String2Bool(value);
+			continue;
+		}
+
+		if (strcmpi(name,"reverseCase") == 0) {
+			reverse_case = String2Bool(value);
 			continue;
 		}
 	}
 
-	if (reverseCase) {
+	if (reverse_case) {
 		for (int i=0; text1[i]!='\0'; i++)
 			if (isupper(text1[i]))
 				text1[i] = tolower(text1[i]);
@@ -377,16 +376,16 @@ case C_STRING_COMPARE:
 				text2[i] = toupper(text2[i]);
 	}
 
-	char tmp[6] = "";
-	int result  = 0;
+	int result = 0;
 
-	if (caseSensitive)
-		result = !natural ? strcmp(text1, text2) : strnatcmp(text1, text2);
+	if (case_sensitive)
+		result = natural_sort ? strnatcmp(text1, text2)     : strcmp(text1, text2);
 	else
-		result = !natural ? strcmpi(text1, text2) : strnatcasecmp(text1, text2);
+		result = natural_sort ? strnatcasecmp(text1, text2) : strcmpi(text1, text2);
 
-	sprintf(tmp, "%d", result);
-	QWrite(tmp, out);
+	char output[4] = "";
+	sprintf(output, "%d", result);
+	QWrite(output, out);
 }
 break;
 
@@ -402,78 +401,82 @@ break;
 case C_STRING_TYPE:
 { // Check if string is a number
 
-	// Read arguments
-	char *text    = "";
-	bool skipMath = false;
+	char *text        = "";
+	bool skip_math_op = false;
 
 	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+		char *name  = stripq(par[i]);
+		char *colon = strchr(name, ':');
 
-		if (pch == NULL) 
+		if (colon == NULL) 
 			continue;
 
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = arg + pos + 1;
+		int pos     = pch - name;
+		name[pos]   = '\0';
+		char *value = name + pos + 1;
 
-		if (strcmpi(arg,"skipmath") == 0) {
-			skipMath = String2Bool(val);
+		if (strcmpi(name,"skipmath") == 0) {
+			skip_math_op = String2Bool(value);
 			continue;
 		}
 
-		if (strcmpi(arg,"text") == 0) {
-			text = val;
+		if (strcmpi(name,"text") == 0) {
+			text = value;
 			continue;
 		}
 	}
 
-	// Switches
-	int type               = 0;
-	int numberOfDots       = 0;
-	bool skip              = false;
-	bool foundNumber       = false;
-	bool foundNonWhite     = false;
-	bool foundSpaceBetween = false;
 
-	// Loop until the end of the string
+	enum STRING_TYPE_RESULT {
+		STR_TYPE_STRING,
+		STR_TYPE_INTEGER,
+		STR_TYPE_FLOAT
+	};
+
+	int result               = STR_TYPE_STRING;
+	int number_of_dots       = 0;
+	bool skip_character      = false;
+	bool found_number        = false;
+	bool found_non_white     = false;
+	bool found_space_between = false;
+
 	for (i=0; text[i]!='\0'; i++) {
 		// Ignore whitespace
 		if (isspace(text[i])) {
-			// if there is a whitespace between digits - it's not a number
-			if (foundNonWhite  &&  !skipMath) 
-				foundSpaceBetween = 1;
+			// remember if there was space between characters
+			if (found_non_white  &&  !skip_math_op) 
+				found_space_between = true;
 
 			continue;
 		}
 
-		// If encountered math operators
+		// If encountered a math operator
 		switch (text[i]) {
-			case '+' : skip=1; break;
-			case '-' : skip=1; break;
-			case '*' : skip=1; break;
-			case '/' : skip=1; break;
-			case '%' : skip=1; break;
-			case '^' : skip=1; break;
-			default	 : foundNonWhite=true;
+			case '+' : 
+			case '-' : 
+			case '*' : 
+			case '/' : 
+			case '%' : 
+			case '^' : skip_character=true; break;
+			default	 : found_non_white=true;
 		}
 
 		// Ignore operators if argument was passed
-		if (skip) {
-			if (skipMath) {
-				skip = 0; 
+		if (skip_character) {
+			if (skip_math_op) {
+				skip_character = false; 
 				continue;
 			}
 
-			foundSpaceBetween = 0;
+			found_space_between = false;
 		}
 
 		// If there is a dot -  it could be a float
 		if (text[i] == '.') {
-			numberOfDots++;
+			number_of_dots++;
 
-			if (numberOfDots>1  &&  !skipMath) {
-				type = 0; 
+			if (number_of_dots>1  &&  !skip_math_op) {
+				result = STR_TYPE_STRING; 
 				break;
 			} else 
 				continue;
@@ -481,8 +484,8 @@ case C_STRING_TYPE:
 
 		// If there is a minus - it could be a negative number
 		if (text[i] == '-') {
-			if (foundNumber) {
-				type = 0; 
+			if (found_number) {
+				result = STR_TYPE_STRING; 
 				break;
 			}
 
@@ -491,32 +494,32 @@ case C_STRING_TYPE:
 
 
 		// If current character is a digit
-		if (isdigit(text[i])  &&  !foundSpaceBetween) {
-			foundNumber = 1;
+		if (isdigit(text[i])  &&  !found_space_between) {
+			found_number = true;
 
 			// If previous character was dot - it could be a float
 			if (i>0  &&  text[i-1]=='.')
-				type = 2;
+				result = STR_TYPE_FLOAT;
 
 			// If it wasn't already set to 'float' then assume it's integer
-			if (type != 2) 
-				type = 1;
+			if (result != STR_TYPE_FLOAT) 
+				result = STR_TYPE_INTEGER;
 		// Otherwise it's a string
 		} else {
-			type = 0;
+			result = STR_TYPE_STRING;
 			break;
 		}
 	}
 
-	// If dot occurs without a number then it's a string
-	if (numberOfDots>0  &&  !foundNumber) 
-		type = 0;
 
-	// Output string type
-	switch(type) {
-		case 0 : QWrite("string", out); break;
-		case 1 : QWrite("integer", out); break;
-		case 2 : QWrite("float", out); break;
+	// If dot occured without a number then it's a string
+	if (number_of_dots>0  &&  !found_number) 
+		result = STR_TYPE_STRING;
+
+	switch(result) {
+		case STR_TYPE_STRING  : QWrite("string", out); break;
+		case STR_TYPE_INTEGER : QWrite("integer", out); break;
+		case STR_TYPE_FLOAT   : QWrite("float", out); break;
 	}
 }
 break;
@@ -533,54 +536,53 @@ break;
 case C_STRING_VARIABLE:
 { // Check if string is a compliant variable
 
-	// Read arguments
 	char *text = "";
 	char *mode = "";
 
 	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+		char *name  = stripq(par[i]);
+		char *colon = strchr(name, ':');
 
-		if (pch == NULL) 
+		if (colon == NULL) 
 			continue;
 
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = Trim(arg + pos + 1);
+		int pos     = pch - name;
+		name[pos]   = '\0';
+		char *value = Trim(name + pos + 1);
 
-		if (strcmpi(arg,"mode") == 0) {
-			mode = val;
+		if (strcmpi(name,"mode") == 0) {
+			mode = value;
 			continue;
 		}
 
-		if (strcmpi(arg,"text") == 0) {
-			text = val;
+		if (strcmpi(name,"text") == 0) {
+			text = value;
 			continue;
 		}
 	}
 	
-	// Switches
-	int result        = 1;		// return value
-	bool global       = true;	// allow global variables
-	bool local        = true;	// allow local variables
-	bool allowNum     = false;	// allow the name to start with a number
-	bool allowBrack   = false;	// allow square brackets at the end
-	bool allowInherit = false;	// allow second class name after colon
-	char *class1      = text;
-	char *class2      = NULL;
+
+	int result         = true;  // return value
+	bool allow_global  = true;	// allow global variables
+	bool allow_local   = true;	// allow local variables
+	bool allow_number  = false;	// allow the name to start with a number
+	bool allow_bracket = false;	// allow square brackets at the end
+	bool allow_inherit = false;	// allow second class name after colon
+	char *class1       = text;
+	char *class2       = NULL;
 
 	if (strcmpi(mode,"onlyLocal") == 0)
-		global = false;
+		allow_global = false;
 
 	if (strcmpi(mode,"onlyGlobal") == 0)
-		local = false;
+		allow_local = false;
 
 	if (strcmpi(mode,"className")==0  ||  strcmpi(mode,"classToken")==0  ||  strcmpi(mode,"classNameInherit")==0) {
-		global       = true;
-		local        = true;
-		allowNum     = true;
-		allowBrack   = strncmpi(mode,"className",9) != 0;
-		allowInherit = strcmpi(mode,"classNameInherit") == 0;
+		allow_global  = true;
+		allow_local   = true;
+		allow_number  = true;
+		allow_bracket = strncmpi(mode,"className",9) != 0;
+		allow_inherit = strcmpi(mode,"classNameInherit") == 0;
 
 		// Keyword "class" is reserved
 		if (strncmpi(text,"class ",6)==0  ||  strncmpi(text,"class=",6)==0) {
@@ -589,7 +591,7 @@ case C_STRING_VARIABLE:
 		}
 
 		// If there are two class names then separate
-		if (allowInherit)
+		if (allow_inherit)
 			if ((class2 = strchr(text, ':')) != NULL) {
 				int pos   = class2 - text;
 				text[pos] = '\0';
@@ -598,19 +600,21 @@ case C_STRING_VARIABLE:
 			}
 	}
 
-	// Empty string
+
 	int length = strlen(text);
+
 	if (length == 0) {
 		QWrite("false", out); 
 		break;
 	}
 
+
 	// Optional mode - remove square brackets at the end
-	if (allowBrack  &&  length>2)
+	if (allow_bracket  &&  length>2)
 		if (text[(length-2)]=='['  &&  text[(length-1)]==']')
 			text[(length-2)] = '\0';
 
-	// Iterate characters
+
 	for (i=0;  result;  i++) {
 		// End loop on string end OR check second string if it exists
 		if (text[i] == '\0') {
@@ -621,23 +625,23 @@ case C_STRING_VARIABLE:
 				break;
 		}
 
+		// Fail conditions for the first character
 		if (i == 0)	{						
-			// Fail condition for the first char
 			if (
-				// DEFAULT - first char is (not alpha assuming digits aren't allowed OR not alpha and not a digit assuming allowed digits) and not underscore	
-				global  &&   local  &&  (!isalpha(text[0]) && !allowNum || !isalpha(text[0]) && !isdigit(text[0]) && allowNum)  &&  text[0]!='_'
+				// DEFAULT - first char is (not alpha assuming digits aren't allowed OR not alpha and not a digit assuming allowed digits) and not underscore
+				allow_global  &&   allow_local  &&  (!isalpha(text[0]) && !allow_number || !isalpha(text[0]) && !isdigit(text[0]) && allow_number)  &&  text[0]!='_'
 				||	
-				// GLOBAL ONLY - first char is (not alpha with digits not allowed OR not alpha and not digit with allowed digits)
-				global  &&  !local  &&  (!isalpha(text[0]) && !allowNum || !isalpha(text[0]) && !isdigit(text[0]) && allowNum) 
+				// GLOBALS ONLY - first char is (not alpha with digits not allowed OR not alpha and not digit with allowed digits)
+				allow_global  &&  !allow_local  &&  (!isalpha(text[0]) && !allow_number || !isalpha(text[0]) && !isdigit(text[0]) && allow_number) 
 				||
-				// LOCAL ONLY - first char is not underscore
-				!global &&  local  &&  text[0]!='_'
+				// LOCALS ONLY - first char is not underscore
+				!allow_global &&  allow_local  &&  text[0]!='_'
 			) 
-				result = 0;
+				result = false;
 		// If character isn't alphanumeric and isn't underscore then fail
 		} else
 			if (!isalnum(text[i])  &&  text[i]!='_')	
-				result = 0;
+				result = false;
 	}
 
 	QWrite(getBool(result), out);
@@ -673,156 +677,156 @@ case C_STRING_RANGE2:
 { // Alternative version of C_STRING_RANGE
 
 	// Read arguments
-	char *text         = "";
-	char *start_find   = "";
-	char *end_find     = "";
-	char tmp[2]        = "";
-	int textSize       = 0;
-	int start          = 0;
-	int end            = 0;
-	int length         = 0;
-	int start_find_pos = 0;
-	int end_find_pos   = 0;
-	int start_offset   = 0;
-	int end_offset     = 0;
-	bool lengthSet     = false;
-	bool endSet        = false;
-	bool exclude       = false;
-	bool matchWord     = false;
-	bool caseSensitive = false;
+	char *text          = "";
+	char *search_start  = "";
+	char *search_end    = "";
+	int range_start     = 0;
+	int range_end       = 0;
+	int range_length    = 0;
+	int offset_start    = 0;
+	int offset_end      = 0;
+	bool is_end_set     = false;
+	bool is_length_set  = false;
+	bool crop_mode      = false;
+	bool match_word     = false;
+	bool case_sensitive = false;
 
 	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+		char *name  = stripq(par[i]);
+		char *colon = strchr(name, ':');
 
-		if (pch == NULL) 
+		if (colon == NULL) 
 			continue;
 
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = arg + pos + 1;
+		int pos     = colon - name;
+		name[pos]   = '\0';
+		char *value = name + pos + 1;
 
-		if (strcmpi(arg,"start") == 0) {
-			start = atoi(val);
-			continue;
-		}
-
-		if (strcmpi(arg,"end") == 0) {
-			end		  = atoi(val);
-			endSet	  = true;
-			lengthSet = false;
+		if (strcmpi(name,"text") == 0) {
+			text = value;
 			continue;
 		}
 
-		if (strcmpi(arg,"length") == 0) {
-			length	  = atoi(val);
-			endSet	  = false;
-			lengthSet = true;
+		if (strcmpi(name,"start") == 0) {
+			range_start = atoi(value);
 			continue;
 		}
 
-		if (strcmpi(arg,"exclude") == 0) {
-			exclude = String2Bool(val);
+		if (strcmpi(name,"end") == 0) {
+			range_end     = atoi(value);
+			is_end_set	  = true;
+			is_length_set = false;
 			continue;
 		}
 
-		if (strcmpi(arg,"text") == 0) {
-			text = val;
+		if (strcmpi(name,"range_length") == 0) {
+			range_length  = atoi(value);
+			is_end_set    = false;
+			is_length_set = true;
 			continue;
 		}
 
-		if (strcmpi(arg,"startfind") == 0) {
-			start_find = val;
+		if (strcmpi(name,"exclude") == 0) {
+			crop_mode = String2Bool(value);
 			continue;
 		}
 
-		if (strcmpi(arg,"endfind") == 0) {
-			end_find = val;
+
+		if (strcmpi(name,"startfind") == 0) {
+			search_start = value;
 			continue;
 		}
 
-		if (strcmpi(arg,"matchWord") == 0) {
-			matchWord = String2Bool(val);
+		if (strcmpi(name,"endfind") == 0) {
+			search_end = value;
 			continue;
 		}
 
-		if (strcmpi(arg,"caseSensitive") == 0) {
-			caseSensitive = String2Bool(val);
+		if (strcmpi(name,"matchWord") == 0) {
+			match_word = String2Bool(value);
 			continue;
 		}
 
-		if (strcmpi(arg,"startoffset") == 0) {
-			start_offset = atoi(val);
+		if (strcmpi(name,"caseSensitive") == 0) {
+			case_sensitive = String2Bool(value);
 			continue;
 		}
 
-		if (strcmpi(arg,"endoffset") == 0) {
-			end_offset = atoi(val);
+		if (strcmpi(name,"startoffset") == 0) {
+			offset_start = atoi(value);
+			continue;
+		}
+
+		if (strcmpi(name,"endoffset") == 0) {
+			offset_end = atoi(value);
 			continue;
 		}
 	}
 
-	textSize = strlen(text);
-	if (textSize == 0)
+	int text_length = strlen(text);
+	if (text_length == 0)
 		break;
 
 	// Search for the start and end position
-	if (strcmp(start_find,"") != 0) {
-		char *start_ptr = strstr2(text, start_find, matchWord, caseSensitive);
+	if (strcmp(search_start,"") != 0) {
+		char *start_ptr = strstr2(text, search_start, match_word, case_sensitive);
 		if (start_ptr == NULL) {
 			QWrite("", out);
 			break;
 		}
 
-		start = start_ptr - text;
+		range_start = start_ptr - text;
 
-		if (strcmp(end_find,"") != 0) {
-			char *end_ptr = strstr2(start_ptr, end_find, matchWord, caseSensitive);
+		if (strcmp(search_end,"") != 0) {
+			char *end_ptr = strstr2(start_ptr, search_end, match_word, case_sensitive);
 			if (start_ptr != NULL) {
-				end       = end_ptr - text;
-				endSet    = true;
-				lengthSet = false;
+				range_end     = end_ptr - text;
+				is_end_set    = true;
+				is_length_set = false;
 			}
 		}
 	}
 
-	start += start_offset;
-	end   += end_offset;
+	range_start += offset_start;
+	range_end   += offset_end;
 
-	CorrectStringPos(&start, &end, length, endSet, lengthSet, textSize);
+	CorrectStringPos(&range_start, &range_end, range_length, is_end_set, is_length_set, text_length);
 
 	// Exclusion mode - remove range of characters
-	if (exclude) {
+	if (crop_mode) {
 		// Normal range
-		if (start <= end)
-			for (int i=0; i<textSize; i++) {
-				if (i<start  ||  i>=end) 
-					sprintf(tmp, "%c", text[i]),
-					QWrite(tmp, out);
+		if (range_start <= range_end)
+			for (int i=0; i<text_length; i++) {
+				if (i<range_start  ||  i>=range_end) {
+					char output[2] = "";
+					sprintf(output, "%c", text[i]);
+					QWrite(output, out);
+				}
 			}
 
 		// Reverse range - iterate characters from the end
 		else
-			for (int i=textSize-1; i>0; i--) {
-				if (i<end  ||  i>=start) {
-					sprintf(tmp, "%c", text[i]);
-					QWrite(tmp, out);
+			for (int i=text_length-1; i>0; i--) {
+				if (i<range_end  ||  i>=range_start) {
+					char output[2] = "";
+					sprintf(output, "%c", text[i]);
+					QWrite(output, out);
 				}
 			}
 
 	// Inclusion mode - return range of characters
 	} else {
 		// Normal range
-		if (start <= end) {
-			text[end] = '\0';
-			text += start;
-			QWrite(text, out);
+		if (range_start <= range_end) {
+			text[range_end] = '\0';
+			QWrite(text+range_start, out);
 		// Reverse range - iterate characters from the end
 		} else
-			for (--start; start>=end; start--)
-				if (start>=0  &&  start<textSize) {
-					sprintf(tmp, "%c", text[start]);
-					QWrite(tmp, out);
+			for (--range_start; range_start>=range_end; range_start--)
+				if (range_start>=0  &&  range_start<text_length) {
+					char output[2] = "";
+					sprintf(output, "%c", text[range_start]);
+					QWrite(output, out);
 				}
 	}
 }
@@ -1970,7 +1974,7 @@ case C_STRING_WORDPOS:
 	}
 
 
-	char tmp[128] = "";
+	char output[128] = "";
 	int StartType = -1;
 
 	i = 0;
@@ -1982,8 +1986,8 @@ case C_STRING_WORDPOS:
 
 		// Output word position
 		if (StartType != 1) {
-			sprintf(tmp, "]+[%d", i);
-			QWrite(tmp, out);
+			sprintf(output, "]+[%d", i);
+			QWrite(output, out);
 		}
 
 		// Iterate until current word ends
