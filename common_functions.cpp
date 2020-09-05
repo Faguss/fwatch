@@ -243,3 +243,87 @@ int String_readfile(String &str, char *path)
 		return -2;
 	}
 }
+
+
+
+
+// Load from a file pid and exit code under given key
+WatchProgramInfo db_pid_load(int db_id_wanted) 
+{
+	WatchProgramInfo ret = {0,0,0,0};
+	FILE *file           = fopen("fwatch\\data\\pid.db","rb");
+
+	if (file) {
+		fseek(file, 0, SEEK_END);
+		int file_size = ftell(file);
+		fseek(file, 0, SEEK_SET);
+
+		bool found = false;
+
+		while (ftell(file) < file_size) {
+			fread(&ret, sizeof(WatchProgramInfo), 1, file);
+
+			if (ret.db_id == db_id_wanted) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found) {
+			ret.db_id = 0;
+			ret.exit_code = 0;
+			ret.launch_error = 0;
+			ret.pid = 0;
+		}
+
+		fclose(file);
+	}
+
+	return ret;
+}
+
+
+
+// Save pid and exit code under given key to a file
+void db_pid_save(WatchProgramInfo input)
+{
+	FILE *file = fopen("fwatch\\data\\pid.db","rb");
+
+	int record_num = 0;
+
+	if (file) {
+		fseek(file, 0, SEEK_END);
+		record_num = ftell(file) / sizeof(WatchProgramInfo);
+		fseek(file, 0, SEEK_SET);
+	}
+
+	WatchProgramInfo* record = (WatchProgramInfo *) malloc ((record_num+1) * sizeof(WatchProgramInfo));
+
+	if (record == NULL) {
+		fclose(file);
+		return;
+	}
+
+	if (file) {
+		fread(record, sizeof(WatchProgramInfo), record_num, file);
+		fclose(file);
+	}
+
+	int index = -1;
+
+	for (int i=0; i<record_num && index==-1; i++)
+		if (record[i].db_id == input.db_id)
+			index = i;
+
+	if (index == -1)
+		index = record_num++;
+
+	record[index] = input;
+
+	if (file = fopen("fwatch\\data\\pid.db", "wb")) {
+		int saved = fwrite(record, sizeof(WatchProgramInfo), record_num, file);
+		fclose(file);
+	}
+
+	free(record);
+}

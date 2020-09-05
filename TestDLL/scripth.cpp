@@ -23,6 +23,7 @@ You may use this source code for personal entertainment purposes only. Any comme
 #include "errno.h"		//v1.13 for errno constants
 #include "shlobj.h"		//v1.14 for copying files to the clipboard
 #include "..\common_functions.cpp"	//1.16
+#include <time.h>		// 1.16 for random number
 
 extern GLOBAL_VARIABLES_TESTDLL global;
 

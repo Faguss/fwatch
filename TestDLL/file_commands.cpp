@@ -359,6 +359,189 @@ case C_FILE_MODLIST:
 		}
 	}
 
-	listDirFiles(username, out, MODFOLDERS, false, CommandID);
+	//listDirFiles(username, out, MODFOLDERS, false, CommandID);
+
+	WIN32_FIND_DATA fd;
+	HANDLE hFind = INVALID_HANDLE_VALUE;
+	hFind		 = FindFirstFile("*", &fd);
+
+	if (hFind != INVALID_HANDLE_VALUE) {
+		String Names, Attributes, Versions, Dates;
+		String_init(Names);
+		String_init(Attributes);
+		String_init(Versions);
+		String_init(Dates);
+
+		char sub_folder[][16] = {"addons","bin","campaigns", "dta", "worlds", "Missions", "MPMissions", "Templates", "SPTemplates"};
+		int sub_folder_num    = sizeof(sub_folder) / sizeof(sub_folder[0]);
+
+		do {
+			if (strcmp(fd.cFileName,".")==0  ||  strcmp(fd.cFileName,"..")==0)
+				continue;
+
+			// skip non-folders and "Res" folder
+			if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)==0  ||  strcmpi("Res",fd.cFileName)==0)
+				continue;
+
+			char path2[MAX_PATH] = "";
+
+			// Check if current directory contains at least one of four required sub-folders
+			for (int i=0; i<sub_folder_num; i++) {			
+				sprintf(path2, "%s\\%s", fd.cFileName, sub_folder[i]);
+
+				DWORD attributes = GetFileAttributes(path2);
+
+				if (attributes != -1  &&  attributes & FILE_ATTRIBUTE_DIRECTORY) {
+					String_append_quotes(Names, "]+[\"", fd.cFileName, "\"");
+
+					sprintf(path2, "%s\\__gs_id", fd.cFileName);
+					FILE *f = fopen(path2, "r");
+
+					if (f) {
+						char data[128] = "";
+						fread(data, sizeof(char), 127, f);
+						char *pch = strtok(data, ";");
+						int i     = 0;
+
+						while (pch != NULL) {
+							switch (i) {
+								case 0: String_append_quotes(Attributes, "]+[\"", pch, "\""); break;
+								case 1: String_append(Versions, "]+["); String_append(Versions, pch); break;
+								case 2: String_append(Dates, "]+["); String_append(Dates, pch); break;
+							}
+
+							i++;
+							pch = strtok (NULL, ";");
+						}
+
+						fclose(f);
+					} else {
+						String_append(Attributes, "]+[\"\"");
+						String_append(Versions, "]+[0");
+						String_append(Dates, "]+[0");
+					}
+
+					break;
+				}
+			}
+		} while (FindNextFile(hFind, &fd));
+		FindClose(hFind);
+
+		double bytes             = 0;
+		char customfilename[256] = "";
+		char path_to_user[256]   = "";
+
+		// Check if profile is using a custom face
+		sprintf(path_to_user, "Users\\%s\\UserInfo.cfg", username);
+		FILE *f = fopen(path_to_user,"r");
+
+		if (f) {
+			fseek(f, 0, SEEK_END);
+			int fsize = ftell(f);
+			fseek(f, 0, SEEK_SET);
+
+			char *settings	 = new char[fsize+1];
+			int result		 = fread(settings, 1, fsize, f);
+			settings[result] = '\0';
+
+			// Check custom face file size
+			if (strstr(settings, "face=\"Custom\"") != NULL) {
+				sprintf(path_to_user, "Users\\%s\\face.paa", username);
+
+				hFind = FindFirstFile(path_to_user, &fd);
+
+				if (hFind != INVALID_HANDLE_VALUE) {
+					if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 102400) {
+						strncpy(customfilename, fd.cFileName, 255);
+						bytes = fd.nFileSizeLow;
+					}
+
+					FindClose(hFind);
+				} else {
+					sprintf(path_to_user, "Users\\%s\\face.jpg", username);
+					hFind = FindFirstFile(path_to_user, &fd);
+
+					if (hFind != INVALID_HANDLE_VALUE)
+						if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 102400) {
+							strncpy(customfilename, fd.cFileName, 255);
+							bytes = fd.nFileSizeLow;
+						}
+
+					FindClose(hFind);
+				}
+			}
+
+			delete[] settings;
+			fclose(f);
+		}
+
+
+		// Check custom sounds file sizes
+		sprintf(path_to_user, "Users\\%s\\sounds\\*.*", username);
+		hFind = FindFirstFile(path_to_user, &fd);
+
+		if (hFind != INVALID_HANDLE_VALUE) {
+			do {
+				if (fd.cFileName[0] == '.')
+					continue;
+
+				if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+					continue;
+
+				if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 51200) {
+					bytes = fd.nFileSizeLow;
+					strncpy(customfilename, fd.cFileName, 255);
+				}
+			} while (FindNextFile(hFind, &fd) != 0);
+			FindClose(hFind);
+		}
+
+		
+		// Output result
+		FWerror(0,0,CommandID,"","",0,0,out);
+
+		QWrite("[", out);
+		QWrite(Names.pointer, out);
+		QWrite("],[", out);
+		QWrite(Attributes.pointer, out);
+		QWrite("],[", out);
+		QWrite(Versions.pointer, out);
+		QWrite("],[", out);
+		QWrite(Dates.pointer, out);
+
+		QWrite("],\"", out);
+		QWrite(customfilename, out);
+
+		double kilobytes = 0;
+		double megabytes = 0;
+
+		if (bytes >= 1048576) 
+			megabytes  = bytes / 1048576,
+			megabytes -= fmod(megabytes, 1),
+			bytes     -= megabytes * 1048576;
+
+		if (bytes >= 1024)
+			kilobytes  = bytes / 1024,
+			kilobytes -= fmod(kilobytes, 1),
+			bytes     -= kilobytes * 1024;
+
+		unsigned int hash = 2166136261;
+		hash              = fnv_hash(hash, Attributes.pointer, Attributes.current_length);
+		hash              = fnv_hash(hash, Versions.pointer,   Versions.current_length  );
+
+		char number[256] = "";
+		sprintf(number, "\",[%f,%f,%f],\"%u\",\"%s\"]", bytes, kilobytes, megabytes, hash, username);
+		QWrite(number, out);
+
+		String_end(Names);
+		String_end(Attributes);
+		String_end(Versions);
+		String_end(Dates);
+	} else {
+		FWerror(5,GetLastError(),CommandID,username,"",0,0,out);
+		QWrite("[],[]]",out); 
+		return;
+	}
+
 }
 break;

@@ -547,9 +547,49 @@ case C_IGSE_LIST:
 	if (!VerifyPath(&ptr_path, buf_path, ALLOW_GAME_ROOT_DIR, CommandID, out)) {
 		QWrite("[],[]]", out); 
 		break;
-	};
+	}
 
-	listDirFiles(ptr_path, out, arg_edit_mode, arg_system_time, CommandID);
+
+	// Get list of files
+	WIN32_FIND_DATA fd;
+	HANDLE hFind = INVALID_HANDLE_VALUE;
+	hFind		 = FindFirstFile(ptr_path, &fd);
+
+	if (hFind != INVALID_HANDLE_VALUE) {
+		String Names, Attributes;
+		String_init(Names);
+		String_init(Attributes);
+
+		do {
+			if (strcmp(fd.cFileName,".")==0  ||  strcmp(fd.cFileName,"..")==0)
+				continue;
+
+			String_append_quotes(Names, "]+[\"", fd.cFileName, "\"");		
+
+			if (arg_edit_mode == FILENAMES_AND_ATTRIBUTES) {
+				char data[1024]	= "";
+				getAttributes(fd, data, arg_system_time);
+				String_append(Attributes,"]+[");
+				String_append(Attributes, data);
+			}
+		} while (FindNextFile(hFind, &fd));
+		FindClose(hFind);
+
+		FWerror(0,0,CommandID,"","",0,0,out);
+		QWrite("[", out);
+		QWrite(Names.pointer, out);
+		QWrite("],[", out);
+		QWrite(Attributes.pointer, out);
+		QWrite("]]", out);
+
+		String_end(Names);
+		String_end(Attributes);
+	} else {
+		FWerror(5,GetLastError(),CommandID,ptr_path,"",0,0,out);
+		QWrite("[],[]]",out); 
+		break;
+	}
+
 	String_end(buf_path);
 }
 break;
@@ -714,6 +754,8 @@ case C_IGSE_LOAD:
 		
 		if (!arg_execute_output)
 			QWrite("[],0,false,false,\"\"]", out);
+		else
+			QWrite("\"\"", out);
 
 		String_end(buf_filename);
 		break;
@@ -1772,7 +1814,8 @@ break;
 
 case C_IGSE_DB:
 { // IGSE Database
-
+//FILE *fd=fopen("fwatch_debug.txt","a");
+//fprintf(fd,"com:%s\n",com);
 	// Define variables
 	char *arg_filename     = "";
 	bool arg_writing_mode  = false;
@@ -1990,6 +2033,7 @@ case C_IGSE_DB:
 					val_start += old_value_length;
 
 				// Write new value
+				//fprintf(fd,"difference:%d\ntext_buffer+val_start:%d %s\nval:%s\nnew_value_length:%d\n",difference, val_start, text_buffer+val_start,val, new_value_length);
 				memcpy(text_buffer+val_start, val, new_value_length);
 
 				// Recalculate value offsets
@@ -2125,5 +2169,7 @@ case C_IGSE_DB:
 		
 	if (file)
 		fclose(file);
+
+	//fclose(fd);
 }
 break;

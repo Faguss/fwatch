@@ -255,8 +255,23 @@ case C_INFO_ERRORLOG:
 { // Switch error message logging
 
 	// If argument passed then enable / disable
-	if (numP > 2)
-		global.ErrorLog_Enabled = String2Bool(par[2]);
+	if (numP > 2) {
+		if (strcmp(par[2],"start") == 0) {
+			FILE *f = fopen(!global.DedicatedServer ? "fwatch\\idb\\_errorLog.txt" : "fwatch\\idb\\_errorLogDedi.txt", "a");
+			HANDLE phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
+
+			if (f) {
+				WriterHeaderInErrorLog(&f, &phandle);
+				fclose(f);
+			}
+
+			if (phandle)
+				CloseHandle(phandle);
+		} else {
+			global.ErrorLog_Enabled = String2Bool(par[2]);
+			NotifyFwatchAboutErrorLog();
+		}
+	}
 
 	QWrite(getBool(global.ErrorLog_Enabled), out);
 }

@@ -299,6 +299,7 @@ struct GLOBAL_VARIABLES_TESTDLL {
 	char mission_path_previous[256];
 	int mission_path_savetime;
 	DWORD pid;
+	int external_program_id;
 
 	int extCamOffset;
 	int restore_int[2];
@@ -368,6 +369,13 @@ struct String {
 	bool heap;
 };
 
+struct WatchProgramInfo {
+	int db_id;
+	DWORD pid;
+	DWORD exit_code;
+	DWORD launch_error;
+};
+
 
 
 
@@ -423,9 +431,6 @@ void  fdbGet2(char* file, char* var, int CommandID, HANDLE out);							//v1.1
 
 
 // New functions
-//1.1
-void listDirFiles (char* path, HANDLE out, int mode, int systime, int CommandID);
-
 //1.11
 DWORD findProcess(const char* exe_name);
 
@@ -486,4 +491,7 @@ unsigned int fnv_hash (unsigned int hash, char* text, int text_length);
 void PurgeComments(char *text, int string_start, int string_end);
 char* Output_Nested_Array(char *temp, int level, char *output_strings_name, int j, int *subclass_count);
 int DeleteWrapper(char *refcstrRootDirectory);
-
+WatchProgramInfo db_pid_load(int db_id_wanted);
+void db_pid_save(WatchProgramInfo input);
+void NotifyFwatchAboutErrorLog();
+void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle);

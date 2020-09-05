@@ -11,21 +11,39 @@ struct ThreadArguments {
 	bool is_dedicated_server;
 	bool is_custom_master1;
 	bool is_custom_master2;
+	HANDLE *mailslot;
 };
 
 struct GLOBAL_VARIABLES_TESTLAUNCHER {	// variables shared between threads
 	int listen_server_port;
 	char master_server1[64];
 	char master_server2[32];
+	bool error_log_enabled;
+	bool error_log_started;
 } global = {
 	-1,
 	"",
-	""
+	"",
+	false
 };
 
 enum GAME_TYPES {
 	GAME_CLIENT,
 	GAME_SERVER
+};
+
+enum COMMAND_ID {
+	C_INFO_ERRORLOG = 6,
+	C_RESTART_SERVER = 105,
+	C_RESTART_CLIENT,
+	C_EXE_SPIG = 123,
+	C_EXE_ADDONTEST,
+	C_EXE_WGET,
+	C_EXE_UNPBO,
+	C_EXE_PREPROCESS,
+	C_EXE_ADDONINSTALL,
+	C_EXE_WEBSITE,
+	C_EXE_MAKEPBO
 };
 
 unsigned long GetIP(char *host);
@@ -36,6 +54,9 @@ void ModfolderMissionsReturn(bool is_dedicated_server);
 
 void FwatchPresence(ThreadArguments *arg);
 void ListenServer(ThreadArguments *arg);
+void WatchProgram(ThreadArguments *arg);
+
+
 
 
 
@@ -86,11 +107,10 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		"fwatch/data/getAspectRatio.sqf",
 		"fwatch/data/DePbo.dll",
 		"fwatch/data/ExtractPbo.exe",
-		"fwatch/data/getExitCode.exe",
 		"fwatch/data/preproc.exe",
 		"fwatch/data/Download.sqs",
 		"fwatch/data/MainMenu_fnc.sqf",
-		"fwatch/data/addonInstaller.exe",
+		"fwatch/data/addonInstarrer.exe",
 		"fwatch/data/7z.dll",
 		"fwatch/data/7z.exe",
 		"fwatch/data/MakePbo.exe",
@@ -110,7 +130,24 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			exit(0);
 		}		
 		x++;
-	} 
+	}
+
+
+
+	// Create mailslot
+	HANDLE mailslot = CreateMailslot(TEXT("\\\\.\\mailslot\\fwatch_mailslot"), 0, MAILSLOT_WAIT_FOREVER, (LPSECURITY_ATTRIBUTES) NULL);
+
+	if (mailslot == INVALID_HANDLE_VALUE) {
+		DWORD error_code    = GetLastError();
+		char error_msg[512] = "";
+
+		sprintf(error_msg, "Failed to create mailslot - %d: ", error_code);
+		int length = strlen(error_msg);
+
+		FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, 0, error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), &error_msg[length], 511-length, 0);
+		MessageBox( NULL, error_msg, "fwatch", MB_OK|MB_ICONSTOP );
+		return 2;
+	}
 
 
 
@@ -131,7 +168,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	bool first_item            = true;
 	bool buffer_shift          = false;
 	int custom_exe             = -1;
-	ThreadArguments client_arg = {false, false, false};
+	ThreadArguments client_arg = {false, false, false, &mailslot};
 
 	for (int i=0, begin=-1; i<=lpCmdLine_size; i++) {
 		bool complete_word = i == lpCmdLine_size;
@@ -331,7 +368,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		} else
 			MessageBox(NULL, "Could not run the game!\n\nEnsure fwatch.exe is located in your game directory,\nor run fwatch with -nolaunch parameter and then run the game manually.", "fwatch error", MB_OK|MB_ICONSTOP);		
 	} else {
-		ThreadArguments server_arg = client_arg;
+		ThreadArguments server_arg     = client_arg;
 		server_arg.is_dedicated_server = true;
 		
 		_beginthread((void(*)(void*))FwatchPresence, 0, &client_arg);
@@ -368,10 +405,13 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 
 
+
     RemoveHook();
 	ModfolderMissionsReturn(GAME_CLIENT);
 	ModfolderMissionsReturn(GAME_SERVER);
 	unlink("fwatch_info.sqf");
+	unlink("fwatch\\data\\pid.db");
+	CloseHandle(mailslot);
     return 0;
 }
 
@@ -747,7 +787,6 @@ void FwatchPresence(ThreadArguments *arg)
 	int signal_action          = -1;
 	char *signal_buffer        = "";
 	char error_msg_last[512]   = "";
-	bool error_log_enabled     = false;
 
 	bool ui_change_enabled     = false;
 	bool ui_portrait_mode      = false;
@@ -775,6 +814,7 @@ void FwatchPresence(ThreadArguments *arg)
 		UI_CHAT_BRIEFINGLOBBY,
 		UI_CHAT_CUSTOM
 	};
+
 
 
 	// Prepare necessary data for fixing UI on game client - 
@@ -1113,7 +1153,7 @@ void FwatchPresence(ThreadArguments *arg)
 			ReadProcessMemory(phandle, (LPVOID)master_server2_address, &global.master_server2, 19, &stBytes);
 
 			// Check for game scripting error
-			if (error_log_enabled) {
+			if (global.error_log_enabled) {
 				int pointers[] = {0, 0, 0, 0};
 				int modif[]	   = {0x68, 0x1C, 0};
 				int last       = sizeof(pointers) / sizeof(pointers[0]) - 1;
@@ -1129,13 +1169,22 @@ void FwatchPresence(ThreadArguments *arg)
 					pointers[i+1] = pointers[i+1] +  modif[i];
 				}
 
-				// Save message if different from the last one
+				// Save message if it's different from the last one
 				if (pointers[last] != 0) {
 					char error_msg[512] = "";
 					ReadProcessMemory(phandle, (LPVOID)pointers[last], &error_msg, 512, &stBytes);
 
-					if (strcmp(error_msg,error_msg_last) != 0) {
+					if (strcmp(error_msg,error_msg_last) != 0) {						
 						strcpy(error_msg_last, error_msg);
+
+						if (!global.error_log_started) {
+							global.error_log_started = true;
+							HANDLE message = CreateFile("scripts\\:info errorlog start", GENERIC_READ, 0, NULL, OPEN_EXISTING, 128, NULL);
+
+							if (message != INVALID_HANDLE_VALUE)
+								CloseHandle(message);
+						}
+
 						FILE *f = fopen("fwatch\\idb\\_errorLog.txt", "a");
 
 						if (f) {
@@ -1356,6 +1405,28 @@ void FwatchPresence(ThreadArguments *arg)
 					signal_action = -1;
 					free(signal_buffer);
 				}
+			}
+
+
+			// Check messages from fwatch.dll
+			if (*arg->mailslot != INVALID_HANDLE_VALUE) {
+				FILE *fd=fopen("fwatch_debug.txt","a");
+				DWORD message_size   = 0;
+				DWORD message_number = 0;
+
+				if (GetMailslotInfo(*arg->mailslot, (LPDWORD)NULL, &message_size, &message_number, (LPDWORD)NULL)) {
+					if (message_size != MAILSLOT_NO_MESSAGE) {
+						_beginthread((void(*)(void*))WatchProgram, 0, arg);
+					} else 
+						fprintf(fd,"fwatch.exe - no messages\n");
+				} else {
+					fprintf(fd,"fwatch.exe - failed to get mailslot info %d\n",GetLastError());
+				}
+				fclose(fd);
+			} else {
+				FILE *fd=fopen("fwatch_debug.txt","a");
+				fprintf(fd,"fwatch.exe - invalid handle value\n");
+				fclose(fd);
 			}
 		}
 
@@ -1760,4 +1831,126 @@ void ListenServer(ThreadArguments *arg)
 	closesocket(reportSocket);
 	WSACleanup();
 	_endthread();
-};
+}
+
+
+
+
+
+
+
+
+// Save program's exit code
+void WatchProgram(ThreadArguments *arg)
+{
+	if (*arg->mailslot != INVALID_HANDLE_VALUE) {
+		DWORD message_size   = 0;
+		DWORD message_number = 0;
+
+		if (GetMailslotInfo(*arg->mailslot, (LPDWORD)NULL, &message_size, &message_number, (LPDWORD)NULL)) {
+			if (message_size != MAILSLOT_NO_MESSAGE) {
+
+				//void *message_buffer = GlobalAlloc(GMEM_FIXED, message_size);
+				HGLOBAL hGbl = GlobalAlloc(GMEM_ZEROINIT|GMEM_MOVEABLE|GMEM_DDESHARE, message_size);
+				
+				if (hGbl) {
+					char* message_buffer = (char*)GlobalLock(hGbl);
+					DWORD bytes_read     = 0;
+
+					if (ReadFile(*arg->mailslot, message_buffer, message_size, &bytes_read, 0)) {
+						int CommandID = 0;
+						int db_id     = 0;
+						char *params  = "";
+
+						int value_pos   = 0;
+						int value_index = 0;
+
+						while (value_pos < (int)message_size) {
+							char *token = Tokenize(message_buffer, "|", value_pos, message_size, false, false);
+
+							switch(value_index++) {
+								case 0 : CommandID=atoi(token); break;
+								case 1 : db_id=atoi(token); break;
+								case 2 : params=token; break;
+							}
+						}
+
+						// Set variables depending on the program
+						char exe_name[64] = "";
+						char exe_path[64] = "fwatch\\data\\";
+
+						switch(CommandID) {
+							case C_EXE_ADDONINSTALL : strcpy(exe_name, "addonInstarrer.exe"); break;
+							case C_EXE_ADDONTEST    : strcpy(exe_name, "addontest.exe"); strcpy(exe_path, "@addontest\\ModData\\"); break;
+							case C_EXE_UNPBO        : strcpy(exe_name, "extractpbo.exe"); break;
+							case C_EXE_MAKEPBO      : strcpy(exe_name, "makepbo.exe"); break;
+							case C_EXE_WGET         : strcpy(exe_name, "wget.exe"); break;
+							case C_EXE_PREPROCESS   : strcpy(exe_name, "preproc.exe"); break;
+							case C_RESTART_CLIENT   : strcpy(exe_name, "gameRestart.exe"); break;
+
+							case C_INFO_ERRORLOG    : {
+								global.error_log_enabled = db_id ? 1 : 0;
+								global.error_log_started = atoi(params) ? 1 : 0;
+							} break;
+						}
+
+						if (strcmp(exe_name,"") != 0) {
+							strcat(exe_path, exe_name);
+
+							// Create log file
+							SECURITY_ATTRIBUTES sa;
+							sa.nLength              = sizeof(sa);
+							sa.lpSecurityDescriptor = NULL;
+							sa.bInheritHandle       = TRUE;       
+
+							HANDLE logFile = CreateFile(TEXT("fwatch\\tmp\\exelog.txt"),
+								FILE_APPEND_DATA,
+								FILE_SHARE_WRITE | FILE_SHARE_READ,
+								&sa,
+								CREATE_ALWAYS,
+								FILE_ATTRIBUTE_NORMAL,
+								NULL );
+
+							// Run program
+							STARTUPINFO si;
+							PROCESS_INFORMATION pi;
+							ZeroMemory(&si, sizeof(si));
+							si.cb          = sizeof(si);
+							si.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+							si.wShowWindow = SW_HIDE;
+							si.hStdOutput  = logFile;
+							si.hStdError   = logFile;
+							ZeroMemory(&pi, sizeof(pi));
+							
+							if (CreateProcess(exe_path, params, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {						
+								WatchProgramInfo info = {db_id, pi.dwProcessId, STILL_ACTIVE, 0};
+								db_pid_save(info);
+
+								// Run another program monitoring the first program
+								if (CommandID != C_RESTART_CLIENT) {
+									do {
+										Sleep(5);
+										GetExitCodeProcess(pi.hProcess, &info.exit_code);
+									} while (info.exit_code == STILL_ACTIVE);
+
+									db_pid_save(info);
+								}
+
+								CloseHandle(pi.hProcess);
+								CloseHandle(pi.hThread);
+								CloseHandle(logFile);
+							} else {
+								WatchProgramInfo info = {db_id, pi.dwProcessId, STILL_ACTIVE, GetLastError()};
+								db_pid_save(info);
+							}
+						}
+					}
+
+					GlobalFree(hGbl);
+				}
+			}
+		}
+	}
+
+	_endthread();
+}

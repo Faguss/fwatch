@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2020,7,12,0,11,13,32,617,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2020,9,5,6,15,25,48,151,120,FALSE]
 	GS_MY_VERSION = 0.54
 	GS_DEFAULT_URL = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -24,7 +24,7 @@
 	; Create or close dialog
 	? MAINMENU_INPUT || ctrlVisible 6900 : exit
 	? ctrlVisible 6657                   : if (lbValue[6657,0]!=1) then {LOADMOD_MODSELECTOR=true} else {closeDialog 0}; exit
-	
+
 	; Initialize functions
 	call preProcessFile "..\fwatch\data\MainMenu_fnc.sqf"
 	["FLIB_DATEDIFF","FLIB_DATEDIFFDAY","FLIB_FORMATDATE","FLIB_MODIFYDATE","FLIB_CURRENTLANG"] call preProcessFile "..\fwatch\data\InitFLib.sqf"
@@ -131,7 +131,7 @@
 	; Check cursor pos
 	_mx = (FWATCH_INPUT_MULTI select 3) select 2
 	_my = (FWATCH_INPUT_MULTI select 3) select 3
-	if (_mx<_x-_tolerance || _mx>_w+_tolerance || _my<_y-_tolerance || _my>_h+_tolerance) then {_timeout=_timeout+1; if (_timeout>3) then {closeDialog 0; exit}} else {_timeout=0}
+	;if (_mx<_x-_tolerance || _mx>_w+_tolerance || _my<_y-_tolerance || _my>_h+_tolerance) then {_timeout=_timeout+1; if (_timeout>3) then {closeDialog 0; exit}} else {_timeout=0}
 	
 	; Read input to check double-click
 	_keys  = FWATCH_INPUT_MULTI select 0
@@ -329,7 +329,7 @@
 			
 			"DownloadMods_ForEachURL" call FUNCTION_READ_DOWNLOADED_FILE
 			
-			if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="bool") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0}
+			if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="scalar") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0}
 			? !_update_available && GS_VERSION != GS_MY_VERSION : [MAINMENU_STR select 20,""] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
 
 			; Add mods to the global list
@@ -560,7 +560,6 @@
 		@count GS_DOWNLOAD_RESULT != 0
 		
 		"ForEachURL" call FUNCTION_READ_DOWNLOADED_FILE
-
 		if (GS_LAST_MODIFIED==(_all_urldates select _i) && _saved_modhash==FWATCH_MODLISTHASH) then {goto "SkipURL"}
 
 		; Download full info
@@ -595,7 +594,7 @@
 			
 				; Examine servers
 				_j = 0
-				if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="bool") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0; if (_update_available) then {_i=count _all_url; goto "SkipURL"}}
+				if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="scalar") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0; if (_update_available) then {_i=count _all_url; goto "SkipURL"}}
 				? GS_VERSION != GS_MY_VERSION : [MAINMENU_STR select 20,""] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
 				? count GS_SERVERS == 0       : (MAINMENU_STR select 19) call FUNCTION_MSG_LB; goto "SkipURL"
 				
@@ -933,7 +932,7 @@
 		? !(_auto_restart in [_current_auto_restart])   : goto "InstallDisplay"
 		? !(_run_voice_program in [_current_run_voice]) : goto "InstallDisplay"
 
-		? _install_status == 0 : if (lbSize 6657 == 0) then {goto "InstallDisplay"}; _ok=call loadFile Format ["\:EXE ADDONINSTALL  check %1", _pid]; _install_hanged=!(_ok select 0); if (_install_hanged) then {_progress=_progress+(MAINMENU_STR select 45)}
+		? _install_status == 0 : if (lbSize 6657 == 0) then {goto "InstallDisplay"}; _ok=call loadFile Format ["\:EXE ADDONINSTALL  check %1", _pid]; _install_hanged=!(_ok select 0); if (_install_hanged) then {if ((_ok select 2) in [740,186]) then {_progress=_progress+Format ["%1 %2 - %3\n\nRight click on fwatch.exe --> Properties --> Compatibility --> Run this program as an administrator",MAINMENU_STR select 63,(_ok select 2),(_ok select 3)]} else {_progress=_progress+(MAINMENU_STR select 45)}}
 		ctrlSetText [6463, _progress]
 
 		; waiting for user input

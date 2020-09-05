@@ -23,6 +23,7 @@ GLOBAL_VARIABLES_TESTDLL global = {
 	"",  // mission_path_previous
 	0,   // mission_path_savetime
 	0,   // pid
+	0,	 // external_program_id
 	
 	0,   // extCamOffset
 	{0}, // RESTORE_INT

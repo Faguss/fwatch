@@ -2373,15 +2373,15 @@ case C_MEM_HUD:
 					current[j] = (float)atof(val);
 
 				break;
-			};
-		};
-	};
+			}
+		}
+	}
 
 	switch(game_version) {
 		case VER_196 : ui_base=0x79F8D0; break;
 		case VER_199 : ui_base=0x78E9C8; break;
 		case VER_201 : ui_base=global.exe_address+0x6D8240; break;
-	};
+	}
 
 	ReadProcessMemory(phandle, (LPVOID)(ui_base+0x0), &ui_base, 4, &stBytes);
 	ReadProcessMemory(phandle, (LPVOID)(ui_base+0x8), &ui_base, 4, &stBytes);

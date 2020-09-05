@@ -26,7 +26,7 @@ Fwatch adds additional scripting functionality to Operation Flashpoint Resistanc
 
 Fwatch v1.0d source code.
 
-by Kegetys <kegetys@dnainternet.net>m
+by Kegetys <kegetys@dnainternet.net>
 
 Based on apihijack example code from CodeGuru.com by Matt Pietrek and Wade Brainerd. 
 

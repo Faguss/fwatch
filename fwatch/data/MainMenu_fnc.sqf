@@ -287,7 +287,8 @@ FUNCTION_FORMAT_GAME_TIME = {
 			_formatPattern = "@d MM 0h:0i";
 			
 			if (_eventBegan && _eventType>0) then {
-				_formatPattern = Format ["@~%1~ 0h:0i", (if (_eventType==1) then {MAINMENU_STR select (51 + (_startTime select 3))} else {MAINMENU_STR select 58})]
+				//temporarily disabled
+				//_formatPattern = Format ["@~%1~ 0h:0i", (if (_eventType==1) then {MAINMENU_STR select (51 + (_startTime select 3))} else {MAINMENU_STR select 58})]
 			};
 			
 			// add event info to arrays
@@ -672,7 +673,7 @@ FUNCTION_REFRESH_MODLIST = {
 
 FUNCTION_DOWNLOAD_INFO = {
 	_title = _this select 0;
-	_file  = _this select 1;
+	_text  = _this select 1;
 
 	lbSetValue [6657, lbAdd [6657,"["+_title+"]"], 0];
 	lbSetCurSel [6657, (lbSize 6657)-1];
@@ -680,8 +681,8 @@ FUNCTION_DOWNLOAD_INFO = {
 	"ctrlShow [_x,false]" forEach _serverDialog;
 	"ctrlShow [_x,true ]" forEach [6460, 6463];
 	
-	if (_file != "compareversion") then {
-		ctrlSetText [6463, loadFile Format ["\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\%1",_file]];
+	if (_text != "compareversion") then {
+		ctrlSetText [6463, _text];
 	} else {
 		ctrlSetText [6463, Format [MAINMENU_STR select 75, GS_VERSION, GS_MY_VERSION]];
 	};
@@ -696,13 +697,13 @@ FUNCTION_READ_DOWNLOADED_FILE = {
 	_error         = !(GS_DOWNLOAD_RESULT select 0);
 	_error_message = MAINMENU_STR select 15;
 	_file_name     = "downloadLog.txt";
-				
+
 	if (GS_DOWNLOAD_RESULT select 0) then {
 		_fileContent   = loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\schedule.sqf";
 		_fileIntegrity = loadFile ("\:STRING CUT start:-5 text:" + _fileContent);
-		
+
 		if (_fileIntegrity == ";true") then {
-			call _fileContent
+			call _fileContent;
 		} else {
 			_error = true;
 			
@@ -714,14 +715,22 @@ FUNCTION_READ_DOWNLOADED_FILE = {
 	};
 	
 	if (_error) then {
-		if (_mirror<count (_all_url select _i)-1) then {
-			lbSetValue [6657, lbAdd [6657,"["+_error_message+"]"], 0];
-			_mirror = _mirror + 1;
-			goto _this;
+		if ((GS_DOWNLOAD_RESULT select 1) == 5) then {
+			if ((GS_DOWNLOAD_RESULT select 2) == 186) then {
+				GS_DOWNLOAD_RESULT set [3, (GS_DOWNLOAD_RESULT select 3)+"\n\nGo to fwatch.exe properties and set it to run as an administrator"];
+			};
+			
+			[_error_message, GS_DOWNLOAD_RESULT select 3] call FUNCTION_DOWNLOAD_INFO;
 		} else {
-			[_error_message,_file_name] call FUNCTION_DOWNLOAD_INFO;
-			goto "ResetLMB";
-		};		
+			if (_mirror<count (_all_url select _i)-1) then {
+				lbSetValue [6657, lbAdd [6657,"["+_error_message+"]"], 0];
+				_mirror = _mirror + 1;
+				goto _this;
+			} else {
+				[_error_message,loadFile Format ["\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\%1",_file_name]] call FUNCTION_DOWNLOAD_INFO;
+				goto "ResetLMB";
+			};		
+		};
 	};
 };
 
@@ -774,6 +783,94 @@ FUNCTION_BUILD_PREVIEW_LINK = {
 
 FUNCTION_STRINGTABLE = {
 	call FLIB_CURRENTLANG;
+	
+	if (CURRENT_LANGUAGE == "Polish") then {
+		MAINMENU_STR = [
+			"Interfejs niedostêpny. SprawdŸ swój bin\resource.cpp.",	//0
+			"Plik bin\resource.cpp jest przestarza³y. Œci¹gnij now¹ wersjê OFP Aspect Ratio",	//1
+			"PLAN ROZGRYWEK",	//2
+			"SERWER PRZEGL¥DARKI GIER",	//3
+			"Jest ju¿ w³¹czony!",		//4
+			"Napisz has³a do prywatnych serwerów",	//5
+			"[Uruchom bez modów]",		//6
+			"[Dodaj nowy]",				//7
+			"Nie ma nic do zapisania!",	//8
+			"Jest ju¿ na liœcie!", //9
+			"[Proszê czekaæ]",	//10
+			"[Œci¹gnij %1]",	//11
+			"[Otwórz zaproszenie do %1]",	//12
+			"Nie uda³o siê utworzyæ fwatch\tmp\schedule\n%1\n\nUruchom grê jako administrator",	//13
+			"[Sprawdzanie aktualizacji]",	//14
+			"Nie uda³o siê pobraæ",			//15
+			"[Pobieranie planu]",	//16
+			"[Przetwarzanie danych]",	//17
+			"Niepoprawne dane",		//18
+			"[Brak serwerów]",		//19
+			"Niepoprawna wersja planu",	//20
+			"[Œci¹ganie loga %1]",	//21
+			"Nie uda³o siê pobraæ loga\n%1",	//22
+			"[Uk³adanie serwerów]",	//23
+			"[Odwo³aj zaplanowane pod³¹czenie]",	//24
+			"[Poka¿ prywatne gry]",	//25
+			"[Do³¹cz o czasie]",	//26
+			"[Do³¹cz]",	//27
+			"[Œci¹gnij wymagane mody %1]",	//28
+			"[Poka¿ zmiany w modach]",		//29
+			"[WejdŸ na stronê serwera]",		//30
+			"[Dodatkowe opcje uruchamiania]",	//31
+			"[Cofnij]",	//32
+			"[Uruchom %1]",	//33
+			"[Bez]",	//34
+			"",	//35
+			"[Przerwij]",	//36
+			"Ju¿ masz folder %1. Czy wolisz:\n\n- zainstalowaæ now¹ kopiê (bezpieczna opcja; nazwa obecnego modu zostanie zmieniona)\n\nLUB\n\n- Oznaczyæ obecny mod jako wersjê %2 (szybsza opcja; dane moda bêd¹ podlegaæ aktualizacjom)",	//37
+			"[Œci¹gnij now¹ kopiê]",	//38
+			"[Oznacz aktualn¹]",		//39
+			"Nie uda³o siê uruchomiæ fwatch\data\addonInstaller.exe\n%1",	//40
+			"Nie uda³o siê utworzyæ pliku\n%1",	//41
+			"[Uruchom ponownie po skoñczeniu: %1]",		//42
+			"TAK",	//43
+			"NIE",	//44
+			"\n\n\nFwatch nie widzi instalatora.\nZignoruj ten komunikat jeœli widaæ postêp instalacji.\n\nW innym przypadku sprawdŸ w menedrze¿e zadañ czy jest addonInstaller.exe; przerwij instalacjê; zobacz fwatch\data\addonInstallerLog.txt",	//45
+			"Serwer wymaga dok³adnie tych samych modów wiêc argument -mod zostanie pominiêty",	//46
+			"Gra zostanie uruchomiona o\n%1\n\ni pod³aczy siê automatycznie do\n%2",	//47
+			"[Aktualizuj %1]",	//48
+			"Jest dostpêpna aktualizacja %1. Musisz uaktualniæ.\n\n\n       Nowa wersja:\n           %2\n\n       Twoja wersja:\n           %3\n\n\nDwuklik na opcjê ¿eby zacz¹æ proces. Instalator zamknie grê, œci¹gnie now¹ wersjê, zamieni dane i uruchomi grê ponownie.", //49
+			"%1 do %2",	//50
+			"Co niedzielê",		//51		
+			"Co poniedzia³ek",		//52	
+			"Co wtorek",	//53		
+			"Co œrodê",	//54	
+			"Co czwartek",	//55
+			"Co pi¹tek",		//56
+			"Co sobotê",	//57	
+			"Codziennie",	//58
+			"==Teraz==",	//59
+			"==Dzisiaj==",	//60
+			"==Wkrótce==",	//61
+			"niedozwolone",	//62
+			"B£¥D:\n",	//63
+			"[Kontynuuj]",	//64
+			"Wersja:",	//65
+			"Mody:",	//66
+			"W³asne pliki:",	//67
+			"Rozk³ad:",	//68
+			"Rozmowy:",		//69
+			"Jêzyki:",	//70
+			"Po³o¿enie:",	//71
+			"Strona:",		//72
+			"Uwagi:",		//73
+			"Wpisz tekst:",	//74
+			"Œci¹gnij wersjê:\n           %1\n\nTwoja wersja:\n           %2",	//75
+			"Nie mo¿esz zaktualizowaæ %1 bo jest w³¹czony.\n\nCzy chcia³byœ uruchomiæ grê bez modów?",	//76
+			"Nie mo¿esz zaktualizowaæ %1 bo s¹ w³¹czone.\n\nCzy chcia³byœ uruchomiæ grê bez modów?",	//77
+			"Plan rozgrywek",	//78
+			"Serwer przegl¹darki gier",	//79		
+			"nowa wersja testowa Fwatch 1.16",	//80
+			"nowa wersja Resource.cpp",		//81
+			"[Œci¹gnij mody]"				//82
+		];
+	};
 	
 	if (CURRENT_LANGUAGE == "Russian") then {
 		MAINMENU_STR = [

@@ -378,233 +378,6 @@ bool checkActiveWindow(void) {
 
 
 
-//v1.1 Create list of files from the given directory
-void listDirFiles(char* path, HANDLE out, int mode, int systime, int CommandID)
-{
-	// Initialize access
-	WIN32_FIND_DATA fd;
-	HANDLE hFind = INVALID_HANDLE_VALUE;
-	hFind		 = FindFirstFile(mode==MODFOLDERS ? "*" : path, &fd);
-
-	if (hFind == INVALID_HANDLE_VALUE) 
-	{
-		FWerror(5,GetLastError(),CommandID,path,"",0,0,out);
-		QWrite("[],[]]",out); 
-		return;
-	}
-
-
-	// Allocate buffers
-	String Names, Attributes, Versions, Dates;
-	String_init(Names);
-	String_init(Attributes);
-	String_init(Versions);
-	String_init(Dates);
-
-
-	// For each file
-	do
-	{
-		// skip current directory and previous directory
-		if (fd.cFileName[0] == '.')
-			continue;
-
-		// Default mode - collect info about files
-		if (mode != MODFOLDERS)
-		{
-			String_append_quotes(Names, "]+[\"", fd.cFileName, "\"");		
-
-			// output information about file attributes
-			if (mode == FILENAMES_AND_ATTRIBUTES)
-			{
-				char data[1024]	= "";
-				getAttributes(fd, data, systime);
-				String_append(Attributes,"]+[");
-				String_append(Attributes, data);
-			}
-		}
-		// Modfolder mode
-		else
-		{
-			// skip files
-			if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)==0  ||  strcmpi("Res",fd.cFileName)==0)
-				continue;
-
-			char path2[MAX_PATH] = "";
-			char required[][16]  = {"addons","bin","campaigns", "dta", "worlds", "Missions", "MPMissions"};
-			int max_loops	     = (sizeof(required) / sizeof(required[0]));
-
-			// Check if current directory contains at least one of four required sub-folders
-			for (int i=0; i<max_loops; i++)
-			{			
-				sprintf(path2, "%s\\%s", fd.cFileName, required[i]);
-
-				DWORD attrib = GetFileAttributes(path2);
-
-				if (attrib != -1  &&  attrib & FILE_ATTRIBUTE_DIRECTORY) 
-				{
-					String_append_quotes(Names, "]+[\"", fd.cFileName, "\"");
-
-					sprintf(path2, "%s\\__gs_id", fd.cFileName);
-					FILE *f = fopen(path2, "r");
-					if (f)
-					{
-						char data[128] = "";
-						fread(data, sizeof(char), 127, f);
-						char *pch = strtok(data, ";");
-						int i     = 0;
-
-						while (pch != NULL)
-						{
-							switch (i) {
-								case 0: String_append_quotes(Attributes, "]+[\"", pch, "\""); break;
-								case 1: String_append(Versions, "]+["); String_append(Versions, pch); break;
-								case 2: String_append(Dates, "]+["); String_append(Dates, pch); break;
-							}
-							i++;
-							pch = strtok (NULL, ";");
-						}
-
-						fclose(f);
-					}
-					else
-						String_append(Attributes, "]+[\"\""),
-						String_append(Versions, "]+[0"),
-						String_append(Dates, "]+[0");
-
-					break;
-				}
-			}
-		}
-
-	}
-	while (FindNextFile(hFind, &fd) != 0);
-	FindClose(hFind);
-
-	double bytes = 0;
-	char customfilename[256]="";
-
-	if (mode == MODFOLDERS  &&  strcmp(path,"*")!=0) {
-		char path_to_user[256] = "";
-		bool check_face        = false;
-
-		// See if custom face is selected in configuration
-		sprintf(path_to_user, "Users\\%s\\UserInfo.cfg", path);
-		FILE *f = fopen(path_to_user,"r");
-
-		if (f) {
-			fseek(f, 0, SEEK_END);
-			int fsize = ftell(f);
-			fseek(f, 0, SEEK_SET);
-			char *settings	 = new char[fsize+1];
-			int result		 = fread(settings, 1, fsize, f);
-			settings[result] = '\0';
-			check_face = strstr(settings, "face=\"Custom\"") != NULL;
-			delete[] settings;
-			fclose(f);
-		}
-
-		// Get custom face size
-		if (check_face) {
-			sprintf(path_to_user, "Users\\%s\\face.paa", path);
-
-			hFind = FindFirstFile(path_to_user, &fd);
-			if (hFind != INVALID_HANDLE_VALUE) {
-				if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 102400) {
-					strncpy(customfilename, fd.cFileName, 255);
-					bytes = fd.nFileSizeLow;
-				}
-				FindClose(hFind);
-			} else {
-				sprintf(path_to_user, "Users\\%s\\face.jpg", path);
-				hFind = FindFirstFile(path_to_user, &fd);
-				if (hFind != INVALID_HANDLE_VALUE)
-					if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 102400) {
-						strncpy(customfilename, fd.cFileName, 255);
-						bytes = fd.nFileSizeLow;
-					}
-
-				FindClose(hFind);
-			};
-		}
-
-		// Get custom sound size
-		sprintf(path_to_user, "Users\\%s\\sounds\\*.*", path);
-		hFind = FindFirstFile(path_to_user, &fd);
-		if (hFind != INVALID_HANDLE_VALUE) {
-			do {
-				if (fd.cFileName[0] == '.')
-					continue;
-
-				if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-					continue;
-
-				if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 51200) {
-					bytes = fd.nFileSizeLow;
-					strncpy(customfilename, fd.cFileName, 255);
-				}
-			}
-			while (FindNextFile(hFind, &fd) != 0);
-		}
-
-		FindClose(hFind);
-	}
-
-
-	FWerror(0,0,CommandID,"","",0,0,out);
-
-	QWrite("[", out);
-	QWrite(Names.pointer, out);
-	QWrite("],[", out);
-	QWrite(Attributes.pointer, out);
-	QWrite("],[", out);
-	QWrite(Versions.pointer, out);
-	QWrite("],[", out);
-	QWrite(Dates.pointer, out);
-
-	if (mode == MODFOLDERS  &&  strcmp(path,"*")!=0) {
-		QWrite("],\"", out);
-		QWrite(customfilename, out);
-
-		double kilobytes = 0;
-		double megabytes = 0;
-
-		if (bytes >= 1048576) 
-			megabytes  = bytes / 1048576,
-			megabytes -= fmod(megabytes, 1),
-			bytes     -= megabytes * 1048576;
-
-		if (bytes >= 1024)
-			kilobytes  = bytes / 1024,
-			kilobytes -= fmod(kilobytes, 1),
-			bytes     -= kilobytes * 1024;
-
-		unsigned int hash = 2166136261;
-		hash = fnv_hash(hash,Attributes.pointer,Attributes.current_length);
-		hash = fnv_hash(hash,Versions.pointer,Versions.current_length);
-
-		char number[256] = "";
-		sprintf(number, "\",[%f,%f,%f],\"%u\",\"%s\"]", bytes, kilobytes, megabytes,hash,path);
-		QWrite(number, out);
-	} else {
-		QWrite("]]", out);
-	}
-
-	String_end(Names);
-	String_end(Attributes);
-	String_end(Versions);
-	String_end(Dates);
-
-};
-
-
-
-
-
-
-
-
-
 
 
 //v1.13 Extract extension out of file name
@@ -1180,18 +953,15 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 	// Find command name
 	char *cmd = "";
 	for (int i=0;  cmdsList[i].id!=-1;  i++)
-		if (cmdsList[i].id == CommandID) 
-		{
+		if (cmdsList[i].id == CommandID) {
 			cmd = cmdsList[i].cmd; 
 			break;
-		};
+		}
 
 
 	// SHFileOp error description
-	if (shfileop)
-	{
-		switch (secondaryCode)
-		{
+	if (shfileop) {
+		switch (secondaryCode) {
 			case 0x71 : strcpy(desc,"The source and destination files are the same file."); break;
 			case 0x72 : strcpy(desc,"Multiple file paths were specified in the source buffer, but only one destination file path."); break;
 			case 0x73 : strcpy(desc,"Rename operation was specified but the destination path is a different directory. Use the move operation instead."); break;
@@ -1219,15 +989,13 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 			case 0x10074 : strcpy(desc,"Destination is a root directory and cannot be renamed."); break;
 
 			default : shfileop=false;
-		};
+		}
 	}
 
 
 	// Fwatch error description
-	if (code!=5  &&  code!=6  &&  code!=7  &&  code!=20 && code!=22 && code!=23)
-	{
-		switch(code)
-		{
+	if (code!=5  &&  code!=6  &&  code!=7  &&  code!=20 && code!=22 && code!=23) {
+		switch(code) {
 			// General 0-99
 			case 0: sprintf(desc, ""); break;
 			case 1: sprintf(desc, "Unknown command"); break;
@@ -1284,103 +1052,98 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 			case 255: sprintf(desc, "Property %s is not an array",str2); break;
 
 			default: sprintf(desc, "Unknown error %d",code); break;
-		};
+		}
 	}
 	else
-	// Winapi error description
-	if (code==5  ||  code==6  &&  !shfileop  ||  code==20  ||  code==22  ||  code==23)
-	{
-		FormatMessage(
-		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-		NULL,
-		secondaryCode, 
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(LPTSTR) &lpMsgBuf,
-		0,
-		NULL);
-		descPTR   = (char*)lpMsgBuf;
+		// Winapi error description
+		if (code==5  ||  code==6  &&  !shfileop  ||  code==20  ||  code==22  ||  code==23) {
+			FormatMessage(
+			FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+			NULL,
+			secondaryCode, 
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+			(LPTSTR) &lpMsgBuf,
+			0,
+			NULL);
+			descPTR   = (char*)lpMsgBuf;
+		} else
+			// Errno error description
+			if (code == 7) {
+				switch(secondaryCode) {
+					case EPERM: sprintf(desc, "Operation not permitted"); break;
+					case ENOENT: sprintf(desc, "No such file or directory"); break;
+					case ESRCH: sprintf(desc, "No such process"); break;
+					case EINTR: sprintf(desc, "Interrupted function call"); break;
+					case EIO: sprintf(desc, "Input/output error"); break;
+					case ENXIO: sprintf(desc, "No such device or address"); break;
+					case E2BIG: sprintf(desc, "Argument list too long"); break;
+					case ENOEXEC: sprintf(desc, "Exec format error"); break;
+					case EBADF: sprintf(desc, "Bad file descriptor"); break;
+					case ECHILD: sprintf(desc, "No child processes"); break;
+					case EAGAIN: sprintf(desc, "Resource temporarily unavailable"); break;
+					case ENOMEM: sprintf(desc, "Not enough memory available for the attempted operator"); break;
+					case EACCES: sprintf(desc, "Permission denied"); break;
+					case EFAULT: sprintf(desc, "Bad address"); break;
+					case EBUSY: sprintf(desc, "Device or resource busy"); break;
+					case EEXIST: sprintf(desc, "File exists"); break;
+					case EXDEV: sprintf(desc, "Cross-device link. An attempt was made to move a file to a different device"); break;
+					case ENODEV: sprintf(desc, "No such device"); break;
+					case ENOTDIR: sprintf(desc, "Not a directory"); break;
+					case EISDIR: sprintf(desc, "Is a directory"); break;
+					case EINVAL: sprintf(desc, "Invalid argument"); break;
+					case ENFILE: sprintf(desc, "Too many open files in system"); break;
+					case EMFILE: sprintf(desc, "Too many open files"); break;
+					case ENOTTY: sprintf(desc, "Inappropriate I/O control operation"); break;
+					case EFBIG: sprintf(desc, "File too large"); break;
+					case ENOSPC: sprintf(desc, "No space left on device"); break;
+					case ESPIPE: sprintf(desc, "Invalid seek"); break;
+					case EROFS: sprintf(desc, "Read-only file system"); break;
+					case EMLINK: sprintf(desc, "Too many links"); break;
+					case EPIPE: sprintf(desc, "Broken pipe"); break;
+					case EDOM: sprintf(desc, "Invalid math argument"); break;
+					case ERANGE: sprintf(desc, "Result too large"); break;
+					case EDEADLK: sprintf(desc, "Command would cause a deadlock"); break;
+					case ENAMETOOLONG: sprintf(desc, "Filename too long"); break;
+					case ENOLCK: sprintf(desc, "Too many segment locks open, lock table is full"); break;
+					case ENOSYS: sprintf(desc, "Function not supported"); break;
+					case ENOTEMPTY: sprintf(desc, "Directory not empty"); break;
+					case EILSEQ: sprintf(desc, "Illegal sequence of bytes"); break;
+
+					default: sprintf(desc, "Unknown error %d", secondaryCode); break;
+				}
+			}
+
+
+
+	// Special formatting for a command that features multiple error arrays
+	if (ErrorWithinError) {
+		sprintf(msg, "[%s,%d,%d,\"", getBool(!code), code, secondaryCode);
+
+		if (code != 0)
+			sprintf(msg, "%s%s - ", msg, cmd);
+
+		QWrite(msg, out);
+		PrintDoubleQ(descPTR, out);
+
+		// If file error then add filename
+		if (code==7  ||  code==105  ||  code>=200)
+			QWrite(" - ", out),
+			PrintDoubleQ(str1, out);
+
+		QWrite("\"]", out);
+
+		if (lpMsgBuf != NULL)
+			LocalFree(lpMsgBuf);
+
+		return;
 	}
+
+
+	// If this function was used before then semi-colon is required
+	if (firstErrorMSG)
+		firstErrorMSG = 0;
 	else
-	// Errno error description
-	if (code == 7)
-	{
-		switch(secondaryCode)
-		{
-			case EPERM: sprintf(desc, "Operation not permitted"); break;
-			case ENOENT: sprintf(desc, "No such file or directory"); break;
-			case ESRCH: sprintf(desc, "No such process"); break;
-			case EINTR: sprintf(desc, "Interrupted function call"); break;
-			case EIO: sprintf(desc, "Input/output error"); break;
-			case ENXIO: sprintf(desc, "No such device or address"); break;
-			case E2BIG: sprintf(desc, "Argument list too long"); break;
-			case ENOEXEC: sprintf(desc, "Exec format error"); break;
-			case EBADF: sprintf(desc, "Bad file descriptor"); break;
-			case ECHILD: sprintf(desc, "No child processes"); break;
-			case EAGAIN: sprintf(desc, "Resource temporarily unavailable"); break;
-			case ENOMEM: sprintf(desc, "Not enough memory available for the attempted operator"); break;
-			case EACCES: sprintf(desc, "Permission denied"); break;
-			case EFAULT: sprintf(desc, "Bad address"); break;
-			case EBUSY: sprintf(desc, "Device or resource busy"); break;
-			case EEXIST: sprintf(desc, "File exists"); break;
-			case EXDEV: sprintf(desc, "Cross-device link. An attempt was made to move a file to a different device"); break;
-			case ENODEV: sprintf(desc, "No such device"); break;
-			case ENOTDIR: sprintf(desc, "Not a directory"); break;
-			case EISDIR: sprintf(desc, "Is a directory"); break;
-			case EINVAL: sprintf(desc, "Invalid argument"); break;
-			case ENFILE: sprintf(desc, "Too many open files in system"); break;
-			case EMFILE: sprintf(desc, "Too many open files"); break;
-			case ENOTTY: sprintf(desc, "Inappropriate I/O control operation"); break;
-			case EFBIG: sprintf(desc, "File too large"); break;
-			case ENOSPC: sprintf(desc, "No space left on device"); break;
-			case ESPIPE: sprintf(desc, "Invalid seek"); break;
-			case EROFS: sprintf(desc, "Read-only file system"); break;
-			case EMLINK: sprintf(desc, "Too many links"); break;
-			case EPIPE: sprintf(desc, "Broken pipe"); break;
-			case EDOM: sprintf(desc, "Invalid math argument"); break;
-			case ERANGE: sprintf(desc, "Result too large"); break;
-			case EDEADLK: sprintf(desc, "Command would cause a deadlock"); break;
-			case ENAMETOOLONG: sprintf(desc, "Filename too long"); break;
-			case ENOLCK: sprintf(desc, "Too many segment locks open, lock table is full"); break;
-			case ENOSYS: sprintf(desc, "Function not supported"); break;
-			case ENOTEMPTY: sprintf(desc, "Directory not empty"); break;
-			case EILSEQ: sprintf(desc, "Illegal sequence of bytes"); break;
-
-			default: sprintf(desc, "Unknown error %d", secondaryCode); break;
-		};
-	};
-
-
-
-		// Special formatting for a command that features multiple error arrays
-		if (ErrorWithinError)
-		{
-			sprintf(msg, "[%s,%d,%d,\"", getBool(!code), code, secondaryCode);
-
-			if (code != 0)
-				sprintf(msg, "%s%s - ", msg, cmd);
-
-			QWrite(msg, out);
-			PrintDoubleQ(descPTR, out);
-
-			// If file error then add filename
-			if (code==7  ||  code==105  ||  code>=200)
-				QWrite(" - ", out),
-				PrintDoubleQ(str1, out);
-
-			QWrite("\"]", out);
-
-			if (lpMsgBuf != NULL)
-				LocalFree(lpMsgBuf);
-
-			return;
-		};
-
-
-		// If this function was used before then semi-colon is required
-		if (firstErrorMSG)
-			firstErrorMSG = 0;
-		else
-			QWrite(";", out);
+		QWrite(";", out);
 
 
 	// Set separate _fwatch_error variable for these commands:
@@ -1392,8 +1155,7 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 	{
 		if (!code)
 			QWrite("_fwatch_error=[true,0,0,\"\"];", out);
-		else
-		{
+		else {
 			sprintf(msg, "_fwatch_error=[%s,%d,%d,\"", getBool(!code), code, secondaryCode);
 			QWrite(msg, out);
 
@@ -1409,21 +1171,18 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 				PrintDoubleQ(str1, out);
 		
 			QWrite("\"];", out);
-		};
+		}
 	}
 
 	// Normal error array
-	else
-	{
-		if (!SuppressNextError) 
-		{
+	else {
+		if (!SuppressNextError) {
 			// first items are error codes
 			sprintf(msg, "[%s,%d,%d,\"", getBool(!code), code, secondaryCode);
 			QWrite(msg, out);
 
 			// format description
-			if (code > 0)
-			{
+			if (code > 0) {
 				QWrite(cmd, out);
 				QWrite(" - ", out);
 				PrintDoubleQ(descPTR, out);
@@ -1449,7 +1208,7 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 				)
 					QWrite(" - ", out),
 					PrintDoubleQ(str2, out);
-			};
+			}
 
 			// If it's a command that doesn't return additional data then close array
 			if (CommandID == C_CLIPBOARD_COPY || 
@@ -1468,139 +1227,59 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 				QWrite("\"]",out); 
 			else 
 				QWrite("\",",out);
-		}
-		else
+		} else
 			SuppressNextError = false;
-	};
+	}
 
 
 	// Log errors
-	if (global.ErrorLog_Enabled  &&  code>0)
-	{
-		FILE *f			= fopen(!global.DedicatedServer ? "fwatch\\idb\\_errorLog.txt" : "fwatch\\idb\\_errorLogDedi.txt", "a");
-		HANDLE phandle  = NULL;
-		SIZE_T stBytes  = 0;
+	if (global.ErrorLog_Enabled  &&  code>0) {
+		FILE *f        = fopen(!global.DedicatedServer ? "fwatch\\idb\\_errorLog.txt" : "fwatch\\idb\\_errorLogDedi.txt", "a");
 
-		phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
+		if (f) {
+			HANDLE phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
+			SIZE_T stBytes = 0;
 
-		if (!global.ErrorLog_Started)
-		{
-			global.ErrorLog_Started = true;
+			WriterHeaderInErrorLog(&f, &phandle);
 
-			SYSTEMTIME st;
-			GetLocalTime(&st);
-			
-			fprintf(f, "\n\n\n===========================================================================\nLog started on %d.", st.wYear);
+			// output command input
+			fprintf(f, "\t%s\n", global.com_ptr);
 
-			if (st.wMonth < 10)
-				fprintf(f, "0");
+			// Get mission time
+			if (phandle != 0) {
+				int missionTime = 0;
+				int base		= !global.DedicatedServer ? (!global.CWA ? 0x7DD028 : 0x7CBFE8) : (!global.CWA ? 0x75A2E0 : 0x75A370);
+				ReadProcessMemory(phandle, (LPVOID)base, &missionTime, 4, &stBytes);
 
-			fprintf(f, "%d.", st.wMonth);
+				int seconds = missionTime / 1000;
+				int minutes = seconds / 60;
 
-			if (st.wDay < 10)
-				fprintf(f, "0");
+				if (minutes < 10)
+					fprintf(f, "0");
 
-			fprintf(f, "%d  ", st.wDay);
-			
-			if (st.wHour < 10)
-				fprintf(f, "0");
+				fprintf(f, "%d:", minutes);
 
-			fprintf(f, "%d:", st.wHour);
+				if (seconds < 10)
+					fprintf(f, "0");
 
-			if (st.wMinute < 10)
-				fprintf(f, "0");
+				fprintf(f, "%d  ", seconds);
+				CloseHandle(phandle);
+			}
 
-			fprintf(f, "%d:", st.wMinute);
+			// Trim error description
+			for (unsigned int a=strlen(descPTR)-1;   descPTR[a]=='\r' || descPTR[a]=='\n';   a--)
+				descPTR[a] = '\0';
 
-			if (st.wSecond < 10)
-				fprintf(f, "0");
+			fprintf(f, "%d %d - %s - %s", code, secondaryCode, cmd, descPTR);
 
-			fprintf(f, "%d\n", st.wSecond);
+			// If file error then add filename
+			if (code==7  ||  code==105  ||  code==108  ||  code>=200)
+				fprintf(f, " - %s", str1);
 
-
-			if (phandle != 0)
-			{
-				// mission name
-				char buffer[256] = "";
-				int base		 = !global.DedicatedServer ? (!global.CWA ? 0x7DD0E0 : 0x7CC0A0) : (!global.CWA ? 0x75A398 : 0x75A428);
-				int pointer		 = 0;
-				ReadProcessMemory(phandle, (LPVOID)base, &buffer, 80, &stBytes);
-
-				// if packed pbo
-				if (strcmp(buffer,"__cur_sp")==0  ||  strcmp(buffer,"__cur_mp")==0)
-				{
-					base = !global.DedicatedServer ? (!global.CWA ? 0x7DD180 : 0x7CC140) : (!global.CWA ? 0x75A438 : 0x75A4C8);
-
-					ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
-
-					if (pointer != 0)
-						ReadProcessMemory(phandle, (LPVOID)(pointer+0x8),			 &buffer,  255, &stBytes);
-				};
-			
-				fprintf(f, "%s", buffer);
-
-				// island name
-				base = !global.DedicatedServer ? (!global.CWA ? 0x7DD130 : 0x7CC0F0) : (!global.CWA ? 0x75A3E8 : 0x75A478);
-				ReadProcessMemory(phandle, (LPVOID)base, &buffer, 80, &stBytes);
-				fprintf(f, ".%s\t", buffer);
-
-				// briefing title
-				strcpy(buffer, "");
-				base = !global.DedicatedServer ? (!global.CWA ? 0x78324C : 0x77233C) : (!global.CWA ? 0x7030AC : 0x7030FC);
-				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4,	 &stBytes);
-
-				if (pointer != 0) 
-					ReadProcessMemory(phandle, (LPVOID)(pointer+0x114), &buffer, 255, &stBytes);
-				else
-				{
-					base = !global.DedicatedServer ? (!global.CWA ? 0x786880 : 0x775968) : (!global.CWA ? 0x7066D8 : 0x706728);
-					ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4,	 &stBytes);
-
-					if (pointer != 0)
-						ReadProcessMemory(phandle, (LPVOID)(pointer+0x8), &buffer, 255, &stBytes);
-				};
-				fprintf(f, "%s\n", buffer);
-			};
-		};
-
-		// output command input
-		fprintf(f, "\t%s\n", global.com_ptr);
-
-		// Get mission time
-		if (phandle != 0)
-		{
-			int missionTime = 0;
-			int base		= !global.DedicatedServer ? (!global.CWA ? 0x7DD028 : 0x7CBFE8) : (!global.CWA ? 0x75A2E0 : 0x75A370);
-			ReadProcessMemory(phandle, (LPVOID)base, &missionTime, 4, &stBytes);
-
-			int seconds = missionTime / 1000;
-			int minutes = seconds / 60;
-
-			if (minutes < 10)
-				fprintf(f, "0");
-
-			fprintf(f, "%d:", minutes);
-
-			if (seconds < 10)
-				fprintf(f, "0");
-
-			fprintf(f, "%d  ", seconds);
-			CloseHandle(phandle);
-		};
-
-		// Trim error description
-		for (unsigned int a=strlen(descPTR)-1;   descPTR[a]=='\r' || descPTR[a]=='\n';   a--)
-			descPTR[a] = '\0';
-
-		fprintf(f, "%d %d - %s - %s", code, secondaryCode, cmd, descPTR);
-
-		// If file error then add filename
-		if (code==7  ||  code==105  ||  code==108  ||  code>=200)
-			fprintf(f, " - %s", str1);
-
-		fprintf(f, "\n");
-		fclose(f);
-	};
+			fprintf(f, "\n");
+			fclose(f);
+		}
+	}
 
 	if (lpMsgBuf != NULL)
 		LocalFree(lpMsgBuf);
@@ -1617,19 +1296,17 @@ void PrintDoubleQ(char *txt, HANDLE out)
 
 	if (quote == NULL) 
 		QWrite(txt, out); 
-	else
-	{
+	else {
 		char tmp[2] = "";
 
-		for (unsigned int i=0; i<strlen(txt); i++)
-		{
+		for (unsigned int i=0; i<strlen(txt); i++) {
 			if (txt[i] == '\"') 
 				QWrite("\"", out);
 
 			sprintf(tmp, "%c", txt[i]);
 			QWrite(tmp, out);
-		};
-	};
+		}
+	}
 };
 
 
@@ -1640,8 +1317,7 @@ void SplitStringIntoParts(char *txt, int cut, bool addComma, HANDLE out)
 {
 	int len = strlen(txt);
 	
-	if (len <= cut)
-	{
+	if (len <= cut) {
 		if (addComma) 
 			QWrite(",",out); 
 		else 
@@ -1650,13 +1326,10 @@ void SplitStringIntoParts(char *txt, int cut, bool addComma, HANDLE out)
 		QWrite("\""     , out),
 		PrintDoubleQ(txt, out),
 		QWrite("\""     , out);
-	}
-	else
-	{
+	} else {
 		char *txt2 = txt;
 
-		for (int i=0;  i<len;  i+=cut, txt2=txt+i)
-		{
+		for (int i=0;  i<len;  i+=cut, txt2=txt+i) {
 			int len2 = strlen(txt2);
 
 			if (cut > len2) 
@@ -1675,8 +1348,8 @@ void SplitStringIntoParts(char *txt, int cut, bool addComma, HANDLE out)
 			QWrite("\""      , out);
 
 			txt2[cut] = prev;
-		};
-	};
+		}
+	}
 };
 
 
@@ -1981,6 +1654,7 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset)
 	// Reset error logging
 	global.ErrorLog_Enabled = false;
 	global.ErrorLog_Started = false;
+	NotifyFwatchAboutErrorLog();
 
 	// Restore what was modified by Fwatch commands
 	RestoreMemValues(pathType==3 || pathType==4);
@@ -2085,13 +1759,11 @@ char* strtok3(char* str, int CommandID)
 
 
 	// For each character
-	do 
-	{
+	do {
 		c = str[i];
 
 		// Entered/left quote
-		if (c=='"'  &&  (!inQuote && str[i-1]=='\a' || inQuote && (str[i+1]==' ' || str[i+1]=='\0'))  &&  !waitForSpecialSeparator)
-		{
+		if (c=='"'  &&  (!inQuote && str[i-1]=='\a' || inQuote && (str[i+1]==' ' || str[i+1]=='\0'))  &&  !waitForSpecialSeparator) {
 			inQuote = !inQuote;
 
 			if (QuotePos < 0)
@@ -2100,25 +1772,23 @@ char* strtok3(char* str, int CommandID)
 				str[QuotePos] = '\a',
 				str[i]		  = '\a',
 				QuotePos	  = -1;
-		};
+		}
 
 
 		// Special separator
-		if (c == 0x1F)
-			c = ' ',
+		if (c == 0x1F) {
+			c = ' ';
 			waitForSpecialSeparator = false;
+		}
 
 
 		// Replace spaces with \a
-		if (c==' '  &&  !inQuote)
-		{
+		if (c==' '  &&  !inQuote) {
 			if (!waitForSpecialSeparator)
 				str[i]			 = '\a',
 				prevCharWasSpace = true;
-		}
-		else
-			if (prevCharWasSpace  &&  c!='\"')
-			{
+		} else
+			if (prevCharWasSpace  &&  c!='\"') {
 				prevCharWasSpace = false;
 
 				char c2;
@@ -2152,27 +1822,24 @@ char* strtok3(char* str, int CommandID)
 					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"remove:"  ,j-i+1) == 0)
 				)
 					waitForSpecialSeparator=true;
-			};
+			}
 
 		i++;
-	} 
-	while (c != '\0');
+	} while (c != '\0');
 
 	i = 0; 
 	y = 0;
 
 	// Remove double-null characters
-	do 
-	{
+	do {
 		str[y] = str[i];
 
-		if(str[i] != '\0')
+		if (str[i] != '\0')
 			if(str[i]!='\a'  ||  str[i+1]!='\a')
 				y++;
 
 		i++;
-	} 
-	while (str[y] != '\0');
+	} while (str[y] != '\0');
 
 	return str;
 }
@@ -2229,11 +1896,11 @@ int GetCharType(char c)
 	else
 		if (c<0x20  ||  c==' ')
 			return 1;
-	else
-		if (c>=0x80  ||  isalnum(c)  ||  c=='_')
-			return 2;
 		else
-			return 3;
+			if (c>=0x80  ||  isalnum(c)  ||  c=='_')
+				return 2;
+			else
+				return 3;
 }
 
 
@@ -2354,11 +2021,10 @@ void RestoreMemValues(bool isMissionEditor)
 				pointer[0] = 0x778590,
 				modif[1]   = 0x6A0;
 
-			for (int i=0; i<max_loops; i++)
-			{
+			for (int i=0; i<max_loops; i++) {
 				ReadProcessMemory(phandle, (LPVOID)pointer[i], &pointer[i+1], 4, &stBytes);
 				pointer[i+1] = pointer[i+1] + modif[i];
-			};
+			}
 			
 			WriteProcessMemory(phandle, (LPVOID)(global.extCamOffset+0), &global.restore_float[FLOAT_EXTCAMX], 4, &stBytes);
 			WriteProcessMemory(phandle, (LPVOID)(global.extCamOffset+4), &global.restore_float[FLOAT_EXTCAMZ], 4, &stBytes);
@@ -2460,7 +2126,7 @@ void RestoreMemValues(bool isMissionEditor)
 				if (IsNumberInArray((i-RESTORE_HUD),hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0])))
 					WriteProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i-RESTORE_HUD]), &global.restore_hud_int[i-RESTORE_HUD], 4, &stBytes);
 				else
-					WriteProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i-RESTORE_HUD]), &global.restore_hud_int[i-RESTORE_HUD], 4, &stBytes);
+					WriteProcessMemory(phandle,(LPVOID)(pointer+hud_offset[i-RESTORE_HUD]), &global.restore_hud_float[i-RESTORE_HUD], 4, &stBytes);
 			}
 		}
 
@@ -2918,4 +2584,104 @@ DeleteDirectory_return:
 	String_end(strFilePath);
 	String_end(strPattern);
 	return return_value;
+}
+
+
+// Send message to fwatch.exe to enable/disable error logging there
+void NotifyFwatchAboutErrorLog()
+{
+	HANDLE mailslot = CreateFile(TEXT("\\\\.\\mailslot\\fwatch_mailslot"), GENERIC_WRITE, FILE_SHARE_READ, (LPSECURITY_ATTRIBUTES)NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, (HANDLE)NULL);
+	
+	if (mailslot != INVALID_HANDLE_VALUE) {
+		char temp[32] = "";
+		sprintf(temp, "6|%d|%d", global.ErrorLog_Enabled, global.ErrorLog_Started);
+
+		DWORD bytes_written = 0;
+		WriteFile(mailslot, temp, strlen(temp+1), &bytes_written, (LPOVERLAPPED)NULL);
+		CloseHandle(mailslot);
+	}
+};
+
+
+void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle)
+{
+	FILE **logfile  = (FILE **)ptr_logfile;
+	HANDLE *phandle = (HANDLE *)ptr_phandle;
+	
+	global.ErrorLog_Started = true;
+	NotifyFwatchAboutErrorLog();
+
+	SYSTEMTIME st;
+	GetLocalTime(&st);
+	
+	fprintf(*logfile, "\n\n\n===========================================================================\nLog started on %d.", st.wYear);
+
+	if (st.wMonth < 10)
+		fprintf(*logfile, "0");
+
+	fprintf(*logfile, "%d.", st.wMonth);
+
+	if (st.wDay < 10)
+		fprintf(*logfile, "0");
+
+	fprintf(*logfile, "%d  ", st.wDay);
+	
+	if (st.wHour < 10)
+		fprintf(*logfile, "0");
+
+	fprintf(*logfile, "%d:", st.wHour);
+
+	if (st.wMinute < 10)
+		fprintf(*logfile, "0");
+
+	fprintf(*logfile, "%d:", st.wMinute);
+
+	if (st.wSecond < 10)
+		fprintf(*logfile, "0");
+
+	fprintf(*logfile, "%d\n", st.wSecond);
+
+
+	if (*phandle != 0) {
+		// mission name
+		char buffer[256] = "";
+		int base		 = !global.DedicatedServer ? (!global.CWA ? 0x7DD0E0 : 0x7CC0A0) : (!global.CWA ? 0x75A398 : 0x75A428);
+		int pointer		 = 0;
+		DWORD stBytes    = 0;
+		ReadProcessMemory(*phandle, (LPVOID)base, &buffer, 80, &stBytes);
+
+		// if packed pbo
+		if (strcmp(buffer,"__cur_sp")==0  ||  strcmp(buffer,"__cur_mp")==0) {
+			base = !global.DedicatedServer ? (!global.CWA ? 0x7DD180 : 0x7CC140) : (!global.CWA ? 0x75A438 : 0x75A4C8);
+
+			ReadProcessMemory(*phandle, (LPVOID)base, &pointer, 4, &stBytes);
+
+			if (pointer != 0)
+				ReadProcessMemory(*phandle, (LPVOID)(pointer+0x8),			 &buffer,  255, &stBytes);
+		}
+	
+		fprintf(*logfile, "%s", buffer);
+
+		// island name
+		base = !global.DedicatedServer ? (!global.CWA ? 0x7DD130 : 0x7CC0F0) : (!global.CWA ? 0x75A3E8 : 0x75A478);
+		ReadProcessMemory(*phandle, (LPVOID)base, &buffer, 80, &stBytes);
+		fprintf(*logfile, ".%s\t", buffer);
+
+		// briefing title
+		strcpy(buffer, "");
+		base = !global.DedicatedServer ? (!global.CWA ? 0x78324C : 0x77233C) : (!global.CWA ? 0x7030AC : 0x7030FC);
+		ReadProcessMemory(*phandle, (LPVOID)base, &pointer, 4,	 &stBytes);
+
+		if (pointer != 0) 
+			ReadProcessMemory(*phandle, (LPVOID)(pointer+0x114), &buffer, 255, &stBytes);
+		else {
+			base = !global.DedicatedServer ? (!global.CWA ? 0x786880 : 0x775968) : (!global.CWA ? 0x7066D8 : 0x706728);
+			ReadProcessMemory(*phandle, (LPVOID)base, &pointer, 4,	 &stBytes);
+
+			if (pointer != 0)
+				ReadProcessMemory(*phandle, (LPVOID)(pointer+0x8), &buffer, 255, &stBytes);
+		}
+
+		fprintf(*logfile, "%s\n", buffer);
+	}
 }

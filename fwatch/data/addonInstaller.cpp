@@ -3633,6 +3633,69 @@ int main(int argc, char *argv[])
 			"Îøèáêà ïðè ñ÷èòûâàíèè",		//58
 			"Îøèáêà ïðè ñîçäàíèè ôàéëà",	//59
 			"Ñ÷èòûâàíèå mission.sqm"		//60
+		},
+		{
+			"Przygotowywanie",
+			"Pobieraniu skryptu instalacyjnego",
+			"Przetwarzanie skryptu instalacyjnego",
+			"£¹czenie",
+			"Pobieranie",
+			"Pobrano",
+			"Wypakowywanie",
+			"Wypakowywanie PBO",
+			"Pakowanie PBO",
+			"Kopiowanie plików",
+			"Kopiowanie plików do fwatch\\tmp",
+			"Porz¹dkowanie",
+			"Przygotowywanie do instalacji modu",
+			"Usuwanie plików",
+			"Zmienianie nazwy plików",
+			"Edytowanie plików",
+			"Instalacja przerwana przez u¿ytkownika",
+			"Instalacja zakoñczona!",
+			"Koniec instalacji\\nale brakuje modów %MOD%\\nSzczegó³y w pliku fwatch\\data\\addonInstallerLog.txt",
+			"Postêp instalacji:",
+			"ALT+TAB ¿eby przejœæ do pulpitu",
+			"B£¥D",
+			"Nie mo¿na utworzyæ zapisu instalacji",
+			"Nie mo¿na odczytaæ skryptu instalacyjnego",
+			"W wersji",
+			"W linijce",
+			"Nie mo¿na uruchomiæ",
+			"Brakuje argumentów",
+			"Nie mo¿na utworzyæ listy plików z ",
+			"Brakuje nazwy pliku",
+			"Œcie¿ka wychodzi poza obecny katalog",
+			"Skrypt instalacyjny jest b³êdny",
+			"B³êdne argumenty instalatora",
+			"Nie mo¿na zarezerwowaæ pamiêci",
+			"zosta³o",
+			"w sumie",
+			"Nieprawid³owy katalog docelowy dla œci¹gniêtego pliku",
+			"Nie mo¿na pobraæ",
+			"Nie znaleziono",
+			"usuñ ten plik i œci¹gnij ponownie",
+			"Nie mo¿na rozpakowaæ",
+			"Nie mo¿na utworzyæ katalogu",
+			"Nie mo¿na odczytaæ atrybutów",
+			"Œcie¿ka Ÿród³owa wychodzi poza obecny katalog",
+			"Œcie¿ka docelowa wychodzi poza obecny katalog",
+			"Nie mo¿na przenosiæ plików poza katalog z gr¹",
+			"Nie mo¿na zmieniæ nazwy",
+			"na",
+			"Nowa nazwa pliku zawiera ukoœniki",
+			"Œcie¿ka zawiera symbole zastêpcze",
+			"Brakuje nowej nazwy pliku",
+			"Musisz rêcznie uruchomiæ",
+			"Musisz rêcznie pobraæ",
+			"Wybierz katalog z pobranym plikiem",
+			"Brakuje numeru wersji",
+			"Plik nie jest PBO",
+			"Nie mo¿na utworzyæ PBO",
+			"Nie mo¿na rozpakowaæ PBO",
+			"Nie mo¿na wczytaæ pliku",
+			"Nie mo¿na utworzyæ pliku",
+			"Przetwarzanie mission.sqm"
 		}
 	};
 	
@@ -3641,7 +3704,9 @@ int main(int argc, char *argv[])
 	
 	if (Equals(global.arguments_table["language"],"Russian"))
 		global.lang = stringtable[1];
-
+	
+	if (Equals(global.arguments_table["language"],"Polish"))
+		global.lang = stringtable[2];
 
 	
 	// Find current directory

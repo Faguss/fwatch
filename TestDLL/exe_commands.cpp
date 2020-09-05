@@ -126,38 +126,42 @@ case C_EXE_UNPBO:
 case C_EXE_WGET:
 case C_EXE_PREPROCESS:
 case C_RESTART_CLIENT:
-{ // Execute a program from the fwatch\data\
+{ // Execute program from fwatch\data\
 
 	// Not enough arguments
 	if (numP < 3  &&  CommandID!=C_RESTART_CLIENT) {
 		FWerror(100,0,CommandID,"","",numP,3,out);
-		QWrite("0]", out);
+		QWrite("0,0]", out);
 		break;
 	}
 
 	// Not allowed on the server
-	if (global.DedicatedServer  &&  CommandID==C_RESTART_CLIENT  &&  CommandID==C_EXE_ADDONTEST) 
+	if (global.DedicatedServer  &&  CommandID==C_RESTART_CLIENT  &&  CommandID==C_EXE_ADDONTEST)
 		break;
-	
+
+
 
 	// Set variables depending on the program
+	int db_id         = 0;
+	int com_offset    = 0;
 	char exe_name[64] = "";
 	char exe_path[64] = "fwatch\\data\\";
 
 	switch(CommandID) {
-		case C_EXE_ADDONINSTALL : strcpy(exe_name, "addonInstaller.exe"); break;
-		case C_EXE_ADDONTEST    : strcpy(exe_name, "addontest.exe"); strcpy(exe_path, "@addontest\\ModData\\"); break;
-		case C_EXE_UNPBO        : strcpy(exe_name, "extractpbo.exe"); break;
-		case C_EXE_MAKEPBO      : strcpy(exe_name, "makepbo.exe"); break;
-		case C_EXE_WGET         : strcpy(exe_name, "wget.exe"); break;
-		case C_EXE_PREPROCESS   : strcpy(exe_name, "preproc.exe"); break;
-		case C_RESTART_CLIENT   : strcpy(exe_name, "gameRestart.exe"); break;
+		case C_EXE_ADDONINSTALL : strcpy(exe_name, "addonInstarrer.exe"); com_offset=17; break;
+		case C_EXE_ADDONTEST    : strcpy(exe_name, "addontest.exe"); strcpy(exe_path, "@addontest\\ModData\\"); com_offset=14; break;
+		case C_EXE_UNPBO        : strcpy(exe_name, "extractpbo.exe"); com_offset=10; break;
+		case C_EXE_MAKEPBO      : strcpy(exe_name, "makepbo.exe"); com_offset=12; break;
+		case C_EXE_WGET         : strcpy(exe_name, "wget.exe"); com_offset=9; break;
+		case C_EXE_PREPROCESS   : strcpy(exe_name, "preproc.exe"); com_offset=15; break;
+		case C_RESTART_CLIENT   : strcpy(exe_name, "gameRestart.exe"); com_offset=15; break;
 	}
 
 	strcat(exe_path, exe_name);
-	
-	
+
+
 	// Optional argument - check if the program is running or terminate it
+	char temp[32] = "";
 	bool check = numP>2 && strcmpi(par[2],"check") == 0;
 	bool close = numP>2 && strcmpi(par[2],"close") == 0;
 
@@ -166,13 +170,40 @@ case C_RESTART_CLIENT:
 		bool  found	= false;
 
 		if (numP > 3) 
-			pid = atoi(par[3]);
+			db_id = atoi(par[3]);
 		else {
 			FWerror(100,0,CommandID,"","",numP,4,out);
-			QWrite("0]", out);
+			QWrite("0,0]", out);
 			break;
-		};
-		//int pid = findProcess(exe_name);
+		}
+
+		// Convert db_id to pid here
+		WatchProgramInfo info = db_pid_load(db_id);
+		pid = info.pid;
+
+		// If create process failed
+		if (info.launch_error != 0) {
+			FWerror(5,info.launch_error,CommandID,"","",0,0,out);
+			sprintf(temp, "%d,%d]", db_id, info.exit_code);
+			QWrite(temp, out);
+			break;
+		}
+
+		// If thread in fwatch.exe hasn't prepared data yet then quit
+		if (pid == 0  ||  info.exit_code == STILL_ACTIVE) {
+			FWerror(0,0,CommandID,"","",0,0,out);
+			sprintf(temp, "%d,%d]", db_id, info.exit_code);
+			QWrite(temp, out);
+			break;
+		}
+
+		// If program is done then return exit code
+		if (pid != 0  &&  info.exit_code != STILL_ACTIVE) {
+			FWerror(2,0,CommandID,"","",0,0,out);
+			sprintf(temp, "%d,%d]", db_id, info.exit_code);
+			QWrite(temp, out);
+			break;
+		}
 		
 		// Search for the process
 		PROCESSENTRY32 processInfo;
@@ -195,7 +226,8 @@ case C_RESTART_CLIENT:
 			CloseHandle(processesSnapshot);
 		} else {
 			FWerror(5,GetLastError(),CommandID,"","",0,0,out),
-			QWrite("0]", out);
+			sprintf(temp, "%d,%d]", db_id, info.exit_code);
+			QWrite(temp, out);
 			break;
 		}
 
@@ -223,17 +255,30 @@ case C_RESTART_CLIENT:
 		}
 
 		FWerror(primary_error,secondary_error,CommandID,string_error,"",0,0,out);
-		QWrite("0]", out);
+		sprintf(temp, "%d,%d]", db_id, info.exit_code);
+		QWrite(temp, out);
 		break;
 	}
 	// ---------
 
-	
+
+	// Assign id number for this instance so we can find it later
+	if (global.external_program_id == 0) {
+		srand(time(NULL));
+		global.external_program_id = rand() % 10000 + 1;
+	}
+
+	db_id = ++global.external_program_id;
+
+
 	// Get current dir
 	TCHAR pwd[MAX_PATH];
 	GetCurrentDirectory(MAX_PATH, pwd);
 	String param;
 	String_init(param);
+	char tmp[32]        = "";
+	sprintf(tmp, "%d|%d|", CommandID, db_id);
+	String_append(param, tmp);
 
 	// Create string that will be passed to the program
 	// Starting with directory path (deal with spaces)
@@ -298,20 +343,20 @@ case C_RESTART_CLIENT:
 					if (numP >= 6) {
 						String_append(param, "\\");
 						String_append(param, stripq(par[5]));
-					};
+					}
 
 					String_append(param, "\"");
 				}
 			}
 
 			String_end(buf_filename);
-		}; 
+		}
 		break;
 		
 		case C_EXE_WGET : {
 			String_append(param, "--directory-prefix=fwatch\\tmp ");
 			String_append(param, com+9);
-		};
+		}
 		break;
 		
 		case C_EXE_PREPROCESS : {
@@ -350,12 +395,10 @@ case C_RESTART_CLIENT:
 
 			if (ptr_filename2) {
 				if (!VerifyPath(&ptr_filename2, buf_filename2, RESTRICT_TO_MISSION_DIR, CommandID, out)) {
-					QWrite("0]", out); 
+					QWrite("0,0]", out); 
 					String_end(buf_filename1);
 					String_end(buf_filename2);
-					String_end(param);
 					error = true;
-					break;
 				}
 			}
 
@@ -381,11 +424,11 @@ case C_RESTART_CLIENT:
 				String_append(param, " \"");
 				String_append(param, ptr_filename2);
 				String_append(param, "\"");
-			};
+			}
 
 			String_end(buf_filename1);
 			String_end(buf_filename2);
-		};
+		}
 		break;
 		
 		default : {
@@ -409,97 +452,35 @@ case C_RESTART_CLIENT:
 			String_append(param, tmp);
 			String_append(param, game_exe_ptr);
 			String_append(param, "\"");
-		};
-		break;
-	};
-	
-	if (error)
-		break;
-
-	if (CommandID == C_RESTART_CLIENT) {
-		FILE *f = fopen("fwatch\\data\\fwatch_client_restart.db", "a");
-		//fprintf(f, " %s ", exe_path);
-		fprintf(f, param.pointer);
-		fclose(f);
-		String_end(param);
-		FWerror(0,0,CommandID,"","",0,0,out);
-		QWrite("0]", out);
-		break;
-	}
-
-
-
-	// Create log file
-	SECURITY_ATTRIBUTES sa;
-    sa.nLength              = sizeof(sa);
-    sa.lpSecurityDescriptor = NULL;
-    sa.bInheritHandle       = TRUE;       
-
-    HANDLE logFile = CreateFile(TEXT("fwatch\\tmp\\exelog.txt"),
-        FILE_APPEND_DATA,
-        FILE_SHARE_WRITE | FILE_SHARE_READ,
-        &sa,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL );
-
-	// Run program
-	STARTUPINFO si;
-	PROCESS_INFORMATION pi;
-	ZeroMemory(&si, sizeof(si));
-	si.cb          = sizeof(si);
-	si.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-	si.wShowWindow = SW_HIDE;
-	si.hStdOutput  = logFile;
-	si.hStdError   = logFile;
-	ZeroMemory(&pi, sizeof(pi));
-	
-	if (CreateProcess(exe_path, param.pointer, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
-		FWerror(0,0,CommandID,"","",0,0,out);
-
-		DWORD dwPid	 = pi.dwProcessId;
-		char tmp[13] = "";
-
-		sprintf(tmp, "%d]", dwPid);
-		QWrite(tmp, out);
-
-		// Run another program monitoring the first program
-		if (CommandID==C_EXE_UNPBO  ||  CommandID==C_EXE_WGET) {
-			// Remove temporary file
-			char filename[128] = "";
-			sprintf(filename, "fwatch\\tmp\\%d.pid", dwPid);
-			unlink(filename);
-
-			// Add process id number of the first program
-			param.current_length = 0;
-			String_append(param, pwd);
-			String_append(param, " -pid=");
-			char tmp[32] = "";
-			sprintf(tmp, "%d ", dwPid);
-			String_append(param, tmp);
-
-			// Launch
-			STARTUPINFO si2;
-			PROCESS_INFORMATION pi2;
-			ZeroMemory(&si2, sizeof(si2));
-			si2.cb          = sizeof(si2);
-			si2.dwFlags     = STARTF_USESHOWWINDOW;
-			si2.wShowWindow = SW_HIDE;
-			ZeroMemory(&pi2, sizeof(pi2));
-			CreateProcess("fwatch\\data\\getExitCode.exe", param.pointer, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si2, &pi2);
-			CloseHandle(pi2.hProcess);
-			CloseHandle(pi2.hThread);
 		}
-	} else {
-		FWerror(5,GetLastError(),CommandID,"","",0,0,out);
-		QWrite("0]", out);
+		break;
+	}
+	
+	if (!error) {
+		// Send a message to the fwatch.exe
+		HANDLE mailslot = CreateFile(TEXT("\\\\.\\mailslot\\fwatch_mailslot"), GENERIC_WRITE, FILE_SHARE_READ, (LPSECURITY_ATTRIBUTES)NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, (HANDLE)NULL);
+		
+		if (mailslot != INVALID_HANDLE_VALUE) {
+			DWORD bytes_written = 0;
+			
+			if (WriteFile(mailslot, param.pointer, param.current_length+1, &bytes_written, (LPOVERLAPPED)NULL)) {
+				FWerror(0,0,CommandID,"","",numP,3,out);
+				sprintf(tmp, "%d,259]", db_id);
+				QWrite(tmp, out);
+			} else {
+				FWerror(5,GetLastError(),CommandID,"","",0,0,out);
+				QWrite("0,0]", out);
+			}
+
+			CloseHandle(mailslot);
+		} else {
+			FWerror(5,GetLastError(),CommandID,"","",0,0,out);
+			QWrite("0,0]", out);
+		}
 	}
 
-	CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-	CloseHandle(logFile);
 	String_end(param);
-};
+} 
 break;
 
 
