@@ -354,7 +354,7 @@ case C_RESTART_CLIENT:
 		break;
 		
 		case C_EXE_WGET : {
-			String_append(param, "--directory-prefix=fwatch\\tmp ");
+			String_append(param, "--directory-prefix=fwatch\\tmp --no-check-certificate ");
 			String_append(param, com+9);
 		}
 		break;

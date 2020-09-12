@@ -1410,23 +1410,12 @@ void FwatchPresence(ThreadArguments *arg)
 
 			// Check messages from fwatch.dll
 			if (*arg->mailslot != INVALID_HANDLE_VALUE) {
-				FILE *fd=fopen("fwatch_debug.txt","a");
 				DWORD message_size   = 0;
 				DWORD message_number = 0;
 
-				if (GetMailslotInfo(*arg->mailslot, (LPDWORD)NULL, &message_size, &message_number, (LPDWORD)NULL)) {
-					if (message_size != MAILSLOT_NO_MESSAGE) {
+				if (GetMailslotInfo(*arg->mailslot, (LPDWORD)NULL, &message_size, &message_number, (LPDWORD)NULL))
+					if (message_size != MAILSLOT_NO_MESSAGE)
 						_beginthread((void(*)(void*))WatchProgram, 0, arg);
-					} else 
-						fprintf(fd,"fwatch.exe - no messages\n");
-				} else {
-					fprintf(fd,"fwatch.exe - failed to get mailslot info %d\n",GetLastError());
-				}
-				fclose(fd);
-			} else {
-				FILE *fd=fopen("fwatch_debug.txt","a");
-				fprintf(fd,"fwatch.exe - invalid handle value\n");
-				fclose(fd);
 			}
 		}
 

@@ -1,11 +1,19 @@
 
 _url      = _this select 0
-_variable = _this select 1
+_filename = _this select 1
+_variable = _this select 2
 
 ? call Format ["count %1 != 0", _variable] : exit
 
 
+	; Remove existing file
+	? _filename == "" : goto "Start"
+	loadFile ("\:IGSE NEW mode:delete file:..\fwatch\tmp\"+_filename)
+	_url = " --output-document=fwatch\tmp\" + _filename + " " + _url
+
+
 	; Start the program
+	#Start
 	_ok = call loadFile Format ["\:EXE WGET  %1", _url]
 	? !(_ok select 0) : goto "Exit"
 	_pid = _ok select 4

@@ -727,7 +727,7 @@ FUNCTION_READ_DOWNLOADED_FILE = {
 				_mirror = _mirror + 1;
 				goto _this;
 			} else {
-				[_error_message,loadFile Format ["\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\%1",_file_name]] call FUNCTION_DOWNLOAD_INFO;
+				[_error_message,(GS_DOWNLOAD_RESULT select 3)+"\n\n"+(loadFile Format ["\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\%1",_file_name])] call FUNCTION_DOWNLOAD_INFO;
 				goto "ResetLMB";
 			};		
 		};

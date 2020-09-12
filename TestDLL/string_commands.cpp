@@ -332,7 +332,7 @@ case C_STRING_COMPARE:
 		if (colon == NULL) 
 			continue;
 
-		int pos     = pch - name;
+		int pos     = colon - name;
 		name[pos]   = '\0';
 		char *value = name + pos + 1;
 
@@ -411,7 +411,7 @@ case C_STRING_TYPE:
 		if (colon == NULL) 
 			continue;
 
-		int pos     = pch - name;
+		int pos     = colon - name;
 		name[pos]   = '\0';
 		char *value = name + pos + 1;
 
@@ -546,7 +546,7 @@ case C_STRING_VARIABLE:
 		if (colon == NULL) 
 			continue;
 
-		int pos     = pch - name;
+		int pos     = colon - name;
 		name[pos]   = '\0';
 		char *value = Trim(name + pos + 1);
 

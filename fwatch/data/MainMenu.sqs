@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2020,9,5,6,15,25,48,151,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2020,9,12,6,17,12,59,410,120,FALSE]
 	GS_MY_VERSION = 0.54
 	GS_DEFAULT_URL = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -324,7 +324,7 @@
 
 		; Download info about all mods
 		GS_DOWNLOAD_RESULT = []
-		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 --output-document=fwatch\tmp\schedule\schedule.sqf "+_url+"?mod=all&mode=mods"), "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 "+_url+"?mod=all&mode=mods"), "schedule\schedule.sqf", "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
 			
 			"DownloadMods_ForEachURL" call FUNCTION_READ_DOWNLOADED_FILE
@@ -556,7 +556,7 @@
 
 		; Download timestamp and compare it against local timestamp
 		GS_DOWNLOAD_RESULT = []
-		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 --output-document=fwatch\tmp\schedule\schedule.sqf "+_url+"?server=current&mode=lastmodified"+([""] call FUNCTION_BUILD_QUERY_STRING)), "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 "+_url+"?server=current&mode=lastmodified"+([""] call FUNCTION_BUILD_QUERY_STRING)), "schedule\schedule.sqf", "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
 		
 		"ForEachURL" call FUNCTION_READ_DOWNLOADED_FILE
@@ -566,7 +566,7 @@
 		(MAINMENU_STR select 16) call FUNCTION_MSG_LB
 
 		GS_DOWNLOAD_RESULT = []
-		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 --output-document=fwatch\tmp\schedule\schedule.sqf "+_url+Format["?server=current&language=%1",CURRENT_LANGUAGE]+(["modcheck",GS_MODS_ID,GS_MODS_VER] call FUNCTION_BUILD_QUERY_STRING)), "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 "+_url+Format["?server=current&language=%1",CURRENT_LANGUAGE]+(["modcheck",GS_MODS_ID,GS_MODS_VER] call FUNCTION_BUILD_QUERY_STRING)), "schedule\schedule.sqf", "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
 		
 		_done_url set [count _done_url, _url]
@@ -624,7 +624,7 @@
 
 				Format [MAINMENU_STR select 21, (if (_server_name!="") then {_server_name} else {_server_uniqueid})] call FUNCTION_MSG_LB
 				GS_DOWNLOAD_RESULT = []
-				[Format ["--tries=1 --output-document=fwatch\tmp\schedule\%1  %2 ", _filename, _server_logo], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+				["--tries=1 "+_server_logo, "schedule\"+_filename, "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 				@count GS_DOWNLOAD_RESULT != 0
 
 				if (GS_DOWNLOAD_RESULT select 0) then {_code_string=_code_string+Format[";_server_logo_local=""..\fwatch\tmp\schedule\%1"";true", _filename]; loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedulelogo.bin  key:%1write:_name=""%2""",_server_uniqueid,_tokens select (count _tokens-2)]} else {titleText [Format [MAINMENU_STR select 22,GS_DOWNLOAD_RESULT select 3], "PLAIN DOWN", 0.5]}
@@ -929,6 +929,7 @@
 		; Wait for the program to finish
 		#InstallWait
 		_progress = call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
+		? _progress == "" : _progress=MAINMENU_STR select 10
 		? !(_auto_restart in [_current_auto_restart])   : goto "InstallDisplay"
 		? !(_run_voice_program in [_current_run_voice]) : goto "InstallDisplay"
 
