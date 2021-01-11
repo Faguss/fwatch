@@ -18,12 +18,15 @@ struct GLOBAL_VARIABLES_TESTLAUNCHER {	// variables shared between threads
 	int listen_server_port;
 	char master_server1[64];
 	char master_server2[32];
+	char error_msg_last[512];
 	bool error_log_enabled;
 	bool error_log_started;
 } global = {
 	-1,
 	"",
 	"",
+	"",
+	false,
 	false
 };
 
@@ -786,7 +789,6 @@ void FwatchPresence(ThreadArguments *arg)
 	int transfered_missions    = 0;
 	int signal_action          = -1;
 	char *signal_buffer        = "";
-	char error_msg_last[512]   = "";
 
 	bool ui_change_enabled     = false;
 	bool ui_portrait_mode      = false;
@@ -1174,16 +1176,17 @@ void FwatchPresence(ThreadArguments *arg)
 					char error_msg[512] = "";
 					ReadProcessMemory(phandle, (LPVOID)pointers[last], &error_msg, 512, &stBytes);
 
-					if (strcmp(error_msg,error_msg_last) != 0) {						
-						strcpy(error_msg_last, error_msg);
+					if (strcmp(error_msg,global.error_msg_last) != 0) {
+						strcpy(global.error_msg_last, error_msg);
 
-						if (!global.error_log_started) {
+						/*if (!global.error_log_started) {
+							fd=fopen("fwatch_debug.txt","a");fprintf(fd,"EXE message dll that log is starting\n");fclose(fd);
 							global.error_log_started = true;
 							HANDLE message = CreateFile("scripts\\:info errorlog start", GENERIC_READ, 0, NULL, OPEN_EXISTING, 128, NULL);
 
 							if (message != INVALID_HANDLE_VALUE)
 								CloseHandle(message);
-						}
+						}*/
 
 						FILE *f = fopen("fwatch\\idb\\_errorLog.txt", "a");
 
@@ -1342,69 +1345,6 @@ void FwatchPresence(ThreadArguments *arg)
 
 				ui_apply_change    = false;
 				ui_chat_state_last = UI_CHAT_CUSTOM;
-			}
-
-			// Check if there's a signal to restart the client/server
-			char file_name[64] = "fwatch\\data\\fwatch_client_restart.db";
-
-			if (arg->is_dedicated_server)
-				strcpy(file_name, "fwatch\\data\\fwatch_server_restart.db");
-
-			if (signal_action == -1) {
-				FILE *fp = fopen(file_name, "r");					 
-				if (fp) {
-					fseek(fp, 0, SEEK_END);
-					int buffer_size = ftell(fp);
-					signal_buffer   = (char*) malloc (buffer_size+1);
-
-					if (signal_buffer) {
-						fseek(fp, 0, SEEK_SET);
-						fread(signal_buffer, 1, buffer_size, fp);
-						signal_buffer[buffer_size] = '\0';
-						signal_action = 1;
-					}
-				
-					fclose(fp);
-				}
-			} 
-
-			if (signal_action == 1) {
-				bool file_removed = false;
-
-				if (remove(file_name) == 0) {
-					file_removed = true;
-				} else {
-					if (errno == 2) {
-						file_removed = true;
-					}
-				}
-
-				if (file_removed) {
-					char exe_name[64] = "fwatch\\data\\gameRestart.exe";
-
-					if (arg->is_dedicated_server) {
-						strcpy(exe_name, global_exe_name[game_exe_index]);
-						TerminateProcess(phandle, 0);
-						CloseHandle(phandle);
-					}
-
-					// Run program
-					STARTUPINFO si;
-					PROCESS_INFORMATION pi;
-					ZeroMemory(&si, sizeof(si));
-					si.cb = sizeof(si);
-					si.dwFlags = STARTF_USESHOWWINDOW;
-					si.wShowWindow = SW_HIDE;
-					ZeroMemory(&pi, sizeof(pi));
-
-					if (CreateProcess(exe_name, signal_buffer, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
-						CloseHandle(pi.hProcess);
-						CloseHandle(pi.hThread); 
-					}
-
-					signal_action = -1;
-					free(signal_buffer);
-				}
 			}
 
 
@@ -1875,9 +1815,16 @@ void WatchProgram(ThreadArguments *arg)
 							case C_EXE_MAKEPBO      : strcpy(exe_name, "makepbo.exe"); break;
 							case C_EXE_WGET         : strcpy(exe_name, "wget.exe"); break;
 							case C_EXE_PREPROCESS   : strcpy(exe_name, "preproc.exe"); break;
+							case C_RESTART_SERVER   :
 							case C_RESTART_CLIENT   : strcpy(exe_name, "gameRestart.exe"); break;
 
 							case C_INFO_ERRORLOG    : {
+								bool enabled_new = db_id ? 1 : 0;
+								bool started_new = atoi(params) ? 1 : 0;
+
+								if (global.error_log_enabled != enabled_new || global.error_log_started != started_new)
+									strcpy(global.error_msg_last,"");
+								
 								global.error_log_enabled = db_id ? 1 : 0;
 								global.error_log_started = atoi(params) ? 1 : 0;
 							} break;

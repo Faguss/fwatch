@@ -142,10 +142,7 @@ int String_allocate(String &str, int new_maximal_length)
 
 
 // Custom string concatenation
-int String_append(String &str, char *text) 
-{
-	int text_length = strlen(text) + 1;
-	
+int String_append_len(String &str, char *text, int text_length) {
 	if (text_length > 1) {
 		int new_length  = str.current_length + text_length;
 
@@ -161,6 +158,11 @@ int String_append(String &str, char *text)
 	}
 
 	return 0;
+}
+
+int String_append(String &str, char *text) 
+{
+	return String_append_len(str, text, strlen(text)+1);
 }
 
 

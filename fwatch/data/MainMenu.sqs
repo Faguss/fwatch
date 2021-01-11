@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2020,9,12,6,17,12,59,410,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2020,12,31,4,1,27,54,348,60,FALSE]
 	GS_MY_VERSION = 0.54
 	GS_DEFAULT_URL = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -360,12 +360,10 @@
 	
 	"if ((_missing_mods_myversion select _i) != 0) then {_update_mods set [count _update_mods, [_i,_x]]} else {_new_mods set [count _new_mods, [_i,_x]]}; _i=_i+1" forEach _missing_mods
 
-	_title = "===" + (loadFile Format ["\:STRING CUT text:%1start:1 end:-4", MAINMENU_STR select 48]) + "==="
-	? count _update_mods > 0 : lbSetColor [6657, lbAdd [6657, _title], [246/255, 40/255, 23/255, 1]]
+	? count _update_mods > 0 : lbSetColor [6657, lbAdd [6657, "==="+(MAINMENU_STR select 83)+"==="], [246/255, 40/255, 23/255, 1]]
 	"_index=lbAdd [6657,_missing_mods_name select (_x select 0)]; lbSetValue [6657, _index, 6]; lbSetData [6657, _index, Format[""%1"",_x select 1]]" forEach _update_mods
 	
-	_title = "===" + (loadFile Format ["\:STRING CUT text:%1start:1 end:-1",MAINMENU_STR select 7]) + "==="
-	? count _new_mods > 0 : lbSetColor [6657, lbAdd [6657, _title], [201/255, 190/255, 98/255, 1]]
+	? count _new_mods > 0 : lbSetColor [6657, lbAdd [6657, "==="+(MAINMENU_STR select 84)+"==="], [201/255, 190/255, 98/255, 1]]
 	"_index=lbAdd [6657,_missing_mods_name select (_x select 0)]; lbSetValue [6657, _index, 6]; lbSetData [6657, _index, Format[""%1"",_x select 1]]" forEach _new_mods
 	goto "ResetLMB"
 	
@@ -797,8 +795,9 @@
 	
 	lbClear 6657
 	lbSetCurSel [6657, -1]
-	? _server_version in [0,_myVersion]  &&  count _missing_mods==0 : if (_server_uniqueid in _today_game_servers && !_playingNow && _gamerestart_pid==0) then {lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 26], 220]}; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 27], 221]; if (_voice_name!="") then {lbSetValue [6657, lbAdd [6657, Format [_voice_format,_voice_name]], 222]}
+	? _server_version in [0,_myVersion]  &&  count _missing_mods==0 : if (_server_uniqueid in _today_game_servers && !_playingNow && _gamerestart_pid==0) then {lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 26], 220]}; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 27], 221]; 
 	? count _missing_mods > 0                                       : lbSetValue [6657, lbAdd [6657, Format [MAINMENU_STR select 28, _missing_mods_size]], 204]; lbSetValue [6657, lbAdd [6657, Format [MAINMENU_STR select 29, _missing_mods_size]], 224]
+	? _voice_name != ""                                             : lbSetValue [6657, lbAdd [6657, Format [_voice_format,_voice_name]], 222]
 	? count _missing_mods==0 && count _server_modfolders > 0        : lbSetValue [6657, lbAdd [6657, Format [MAINMENU_STR select 29, _missing_mods_size]], 225]
 	? _server_website != ""                                         : lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 30], 205]
 	? _server_version == _myVersion                                 : lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 31], 206]

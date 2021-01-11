@@ -6,7 +6,7 @@
 #endif
 
 #include <process.h>
-
+#include <stdio.h>
 
 static enum RESTORE_MEM_COMMANDS
 {
@@ -280,6 +280,7 @@ static const int hud_offset[] =
 
 static const int hud_offset_num = sizeof(hud_offset) / sizeof(hud_offset[0]);
 
+
 // Global variables used in TestDLL
 struct GLOBAL_VARIABLES_TESTDLL {
 	int exe_index;
@@ -482,6 +483,7 @@ int strnatcasecmp(nat_char const *a, nat_char const *b);
 
 void String_init(String &str);
 int String_allocate(String &str, int new_maximal_length);
+int String_append_len(String &str, char *text, int text_length);
 int String_append(String &str, char *text);
 int String_append_quotes(String &str, char *left, char *text, char *right);
 void String_end(String &str);
@@ -494,4 +496,6 @@ int DeleteWrapper(char *refcstrRootDirectory);
 WatchProgramInfo db_pid_load(int db_id_wanted);
 void db_pid_save(WatchProgramInfo input);
 void NotifyFwatchAboutErrorLog();
-void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle);
+void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle, bool notify);
+void shift_text_in_buffer(char *buffer, int buffer_size, int shift_origin, int shift_size);
+void printbuf(FILE **fd, char *buffer, int size);

@@ -102,7 +102,7 @@ case C_CLASS_LIST:
 	char *offset;			// position of the classes in the file (in bytes)
 	char *offsetNEW;		// used when reallocating "offset"
 	bool error		= false;// stop iterating
-	int lineLen		= 512;	// length of the "line"
+	int lineLen		= 1024;	// length of the "line"
 	int matchLen	= 100;	// length of the "match"
 	int classesLen	= 24;	// length of the "classes"
 	int inheritsLen = 24;	// length of the "inherits"
@@ -632,7 +632,7 @@ case C_CLASS_TOKENS:
 	char *values;				// list with class properties values, for output
 	char *valuesNEW;			// used when reallocating "values"
 	bool error		= false;	// stop iterating
-	int lineLen		= 512;		// length of the "line"
+	int lineLen		= 1024;		// length of the "line"
 	int matchLen	= 100;		// length of the "match"
 	int namesLen	= 24;		// length of the "names"
 	int valuesLen	= 24;		// length of the "values"
@@ -1377,7 +1377,7 @@ case C_CLASS_MODIFY:
 	char *match;			// stores word that's being parsed
 	char *matchNEW;			// used when reallocating "match"
 	int error		= 0;	// stop iterating
-	int lineLen		= 512;	// length of the "line"
+	int lineLen		= 1024;	// length of the "line"
 	int matchLen	= 100;	// length of the "match"
 
 	// Allocate
@@ -2137,7 +2137,7 @@ case C_CLASS_MODTOK:
 	char *match;			// stores word that's being parsed
 	char *matchNEW;			// used when reallocating "match"
 	int error		= 2;	// stop iterating (error=2 is "property not found")
-	int lineLen		= 512;	// length of the "line"
+	int lineLen		= 1024;	// length of the "line"
 	int matchLen	= 100;	// length of the "match"
 
 	// Allocate
@@ -3740,6 +3740,7 @@ case C_CLASS_READ2:
 	int arg_offset         = 0;
 	int arg_classpath_pos  = -1;
 	int arg_level          = predefined_capacity;
+	bool arg_verify        = false;
 	
 	for (int i=2; i<numP; i++) {
 		char *arg = stripq(par[i]);
@@ -3792,6 +3793,11 @@ case C_CLASS_READ2:
 			arg_level = atoi(val);
 			continue;
 		}
+
+		if (strcmpi(arg,"verify") == 0) {
+			arg_verify = String2Bool(val);
+			continue;
+		}
 	}
 
 	// File not specified
@@ -3820,18 +3826,20 @@ case C_CLASS_READ2:
 	char *class_name = strtok(arg_classpath, "[,]");
 
 	//from ofp array to char array
-	while (class_name!=NULL  &&  classpath_size<classpath_capacity) {
-		classpath[classpath_size++] = stripq(class_name);
-		class_name                  = strtok(NULL, "[,]");
-	}
+	if (!arg_verify) {
+		while (class_name!=NULL  &&  classpath_size<classpath_capacity) {
+			classpath[classpath_size++] = stripq(class_name);
+			class_name                  = strtok(NULL, "[,]");
+		}
 
-	if (arg_offset > 0) {
-		classpath_current = classpath_size;
-		
-		if (arg_classpath_pos >= 0)
-			classpath_current = arg_classpath_pos+1;
-	} else
-		arg_offset = 0;
+		if (arg_offset > 0) {
+			classpath_current = classpath_size;
+			
+			if (arg_classpath_pos >= 0)
+				classpath_current = arg_classpath_pos+1;
+		} else
+			arg_offset = 0;
+	}
 
 
 	// Wrapping
@@ -3985,6 +3993,8 @@ case C_CLASS_READ2:
 	int parenthesis_level = 0;
 	int property_start    = 0;
 	int property_end      = 0;
+	int line_num          = 1;
+	int column_num        = 0;
 	bool first_char       = true;
 	bool is_array         = false;
 	bool in_quote         = false;
@@ -3994,11 +4004,20 @@ case C_CLASS_READ2:
 	bool classpath_match  = false;
 	bool property_found   = false;
 	bool purge_comment    = false;
+	bool syntax_error     = false;
 	char separator        = ' ';
 	char *text            = file_contents.pointer;
 	
 	for (i=0; i<file_size; i++) {
 		char c = text[i];
+		
+		if (c == '\n') {
+			if (i<file_size-1)
+				line_num++;
+				
+			column_num = 1;
+		} else
+			column_num++;
 
 		// Parse preprocessor comment
 		switch (comment) {
@@ -4071,14 +4090,14 @@ case C_CLASS_READ2:
 			case PROPERTY : {
 				if (c == '}') {
 					// End parsing when left the target class
-					if (classpath_current==classpath_size && class_level==classpath_current && !classpath_done) {
+					if (!arg_verify && classpath_current==classpath_size && class_level==classpath_current && !classpath_done) {
 						classpath_done = true;
 						i              = file_size;
 						continue;
 					}
 					
 					// When left subclass within target class
-					if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+					if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 						int level = class_level - classpath_current;
 
 						for (int z=level; z<predefined_capacity; z++)
@@ -4092,8 +4111,16 @@ case C_CLASS_READ2:
 					class_level--;
 					
 					// End parsing when couldn't find wanted classes
-					if (class_level < classpath_current)
+					if (!arg_verify && class_level < classpath_current)
 						i = file_size;
+
+					// Excess closing brackets
+					if (arg_verify  &&  class_level < 0) {
+						column_num--;
+						separator = ' ';
+						syntax_error = true;
+						goto class_read2_end_parsing;
+					}
 
 					continue;
 				}
@@ -4142,10 +4169,15 @@ case C_CLASS_READ2:
 						separator         = ' ';
 						parenthesis_level = 1;
 					} else 
-						if (!isspace(c)) {	//ignore syntax error
-							i--;
-							separator = ' ';
-							expect    = SEMICOLON;
+						if (!isspace(c)) {
+							if (!arg_verify) {	//syntax error
+								i--;
+								separator = ' ';
+								expect    = SEMICOLON;
+							} else {
+								syntax_error = true;
+								goto class_read2_end_parsing;
+							}
 						}
 				
 				break;
@@ -4183,7 +4215,7 @@ case C_CLASS_READ2:
 							PurgeComments(text, word_start    , i);
 						}
 
-						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+						if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 							bool found = properties_to_find_size == 0;
 
 							for (int j=0; j<properties_to_find_size && !found; j++)
@@ -4194,7 +4226,7 @@ case C_CLASS_READ2:
 								property_found = true;
 								int level      = class_level - classpath_current;
 
-								if (level < classpath_capacity) {
+								if (!arg_verify && level < classpath_capacity) {
 									// Add property name
 									String_append(output_property[level], Output_Nested_Array(temp, level, "property", level, subclass_count));
 									String_append(output_property[level], "\"");
@@ -4260,16 +4292,16 @@ case C_CLASS_READ2:
 							PurgeComments(text, word_start, i);
 						}
 						
-						if (expect==CLASS_NAME && classpath_size>0 && classpath_current<classpath_size && class_level==classpath_current && strcmpi(text+word_start,classpath[classpath_current])==0) {
+						if (!arg_verify && expect==CLASS_NAME && classpath_size>0 && classpath_current<classpath_size && class_level==classpath_current && strcmpi(text+word_start,classpath[classpath_current])==0) {
 							classpath_current++;
 							classpath_match = true;
 						}
 
-						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+						if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 							String *output_array = expect==CLASS_NAME ? output_class : output_inherit;
 							int level            = class_level - classpath_current;
 
-							if (level < classpath_capacity && !classpath_done) {
+							if (!arg_verify && level < classpath_capacity && !classpath_done) {
 								char tempname[8] = "class";
 								if (expect != CLASS_NAME)
 									strcpy(tempname, "inherit");
@@ -4296,11 +4328,11 @@ case C_CLASS_READ2:
 					expect = CLASS_INHERIT;
 				else 
 					if (c == '{') {
-						if (!is_inherit) {
+						if (!arg_verify && !is_inherit) {
 							if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 								int level = class_level - classpath_current;
 								
-								if (level < classpath_capacity && !classpath_done) {
+								if (!arg_verify && level < classpath_capacity && !classpath_done) {
 									String_append(output_inherit[level], Output_Nested_Array(temp, level, "inherit", level, subclass_count));
 									strcpy(temp,"\"\"];");
 									String_append(output_inherit[level], temp);
@@ -4309,17 +4341,17 @@ case C_CLASS_READ2:
 							}
 						}
 
-						if (classpath_match) {
+						if (!arg_verify && classpath_match) {
 							char temp[32] = "";
 							sprintf(temp, "]+[\"%d\"", i+1);
 							String_append(output_classpath_bytes, temp);
 							classpath_match = false;
 						}
 
-						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+						if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 							int level = class_level - classpath_current;
 
-							if (level < classpath_capacity) {
+							if (!arg_verify && level < classpath_capacity) {
 								String_append(output_bytes[level], Output_Nested_Array(temp, level, "bytes", level, subclass_count));
 								sprintf(temp,"\"%d\"];", i+1);
 								String_append(output_bytes[level], temp);
@@ -4329,13 +4361,13 @@ case C_CLASS_READ2:
 						class_level++;
 						expect = PROPERTY;
 						
-						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+						if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 							int level = class_level - classpath_current;
 							
 							if (level > output_level)
 								output_level = level;
 							
-							if (level > 0)
+							if (!arg_verify && level > 0)
 							for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
 								for (int k=0; k<all_output_strings_num; k++) {								
 									String_append(all_output_strings[k][j], Output_Nested_Array(temp, level-1, output_strings_name[k], j, subclass_count));
@@ -4344,9 +4376,15 @@ case C_CLASS_READ2:
 								}
 						}
 					} else
-						if (!isspace(c)) {	//ignore syntax error
-							i--;
-							expect = SEMICOLON;
+						if (!isspace(c)) {
+							if (!arg_verify) {	//syntax error
+								i--;
+								expect = SEMICOLON;
+							} else {
+								separator = '{';
+								syntax_error = true;
+								goto class_read2_end_parsing;
+							}
 						}
 				
 				break;
@@ -4381,49 +4419,76 @@ case C_CLASS_READ2:
 	}
 
 	//---------------------------------------------------------------------------
-	for (i=0; i<classpath_capacity && i<=output_level; i++) {
-		for (int j=0; j<all_output_strings_num; j++) {
-			QWrite(all_output_strings[j][i].pointer, out);
-			String_end(all_output_strings[j][i]);
+	class_read2_end_parsing:
+
+	if (!arg_verify) {
+		for (i=0; i<classpath_capacity && i<=output_level; i++) {
+			for (int j=0; j<all_output_strings_num; j++) {
+				QWrite(all_output_strings[j][i].pointer, out);
+				String_end(all_output_strings[j][i]);
+			}
 		}
-	}
-	
-	if (classpath_current < classpath_size)
-		FWerror(250,0,CommandID,ptr_filename,classpath[classpath_current],classpath_current,++classpath_size,out);
-	else
-		if (properties_to_find_size>0 && !property_found)
-			FWerror(253,0,CommandID,ptr_filename,arg_findproperty,0,0,out);
+
+		if (classpath_current < classpath_size)
+			FWerror(250,0,CommandID,ptr_filename,classpath[classpath_current],classpath_current,++classpath_size,out);
 		else
+			if (properties_to_find_size>0 && !property_found)
+				FWerror(253,0,CommandID,ptr_filename,arg_findproperty,0,0,out);
+			else
+				FWerror(0,0,CommandID,"","",0,0,out);
+
+		QWrite("[", out);
+		
+		for (i=0; i<classpath_capacity && i<=output_level; i++) {
+			if (i == 0)
+				QWrite("[", out);
+			else
+				QWrite(",[", out);
+
+			for (int j=0; j<all_output_strings_num; j++) {
+				char temp[32] = "";
+				sprintf(temp, "%c_output_%s%d", (j==0 ? ' ' : ','), output_strings_name[j], i);
+				QWrite(temp, out);
+			}
+
+			QWrite("]", out);
+		}
+
+		QWrite("],", out);
+		String_append(output_classpath_bytes, "]");
+		QWrite(output_classpath_bytes.pointer, out);
+
+		sprintf(temp,",%d]",classpath_current);
+		QWrite(temp, out);
+	} else {
+		if (!syntax_error && class_level>0) {
+			syntax_error = true;
+			separator    = '}';
+		}
+
+		if (syntax_error) {
+			char error_msg[32]   = "";
+			char encountered[16] = "end of file";
+			char insteadof[16]   = "nothing";
+
+			if (i < file_size)
+				sprintf(encountered, "%c", text[i]);
+
+			if (separator != ' ')
+				sprintf(insteadof, "%c", separator);
+
+			sprintf(error_msg, "%s instead of %s", encountered, insteadof);
+			FWerror(256,0,CommandID,ptr_filename,error_msg,line_num,column_num,out);
+		} else
 			FWerror(0,0,CommandID,"","",0,0,out);
 
-	QWrite("[", out);
-	
-	for (i=0; i<classpath_capacity && i<=output_level; i++) {
-		if (i == 0)
-			QWrite("[", out);
-		else
-			QWrite(",[", out);
-
-		for (int j=0; j<all_output_strings_num; j++) {
-			char temp[32] = "";
-			sprintf(temp, "%c_output_%s%d", (j==0 ? ' ' : ','), output_strings_name[j], i);
-			QWrite(temp, out);
-		}
-
-		QWrite("]", out);
+		QWrite("[]]", out);
 	}
-
-	QWrite("],", out);
-	String_append(output_classpath_bytes, "]");
-	QWrite(output_classpath_bytes.pointer, out);
-
-	sprintf(temp,",%d]",classpath_current);
-	QWrite(temp, out);
 
 	String_end(output_classpath_bytes);
 	String_end(file_contents);
 	String_end(buf_filename);
-};
+}
 break;
 
 

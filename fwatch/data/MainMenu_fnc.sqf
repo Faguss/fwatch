@@ -287,8 +287,7 @@ FUNCTION_FORMAT_GAME_TIME = {
 			_formatPattern = "@d MM 0h:0i";
 			
 			if (_eventBegan && _eventType>0) then {
-				//temporarily disabled
-				//_formatPattern = Format ["@~%1~ 0h:0i", (if (_eventType==1) then {MAINMENU_STR select (51 + (_startTime select 3))} else {MAINMENU_STR select 58})]
+				_formatPattern = Format ["@~%1~ 0h:0i", (if (_eventType==1) then {MAINMENU_STR select (51 + (_startTime select 3))} else {MAINMENU_STR select 58})];
 			};
 			
 			// add event info to arrays
@@ -716,11 +715,12 @@ FUNCTION_READ_DOWNLOADED_FILE = {
 	
 	if (_error) then {
 		if ((GS_DOWNLOAD_RESULT select 1) == 5) then {
-			if ((GS_DOWNLOAD_RESULT select 2) == 186) then {
-				GS_DOWNLOAD_RESULT set [3, (GS_DOWNLOAD_RESULT select 3)+"\n\nGo to fwatch.exe properties and set it to run as an administrator"];
+			if ((GS_DOWNLOAD_RESULT select 2) in [5,186]) then {
+				GS_DOWNLOAD_RESULT set [3, (GS_DOWNLOAD_RESULT select 3)+"\n\nCheck if firewall or antivirus aren't blocking\n\nGo to fwatch.exe properties and set it to run as an administrator"];
 			};
 			
 			[_error_message, GS_DOWNLOAD_RESULT select 3] call FUNCTION_DOWNLOAD_INFO;
+			goto "ResetLMB";
 		} else {
 			if (_mirror<count (_all_url select _i)-1) then {
 				lbSetValue [6657, lbAdd [6657,"["+_error_message+"]"], 0];
@@ -798,7 +798,7 @@ FUNCTION_STRINGTABLE = {
 			"Jest ju¿ na liœcie!", //9
 			"[Proszê czekaæ]",	//10
 			"[Œci¹gnij %1]",	//11
-			"[Otwórz zaproszenie do %1]",	//12
+			"[Otwórz zaproszenie na %1]",	//12
 			"Nie uda³o siê utworzyæ fwatch\tmp\schedule\n%1\n\nUruchom grê jako administrator",	//13
 			"[Sprawdzanie aktualizacji]",	//14
 			"Nie uda³o siê pobraæ",			//15
@@ -868,7 +868,9 @@ FUNCTION_STRINGTABLE = {
 			"Serwer przegl¹darki gier",	//79		
 			"nowa wersja testowa Fwatch 1.16",	//80
 			"nowa wersja Resource.cpp",		//81
-			"[Œci¹gnij mody]"				//82
+			"[Œci¹gnij mody]",				//82
+			"Dostêpne aktualizacje",		//83
+			"Pobierz nowy mod"				//84
 		];
 	};
 	
@@ -956,7 +958,9 @@ FUNCTION_STRINGTABLE = {
 			"Ìàñòåð Ñåðâåð",	//79		
 			"íîâàÿ òåñòîâàÿ âåðñèÿ Fwatch 1.16",	//80
 			"íîâàÿ âåðñèÿ Resource.cpp",		//81
-			"[Ñêà÷àòü ìîäû]"		//82
+			"[Ñêà÷àòü ìîäû]",		//82
+			"Îáíîâèòü",				//83
+			"Äîáàâèòü Íîâûé"		//84
 		];
 	};
 	
@@ -1044,7 +1048,9 @@ FUNCTION_STRINGTABLE = {
 			"Master Server",	//79		
 			"new test version of Fwatch 1.16",	//80
 			"new Resource.cpp version",		//81
-			"[Download Mods]"				//82
+			"[Download Mods]",				//82
+			"Available Updates",			//83
+			"Install New"					//84
 		];
 	};
 };

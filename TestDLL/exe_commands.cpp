@@ -93,32 +93,6 @@ break;
 
 
 
-case C_RESTART_SERVER:		
-{ // signal fwatch.exe thread to restart server
-
-	if (!global.DedicatedServer) 
-		break;
-	
-	FILE *fp = fopen("fwatch\\data\\fwatch_server_restart.db", "w");
-
-	if (fp) {
-		fprintf(fp, " %s", com+15);
-		fclose(fp);
-	}
-}
-break;
-
-
-
-
-
-
-
-
-
-
-
-
 case C_EXE_MAKEPBO:
 case C_EXE_ADDONTEST:
 case C_EXE_ADDONINSTALL:
@@ -126,6 +100,7 @@ case C_EXE_UNPBO:
 case C_EXE_WGET:
 case C_EXE_PREPROCESS:
 case C_RESTART_CLIENT:
+case C_RESTART_SERVER:
 { // Execute program from fwatch\data\
 
 	// Not enough arguments
@@ -135,8 +110,8 @@ case C_RESTART_CLIENT:
 		break;
 	}
 
-	// Not allowed on the server
-	if (global.DedicatedServer  &&  CommandID==C_RESTART_CLIENT  &&  CommandID==C_EXE_ADDONTEST)
+	// Abort if command not allowed on the server or client
+	if ((global.DedicatedServer && (CommandID==C_RESTART_CLIENT || CommandID==C_EXE_ADDONTEST)) || (!global.DedicatedServer && CommandID==C_RESTART_SERVER))
 		break;
 
 

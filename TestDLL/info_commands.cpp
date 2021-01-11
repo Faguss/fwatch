@@ -78,20 +78,19 @@ case C_INFO_DATE:
 	bool get_current     = true;
 	bool get_system_time = false;
 
-
 	// Optional arguments
 	if (numP > 2) {
 		if (strcmpi(par[2],"systime") == 0) 
 			get_system_time = true;
 
 		// If an array was passed - tokenize it
-		int l = strlen(par[2]) - 1;
+		int len = strlen(par[2]);
 
-		if (par[2][0]=='['  &&  par[2][l]==']') {
+		if (len>2  &&  par[2][0]=='['  &&  par[2][len-1]==']') {
 			int index  = 0;
 			char *item = strtok(par[2], "[,]");
 
-			while (pch != NULL) {
+			while (item != NULL) {
 				// From ofp date array to systemtime structure
 				switch (index) {
 					case 0: st.wYear         = atoi(item); break;
@@ -101,7 +100,7 @@ case C_INFO_DATE:
 					case 5: st.wMinute       = atoi(item); break;
 					case 6: st.wSecond       = atoi(item); break;
 					case 7: st.wMilliseconds = atoi(item); break;
-					case 9: get_system_time  = strcmpi(pch,"true") == 0; break;
+					case 9: get_system_time  = strcmpi(item,"true") == 0; break;
 				}
 				
 				index++;
@@ -116,11 +115,12 @@ case C_INFO_DATE:
 	}
 
 
-	if (get_current)
-		if (!get_system_time) 
+	if (get_current) {
+		if (!get_system_time)
 			GetLocalTime(&st); 
-		else 
+		else
 			GetSystemTime(&st);
+	}
 
 	char output[64] = "";
 	FormatTime(st, get_system_time, output);
@@ -261,7 +261,7 @@ case C_INFO_ERRORLOG:
 			HANDLE phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
 
 			if (f) {
-				WriterHeaderInErrorLog(&f, &phandle);
+				WriterHeaderInErrorLog(&f, &phandle, 0);
 				fclose(f);
 			}
 

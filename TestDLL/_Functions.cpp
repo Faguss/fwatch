@@ -1050,6 +1050,7 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 			case 253: sprintf(desc, "Couldn't find property %s", str2); break;
 			case 254: sprintf(desc, "Couldn't find item %d in array %s",num1,str2); break;
 			case 255: sprintf(desc, "Property %s is not an array",str2); break;
+			case 256: sprintf(desc, "Syntax error: %s at line %d column %d", str2, num1, num2); break;
 
 			default: sprintf(desc, "Unknown error %d",code); break;
 		}
@@ -1234,13 +1235,58 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 
 	// Log errors
 	if (global.ErrorLog_Enabled  &&  code>0) {
-		FILE *f        = fopen(!global.DedicatedServer ? "fwatch\\idb\\_errorLog.txt" : "fwatch\\idb\\_errorLogDedi.txt", "a");
+		HANDLE mailslot = CreateFile(TEXT("\\\\.\\mailslot\\fwatch_mailslot_error"), GENERIC_WRITE, FILE_SHARE_READ, (LPSECURITY_ATTRIBUTES)NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, (HANDLE)NULL);
+	
+		if (mailslot != INVALID_HANDLE_VALUE) {
+			String message;
+			String_init(message);
+			char temp[32] = "";
+
+			HANDLE phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
+
+			// Get mission time
+			if (phandle != 0) {
+				SIZE_T stBytes  = 0;
+				int missionTime = 0;
+				int base		= !global.DedicatedServer ? (!global.CWA ? 0x7DD028 : 0x7CBFE8) : (!global.CWA ? 0x75A2E0 : 0x75A370);
+				ReadProcessMemory(phandle, (LPVOID)base, &missionTime, 4, &stBytes);
+
+				int seconds = missionTime / 1000;
+				int minutes = seconds / 60;
+
+				sprintf(temp, "%s%d:%s%d  ", minutes<10 ? "0" : "", minutes, seconds<10 ? "0" : "", seconds);
+				String_append(message, temp);
+				CloseHandle(phandle);
+			}
+
+			// Trim error description
+			for (unsigned int i=strlen(descPTR)-1;   descPTR[i]=='\r' || descPTR[i]=='\n';   i--)
+				descPTR[i] = '\0';
+
+			sprintf(temp, "%d %d - ", code, secondaryCode);
+			String_append(message, temp);
+			String_append(message, cmd);
+			String_append(message, " - ");
+			String_append(message, descPTR);
+
+			// If file error then add filename
+			if (code==7  ||  code==105  ||  code==108  ||  code>=200) {
+				String_append(message, " - ");
+				String_append(message, str1);
+			}
+
+			DWORD bytes_written = 0;
+			WriteFile(mailslot, message.pointer, message.current_length+1, &bytes_written, (LPOVERLAPPED)NULL);
+			String_end(message);
+		}
+		/*FILE *f = fopen(!global.DedicatedServer ? "fwatch\\idb\\_errorLog.txt" : "fwatch\\idb\\_errorLogDedi.txt", "a");
 
 		if (f) {
 			HANDLE phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
 			SIZE_T stBytes = 0;
 
-			WriterHeaderInErrorLog(&f, &phandle);
+			if (!global.ErrorLog_Started)
+				WriterHeaderInErrorLog(&f, &phandle, 1);
 
 			// output command input
 			fprintf(f, "\t%s\n", global.com_ptr);
@@ -1278,7 +1324,7 @@ void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2,
 
 			fprintf(f, "\n");
 			fclose(f);
-		}
+		}*/
 	}
 
 	if (lpMsgBuf != NULL)
@@ -2594,22 +2640,23 @@ void NotifyFwatchAboutErrorLog()
 	
 	if (mailslot != INVALID_HANDLE_VALUE) {
 		char temp[32] = "";
-		sprintf(temp, "6|%d|%d", global.ErrorLog_Enabled, global.ErrorLog_Started);
+		sprintf(temp, "%d|%d|%d", C_INFO_ERRORLOG, global.ErrorLog_Enabled, global.ErrorLog_Started);
 
 		DWORD bytes_written = 0;
-		WriteFile(mailslot, temp, strlen(temp+1), &bytes_written, (LPOVERLAPPED)NULL);
+		WriteFile(mailslot, temp, strlen(temp)+1, &bytes_written, (LPOVERLAPPED)NULL);
 		CloseHandle(mailslot);
 	}
 };
 
 
-void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle)
+void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle, bool notify)
 {
 	FILE **logfile  = (FILE **)ptr_logfile;
 	HANDLE *phandle = (HANDLE *)ptr_phandle;
 	
 	global.ErrorLog_Started = true;
-	NotifyFwatchAboutErrorLog();
+	if (notify)
+		NotifyFwatchAboutErrorLog();
 
 	SYSTEMTIME st;
 	GetLocalTime(&st);
@@ -2684,4 +2731,35 @@ void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle)
 
 		fprintf(*logfile, "%s\n", buffer);
 	}
+}
+
+void shift_text_in_buffer(char *buffer, int buffer_size, int shift_origin, int shift_size)
+{
+	if (shift_size > 0) {
+		for (int i=buffer_size+shift_size; i>shift_origin; i--)
+			buffer[i] = buffer[i-shift_size];
+	} else
+		if (shift_size < 0)
+			for (int i=shift_origin; i<buffer_size; i++)
+				buffer[i] = buffer[i-shift_size];
+}
+
+void printbuf(FILE **fd, char *buffer, int size)
+{
+	for (int k=0; k<size; k++) {
+		if (buffer[k]=='\r') {
+			fprintf(*fd,"\\r");
+		} else 
+			if (buffer[k]=='\n') {
+				fprintf(*fd,"\\n");
+			} else 
+				if (buffer[k]=='\0') {
+					fprintf(*fd,"\0");
+				} else {
+					fprintf(*fd,"%c",buffer[k]);
+				}
+		
+	}
+
+	fprintf(*fd,"\n");
 }

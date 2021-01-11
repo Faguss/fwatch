@@ -89,14 +89,14 @@ case C_IGSE_WRITE:
 			arg_open_mode = val;
 			continue;
 		}
-	};
+	}
 
 	
 	// File not specified
 	if (strcmpi(arg_filename, "") == 0) {
 		FWerror(107,0,CommandID,"file name","",0,0,out);
 		break;
-	};
+	}
 	
 	// Cannot move up the first line
 	if (arg_edit_mode==IGSE_WRITE_MOVEUP  &&  arg_line_start==1) {
@@ -160,7 +160,7 @@ case C_IGSE_WRITE:
 			arg_txt  = EscSequences(arg_txt, 2, quantity);
 			quantity = -1;
 		}
-	};
+	}
 
 
 	// Move down is move up
@@ -187,21 +187,21 @@ case C_IGSE_WRITE:
 
 		if (strcmpi(arg_open_mode,"recreate") == 0)
 			strcpy(open_mode, "wb");
-	};
+	}
 
 	FILE *file = fopen(ptr_filename, open_mode);
 	if (!file) {
 		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
 		String_end(buf_filename);
 		break;
-	};
+	}
 
 	if (strcmpi(arg_open_mode,"unique") == 0) {
 		FWerror(207,0,CommandID,ptr_filename,"",0,0,out);
 		String_end(buf_filename);
 		fclose(file);
 		break;
-	};
+	}
 
 
 	// Find file size
@@ -227,7 +227,7 @@ case C_IGSE_WRITE:
 			String_end(buf_filename);
 			fclose(file);
 			break;
-		};
+		}
 
 
 	// Allocate buffer
@@ -245,6 +245,7 @@ case C_IGSE_WRITE:
 		String_end(buf_filename);
 		break;
 	}
+
 
 	// Copy text to buffer
 	fseek(file, 0, SEEK_SET);
@@ -269,15 +270,15 @@ case C_IGSE_WRITE:
 
 
 	// Set vars for parsing text
-	char *buffer               = file_contents.pointer;
-	char *new_line             = arg_txt;
-	int line_num               = 0;
-	int direction              = arg_line_start > 0 ? 1 : -1;
-	int line_start_pos         = direction>0 ? 0 : file_size;
-	int last_new_line          = file_size;
-	bool took_action           = false;
-	int line_shift_dest_pos    = 0;
-	int line_shift_source_pos  = 0;
+	char *buffer              = file_contents.pointer;
+	char *new_line            = arg_txt;
+	int line_num              = 0;
+	int direction             = arg_line_start > 0 ? 1 : -1;
+	int line_start_pos        = direction>0 ? 0 : file_size;
+	int last_new_line         = file_size;
+	bool took_action          = false;
+	int line_shift_dest_pos   = 0;
+	int line_shift_source_pos = 0;
 	char *line_shift_dest;
 	char *line_shift_source;
 
@@ -288,7 +289,7 @@ case C_IGSE_WRITE:
 			bool carriage_return  = false;
 			bool revert_separator = true;
 			buffer[*separator]    = '\0';
-				
+
 			if (*separator>0  && buffer[*separator-1]=='\r') {
 				carriage_return      = true;
 				buffer[*separator-1] = '\0';
@@ -309,8 +310,8 @@ case C_IGSE_WRITE:
 			if (abs(line_num) >= abs(arg_line_start)  &&  abs(line_num) <= abs(line_range_end)) {
 				took_action = true;
 				
-				int line_len     = carriage_return ? *separator-line_start_pos-1 : *separator-line_start_pos;
-				int column_num   = arg_column_num;
+				int line_len   = carriage_return ? *separator-line_start_pos-1 : *separator-line_start_pos;
+				int column_num = arg_column_num;
 				
 				// If negative then count from the end of the string			
 				if (column_num < 0)
@@ -327,61 +328,56 @@ case C_IGSE_WRITE:
 				line_start_pos += column_num;
 				line_start      = buffer + line_start_pos;
 
-				line_len         = carriage_return ? *separator-line_start_pos-1 : *separator-line_start_pos;				
-				int buffer_shift = 0;
+				line_len                = carriage_return ? *separator-line_start_pos-1 : *separator-line_start_pos;				
+				int buffer_shift_amount = 0;
 				
 				if (arg_edit_mode == IGSE_WRITE_REPLACE)
-					buffer_shift = new_line_len - line_len;
+					buffer_shift_amount = new_line_len - line_len;
 					
 				char *line_end   = line_start + line_len;
 				int line_end_pos = carriage_return ? *separator-1 : *separator;
 				
 				if (arg_edit_mode == IGSE_WRITE_APPEND  ||  arg_edit_mode == IGSE_WRITE_NEW  ||  arg_edit_mode == IGSE_WRITE_INSERT) {
-					buffer_shift = new_line_len;
-					line_end     = line_start;
-					line_end_pos = line_start_pos;
+					buffer_shift_amount = new_line_len;
+					line_end            = line_start;
+					line_end_pos        = line_start_pos;
 					
 					if (arg_edit_mode == IGSE_WRITE_NEW  ||  arg_edit_mode == IGSE_WRITE_INSERT) {
-						buffer_shift += 2;
+						buffer_shift_amount += 2;
 						
 						if (arg_edit_mode == IGSE_WRITE_NEW && arg_column)
-							buffer_shift += 2;
+							buffer_shift_amount += 2;
 					}
 				}
 				
 				if (arg_edit_mode == IGSE_WRITE_COPY) {
-					buffer_shift = line_len + 2;
-					line_end     = line_start;
-					line_end_pos = line_start_pos;
-					memcpy(line_end+buffer_shift, line_end, file_size-line_end_pos);
+					buffer_shift_amount = line_len + (carriage_return ? 2 : 1);
+					shift_text_in_buffer(buffer, file_size+1, line_end_pos, buffer_shift_amount);
 					memcpy(line_start+line_len, "\r\n", 2);
 				}
 				
 				if (arg_edit_mode == IGSE_WRITE_DELETE  ||  arg_edit_mode == IGSE_WRITE_CLEAR) {
-					buffer_shift = -line_len;
+					buffer_shift_amount = -line_len;
 					
 					if (arg_edit_mode == IGSE_WRITE_DELETE) {
 						revert_separator = false;
 						
 						if (prev == '\n') {
-							line_end     += (carriage_return ? 2 : 1);
-							line_end_pos += (carriage_return ? 2 : 1);
-							buffer_shift -= (carriage_return ? 2 : 1);
+							line_end            += (carriage_return ? 2 : 1);
+							line_end_pos        += (carriage_return ? 2 : 1);
+							buffer_shift_amount -= (carriage_return ? 2 : 1);
 						} else {
 							// If last line then we need to remove previous \n
-							if (line_start_pos>0  &&  buffer[line_start_pos-1]=='\n')
-								buffer_shift--;
-								
-							if (line_start_pos>1  &&  buffer[line_start_pos-2]=='\r')
-								buffer_shift--;
+							if (line_start_pos>0  &&  buffer[line_start_pos-1]=='\n') buffer_shift_amount--;
+							if (line_start_pos>1  &&  buffer[line_start_pos-2]=='\r') buffer_shift_amount--;
 						}
 					}
 					
-					memcpy(line_end+buffer_shift, line_end, file_size-line_end_pos);
+					shift_text_in_buffer(buffer, file_size+1, line_start_pos, buffer_shift_amount);
 				}
 				
 				if (arg_edit_mode == IGSE_WRITE_REPLACE  ||  arg_edit_mode == IGSE_WRITE_APPEND  ||  arg_edit_mode == IGSE_WRITE_NEW  ||  arg_edit_mode == IGSE_WRITE_INSERT) {
-					memcpy(line_end+buffer_shift, line_end, file_size-line_end_pos);
+					shift_text_in_buffer(buffer, file_size+1, line_start_pos, buffer_shift_amount);
 
 					if (arg_edit_mode == IGSE_WRITE_NEW) {
 						memcpy(line_start, "\r\n", 2);
@@ -403,45 +399,49 @@ case C_IGSE_WRITE:
 				}
 
 				if (abs(line_num) == abs(line_range_end)  &&  arg_edit_mode == IGSE_WRITE_MOVEUP) {
-					revert_separator  = false;
-					
-					// line_end is changed to include \r\n
-					char *line_end2   = buffer + *separator;
-					int line_end2_pos = *separator;
+					bool previous_line_carriage = buffer[line_start_pos-2] == '\r';
+
+					// Include \r\n in calculations
+					line_end     = buffer + *separator;
+					line_end_pos = *separator + (prev=='\0' ? 0 : 1);
+					line_len     = line_end_pos - line_start_pos;
 					
 					// turn \0 back to \r\n
-					buffer[line_end2_pos] = prev;
-					if (carriage_return) buffer[line_end2_pos-1] = '\r';
-					
-					// If current line ends without \r\n then copy \r\n from the previous line
+					revert_separator   = false;
+					buffer[*separator] = prev;
+					if (carriage_return) buffer[*separator-1] = '\r';
+
+					// Copy previous line to an extra buffer
+					String previous_line_backup;
+					String_init(previous_line_backup);
+					int previous_line_len = line_shift_source_pos - line_shift_dest_pos;
+					String_append_len(previous_line_backup, line_shift_dest, previous_line_len);
+
+					// Move current line to the previous line
+					for (int k=line_shift_source_pos; k<line_end_pos; k++)
+						buffer[k-previous_line_len] = buffer[k];
+
+					// If current line is without EOL
 					if (prev == '\0') {
-						int offset = 0;
-						if (line_start_pos > 0 && buffer[line_start_pos-1] == '\n') offset++;
-						if (line_start_pos > 1 && buffer[line_start_pos-2] == '\r') offset++;
-						
-						memcpy(line_shift_dest+2, line_shift_dest, (line_start_pos-offset)-line_shift_dest_pos);
-						
-						char to_copy[] = "\r\n";
-						memcpy(line_shift_dest, to_copy+2-offset, offset);
-						
-						line_end2_pos -= 1;
-						line_end2      = buffer + line_end2_pos;						
+						if (previous_line_carriage) {
+							buffer[line_shift_dest_pos+line_len]   = '\r';
+							buffer[line_shift_dest_pos+line_len+1] = '\n';
+							line_len          += 2;
+							previous_line_len -= 2;
+						} else {
+							buffer[line_shift_dest_pos+line_len] = '\n';
+							line_len          += 1;
+							previous_line_len -= 1;
+						}
 					}
-					
-					int shifts = line_end_pos - line_shift_source_pos;
-					if (buffer[line_end2_pos] == '\n') shifts++;
-					if (i>0 && buffer[line_end2_pos-1] == '\r') shifts++;
-										
-					// Copy characters from the end of the current line to the beginning of the previous line
-					for (int j=0; j<shifts; j++) {
-						char temp = buffer[line_end2_pos];
-						memcpy(line_shift_dest+1, line_shift_dest, line_end2_pos-line_shift_dest_pos);
-						buffer[line_shift_dest_pos] = temp;
-					}
+
+					// Paste line from an extra buffer
+					memcpy(buffer+line_shift_dest_pos+line_len, previous_line_backup.pointer, previous_line_len);
+					String_end(previous_line_backup);
 				}
 
-				*separator       += buffer_shift;
-				file_size        += buffer_shift;
+				*separator       += buffer_shift_amount;
+				file_size        += buffer_shift_amount;
 				buffer[file_size] = '\0';
 			}
 
@@ -488,7 +488,7 @@ case C_IGSE_WRITE:
 
 	String_end(file_contents);
 	String_end(buf_filename);
-};
+}
 break;
 
 
@@ -1814,8 +1814,7 @@ break;
 
 case C_IGSE_DB:
 { // IGSE Database
-//FILE *fd=fopen("fwatch_debug.txt","a");
-//fprintf(fd,"com:%s\n",com);
+
 	// Define variables
 	char *arg_filename     = "";
 	bool arg_writing_mode  = false;
@@ -1830,7 +1829,7 @@ case C_IGSE_DB:
 		if (col == NULL) 
 			continue;
 
-		int pos	  = col-arg;
+		int pos	  = col - arg;
 		arg[pos]  = '\0';
 		char *val = Trim(arg + pos + 1);
 
@@ -1891,7 +1890,7 @@ case C_IGSE_DB:
 		FWerror(107,0,CommandID,"file","",0,0,out);
 		QWrite(",[],[]]", out);
 		break;
-	};
+	}
 
 
 	// Verify and update path to the file
@@ -2005,6 +2004,7 @@ case C_IGSE_DB:
 
 		// Add new key and value / Replace value / Append value / Rename key
 		if (argumentID==IGSEDB_WRITE  ||  argumentID==IGSEDB_APPEND  ||  argumentID==IGSEDB_RENAME) {
+
 			if (found_key) {
 				int key_length       = strlen(key_name) + 1;
 				int old_value_length = offsets[key_index+1] - offsets[key_index] - key_length - 1;
@@ -2015,7 +2015,7 @@ case C_IGSE_DB:
 				
 				if (argumentID == IGSEDB_APPEND)
 					difference = new_value_length;
-				
+
 				if (argumentID == IGSEDB_RENAME) {
 					val_start  = offsets[key_index];
 					val_end    = val_start + key_length;
@@ -2023,8 +2023,12 @@ case C_IGSE_DB:
 				}
 
 				// Shift current values to make room for the new data
-				if (difference != 0) {
-					memcpy(text_buffer+val_end+difference,  text_buffer+val_end,  final_text_buffer_size-val_end);
+				if (difference != 0) {					
+					// I can't use memcpy here because it copies characters starting from the beginning and it will overwrite itself
+					// Instead I need to copy manually from the end
+					for (int i=final_text_buffer_size+difference; i>=val_end+difference; i--)
+						text_buffer[i] = text_buffer[i-difference];
+					
 					final_text_buffer_size += difference;
 					offsets[final_keys]     = final_text_buffer_size;
 				}
@@ -2033,7 +2037,6 @@ case C_IGSE_DB:
 					val_start += old_value_length;
 
 				// Write new value
-				//fprintf(fd,"difference:%d\ntext_buffer+val_start:%d %s\nval:%s\nnew_value_length:%d\n",difference, val_start, text_buffer+val_start,val, new_value_length);
 				memcpy(text_buffer+val_start, val, new_value_length);
 
 				// Recalculate value offsets
@@ -2169,7 +2172,5 @@ case C_IGSE_DB:
 		
 	if (file)
 		fclose(file);
-
-	//fclose(fd);
 }
 break;

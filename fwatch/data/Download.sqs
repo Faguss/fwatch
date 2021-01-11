@@ -30,10 +30,8 @@ _variable = _this select 2
 	; Check result file
 	_exit_code = _ok select 5;
 	
-	_errorDescription = ["No problems occurred","Generic error code","Parse error","File I/O error","Network failure","SSL verification failure","Username/password authentication failure","Protocol errors","Server issued an error response","Failed to get exit code for download"]
+	_errorDescription = ["","Generic error code","Parse error","File I/O error","Network failure","SSL verification failure","Username/password authentication failure","Protocol errors","Server issued an error response"]
 	_ok = [_exit_code==0, (if (_exit_code!=0) then {8} else {0}), _exit_code, _errorDescription select _exit_code]
 
 	#Exit
 	call Format ["%1=_ok", _variable]
-
-

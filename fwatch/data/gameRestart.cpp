@@ -19,10 +19,15 @@ struct GLOBAL_VARIABLES
 	string downloaded_filename;
 	string working_directory;
 	ofstream logfile;
-	HWND game_window_handle;
 } global = {
 	"",
 	""
+};
+
+struct game_info
+{
+	HWND handle;
+	DWORD pid;
 };
 
 enum GAME_EXE_LIST
@@ -42,6 +47,41 @@ enum MOD_LIST
 
 
 // **************** FUNCTIONS **************************************************
+
+// Compare characters of two strings case insensitive
+// http://my.fit.edu/~vkepuska/ece5527/sctk-2.3-rc1/src/rfilter1/include/strncmpi.c
+int strncmpi(const char *ps1, const char *ps2, int n)
+{
+	char *px1     = (char *)ps1;
+	char *px2     = (char *)ps2;
+	int indicator = 9999;
+	int i         = 0;
+
+	while (indicator == 9999) {
+		if (++i > n) 
+			indicator = 0;
+		else {
+			if (*px1 == '\0') {
+				if (*px2 == '\0') 
+					indicator = 0; 
+				else	
+					indicator = -1;
+			} else {
+				if (toupper((int)*px1)  <  toupper((int)*px2)) 
+					indicator = -1; 
+				else {
+					if (toupper((int)*px1)  >  toupper((int)*px2)) 
+						indicator = 1; 
+					else 
+						px1 += 1, 
+						px2 += 1;
+				}
+			}
+		}
+	}
+
+	return indicator;
+}
 
 
 // Translate error code to message
@@ -105,49 +145,38 @@ int get_process_id(string exename)
 };
 
 
-// Find OFP window only by name
-int findOFPwindow(string window_wanted)
+// Find OFP window by name and/or process id
+game_info find_game_instance(DWORD input_pid, string input_name)
 {
-	DWORD pid          = 0;
-	global.game_window_handle = FindWindow(NULL, window_wanted.c_str());
+    game_info info = {NULL, 0};
+	HWND handle    = GetTopWindow(NULL);
 	
-	if (global.game_window_handle != 0) 
-		GetWindowThreadProcessId(global.game_window_handle, &pid);
-		
-	return pid;
-};
-
-
-// Find OFP window by name and process id
-int findOFPwindow(string window_wanted, DWORD pid_wanted)
-{
-    global.game_window_handle = GetTopWindow(NULL);
+	if (handle) {
+		char current_window[1024] = "";
+		DWORD current_pid 	      = 0;
 	
-	if (!global.game_window_handle) {
+		while (handle) {
+			GetWindowText(handle, current_window, 1023);
+			GetWindowThreadProcessId(handle, &current_pid);
+	
+			bool match_name = strncmpi(current_window, input_name.c_str(), input_name.length()) == 0;
+			bool match_pid  = input_pid == current_pid;
+	
+			if (
+				(input_pid!=0 && !input_name.empty() && match_name && match_pid) || 
+				(input_pid!=0 && input_name.empty() && match_pid) ||
+				(input_pid==0 && !input_name.empty() && match_name)
+			) {
+				info = (game_info){handle, current_pid};
+				break;
+			}
+			
+			handle = GetNextWindow(handle, GW_HWNDNEXT);
+		}
+	} else
 		global.logfile << "Couldn't get top window" << FormatError(GetLastError());
-		return -1;
-	}
-
-	char current_window[1024] = "";
-	string current_window2    = "";
-	DWORD pid_current 	      = 0;
-
-	while (global.game_window_handle) {
-		GetWindowText(global.game_window_handle, current_window, 1023);
-		GetWindowThreadProcessId(global.game_window_handle, &pid_current);	
-		WINDOWINFO wi;
-
-		current_window2 = (string)current_window;
-
-		if (pid_current==pid_wanted  &&  Equals(current_window2,window_wanted))
-			break;
-		else
-			pid_current = 0;
-		
-		global.game_window_handle = GetNextWindow(global.game_window_handle, GW_HWNDNEXT);
-	};
 	
-	return pid_current;
+	return info;
 };
 
 
@@ -1166,7 +1195,7 @@ int main(int argc, char *argv[])
 			}
 			
 			if (Equals(name,"-run")) {
-				game_exe = value; 
+				game_exe = value;
 				continue;
 			}
 			
@@ -1375,65 +1404,100 @@ int main(int argc, char *argv[])
 
 
 	// Detect which game and executable -----------------------
-	vector<string> game[2];
-	game[EXE].push_back("ArmAResistance.exe");
-	game[EXE].push_back("ColdWarAssault.exe");
-	game[EXE].push_back("flashpointresistance.exe");
-	game[EXE].push_back("ofp.exe");
-	game[EXE].push_back("flashpointbeta.exe");
-	game[EXE].push_back("operationflashpoint.exe");
-	game[EXE].push_back("operationflashpointbeta.exe");
+	enum GAME_VERSION {
+		VER_UNKNOWN,
+		VER_196,
+		VER_199,
+		VER_201
+	};
 
-	game[TITLE].push_back("Arma Resistance");
-	game[TITLE].push_back("Cold War Assault");
-	game[TITLE].push_back("Operation Flashpoint");
-	game[TITLE].push_back("Operation Flashpoint");
-	game[TITLE].push_back("Operation Flashpoint");
-	game[TITLE].push_back("Operation Flashpoint");
-	game[TITLE].push_back("Operation Flashpoint");
+	string exe_name_list[] = {
+		"armaresistance.exe",
+		"coldwarassault.exe",
+		"flashpointresistance.exe",
+		"ofp.exe",
+		"flashpointbeta.exe",
+		"operationflashpoint.exe",
+		"operationflashpointbeta.exe",
+		"armaresistance_server.exe",
+		"coldwarassault_server.exe",
+		"ofpr_server.exe"
+	};
+	
+	string window_name_list[] = {
+		"ArmA Resistance",
+		"Cold War Assault",
+		"Operation Flashpoint",
+		"Operation Flashpoint",
+		"Operation Flashpoint",
+		"Operation Flashpoint",
+		"Operation Flashpoint",
+		"ArmA Resistance Console",
+		"Cold War Assault Console",
+		"Operation Flashpoint Console"
+	};
+	
+	int exe_version_list[] = {
+		VER_201,
+		VER_199,
+		VER_196,
+		VER_196,
+		VER_196,
+		VER_196,
+		VER_196,
+		VER_201,
+		VER_199,
+		VER_196
+	};
+	
+	int exe_num    = sizeof(exe_version_list) / sizeof(exe_version_list[0]);
+	int window_num = sizeof(window_name_list) / sizeof(window_name_list[0]);
 
-	string game_window = "";
-	bool got_handle    = false;
-
-	for (int i=0; i<game[EXE].size(); i++)
-		if (!game_exe.empty()) {
-			if (Equals(game[EXE][i],game_exe)) {
-				game_window = game[TITLE][i];
+	string game_window    = "";
+	bool got_handle       = false;
+	bool dedicated_server = false;
+	game_info game;
+	
+	for (int i=0; i<exe_num; i++)
+		if (!game_exe.empty()) {		// if executable name is known then match corresponding window name
+			if (Equals(exe_name_list[i],game_exe)) {
+				game_window = window_name_list[i];
+				dedicated_server = i>=7;
 				break;
 			}
-		} else {
-			if (game_pid = findOFPwindow(game[TITLE][i])) {
-				game_exe    = game[EXE][i];
-				game_window = game[TITLE][i];
+		} else if (i<exe_num-3) {	// if executable name is not known then search for process with corresponding window name
+			game = find_game_instance(game_pid, window_name_list[i]);
+			
+			if (game.pid != 0) {
+				game_exe    = exe_name_list[i];
+				game_window = window_name_list[i];
 				got_handle  = true;
 				break;
 			}
-		}		
+		}
 
 
-	// if window wasn't found then pick existing exe
+	// If exe is not known or if there's no game running then check existing executables in the game directory
 	if (game_window.empty())
-		for (int i=0; i<game[EXE].size(); i++)
-			if (GetFileAttributes(game[EXE][i].c_str()) != INVALID_FILE_ATTRIBUTES) {
-				game_exe    = game[EXE][i];
-				game_window = game[TITLE][i];
+		for (int i=0; i<exe_num-3; i++)
+			if (GetFileAttributes(exe_name_list[i].c_str()) != INVALID_FILE_ATTRIBUTES) {
+				game_exe    = exe_name_list[i];
+				game_window = window_name_list[i];
 				break;
 			}
 
-	// if no exe then exit
+	// If nothing was found
 	if (game_window.empty()) {
 		global.logfile << "Can't find game executable\n";
 		global.logfile.close();
 		return 2;
 	}
+	
+	
 
-	// get window handle
-	if (!got_handle) {
-		if (game_pid != 0)
-			findOFPwindow(game_window, game_pid);
-		else
-			game_pid = findOFPwindow(game_window);
-	}
+	// Get game window handle
+	if (!got_handle)
+		game = find_game_instance(game_pid, game_window);
 	
 	
 
@@ -1513,13 +1577,18 @@ int main(int argc, char *argv[])
 	/*if (!nolaunch)
 		filtered_game_arguments += fwatch_arguments;*/
 
-	if (global.game_window_handle) {
-		HANDLE game_handle = OpenProcess(PROCESS_ALL_ACCESS, 0, game_pid);
+	if (game.handle) {
+		HANDLE game_handle = OpenProcess(PROCESS_ALL_ACCESS, 0, game.pid);
 		
 		// Read game parameters
-		if (game_handle != 0) {
+		if (game.handle != 0) {
 			vector<string> all_game_arguments;
-			int result = GetProcessParams(game_pid, &game_handle, "ifc22.dll", 0x2C154, all_game_arguments);
+			char module_name[32] = "ifc22.dll";
+			
+			if (dedicated_server)
+				strcpy(module_name, "ijl15.dll");
+			
+			int result = GetProcessParams(game.pid, &game_handle, module_name, dedicated_server ? 0x4FF20 : 0x2C154, all_game_arguments);
 			if (result == 0) {				
 				string log_arguments = "";
 				
@@ -1538,13 +1607,11 @@ int main(int argc, char *argv[])
 				global.logfile << "Game arguments: " << log_arguments << endl;	
 			} else {
 				if (result == -1)
-					global.logfile << "Couldn't find ifc22.dll" << endl;
+					global.logfile << "Couldn't find " << module_name << endl;
 				else {
 					string errorMSG = FormatError(GetLastError());
 					global.logfile << "Can't get module list" << errorMSG;
 				}
-					
-				global.logfile.close();
 			}
 			
 			CloseHandle(game_handle);
@@ -1556,17 +1623,16 @@ int main(int argc, char *argv[])
 				
 
 		// Shutdown the game
-		bool close 	   = PostMessage(global.game_window_handle, WM_CLOSE, 0, 0);
-		int isRunning  = 1;
+		bool close 	   = PostMessage(game.handle, WM_CLOSE, 0, 0);
 		int tries 	   = 0;			
 			
 		do {
-			isRunning = findOFPwindow(game_window, game_pid);
+			game = find_game_instance(game.pid, game_window);
 			Sleep(500);
-		} while (close && isRunning && ++tries<7);
+		} while (close && game.pid!=0 && ++tries<7);
 			
-		if (isRunning) {
-			game_handle = OpenProcess(PROCESS_ALL_ACCESS, 0, game_pid);
+		if (game.pid!=0) {
+			game_handle = OpenProcess(PROCESS_ALL_ACCESS, 0, game.pid);
 			
 			if (TerminateProcess(game_handle, 0)) 
 				global.logfile << "Game terminated\n"; 
