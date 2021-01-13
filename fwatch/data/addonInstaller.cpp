@@ -11,6 +11,7 @@
 #include <Shlobj.h>		// opening explorer
 #include <map>			// associative array for arguments
 #include <time.h>		// get current time as unix timestamp
+#include <iomanip>		// for url encode
 
 using namespace std;
 
@@ -586,6 +587,60 @@ string wide2string(const wstring& input)
 {
    return wide2string(input.c_str(), (int)input.size());
 }
+
+string GetTextBetween(string &buffer, string start, string end, size_t &offset, bool reverse=false)
+{
+	string out  = "";
+	size_t pos0 = buffer.find(start, offset);
+	
+	if (!reverse) {
+		if (pos0 != string::npos) {
+			size_t pos1 = pos0 + start.length();
+			size_t pos2 = buffer.find(end, pos1);
+			
+			if (pos2 != string::npos) {
+				offset = pos1;
+				out    = buffer.substr(pos1, pos2-pos1);
+			}
+		}		
+	} else {
+		if (pos0 != string::npos) {
+			size_t pos1 = buffer.rfind(end, pos0);			
+			
+			if (pos1 != string::npos) {
+				offset      = pos0 + start.length();
+				size_t pos2 = pos1 + end.length();
+				out         = buffer.substr(pos2, pos0-pos2);
+			}
+		}			
+	}
+
+	return out;
+}
+
+// https://stackoverflow.com/questions/154536/encode-decode-urls-in-c
+string url_encode(const string &value) {
+    ostringstream escaped;
+    escaped.fill('0');
+    escaped << hex;
+
+    for (string::const_iterator i = value.begin(), n = value.end(); i != n; ++i) {
+        string::value_type c = (*i);
+
+        // Keep alphanumeric and other accepted characters intact
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            escaped << c;
+            continue;
+        }
+
+        // Any other characters are percent-encoded
+        escaped << uppercase;
+        escaped << '%' << setw(2) << int((unsigned char) c);
+        escaped << nouppercase;
+    }
+
+    return escaped.str();
+}
 // -------------------------------------------------------------------------------------------------------
 
 
@@ -660,7 +715,7 @@ int ErrorMessage(int string_code, string message="%STR%", int error_code=COMMAND
 	if (global.current_mod=="parsetest" && global.current_mod_version=="-1")
 		return NO_ERRORS;
 	
-	int status              = global.mirror==ENABLED ? INSTALL_PROGRESS : INSTALL_ERROR;
+	int status              = global.mirror ? INSTALL_PROGRESS : INSTALL_ERROR;
 	string message_eng      = ReplaceAll(message, "%STR%", global.lang_eng[string_code]);
 	string message_local    = ReplaceAll(message, "%STR%", global.lang[string_code]);
 	string message_complete = "";
@@ -681,7 +736,7 @@ int ErrorMessage(int string_code, string message="%STR%", int error_code=COMMAND
 			global.logfile << "ERROR " << global.current_mod;
 			
 			if (global.current_mod_version != "")
-				global.logfile << " " << global.current_mod_version;
+				global.logfile << " v" << global.current_mod_version;
 			
 			if (global.command_line_num > 0)	
 				global.logfile << " line " << Int2Str(global.command_line_num) << ": " << global.command_line;
@@ -1203,7 +1258,7 @@ int Download(string url, int options=0, string log_file_name="")
 	}
 
 	string arguments = options & OVERWRITE ? "" : " --no-clobber";
-	arguments += " --tries=3 --no-check-certificate --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ " + url;
+	arguments += " --tries=1 --user-agent=\"Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)\" --no-check-certificate --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ " + url;
 	unlink("fwatch\\tmp\\schedule\\downloadLog.txt");
 
 
@@ -1287,7 +1342,7 @@ int Download(string url, int options=0, string log_file_name="")
 
 
 int Download_Wrapper(const vector<string> &arg)
-{
+{	
 	if (arg.size() == 0)
 		return ErrorMessage(STR_ERROR_ARG_COUNT);
 		
@@ -1304,59 +1359,125 @@ int Download_Wrapper(const vector<string> &arg)
 	string token_file   = "fwatch\\tmp\\__downloadtoken";
 	string arguments    = "";
 	string new_url      = original_url;
+	string POST         = "";
 	int result          = 0;
 	bool found_phrase   = false;
 
 	DeleteFile(cookie_file.c_str());
 	DeleteFile(token_file.c_str());
 
-	for (int i=1; i<arg.size()-1; i++) {
-		arguments  = i==1 ? "--keep-session-cookies --save-cookies " : "--load-cookies ";
-		arguments += cookie_file + " --output-document=" + token_file + " " + new_url;
+	for (int i=1; i<arg.size()-1; i++) {		
+		arguments = "";
 		
-		result = Download(arguments, OVERWRITE, new_url);
+		if (!POST.empty()) {
+			arguments += "--post-data=" + POST + " ";
+			POST = "";
+		}
+	
+		arguments += (i==1 ? "--keep-session-cookies --save-cookies " : "--load-cookies ") + cookie_file + " --output-document=" + token_file + " " + new_url;	
+		result     = Download(arguments, OVERWRITE, new_url);
 
 		if (result != 0)
 			return result;
 
 		// Parse downloaded file and find link
+		string token_file_buffer = "";
 		fstream token_file_handle;
 		token_file_handle.open(token_file.c_str(), ios::in);
 		
 		if (token_file_handle.is_open()) {
 		    string line = "";
-	
-			while(getline(token_file_handle, line)) {
-				size_t find = line.find(arg[i]);
-	
-				if (find != string::npos) {
-					size_t left_quote  = line.rfind("\"", find);
-					size_t right_quote = line.find("\"", find + arg[i].length());
-					
-					if (left_quote!=string::npos && right_quote!=string::npos) {
-						left_quote++;
-						found_phrase = true;
-						new_url      = line.substr(left_quote, right_quote - left_quote);
-						new_url      = ReplaceAll(new_url, "&amp;", "&");
+
+			while(getline(token_file_handle, line))
+				token_file_buffer += line;
+				
+			size_t find = token_file_buffer.find(arg[i]);
+
+			if (find != string::npos) {
+				size_t left_quote  = string::npos;
+				size_t right_quote = string::npos;
+				
+				for(int j=find; j>=0 && left_quote==string::npos; j--)
+					if (token_file_buffer[j]=='\"' || token_file_buffer[j]=='\'')
+						left_quote=j;
 						
-						// if relative address
-						if (new_url[0] == '/') {
-							int offset = 0;
-							size_t doubleslash = original_url.find("//");
+				for(int k=find; k<token_file_buffer.length() && right_quote==string::npos; k++)
+					if (token_file_buffer[k]=='\"' || token_file_buffer[k]=='\'')
+						right_quote=k;
+				
+				if (left_quote!=string::npos && right_quote!=string::npos) {
+					left_quote++;
+					found_phrase     = true;
+					string found_url = ReplaceAll(token_file_buffer.substr(left_quote, right_quote - left_quote), "&amp;", "&");
+					
+					// if relative address
+					if (found_url[0] == '/') {
+						int offset = 0;
+						size_t doubleslash = original_url.find("//");
+						
+						if (doubleslash != string::npos)
+							offset = doubleslash + 2;
+						
+						size_t slash = original_url.find_first_of("/", offset);
+						
+						if (slash != string::npos)
+							original_url = original_url.substr(0, slash);
+						
+						found_url = original_url + found_url;
+					} else
+						if (!IsURL(found_url)) {
+							size_t lastslash = new_url.find_last_of("/");
 							
-							if (doubleslash != string::npos)
-								offset = doubleslash + 2;
+							if (lastslash != string::npos)
+								new_url = new_url.substr(0, lastslash+1);
 							
-							size_t slash = original_url.find_first_of("/", offset);
-							
-							if (slash != string::npos)
-								original_url = original_url.substr(0, slash);
-							
-							new_url = original_url + new_url;
+							found_url = new_url + found_url;
 						}
 						
-						break;
+					// Check if it's a form
+					if (left_quote>8 && token_file_buffer.substr(left_quote-8, 7)=="action=") {
+						size_t offset = 0;
+						string form  = GetTextBetween(token_file_buffer, "</form>", "<form", left_quote, true);
+						string input = GetTextBetween(form, "<input", ">", offset);
+						
+						while (!input.empty()) {							
+							vector<string> attributes;
+							Tokenize(input," ", attributes);
+							string name  = "";
+							string value = "";
+							
+							for (int j=0; j<attributes.size(); j++) {								
+								if (attributes[j].substr(0,5) == "name=")
+									name = ReplaceAll(attributes[j].substr(5), "\"", "");
+									
+								if (attributes[j].substr(0,6) == "value=")
+									value = ReplaceAll(attributes[j].substr(6), "\"", "");
+							}
+							
+							if (!name.empty()) {
+								size_t replacement = token_file_buffer.find("input[name="+name);
+								
+								if (replacement != string::npos) {
+									size_t new_value = token_file_buffer.find("'", replacement+13+name.length());
+									
+									if (new_value != string::npos) {
+										new_value++;
+										size_t end_value = token_file_buffer.find("'", new_value);
+										
+										if (end_value != string::npos)
+											value = token_file_buffer.substr(new_value, end_value-new_value);
+									}
+									
+								}
+								
+								POST += (POST.empty() ? "" : "&") + url_encode(name) + "=" + url_encode(value);
+							}
+							
+							input = GetTextBetween(form, "<input", ">", offset);
+						}
 					}
+					
+					new_url = found_url;
 				}
 			}
 
@@ -1370,6 +1491,10 @@ int Download_Wrapper(const vector<string> &arg)
 	}
 
 	arguments  = "--load-cookies " + cookie_file;
+	
+	if (!POST.empty())
+		arguments += " --post-data=\"" + POST + "\" ";
+	
 	arguments +=  " \"--output-document=" + arg[arg.size()-1] + "\" " + new_url;
 	result     = Download(arguments, 0, new_url);
 
@@ -1652,7 +1777,7 @@ int MoveFiles(string source, string destination, string new_name, int options)
 		for (int i=empty_dirs.size()-1; i>=0; i--)
 			RemoveDirectory(empty_dirs[i].c_str());
 
-	return NO_ERRORS;
+	return (return_value!=0 ? COMMAND_FAILED : NO_ERRORS);
 }
 
 
@@ -2327,6 +2452,23 @@ int ChangeFileDate(string file_name)
 	else
 		return GetLastError();
 }
+
+	//https://insanecoding.blogspot.com/2011/11/how-to-read-in-file-in-c.html
+string GetFileContents(string &filename)
+{
+	ifstream file(filename.c_str(), ios::in | ios::binary);
+	string contents;
+  
+	if (file) {
+		file.seekg(0, ios::end);
+		contents.resize(file.tellg());
+		file.seekg(0, ios::beg);
+		file.read(&contents[0], contents.size());
+		file.close();
+	}
+	
+	return contents;
+}
 // -------------------------------------------------------------------------------------------------------
 
 
@@ -2340,23 +2482,16 @@ int ChangeFileDate(string file_name)
 
 // Scripting commands ------------------------------------------------------------------------------------
 
-int SCRIPT_Download(const vector<string> &arg) 
+int SCRIPT_Download(const vector<string> &arg) 	// Legacy
 {
-	vector<string> Download_Arguments;
-
-	for (int i=1;  i<arg.size();  i++)
-		Download_Arguments.push_back(arg[i]);
-
-	return Download_Wrapper(Download_Arguments);
+	return NO_ERRORS;
 }
 
 
 int SCRIPT_Unpack(const vector<string> &arg) 
 {
-	string file_name    = "";
-	string password     = "";
-	bool save_downl_arg = false;
-	vector<string> Download_Arguments;
+	string file_name = "";
+	string password  = "";
 
 	for (int i=1, j=0;  i<arg.size();  i++) {
 		if (Equals(arg[i].substr(0,10), "/password:")) {
@@ -2364,28 +2499,12 @@ int SCRIPT_Unpack(const vector<string> &arg)
 			continue;
 		}
 
-		if (IsURL(arg[i]))
-			save_downl_arg = true;
-			
-		if (save_downl_arg) {
-			Download_Arguments.push_back(arg[i]);
-			continue;
-		}
-
 		if (file_name.empty())
 			file_name = arg[i];
 	}
-
-	if (file_name.empty()) {
-		if (Download_Arguments.size() > 0) {
-			int result = Download_Wrapper(Download_Arguments);
-			
-			if (result > 0)
-				return result;
-		}
 		
+	if (Equals(file_name,"<download>")  ||  Equals(file_name,"<dl>")  ||  file_name.empty())
 		file_name = global.downloaded_filename;
-	}
 
 	if (file_name.empty())
 		return ErrorMessage(STR_ERROR_NO_FILE);
@@ -2397,13 +2516,11 @@ int SCRIPT_Unpack(const vector<string> &arg)
 int SCRIPT_Move(const vector<string> &arg) 
 {
 	vector<string> path;
-	vector<string> Download_Arguments;
 	path.push_back("");
 	path.push_back("");
 	path.push_back("");
 
 	bool is_download_dir = true;
-	bool save_downl_arg  = false;
 	int options          = OVERWRITE | (Equals(arg[0],"move") ? MOVE_FILES : 0);
 	
 	for (int i=1, j=0;  i<arg.size();  i++) {
@@ -2414,21 +2531,6 @@ int SCRIPT_Move(const vector<string> &arg)
 		
 		if (Equals(arg[i], "/match_dir")) {
 			options |= MATCH_DIRS;
-			continue;
-		}
-		
-		if (j==0  &&  IsURL(arg[i])) {
-			save_downl_arg = true;
-			path[j++] = "<download>";
-		}
-			
-		if (save_downl_arg) {
-			if (arg[i] == "|") {
-				save_downl_arg = false;
-				continue;
-			}
-	
-			Download_Arguments.push_back(arg[i]);
 			continue;
 		}
 
@@ -2445,20 +2547,13 @@ int SCRIPT_Move(const vector<string> &arg)
 	// Format source path
 	if (path[SOURCE].empty())
 		return ErrorMessage(STR_ERROR_NO_FILE);
-
-	if (Download_Arguments.size() > 0) {
-		int result = Download_Wrapper(Download_Arguments);
-
-		if (result > 0)
-			return result;
-			
+	
+	if (Equals(path[SOURCE],"<download>")  ||  Equals(path[SOURCE],"<dl>")) {
+		path[SOURCE] = "fwatch\\tmp\\" + global.downloaded_filename;
+		
 		if (options & MOVE_FILES)
 			global.downloads.pop_back();
-	}
-	
-	if (Equals(path[SOURCE],"<download>")  ||  Equals(path[SOURCE],"<dl>"))
-		path[SOURCE] = "fwatch\\tmp\\" + global.downloaded_filename;
-	else 
+	} else 
 		if (Equals(path[SOURCE].substr(0,5),"<mod>")) {
 			path[SOURCE]    = global.current_mod_new_name + path[SOURCE].substr(5);
 			is_download_dir = false;
@@ -2522,33 +2617,14 @@ int SCRIPT_MakeDir(const vector<string> &arg)
 
 int SCRIPT_RequestExecution(const vector<string> &arg) 
 {
-	string file_name    = "";
-	bool save_downl_arg = false;
-	vector<string> Download_Arguments;
+	string file_name = "";
 
-	for (int i=1, j=0;  i<arg.size();  i++) {
-		if (IsURL(arg[i]))
-			save_downl_arg = true;
-
-		if (save_downl_arg) {
-			Download_Arguments.push_back(arg[i]);
-			continue;
-		}
-
+	for (int i=1, j=0;  i<arg.size();  i++)
 		if (file_name.empty())
 			file_name = arg[i];
-	}
 
-	if (file_name.empty()  &&  Download_Arguments.size()==0)
+	if (Equals(file_name,"<download>")  ||  Equals(file_name,"<dl>")  ||  file_name.empty())
 		file_name = global.downloaded_filename;
-	else {
-		int result = Download_Wrapper(Download_Arguments);
-		
-		if (result > 0)
-			return result;
-			
-		file_name = global.downloaded_filename;
-	}
 
 	if (file_name.empty())
 		return ErrorMessage(STR_ERROR_NO_FILE);
@@ -2570,7 +2646,7 @@ int SCRIPT_RequestExecution(const vector<string> &arg)
 
 int SCRIPT_StartMod(const vector<string> &arg) 
 {
-	if (arg.size() < 4)
+	if (arg.size() < 5)
 		return ErrorMessage(STR_ERROR_INVALID_SCRIPT, "%STR%", SCRIPT_ERROR);
 	
 	if (!global.current_mod.empty())
@@ -2686,7 +2762,7 @@ int SCRIPT_Delete(const vector<string> &arg)
 	// Format source path
 	bool trash = false;
 
-	if (path[SOURCE].empty()) {
+	if (Equals(path[SOURCE],"<download>")  ||  Equals(path[SOURCE],"<dl>")  ||  path[SOURCE].empty()) {
 		if (global.downloaded_filename.empty())
 			return ErrorMessage(STR_ERROR_NO_FILE);
 	
@@ -2797,9 +2873,12 @@ int SCRIPT_Rename(const vector<string> &arg)
 	if (path[SOURCE].empty())
 		return ErrorMessage(STR_RENAME_NO_NAME_ERROR, "%STR%");
 	
-	if (Equals(path[SOURCE],"<download>")  ||  Equals(path[SOURCE],"<dl>"))	
-		path[SOURCE]  = "fwatch\\tmp\\_extracted\\" + global.downloaded_filename;
-	else
+	if (Equals(path[SOURCE],"<download>")  ||  Equals(path[SOURCE],"<dl>"))	{
+		if (global.downloaded_filename.empty())
+			return ErrorMessage(STR_ERROR_NO_FILE);
+		
+		path[SOURCE] = "fwatch\\tmp\\_extracted\\" + global.downloaded_filename;
+	} else
 		path[SOURCE] = global.current_mod_new_name + "\\" + path[SOURCE];
 
 	string relative_path = PathNoLastItem(path[SOURCE]);
@@ -3288,14 +3367,17 @@ int SCRIPT_EditLine(const vector<string> &arg)
 
 	string file_name = arg2[0];	
 	int wanted_line  = atoi(arg2[1].c_str());
-	
-	if (Equals(file_name,"<download>")  ||  Equals(file_name,"<dl>"))
-		file_name = "fwatch\\tmp\\" + global.downloaded_filename;
-	else 
-		file_name = global.current_mod_new_name + "\\" + file_name;
 
 	if (file_name.empty())
 		return ErrorMessage(STR_ERROR_NO_FILE);
+	
+	if (Equals(file_name,"<download>")  ||  Equals(file_name,"<dl>")) {
+		if (global.downloaded_filename.empty())
+			return ErrorMessage(STR_ERROR_NO_FILE);
+
+		file_name = "fwatch\\tmp\\" + global.downloaded_filename;
+	} else 
+		file_name = global.current_mod_new_name + "\\" + file_name;
 
 	if (!VerifyPath(file_name))
 		return ErrorMessage(STR_ERROR_PATH);
@@ -3408,21 +3490,13 @@ int SCRIPT_StartVersion(const vector<string> &arg)
 int SCRIPT_AutoInstall(const vector<string> &arg)
 {
 	string password = "";
-	vector<string> Download_Arguments;
 
 	for (int i=0, j=0;  i<arg.size();  i++) {
 		if (Equals(arg[i].substr(0,10), "/password:")) {
 			password = arg[i].substr(10);
 			continue;
 		}
-
-		Download_Arguments.push_back(arg[i]);
 	}
-
-	int result = Download_Wrapper(Download_Arguments);
-	
-	if (result != NO_ERRORS)
-		return result;
 
 	global.logfile << "Auto installation" << endl;
 	return Auto_Install(global.downloaded_filename, password);
@@ -3434,7 +3508,7 @@ int SCRIPT_Alias(const vector<string> &arg)
 	if (arg.size() == 0)
 		global.current_mod_alias.clear();
 	else 
-		for(int i=0; i<arg.size(); i++)
+		for(int i=1; i<arg.size(); i++)
 			global.current_mod_alias.push_back(arg[i]);
 
 	return NO_ERRORS;
@@ -3785,41 +3859,78 @@ int main(int argc, char *argv[])
 
 
 	// Define allowed commands
-	struct {
-		string name;
-		int (*execute)(const vector<string> &arg);
-	} 
-	Commands[] = {
-		"auto_install",		SCRIPT_AutoInstall,
-		"download",			SCRIPT_Download,
-		"get", 				SCRIPT_Download,
-		"unpack", 			SCRIPT_Unpack,
-		"extract", 			SCRIPT_Unpack,
-		"move", 			SCRIPT_Move,
-		"copy", 			SCRIPT_Move,
-		"makedir",			SCRIPT_MakeDir,
-		"newfolder", 		SCRIPT_MakeDir,
-		"ask_run", 			SCRIPT_RequestExecution,
-		"ask_execute", 		SCRIPT_RequestExecution,
-		"begin_mod",		SCRIPT_StartMod,
-		"delete",			SCRIPT_Delete,
-		"remove",			SCRIPT_Delete,
-		"rename",			SCRIPT_Rename,
-		"ask_download",		SCRIPT_RequestDownload,
-		"ask_get",			SCRIPT_RequestDownload,
-		"if_version",		SCRIPT_If_version,
-		"else",				SCRIPT_Else,
-		"endif",			SCRIPT_Endif,
-		"makepbo",			SCRIPT_MakePBO,
-		"extractpbo",		SCRIPT_ExtractPBO,
-		"unpackpbo",		SCRIPT_ExtractPBO,
-		"unpbo",			SCRIPT_ExtractPBO,
-		"edit",				SCRIPT_EditLine,
-		"begin_ver",		SCRIPT_StartVersion,
-		"alias",			SCRIPT_Alias
+	string command_names[] = {
+		"auto_install",	
+		"download",		
+		"get", 			
+		"unpack", 		
+		"extract", 		
+		"move", 		
+		"copy", 		
+		"makedir",		
+		"newfolder", 	
+		"ask_run", 		
+		"ask_execute", 	
+		"begin_mod",	
+		"delete",		
+		"remove",		
+		"rename",		
+		"ask_download",	
+		"ask_get",		
+		"if_version",	
+		"else",			
+		"endif",		
+		"makepbo",		
+		"extractpbo",	
+		"unpackpbo",	
+		"unpbo",		
+		"edit",			
+		"begin_ver",	
+		"alias"
+	};
+	
+	int (*command_function_pointers[])(const vector<string> &arg) = {
+		SCRIPT_AutoInstall,
+		SCRIPT_Download,
+		SCRIPT_Download,
+		SCRIPT_Unpack,
+		SCRIPT_Unpack,
+		SCRIPT_Move,
+		SCRIPT_Move,
+		SCRIPT_MakeDir,
+		SCRIPT_MakeDir,
+		SCRIPT_RequestExecution,
+		SCRIPT_RequestExecution,
+		SCRIPT_StartMod,
+		SCRIPT_Delete,
+		SCRIPT_Delete,
+		SCRIPT_Rename,
+		SCRIPT_RequestDownload,
+		SCRIPT_RequestDownload,
+		SCRIPT_If_version,
+		SCRIPT_Else,
+		SCRIPT_Endif,
+		SCRIPT_MakePBO,
+		SCRIPT_ExtractPBO,
+		SCRIPT_ExtractPBO,
+		SCRIPT_ExtractPBO,
+		SCRIPT_EditLine,
+		SCRIPT_StartVersion,
+		SCRIPT_Alias
+	};
+	
+	string command_switches_names[] = {
+		"/password:",
+		"/no_overwrite",
+		"/match_dir",
+		"/no_delete",
+		"/insert",
+		"/newfile",
+		"/append"
 	};
 
-	int number_of_commands = sizeof(Commands) / sizeof(Commands[0]);
+	int number_of_commands = sizeof(command_names) / sizeof(command_names[0]);
+	int number_of_switches = sizeof(command_switches_names) / sizeof(command_switches_names[0]);
 
 
 
@@ -3835,7 +3946,7 @@ int main(int argc, char *argv[])
 		if (url_file.is_open()) {
 			getline(url_file, url);
 			url_file.close();
-		};
+		}
 
 		url       += " --verbose \"--output-document=fwatch\\tmp\\installation script\"";
 		int result = Download(url, OVERWRITE | SILENT_MODE);
@@ -3848,102 +3959,169 @@ int main(int argc, char *argv[])
 		}
 	}
 	
-	// Open script file and store lines in a vector
+	// Open installation script
 	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_READSCRIPT]);
 
     vector<string> instructions;
     fstream script_file;
-    string script_file_name = global.test_mode ? "fwatch\\data\\addonInstaller_test.txt" : "fwatch\\tmp\\installation script";
-
-	script_file.open(script_file_name.c_str(), ios::in);
-
-	if (script_file.is_open()) {
-		string script_line;
-
-		while(getline(script_file, script_line)) {
-			script_line = Trim(script_line);
-			
-			instructions.push_back(script_line);
-			
-			// Do preliminary parsing to determine number of steps
-			vector<string> command_arguments;
-			Tokenize(script_line, " \t\r\n", command_arguments, CUSTOM_DELIMITERS);
-			
-			if (command_arguments.size() == 0)
-				continue;
+    string script_file_name    = global.test_mode ? "fwatch\\data\\addonInstaller_test.txt" : "fwatch\\tmp\\installation script";
+	string script_file_content = GetFileContents(script_file_name);
 	
-			// If url then keep j==0 which is auto installation; otherwise search for a command
-			int j = 0;
-			if (!IsURL(script_line))
-				for (; j<number_of_commands; j++)
-					if (Equals(command_arguments[0], Commands[j].name))
-						break;
-									
-			if (j == number_of_commands)
-				continue;
-				
-			// if modfolder wasn't formally started OR skipping this mod
-			if ((global.current_mod.empty() || global.skip_modfolder)  &&  Commands[j].execute!=SCRIPT_StartMod)
-				continue;
-				
-			// if version wasn't formally started
-			if (!global.current_mod.empty()  &&  global.current_mod_version.empty()  &&  Commands[j].execute!=SCRIPT_StartVersion)
-				continue;
-	
-			// if inside condition block
-			if (global.game_ver_index >= 0  &&  !global.game_ver_cond[global.game_ver_index]  &&  Commands[j].execute!=SCRIPT_StartMod  &&  Commands[j].execute!=SCRIPT_StartVersion  &&  Commands[j].execute!=SCRIPT_If_version  &&  Commands[j].execute!=SCRIPT_Else  &&  Commands[j].execute!=SCRIPT_Endif)
-				continue;
-	
-			// /mirror switch enables error fallthrough
-			bool is_mirror = false;
-			for (int k=0;  k<command_arguments.size();  k++)
-				if (Equals(command_arguments[k].substr(0,10), "/mirror")) {
-					is_mirror = true;
-					break;
-				}
-					
-			if (is_mirror)
-				continue;
-		
-			if (Commands[j].execute==SCRIPT_StartMod)
-				global.current_mod = "parsetest";
-			else 
-			if (Commands[j].execute==SCRIPT_StartVersion)
-				global.current_mod_version = "-1";
-			else
-			if (Commands[j].execute==SCRIPT_If_version || Commands[j].execute==SCRIPT_Else || Commands[j].execute==SCRIPT_Endif)
-				Commands[j].execute(command_arguments);
-			else
-				global.instructions_max++;
-		}
-		
-		script_file.close();
-		
-		if (!global.test_mode)
-			DeleteFile(script_file_name.c_str());
-			
-		// Reset variables
-		global.current_mod         = "";
-		global.current_mod_version = "";
-		global.game_ver_index      = -1;
-		global.game_ver_cond.clear();
-		global.current_mod_alias.clear();
-		
-		if (global.test_mode) {
-			global.current_mod              = global.arguments_table["testmod"];
-			global.current_mod_version      = "1";
-			global.current_mod_version_date = time(0);
-			
-			if (global.arguments_table["testdir"].empty())
-				global.current_mod_new_name = global.arguments_table["testmod"];
-			else
-				global.current_mod_new_name = global.arguments_table["testdir"];
-		}
-	} else {
+	if (script_file_content.empty()) {
 		global.logfile << "Failed to open " << script_file_name << "\n\n--------------\n\n";
 		WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR]+"\\n"+global.lang[STR_ERROR_READSCRIPT]));
 		global.logfile.close();
 		return NO_SCRIPT;
+	}	
+	
+	
+	// Parse installation script and store instructions in vectors
+	int word_begin            = -1;
+	int word_count            = 1;
+	int word_line_num         = 1;
+	int command_id            = -1;
+	int last_command_line_num = -1;
+	int last_url_list_id      = -1;
+	bool in_quote             = false;
+	bool remove_quotes        = true;
+	bool url_block            = false;
+	bool url_line             = false;
+	
+	vector<int>    instruction_id;
+	vector<int>    instruction_line;
+	vector<string> instruction_arg;
+	vector<int>    instruction_arg_id;
+	vector<string> url_list;
+	vector<int>    url_list_id;
+	
+	for (int i=0; i<=script_file_content.length(); i++) {
+		bool end_of_word = i==script_file_content.length() || isspace(script_file_content[i]);
+		
+		// When quote
+		if (script_file_content[i] == '"')
+			in_quote = !in_quote;
+		
+		// If beginning of an url block
+		if (script_file_content[i] == '{' && word_begin<0) {
+			url_block = true;
+	
+			// if bracket is the first thing in the line then it's auto installation
+			if (word_count == 1) {
+				last_command_line_num = word_line_num;
+				instruction_id.push_back(0);
+				instruction_line.push_back(word_line_num);
+			}
+			
+			continue;
+		}
+		
+		// If ending of an url block
+		if (script_file_content[i] == '}' && url_block) {
+			end_of_word = true;
+			
+			// If there's space between last word and the closing bracket
+			if (word_begin == -1) {	
+				url_block = false;
+				url_line  = false;
+				word_count++;
+				continue;
+			}
+		}
+		
+		// Remember beginning of the word
+		if (!end_of_word && word_begin<0) {
+			word_begin = i;
+			
+			// If custom delimeter - jump to the end of the argument
+			if (script_file_content.substr(word_begin,2) == ">>") {
+				word_begin   += 3;
+				size_t end    = script_file_content.find(script_file_content[i+2], i+3);
+				end_of_word   = true;
+				i             = end==string::npos ? script_file_content.length() : end;
+				remove_quotes = false;
+			}
+		}
+		
+		// When hit end of the word
+		if (end_of_word && word_begin>=0 && !in_quote) {
+			string word = script_file_content.substr(word_begin, i-word_begin);
+
+			if (remove_quotes)
+				word = UnQuote(word);
+			else
+				remove_quotes = true;
+				
+			// If first word in the line
+			if (word_count == 1 && !url_block) {
+				command_id = -1;
+				
+				// Check if it's a valid command
+				if (IsURL(word))
+					command_id = 0;
+				else
+					for (int j=0; j<number_of_commands && command_id==-1; j++)
+						if (Equals(word, command_names[j]))
+							command_id = j;
+				
+				// If so then add it to database, otherwise skip this line
+				if (command_id != -1) {
+					last_command_line_num = word_line_num;
+					instruction_id.push_back(command_id);
+					instruction_line.push_back(word_line_num);
+					
+					// If command is an URL then add it to the url database
+					if (command_id == 0) {
+						url_line         = true;
+						last_url_list_id = url_list_id.size();
+						url_list.push_back(word);
+						url_list_id.push_back(last_command_line_num);
+					}
+				} else {
+					size_t end = script_file_content.find("\n", i);
+					i          = (end==string::npos ? script_file_content.length() : end) - 1;
+				}
+			} else {
+				// Check if URL starts here
+				if (!url_line)
+					url_line = IsURL(word);
+					
+				// Check if it's a valid command switch
+				bool is_switch = false;
+				
+				for (int j=0; j<number_of_switches && !is_switch; j++)
+					is_switch = Equals(word.substr(0,command_switches_names[j].length()), command_switches_names[j]);
+
+				// Add word to the URL database or the arguments database
+				if (url_line && !is_switch) {
+					if (last_url_list_id == -1) {
+						last_url_list_id = url_list_id.size();
+						url_list.push_back(word);
+						url_list_id.push_back(last_command_line_num);
+					} else
+						url_list[last_url_list_id] += " " + word;
+				} else {
+					instruction_arg.push_back(word);
+					instruction_arg_id.push_back(last_command_line_num);
+				}
+			}
+			
+			// If ending of an url block
+			if (script_file_content[i] == '}' && url_block) {
+				url_block = false;
+				url_line  = false;
+			}
+
+			word_begin = -1;
+			word_count++;
+		}
+		
+		// When new line
+		if (!in_quote && script_file_content[i] == '\n') {
+			word_count       = 1;
+			url_line         = false;
+			last_url_list_id = -1;
+			word_line_num++;
+		}
 	}
 
 	
@@ -3953,83 +4131,81 @@ int main(int argc, char *argv[])
 
 
 
-
 	int result = 0;
+	global.instructions_max = instruction_id.size();
+	vector<string> url_list_for_current_command;
+	vector<string> download_arguments;
+	vector<string> command_arguments;
 
-	// Parse stored text
-	for (int i=0;  i<instructions.size(); i++) {
+	// Execute instructions
+	for (int i=0;  i<instruction_id.size(); i++) {
 		if (Abort())
 			return USER_ABORTED;
 
-		global.command_line_num++;
-		global.command_line     = instructions[i];
-		bool manual_install     = false;
+		global.instructions_pos = i;
+		global.command_line_num = instruction_line[i];
+		global.command_line     = command_names[instruction_id[i]];
 		global.unpack_set_error = true;
-
-		vector<string> command_arguments;
-		Tokenize(instructions[i], " \t\r\n", command_arguments, CUSTOM_DELIMITERS);
-		
-		if (command_arguments.size() == 0)
-			continue;
-
-		// If url then keep j==0 which is auto installation; otherwise search for a command
-		int j = 0;
-		if (!IsURL(instructions[i]))
-			for (; j<number_of_commands; j++)
-				if (Equals(command_arguments[0], Commands[j].name))
-					break;
-
-		if (j == number_of_commands)
-			continue;
-			
+		bool manual_install     = false;
 
 		// if modfolder wasn't formally started OR skipping this mod
-		if ((global.current_mod.empty() || global.skip_modfolder)  &&  Commands[j].execute!=SCRIPT_StartMod)
+		if ((global.current_mod.empty() || global.skip_modfolder)  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartMod)
 			continue;
 			
 		// if version wasn't formally started
-		if (!global.current_mod.empty()  &&  global.current_mod_version.empty()  &&  Commands[j].execute!=SCRIPT_StartVersion)
+		if (!global.current_mod.empty()  &&  global.current_mod_version.empty()  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartVersion)
 			continue;
 
 		// if inside condition block
-		if (global.game_ver_index >= 0  &&  !global.game_ver_cond[global.game_ver_index]  &&  Commands[j].execute!=SCRIPT_StartMod  &&  Commands[j].execute!=SCRIPT_StartVersion  &&  Commands[j].execute!=SCRIPT_If_version  &&  Commands[j].execute!=SCRIPT_Else  &&  Commands[j].execute!=SCRIPT_Endif)
+		if (global.game_ver_index >= 0  &&  !global.game_ver_cond[global.game_ver_index]  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartMod  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartVersion  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_If_version  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_Else  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_Endif)
 			continue;
 
 
-		// /mirror switch enables error fallthrough
-		bool is_mirror = false;
-		for (int k=0;  k<command_arguments.size();  k++)
-			if (Equals(command_arguments[k].substr(0,10), "/mirror")) {
-				is_mirror = true;
-				command_arguments.erase(command_arguments.begin() + k);
-				break;
-			}
+		// Check if there's an URL list for this command
+		url_list_for_current_command.clear();
+		int failed_downloads = 0;
+		
+		for (int j=0; j<url_list_id.size(); j++)
+			if (url_list_id[j] == instruction_line[i])
+				url_list_for_current_command.push_back(url_list[j]);
 				
-		if (global.mirror == SKIP_REMAINING) {
-			global.mirror = is_mirror ? SKIP_REMAINING : DISABLED;
-			continue;
-		} else
-			global.mirror = is_mirror ? ENABLED : DISABLED;
+		for (int j=0; j<url_list_for_current_command.size(); j++) {
+			global.mirror = j < url_list_for_current_command.size() - 1;
+			
+			download_arguments.clear();
+			Tokenize(url_list_for_current_command[j], " ", download_arguments);
+			result = Download_Wrapper(download_arguments);
+				
+			if (result == 0)
+				break;
+			else
+				failed_downloads++;
+		}
+		
+		// If download was successful then execute command
+		if (url_list_for_current_command.size()==0 || (url_list_for_current_command.size()>0 && failed_downloads<url_list_for_current_command.size())) {
+			command_arguments.clear();
+			command_arguments.push_back(command_names[instruction_id[i]]);
+			
+			if (url_list_for_current_command.size() > 0)
+				command_arguments.push_back("<dl>");
+			
+			// Gather arguments for this command in a singe list
+			for (int j=0; j<instruction_arg_id.size(); j++)
+				if (instruction_arg_id[j] == instruction_line[i])
+					command_arguments.push_back(instruction_arg[j]);
+			
+			result = command_function_pointers[instruction_id[i]](command_arguments);
+		}
 
-		if (Commands[j].execute!=SCRIPT_StartMod  &&  Commands[j].execute!=SCRIPT_StartVersion  &&  Commands[j].execute!=SCRIPT_If_version  &&  Commands[j].execute!=SCRIPT_Else  &&  Commands[j].execute!=SCRIPT_Endif)
-			global.instructions_pos++;
-		
-		result = Commands[j].execute(command_arguments);
-		
 		if (result == USER_ABORTED)
 			return result;
 		else
-			if (result != NO_ERRORS  &&  global.mirror==DISABLED) {
+			if (result != NO_ERRORS) {
 				global.logfile << "Installation error - aborting\n\n--------------\n\n";
 				global.logfile.close();
 				return result;
 			}
-			
-		if (global.mirror == ENABLED)
-			if (result == NO_ERRORS)
-				global.mirror = SKIP_REMAINING;
-			else
-				global.instructions_pos--;
     }
 
 	

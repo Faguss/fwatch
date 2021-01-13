@@ -870,7 +870,8 @@ FUNCTION_STRINGTABLE = {
 			"nowa wersja Resource.cpp",		//81
 			"[Њci№gnij mody]",				//82
 			"Dostкpne aktualizacje",		//83
-			"Pobierz nowy mod"				//84
+			"Pobierz nowy mod",				//84
+			"[Zamknij]"						//85
 		];
 	};
 	
@@ -960,7 +961,8 @@ FUNCTION_STRINGTABLE = {
 			"новая версия Resource.cpp",		//81
 			"[Скачать моды]",		//82
 			"Обновить",				//83
-			"Добавить Новый"		//84
+			"Добавить Новый",		//84
+			"[Закрыть]"				//85
 		];
 	};
 	
@@ -1050,7 +1052,8 @@ FUNCTION_STRINGTABLE = {
 			"new Resource.cpp version",		//81
 			"[Download Mods]",				//82
 			"Available Updates",			//83
-			"Install New"					//84
+			"Install New",					//84
+			"[Close]"						//85
 		];
 	};
 };

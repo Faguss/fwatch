@@ -12,8 +12,8 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2020,12,31,4,1,27,54,348,60,FALSE]
-	GS_MY_VERSION = 0.54
+	GS_FWATCH_MY_VERSION = [2021,1,13,3,1,20,16,0,60,FALSE]
+	GS_MY_VERSION = 0.55
 	GS_DEFAULT_URL = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
 
@@ -198,6 +198,7 @@
 	? _value == 224 : loadFile ("\:EXE WEBSITE "+([_url,_missing_mods_id,_missing_mods_myversion] call FUNCTION_BUILD_PREVIEW_LINK))
 	? _value == 225 : loadFile ("\:EXE WEBSITE "+([_url,_server_modfolders,[]] call FUNCTION_BUILD_PREVIEW_LINK))
 	? _value == 226 : _ok=call loadFile Format ["\:RESTART CLIENT -updateresource=%1",(call loadFile ":info version extended") select 4]; if (!(_ok select 0)) then {titleText [_ok select 3, "PLAIN DOWN", 1.5]} else {closeDialog 0; exit}
+	? _value == 227 : closeDialog 0; exit
 	goto "ResetLMB"
 
 
@@ -289,6 +290,7 @@
 		_voice_name         = ""
 		_run_voice_program  = false
 		_playingNow         = false
+		_access_code        = ""
 		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:savestate"
 		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
 		? _install_status >= 0 : goto "InstallDisplay"
@@ -919,6 +921,9 @@
 		lbSetCurSel [6657, -1]
 		lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 36], 208]
 		lbSetValue  [6657, lbAdd [6657, Format [MAINMENU_STR select 42, (if (_auto_restart) then {MAINMENU_STR select 43} else {MAINMENU_STR select 44})]], 209]
+		lbSetValue  [6657, lbAdd [6657, ""], -1]
+		lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 85], 227]
+
 		? _auto_restart && _voice_name!=""         : if (!(GS_VOICE select (_server_voice select 0) select 1)) then {lbSetValue  [6657, lbAdd [6657, Format ["[%1: %2]", _voice_name, (if (_run_voice_program) then {MAINMENU_STR select 43} else {MAINMENU_STR select 44})]], 219]}
 		? _auto_restart && _server_uniqueid!="mod" : lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 31], 206]
 
