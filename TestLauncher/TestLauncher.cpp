@@ -583,8 +583,8 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server)
 
 	FILE *f = fopen(filename, "a");
 	if (f) {
-		char source[2048]           = "";
-		char destination[2048]      = "";
+		char source[1024]           = "";
+		char destination[1024]      = "";
 		wchar_t source_w[1024]      = L"";
 		wchar_t destination_w[1024] = L"";
 
@@ -604,29 +604,52 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server)
 		HANDLE hFind   = INVALID_HANDLE_VALUE;
 		size_t mod_len = strlen(mod);
 
-		char folder[][16] = {
+		char folder_src[][32] = {
 			"MPMissions",
 			"Templates",
-			"SPTemplates"
+			"SPTemplates",
+			"IslandCutscenes",
+			"IslandCutscenesRES"
 		};
-		int folder_num       = sizeof(folder) / sizeof(folder[0]);
-		wchar_t folder_w[32] = L"";
+		char folder_dst[][32] = {
+			"MPMissions",
+			"Templates",
+			"SPTemplates",
+			"Addons",
+			"Res\\Addons"
+		};
+
+		int folder_num           = sizeof(folder_src) / sizeof(folder_src[0]);
+		wchar_t folder_src_w[32] = L"";
+		wchar_t folder_dst_w[32] = L"";
+		bool create_res_addons   = true;
+
+		DWORD attributes = GetFileAttributes("Res\\Addons");
+		if (attributes != 0xFFFFFFFF && attributes & FILE_ATTRIBUTE_DIRECTORY)
+			create_res_addons = false;
+
 
 		for (i=0; i<folder_num; i++) {
-			size_t folder_len = strlen(folder[i]);
-			mbstowcs(folder_w, folder[i], folder_len+1);
+			size_t folder_src_len = strlen(folder_src[i]);
+			size_t folder_dst_len = strlen(folder_dst[i]);
+
+			mbstowcs(folder_src_w, folder_src[i], folder_src_len+1);
+			mbstowcs(folder_dst_w, folder_dst[i], folder_dst_len+1);
 			
 			// Source path is: mod\MPMissions\*
 			mbstowcs(source_w, mod, mod_len+1);
 			wcscat(source_w  , L"\\");
-			wcscat(source_w  , folder_w);
+			wcscat(source_w  , folder_src_w);
 			wcscat(source_w  , L"\\*");
 
 			// Destination path is: MPMissions\ 
-			wcscpy(destination_w, folder_w);
+			wcscpy(destination_w, folder_dst_w);
 			wcscat(destination_w, L"\\");
 
 			hFind = FindFirstFileW(source_w, &fd);
+			wcstombs(source, source_w, wcslen(source_w)+1);
+
+			bool only_folders = i >= 3;
 
 			if (hFind != INVALID_HANDLE_VALUE) {
 				do {
@@ -647,9 +670,15 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server)
 						dot++;
 					}
 
-					if (dots>=1 && dir || !dir && dots>=2 && wcscmp(fd.cFileName+filename_length-4,L".pbo")==0) {
-						wcscpy(source_w + mod_len + folder_len + 2, fd.cFileName);
-						wcscpy(destination_w + folder_len + 1     , fd.cFileName);
+					if (dots>=1 && dir || (!dir && dots>=2 && wcscmp(fd.cFileName+filename_length-4,L".pbo")==0) || (only_folders && dir)) {
+						wcscpy(source_w + mod_len + folder_src_len + 2, fd.cFileName);
+						wcscpy(destination_w + folder_dst_len + 1, fd.cFileName);
+
+						if (i==4 && create_res_addons) {
+							CreateDirectory("Res", NULL);
+							CreateDirectory("Res\\Addons", NULL);
+							create_res_addons = false;
+						}
 
 						if (MoveFileExW(source_w, destination_w, 0)) {
 							wcstombs(source, source_w, wcslen(source_w)+1);
@@ -684,8 +713,9 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 
 	int i                       = 0;
 	int word_start              = 0;
-	wchar_t source_w[2048]      = L"";
-	wchar_t destination_w[2048] = L"";
+	char backup[1024]           = "";
+	wchar_t source_w[1024]      = L"";
+	wchar_t destination_w[1024] = L"";
 				
 	while (i < mission_list.current_length) {
 		char *destination = Tokenize(mission_list.pointer, "\r\n", i, mission_list.current_length, false, false);
@@ -706,6 +736,17 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 
 				destination[separator_pos] = '?';
 			} else {
+				if (strncmpi(source,"IslandCutscenes\\",16)==0) {
+					strcpy(backup, "Addons\\");
+					strcat(backup, source+16);
+					source = backup;
+				} else				
+					if (strncmpi(source,"IslandCutscenesRES\\",19)==0) {
+						strcpy(backup, "Res\\Addons\\");
+						strcat(backup, source+19);
+						source = backup;
+					}
+				
 				size_t source_len      = strlen(source);
 				size_t destination_len = strlen(destination);
 				mbstowcs(source_w, source, source_len+1);
