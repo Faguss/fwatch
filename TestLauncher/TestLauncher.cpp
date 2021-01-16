@@ -757,17 +757,17 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 
 			// Otherwise it's just source where destination can be derived from it
 			} else {
-				if (strncmpi(source,"IslandCutscenes\\",16)==0) {
-					strcpy(backup_buffer, "Addons\\");
-					strcat(backup_buffer, source+16);
+				if (strncmpi(source,"IslandCutscenes\\_RES\\",21)==0) {
+					strcpy(backup_buffer, "Res\\Addons\\");
+					strcat(backup_buffer, source+21);
 					source = backup_buffer;
-				} else				
-					if (strncmpi(source,"IslandCutscenes\\_RES\\",21)==0) {
-						strcpy(backup_buffer, "Res\\Addons\\");
-						strcat(backup_buffer, source+19);
+				} else
+					if (strncmpi(source,"IslandCutscenes\\",16)==0) {
+						strcpy(backup_buffer, "Addons\\");
+						strcat(backup_buffer, source+16);
 						source = backup_buffer;
 					}
-				
+
 				size_t source_len      = strlen(source);
 				size_t destination_len = strlen(destination);
 				mbstowcs(source_w, source, source_len+1);
