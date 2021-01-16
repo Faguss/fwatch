@@ -52,7 +52,7 @@ enum COMMAND_ID {
 unsigned long GetIP(char *host);
 char* Tokenize(char *string, char *delimiter, int &i, int string_length, bool square_brackets, bool reverse);
 void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT);
-int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server);
+int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_name);
 void ModfolderMissionsReturn(bool is_dedicated_server);
 
 void FwatchPresence(ThreadArguments *arg);
@@ -575,7 +575,7 @@ void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, i
 
 
 // Move mission files from the selected modfolder to the game missions folder
-int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server)
+int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_name)
 {
 	int file_count    = 0;
 	char filename[64] = "fwatch\\data\\sortMissions";
@@ -604,29 +604,41 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server)
 		HANDLE hFind   = INVALID_HANDLE_VALUE;
 		size_t mod_len = strlen(mod);
 
-		char folder_src[][32] = {
+		char folder_src[][64] = {
 			"MPMissions",
 			"Templates",
 			"SPTemplates",
 			"IslandCutscenes",
-			"IslandCutscenesRES"
+			"IslandCutscenes\\_RES",
+			"MissionsUsers",
+			"MPMissionsUsers"
 		};
-		char folder_dst[][32] = {
+		char folder_dst[][64] = {
 			"MPMissions",
 			"Templates",
 			"SPTemplates",
 			"Addons",
-			"Res\\Addons"
+			"Res\\Addons",
+			"Users\\",
+			"Users\\"
 		};
 
-		int folder_num           = sizeof(folder_src) / sizeof(folder_src[0]);
-		wchar_t folder_src_w[32] = L"";
-		wchar_t folder_dst_w[32] = L"";
-		bool create_res_addons   = true;
+		strcat(folder_dst[5], player_name);
+		strcat(folder_dst[5], "\\Missions");
+		strcat(folder_dst[6], player_name);
+		strcat(folder_dst[6], "\\MPMissions");
 
-		DWORD attributes = GetFileAttributes("Res\\Addons");
+		int folder_num           = sizeof(folder_src) / sizeof(folder_src[0]);
+		wchar_t folder_src_w[64] = L"";
+		wchar_t folder_dst_w[64] = L"";
+		bool create_res_addons   = true;
+		DWORD attributes         = GetFileAttributes("Res\\Addons");
+
 		if (attributes != 0xFFFFFFFF && attributes & FILE_ATTRIBUTE_DIRECTORY)
 			create_res_addons = false;
+
+		if (strcmp(player_name,"") == 0)
+			folder_num -= 2;
 
 
 		for (i=0; i<folder_num; i++) {
@@ -653,11 +665,11 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server)
 
 			if (hFind != INVALID_HANDLE_VALUE) {
 				do {
-					if (wcscmp(fd.cFileName,L".")==0 || wcscmp(fd.cFileName,L"..")==0)
+					if (wcscmp(fd.cFileName,L".")==0 || wcscmp(fd.cFileName,L"..")==0 || (_wcsicmp(fd.cFileName,L"_RES")==0 && i==3))
 						continue;
 					
 					size_t filename_length = wcslen(fd.cFileName);
-					unsigned long dir      = fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+					DWORD dir              = fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
 
 					if (filename_length<3 || filename_length>(1023-mod_len-13))
 						continue;
@@ -681,9 +693,14 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server)
 						}
 
 						if (MoveFileExW(source_w, destination_w, 0)) {
-							wcstombs(source, source_w, wcslen(source_w)+1);
-							fprintf(f, "%s\n", source);
 							file_count++;
+							wcstombs(source, source_w, wcslen(source_w)+1);
+
+							if (i >= 5) {
+								wcstombs(destination, destination_w, wcslen(destination_w)+1);
+								fprintf(f, "%s?%s\n", source, destination);
+							} else 
+								fprintf(f, "%s\n", source);
 						}
 					}
 				} 
@@ -713,7 +730,7 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 
 	int i                       = 0;
 	int word_start              = 0;
-	char backup[1024]           = "";
+	char backup_buffer[1024]    = "";
 	wchar_t source_w[1024]      = L"";
 	wchar_t destination_w[1024] = L"";
 				
@@ -725,8 +742,10 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 		if (source != NULL) {
 			source++;
 
-			if (strncmpi(source,"missions?",9) == 0) {
-				char *separator            = strchr(destination,'?');
+			char *separator = strchr(destination,'?');
+			
+			// Check if line is: source?destination
+			if (separator != NULL) {
 				int separator_pos          = separator - destination;
 				source                     = destination + separator_pos + 1;
 				destination[separator_pos] = '\0';
@@ -735,16 +754,18 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 					remove_line = true;
 
 				destination[separator_pos] = '?';
+
+			// Otherwise it's just source where destination can be derived from it
 			} else {
 				if (strncmpi(source,"IslandCutscenes\\",16)==0) {
-					strcpy(backup, "Addons\\");
-					strcat(backup, source+16);
-					source = backup;
+					strcpy(backup_buffer, "Addons\\");
+					strcat(backup_buffer, source+16);
+					source = backup_buffer;
 				} else				
-					if (strncmpi(source,"IslandCutscenesRES\\",19)==0) {
-						strcpy(backup, "Res\\Addons\\");
-						strcat(backup, source+19);
-						source = backup;
+					if (strncmpi(source,"IslandCutscenes\\_RES\\",21)==0) {
+						strcpy(backup_buffer, "Res\\Addons\\");
+						strcat(backup_buffer, source+19);
+						source = backup_buffer;
 					}
 				
 				size_t source_len      = strlen(source);
@@ -1185,11 +1206,27 @@ void FwatchPresence(ThreadArguments *arg)
 			ui_apply_change = true;
 			game_pid_last   = game_pid;
 		} else {
+			// Read player's name
+			char player_name[25] = "";
+			int player_name_ptr  = 0;
+			int player_name_addr = 0;
+
+			if (!arg->is_dedicated_server) {
+				switch(global_exe_version[game_exe_index]) {
+					case VER_196 : player_name_ptr=0x7DD184; break;
+					case VER_199 : player_name_ptr=0x7CC144; break;
+					case VER_201 : player_name_ptr=game_exe_address+0x714C10; break;
+				}
+
+				ReadProcessMemory(phandle, (LPVOID)player_name_ptr       , &player_name_addr, 4 , &stBytes);
+				ReadProcessMemory(phandle, (LPVOID)(player_name_addr+0x8), &player_name     , 25, &stBytes);
+			}
+			
 			// If it's a game instance that we have accessed before
 			// Transfer mission files from each mod
 			if (transfered_missions==0 && game_mods_num>0)			
 				for (int i=game_mods_num-1; i>=0; i--)
-					transfered_missions += ModfolderMissionsTransfer(game_mods[i], arg->is_dedicated_server);
+					transfered_missions += ModfolderMissionsTransfer(game_mods[i], arg->is_dedicated_server, player_name);
 
 			// Refresh master servers (user can change them in the main menu)
 			ReadProcessMemory(phandle, (LPVOID)master_server1_address, &global.master_server1, 64, &stBytes);
