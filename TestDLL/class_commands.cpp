@@ -3292,7 +3292,7 @@ case C_CLASS_READ:
 		// Parse preprocessor comment
 		switch (comment) {
 			case NONE  : {
-				if (c == '/') {
+				if (c == '/' && !in_quote) {
 					char c2 = text[i+1];
 					
 					if (c2 == '/')
@@ -4022,7 +4022,7 @@ case C_CLASS_READ2:
 		// Parse preprocessor comment
 		switch (comment) {
 			case NONE  : {
-				if (c == '/') {
+				if (c == '/' && !in_quote) {
 					char c2 = text[i+1];
 					
 					if (c2 == '/')
