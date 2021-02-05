@@ -1,4 +1,5 @@
 // AddonInstaller.exe by Faguss (ofp-faguss.com) for Fwatch 1.16
+// Russian translation by mju (twitter.com/paumju)
 
 
 #include <fstream>		// file operations
@@ -22,11 +23,9 @@ struct GLOBAL_VARIABLES
 	bool skip_modfolder;
 	bool restart_game;
 	bool end_thread;
-	bool first_exe;
-	bool unpack_set_error;
-	bool auto_install_next_file;
 	bool run_voice_program;
-	int game_ver_index;
+	bool download_phase;
+	int condition_index;
 	int command_line_num;
 	int mirror;
 	int current_mod_version_date;
@@ -44,7 +43,7 @@ struct GLOBAL_VARIABLES
 	string current_mod_version;
 	string current_mod_id;
 	string current_mod_keepname;
-	vector<int> game_ver_cond;
+	vector<int> condition;
 	vector<string> downloads;
 	vector<string> mod_id;
 	vector<string> mod_name;
@@ -60,9 +59,7 @@ struct GLOBAL_VARIABLES
 	false,
 	false,
 	true,
-	true,
 	false,
-	true,
 	-1,
 	0,
 	0,
@@ -95,37 +92,28 @@ enum INSTALL_STATUS
 
 enum FUNCTION_FLAGS 
 {
-	NO_END_SLASH,
-	MOVE_FILES,
-	OVERWRITE,
-	MATCH_DIRS = 4,
-	ALLOW_ERROR = 8,
-	SILENT_MODE = 16,
-	CUSTOM_DELIMITERS = 1
-};
-
-enum MOVE_ARGUMENTS 
-{
-	SOURCE,
-	DESTINATION,
-	NEW_NAME
+	FLAG_NONE          = 0x0,
+	FLAG_NO_END_SLASH  = 0x1,
+	FLAG_MOVE_FILES    = 0x2,
+	FLAG_OVERWRITE     = 0x4,
+	FLAG_MATCH_DIRS    = 0x8,
+	FLAG_ALLOW_ERROR   = 0x10,
+	FLAG_SILENT_MODE   = 0x20,
+	FLAG_RUN_EXE       = 0x40,
+	FLAG_CREATE_DIR    = 0x80,
+	FLAG_DONT_IGNORE   = 0x100,
+	FLAG_DEMO_MISSIONS = 0x200,
+	FLAG_RES_ADDONS	   = 0x400
 };
 
 enum ERROR_CODES 
 {
-	NO_ERRORS,
-	USER_ABORTED,
-	LOGFILE_ERROR,
-	NO_SCRIPT,
-	COMMAND_FAILED,
-	SCRIPT_ERROR
-};
-
-enum MIRROR_STATES 
-{
-	DISABLED,
-	ENABLED,
-	SKIP_REMAINING	
+	ERROR_NONE,
+	ERROR_USER_ABORTED,
+	ERROR_LOGFILE,
+	ERROR_NO_SCRIPT,
+	ERROR_COMMAND_FAILED,
+	ERROR_WRONG_SCRIPT
 };
 
 enum STRINGTABLE 
@@ -176,11 +164,16 @@ enum STRINGTABLE
 	STR_UNPACKPBO_SRC_PATH_ERROR,
 	STR_UNPACKPBO_DST_PATH_ERROR,
 	STR_MOVE_DST_PATH_ERROR,
+	STR_MOVE_ERROR,
+	STR_MOVE_TO_ERROR,
+	STR_COPY_ERROR,
 	STR_MOVE_RENAME_ERROR,
 	STR_MOVE_RENAME_TO_ERROR,
 	STR_RENAME_DST_PATH_ERROR,
 	STR_RENAME_WILDCARD_ERROR,
 	STR_RENAME_NO_NAME_ERROR,
+	STR_DELETE_PERMANENT_ERROR,
+	STR_DELETE_BIN_ERROR,
 	STR_ASK_EXE,
 	STR_ASK_DLOAD,
 	STR_ASK_DLOAD_SELECT,
@@ -194,41 +187,35 @@ enum STRINGTABLE
 	STR_MAX
 };
 
-enum MISSIONSQM 
+enum MISSIONSQM_PARSING
 {
-	PROPERTY,
-	EQUALITY,
-	VALUE,
-	SEMICOLON,
-	CLASS_NAME,
-	CLASS_INHERIT,
-	CLASS_COLON,
-	CLASS_BRACKET,
-	ENUM_BRACKET,
-	ENUM_CONTENT,
-	EXEC_BRACKET,
-	EXEC_CONTENT,
-	MACRO_CONTENT
+	SQM_PROPERTY,
+	SQM_EQUALITY,
+	SQM_VALUE,
+	SQM_SEMICOLON,
+	SQM_CLASS_NAME,
+	SQM_CLASS_INHERIT,
+	SQM_CLASS_COLON,
+	SQM_CLASS_BRACKET,
+	SQM_ENUM_BRACKET,
+	SQM_ENUM_CONTENT,
+	SQM_EXEC_BRACKET,
+	SQM_EXEC_CONTENT,
+	SQM_MACRO_CONTENT
 };
 
 enum MISSIONSQM_PLAYERCOUNT 
 {
-	NO_MISSIONSQM,
-	SINGLE_PLAYER,
-	MULTI_PLAYER
+	SQM_NONE,
+	SQM_SINGLE_PLAYER,
+	SQM_MULTI_PLAYER,
+	SQM_SINGLE_PLAYER_TEMPLATE,
+	SQM_MULTI_PLAYER_TEMPLATE
 };
 
 
 
 
-
-
-
-
-
-
-
-	// Functions
 // String operations -------------------------------------------------------------------------------------
 	
 string Trim(string s)
@@ -237,7 +224,6 @@ string Trim(string s)
 	s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
 	return s;
 }
-
 
 string WrapInQuotes(string text)
 {
@@ -249,7 +235,6 @@ string WrapInQuotes(string text)
 	
 	return text;
 }
-
 
 	// Remove quotation marks
 string UnQuote(string text)
@@ -278,28 +263,7 @@ string LeadingZero(int number)
 	return ret;
 }
 
-
-string GetFileExtension(string file_name)
-{
-	string file_extension = file_name.substr( file_name.find_last_of('.')+1 );
-	transform(file_extension.begin(), file_extension.end(), file_extension.begin(), ::tolower);
-	
-	// If extension is a number then it's a wget backup - find real extension
-	int Number;
-	
-	if (file_extension!="7z" && istringstream(file_extension) >> Number) {
-		size_t lastDot       = file_name.find_last_of('.');
-		size_t secondLastDot = file_name.find_last_of('.', lastDot-1);
-		
-		if (lastDot!=string::npos  &&  secondLastDot!=string::npos)
-			file_extension = file_name.substr( secondLastDot+1, lastDot-secondLastDot-1 );
-	};
-	
-	return file_extension;
-}
-
-
-	// https://superuser.com/questions/475874/how-does-the-windows-rename-command-interpret-wildcards
+	// https://superuser.com/questions/475874/how-does-the-windows-rename-command-interpret-wildcards	https://superuser.com/a/739718
 string MaskNewName(string path, string mask) 
 {
 	if (mask.empty())
@@ -379,7 +343,6 @@ string MaskNewName(string path, string mask)
 	return R;
 }
 
-
 string PathLastItem(string path) 
 {
 	size_t lastSlash = path.find_last_of("\\/");
@@ -390,17 +353,15 @@ string PathLastItem(string path)
 		return path;
 }
 
-
-string PathNoLastItem(string path, bool end_slash=true) 
+string PathNoLastItem(string path, int options=FLAG_NONE) 
 {
 	size_t find = path.find_last_of("\\/");
 
 	if (find != string::npos)
-		return path.substr(0, find+end_slash);
+		return path.substr(0, find+(options & FLAG_NO_END_SLASH ? 0 : 1));
 	else
 		return "";
 }
-
 
 	// Windows error message
 string FormatError(int error)
@@ -427,8 +388,7 @@ string FormatError(int error)
 	return Trim(ret);
 }
 
-
-void Tokenize(string text, string delimiter, vector<string> &container, bool custom_delimiters=false)
+void Tokenize(string text, string delimiter, vector<string> &container)
 {
 	bool first_item   = false;
 	bool inQuote      = false;
@@ -447,35 +407,16 @@ void Tokenize(string text, string delimiter, vector<string> &container, bool cus
 			inQuote = !inQuote;
 			
 		// Mark beginning of the word
-		if (!isToken  &&  begin<0) {
+		if (!isToken  &&  begin<0)
 			begin = pos;
-			
-			if (custom_delimiters) {
-				if (text.substr(begin,2) == ">>") {
-					begin      += 3;
-					size_t end  = text.find(text[pos+2], pos+3);
-					isToken     = true;
-					pos         = end==string::npos ? text.length() : end;
-					use_unQuote = false;
-				}
-			}
-		}
 
 		// Mark end of the word
 		if (isToken  &&  begin>=0  &&  !inQuote) {
-			string part = text.substr(begin, pos-begin);
-			
-			if (use_unQuote)
-				part = UnQuote(part);
-			else
-				use_unQuote = true;
-				
-			container.push_back(part);
+			container.push_back(UnQuote(text.substr(begin, pos-begin)));
 			begin = -1;
 		}
 	}
 }
-
 
 	// http://stackoverflow.com/a/3418285
 string ReplaceAll(string str, const string& from, const string& to) 
@@ -493,7 +434,6 @@ string ReplaceAll(string str, const string& from, const string& to)
     return str;
 }
 
-
 	// https://stackoverflow.com/questions/11635/case-insensitive-string-comparison-in-c#315463
 bool Equals(const string& a, const string& b) 
 {
@@ -509,7 +449,6 @@ bool Equals(const string& a, const string& b)
     return true;
 }
 
-
 bool VerifyPath(string path)
 {
 	vector<string> directories;
@@ -523,14 +462,12 @@ bool VerifyPath(string path)
 	return true;
 }
 
-
 string Int2Str(int num)
 {
     ostringstream text;
     text << num;
     return text.str();
 }
-
 
 bool IsURL(string text)
 {
@@ -541,7 +478,6 @@ bool IsURL(string text)
 		Equals(text.substr(0,4),"www.")
 	);
 }
-
 
 bool IsModName(string filename)
 {
@@ -555,8 +491,7 @@ bool IsModName(string filename)
 	return false;
 }
 
-
-//https://stackoverflow.com/questions/6691555/converting-narrow-string-to-wide-string
+	// https://stackoverflow.com/questions/6691555/converting-narrow-string-to-wide-string
 wstring string2wide(const string& input)
 {
     if (input.empty())
@@ -569,7 +504,7 @@ wstring string2wide(const string& input)
 	return output;
 }
 
-//https://mariusbancila.ro/blog/2008/10/20/writing-utf-8-files-in-c/
+	// https://mariusbancila.ro/blog/2008/10/20/writing-utf-8-files-in-c/
 string wide2string(const wchar_t* input, int input_length)
 {
 	int output_length = WideCharToMultiByte(CP_UTF8, 0, input, input_length, NULL, 0, NULL, NULL);
@@ -618,8 +553,9 @@ string GetTextBetween(string &buffer, string start, string end, size_t &offset, 
 	return out;
 }
 
-// https://stackoverflow.com/questions/154536/encode-decode-urls-in-c
-string url_encode(const string &value) {
+	// https://stackoverflow.com/questions/154536/encode-decode-urls-in-c
+string url_encode(const string &value) 
+{
     ostringstream escaped;
     escaped.fill('0');
     escaped << hex;
@@ -641,18 +577,22 @@ string url_encode(const string &value) {
 
     return escaped.str();
 }
+
+string lowercase(const string &input) 
+{
+	string output = input;
+	
+	for (int i=0; i<output.length(); i++)
+		output[i] = tolower(output[i]);
+		
+	return output;
+}
 // -------------------------------------------------------------------------------------------------------
 
 
 
 
-
-
-
-
-
-
-// File operations ---------------------------------------------------------------------------------------
+// Installer messaging -----------------------------------------------------------------------------------
 
 	// Feedback for the game
 void WriteProgressFile(int status, string input)
@@ -672,12 +612,11 @@ void WriteProgressFile(int status, string input)
 	progressLog.close();
 };
 
-
 	// Write mod identification file
 int WriteModID(string modfolder, string content, string content2)
 {
 	if (global.test_mode)
-		return NO_ERRORS;
+		return ERROR_NONE;
 	
 	ofstream ID_file;
 	string path = modfolder + "\\__gs_id";
@@ -703,17 +642,16 @@ int WriteModID(string modfolder, string content, string content2)
 			
 		ID_file << content << current_date << ";" << global.current_mod << ";" << content2;
 		ID_file.close();
-		return NO_ERRORS;
+		return ERROR_NONE;
 	} else
-		return LOGFILE_ERROR;
+		return ERROR_LOGFILE;
 }
 
-
-
-int ErrorMessage(int string_code, string message="%STR%", int error_code=COMMAND_FAILED) 
+	// Format error message
+int ErrorMessage(int string_code, string message="%STR%", int error_code=ERROR_COMMAND_FAILED) 
 {
-	if (global.current_mod=="parsetest" && global.current_mod_version=="-1")
-		return NO_ERRORS;
+	if (global.current_mod=="?pretendtoinstall" && global.current_mod_version=="-1")
+		return ERROR_NONE;
 	
 	int status              = global.mirror ? INSTALL_PROGRESS : INSTALL_ERROR;
 	string message_eng      = ReplaceAll(message, "%STR%", global.lang_eng[string_code]);
@@ -721,16 +659,13 @@ int ErrorMessage(int string_code, string message="%STR%", int error_code=COMMAND
 	string message_complete = "";
 	
 	// show which command failed
-	if (error_code == COMMAND_FAILED) {
+	if (error_code == ERROR_COMMAND_FAILED) {
 		message_complete = global.lang[STR_ERROR] + "\\n" + global.current_mod;
 		
 		if (global.current_mod_version != "")
 			message_complete += "\\n" + global.lang[STR_ERROR_INVERSION] + " " + global.current_mod_version;
 		
-		if (global.command_line_num > 0)
-			message_complete += "\\n" + global.lang[STR_ERROR_ONLINE] + " " + Int2Str(global.command_line_num) + "\\n" + global.command_line;
-			
-		message_complete += "\\n" + message_local;
+		message_complete += "\\n" + global.lang[STR_ERROR_ONLINE] + " " + Int2Str(global.command_line_num) + "\\n" + (global.download_phase ? "\\n" : global.command_line+"\\n") + message_local;
 
 		if (status == INSTALL_ERROR) {
 			global.logfile << "ERROR " << global.current_mod;
@@ -738,15 +673,17 @@ int ErrorMessage(int string_code, string message="%STR%", int error_code=COMMAND
 			if (global.current_mod_version != "")
 				global.logfile << " v" << global.current_mod_version;
 			
-			if (global.command_line_num > 0)	
-				global.logfile << " line " << Int2Str(global.command_line_num) << ": " << global.command_line;
+			global.logfile << " line " << Int2Str(global.command_line_num);
+			
+			if (!global.download_phase)
+				global.logfile << ": " << global.command_line;
 				
 			global.logfile << " - " << ReplaceAll(message_eng, "\\n", " ") << endl;
 		}
 	}
 	
 	// just display input message
-	if (error_code == SCRIPT_ERROR) {
+	if (error_code == ERROR_WRONG_SCRIPT) {
 		message_complete = global.lang[STR_ERROR] + "\\n" + message_local;
 		global.logfile << "ERROR - " << ReplaceAll(message_eng, "\\n", " ") << endl;
 	}
@@ -755,8 +692,7 @@ int ErrorMessage(int string_code, string message="%STR%", int error_code=COMMAND
 	return error_code;
 }
 
-
-	// Separate thread for listening to the user
+	// Separate thread for checking user feedback
 void ReceiveInstructions(void *nothing)
 {
 	fstream instructions;
@@ -787,7 +723,6 @@ void ReceiveInstructions(void *nothing)
 	_endthread();
 }
 
-
 	// Cancel entire installation
 int Abort()
 {
@@ -801,14 +736,60 @@ int Abort()
 
 		global.end_thread = true;
 		Sleep(300);
-		return USER_ABORTED;
+		return ERROR_USER_ABORTED;
 	}
 
-	return NO_ERRORS;
+	return ERROR_NONE;
+}
+// -------------------------------------------------------------------------------------------------------
+
+
+
+
+// File reading ------------------------------------------------------------------------------------------
+
+	// https://insanecoding.blogspot.com/2011/11/how-to-read-in-file-in-c.html
+string GetFileContents(const char *filename)
+{
+	ifstream file(filename, ios::in | ios::binary);
+	string contents;
+  
+	if (file) {
+		file.seekg(0, ios::end);
+		contents.resize(file.tellg());
+		file.seekg(0, ios::beg);
+		file.read(&contents[0], contents.size());
+		file.close();
+	}
+	
+	return contents;
 }
 
+string GetFileContents(string &filename) 
+{
+	return GetFileContents(filename.c_str());
+}
 
-	// Read wget log to get information about download
+string GetFileExtension(string file_name)
+{
+	string file_extension = file_name.substr( file_name.find_last_of('.')+1 );
+	transform(file_extension.begin(), file_extension.end(), file_extension.begin(), ::tolower);
+	
+	// If extension is a number then it's a wget backup - find real extension
+	int Number;
+	
+	if (file_extension!="7z" && istringstream(file_extension) >> Number) {
+		size_t lastDot       = file_name.find_last_of('.');
+		size_t secondLastDot = file_name.find_last_of('.', lastDot-1);
+		
+		if (lastDot!=string::npos  &&  secondLastDot!=string::npos)
+			file_extension = file_name.substr( secondLastDot+1, lastDot-secondLastDot-1 );
+	}
+	
+	return file_extension;
+}
+
+	// Read wget log to get information about the download
 int ParseWgetLog(string &error)
 {
 	fstream DownloadLog;
@@ -946,13 +927,11 @@ int ParseWgetLog(string &error)
 		}
 
 		WriteProgressFile(INSTALL_PROGRESS, tosave);
-	}
-	else
+	} else
 		return 1;
 	
 	return 0;
 }
-
 
 	// Read 7za log to get information about unpacking
 int ParseUnpackLog(string &error, string &file_name)
@@ -1021,7 +1000,6 @@ int ParseUnpackLog(string &error, string &file_name)
 	return 0;
 }
 
-
 	// Read MakePbo/ExtractPBO log to get information about un/packing
 int ParsePBOLog(string &message, string &exename, string &file_name)
 {
@@ -1061,55 +1039,393 @@ int ParsePBOLog(string &message, string &exename, string &file_name)
 	return 0;
 }
 
-
-string ReadStartupParams(string key_to_find)
+int CreateFileList(string source, string destination, vector<string> &sources, vector<string> &destinations, vector<bool> &dirs, int options, vector<string> &empty_dirs, int &buffer_size, int &recursion)
 {
-	FILE *f;
-	string output;
-	
-	if (f = fopen("fwatch\\tmp\\schedule\\params.bin","rb")) {
-		int existing_keys = 0;
-		fread(&existing_keys, sizeof(existing_keys), 1, f);
-		int *offsets = (int  *) malloc (existing_keys + 1);
+	WIN32_FIND_DATAW fd;
+	HANDLE hFind        = INVALID_HANDLE_VALUE;
+	wstring source_wide = string2wide(source);
+	hFind               = FindFirstFileW(source_wide.c_str(), &fd);
+	int result          = 0;
+
+	if (hFind == INVALID_HANDLE_VALUE) {
+		int error_code = GetLastError();
 		
-		if (offsets != NULL) {
-			offsets[0] = 0;
-			fread(offsets+1, sizeof(*offsets), existing_keys, f);
-			int existing_text_buffer_size = offsets[existing_keys];
-			char *text_buffer = (char *) malloc (existing_text_buffer_size);
+		if (options & FLAG_ALLOW_ERROR && error_code==ERROR_FILE_NOT_FOUND  ||  error_code==ERROR_PATH_NOT_FOUND)
+			return ERROR_NONE;
+
+		return ErrorMessage(STR_ERROR_FILE_LIST, "%STR% " + source + "  - " + Int2Str(error_code) + " " + FormatError(error_code));
+	}
+
+	recursion++;
+	string base_source      = PathNoLastItem(source);
+	string base_destination = PathNoLastItem(destination);
+	string new_name         = PathLastItem(destination);
+
+	if (new_name.empty())
+		new_name = PathLastItem(source);
+		
+	bool is_source_wildcard      = source.find("*")!=string::npos    ||  source.find("?")!=string::npos;
+	bool is_destination_wildcard = new_name.find("*")!=string::npos  ||  new_name.find("?")!=string::npos;
+
+	do {
+		if (wcscmp(fd.cFileName,L".")==0  ||  wcscmp(fd.cFileName,L"..")==0)
+			continue;
+	    
+		string file_name       = wide2string(fd.cFileName);
+		string new_source      = base_source      + file_name;
+		string new_destination = base_destination + (is_destination_wildcard ? MaskNewName(file_name,new_name) : new_name);
+		bool is_dir            = fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+		DWORD attributes       = GetFileAttributes(new_destination.c_str());
+
+		if (is_dir  &&  is_source_wildcard  &&  ~options & FLAG_MATCH_DIRS)
+			continue;
+
+		// move modfolder to the game dir when using wildcards
+		if (is_dir  &&  options & FLAG_MATCH_DIRS  &&  recursion==0  &&  Equals(destination,global.current_mod_new_name+"\\")  &&  IsModName(file_name)) {
+			new_destination = global.current_mod_new_name;
+			attributes      = GetFileAttributes(new_destination.c_str());
+		}
+
+		// If we need full paths and their totaled length
+		if (buffer_size != 0) {
+			new_destination = global.working_directory + "\\" + new_destination;
+			buffer_size    += new_destination.length() + 1;
+		}
+
+
+		// Check if destination directory already exists
+		if (is_dir  &&  (attributes != INVALID_FILE_ATTRIBUTES  &&  attributes & FILE_ATTRIBUTE_DIRECTORY  ||  ~options & FLAG_MOVE_FILES)  &&  buffer_size==0) {
+			if (!~options & FLAG_MOVE_FILES)
+				CreateDirectory(new_destination.c_str(), NULL);
+			else
+				empty_dirs.push_back(new_source);
+
+			// If dir already exists then move its contents
+			new_source      += "\\*";
+			new_destination += "\\";
+			result           = CreateFileList(new_source, new_destination, sources, destinations, dirs, options, empty_dirs, buffer_size, recursion);
 			
-			if (text_buffer != NULL) {
-				fread(text_buffer, sizeof(char), existing_text_buffer_size, f);
-				char *key_name;
-				int i = 0;
-				
-				for (; i<existing_keys; i++) {
-					key_name = text_buffer + offsets[i];
-					
-					if (strcmpi(key_name, key_to_find.c_str()) == 0) {
-						output = text_buffer + offsets[i] + strlen(key_name) + 1;
-						string tofind = "_Input=\"";
-						size_t find = output.find_first_of(tofind);
+			if (result != ERROR_NONE)
+				break;
+		} else {
+			sources     .push_back(new_source);
+			destinations.push_back(new_destination);
+			dirs        .push_back(is_dir);
+		}
+	} while (FindNextFileW(hFind, &fd) != 0);
 
-						if (find != string::npos)
-							output = output.substr(find + tofind.length(), output.length() - tofind.length() - 1);
+	recursion--;
+	FindClose(hFind);
+	return result;
+}
 
+string GetMissionDestinationFromSQM(string path)
+{
+	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_READMISSIONSQM]);
+	
+	string text_buffer = GetFileContents(path);
+	
+	if (text_buffer.empty())
+		return "Addons";
+		
+	int expect       = SQM_PROPERTY;
+	int word_start   = -1;
+	int class_level  = 0;
+	int array_level  = 0;
+	int player_count = 0;
+	bool is_array    = false;
+	bool in_quote    = false;
+	bool in_mission  = false;
+	bool is_wizard   = false;
+	char separator   = ' ';
+	string property  = "";
+	
+	for (int i=0; i<text_buffer.size(); i++) {
+		char c = text_buffer[i];
+		
+		switch (expect) {
+			case SQM_SEMICOLON : {
+				if (c == ';') {
+					expect = SQM_PROPERTY;
+					continue;
+				} else 
+					if (!isspace(c))
+						expect = SQM_PROPERTY;
+			}
+			
+			case SQM_PROPERTY : {
+				if (c == '}') {
+					class_level--;
+
+					if (in_mission && class_level==0) {
+						i = text_buffer.size();
 						break;
 					}
+									
+					expect = SQM_SEMICOLON;
+					continue;
 				}
+				
+				if (isalnum(c) || c=='_' || c=='[' || c==']') {
+					if (word_start == -1)
+						word_start = i;
+				} else
+					if (word_start >= 0) {
+						property    = text_buffer.substr(word_start, i-word_start);
+	
+						if (property == "class") {
+							expect    = SQM_CLASS_NAME;
+						} else {
+							expect    = SQM_EQUALITY;
+							separator = '=';
+							is_array  = text_buffer[i-2]=='[' && text_buffer[i-1]==']';
+							
+							if (property == "player")
+								player_count++;
+						}
 
-				free(text_buffer);
-			}			
+						word_start = -1;
+					}
+				
+				if (separator == ' ')
+					break;
+			}
 			
-			free(offsets);
+			case SQM_EQUALITY : {
+				if (c == separator) {
+					expect++;
+					separator = ' ';
+				} else 
+					if (!isspace(c)) {
+						i--;
+						separator = ' ';
+						expect    = SQM_SEMICOLON;
+					}
+				
+				break;
+			}
+			
+			case SQM_VALUE : {
+				if (c == '"')
+					in_quote = !in_quote;
+
+				if (!in_quote && c=='{')
+					array_level++;
+
+				if (!in_quote && c=='}')
+					array_level--;
+
+				if (word_start == -1) {
+					if (!isspace(c))
+						word_start = i;
+				} else {
+					if (!in_quote && array_level==0 && (c==';' || c=='\r' || c=='\n')) {
+						string word = text_buffer.substr(word_start, i-word_start);
+						transform(word.begin(), word.end(), word.begin(), ::tolower);
+						
+						if (!is_wizard && Equals(property,"position[]") && word.find("wizvar_")!=string::npos)
+							is_wizard = true;
+				
+						word_start = -1;
+						expect     = SQM_PROPERTY;
+					}
+				}
+				
+				break;
+			}
+			
+			case SQM_CLASS_NAME : {
+				if (isalnum(c) || c=='_') {
+					if (word_start == -1)
+						word_start = i;
+				} else
+					if (word_start >= 0) {
+						if (text_buffer.substr(word_start, i-word_start) == "Mission")
+							in_mission = true;
+
+						word_start = -1;
+						expect     = SQM_CLASS_BRACKET;
+					}
+				
+				if (expect != SQM_CLASS_BRACKET)
+					break;
+			}
+			
+			case SQM_CLASS_BRACKET : {
+				if (c == '{') {
+					class_level++;
+					expect = SQM_PROPERTY;
+				} else
+					if (!isspace(c)) {
+						i--;
+						expect = SQM_SEMICOLON;
+					}
+				
+				break;
+			}
+		}
+	}
+	
+	if (player_count > 1)
+		return is_wizard ? "Templates" : "MPMissions";
+	else
+		return is_wizard ? "SPTemplates" : "Missions";
+}
+
+	// callback for BrowseFolder()
+static int CALLBACK BrowseCallbackProc(HWND hwnd,UINT uMsg, LPARAM lParam, LPARAM lpData)
+{
+	if (uMsg == BFFM_INITIALIZED)
+		SendMessage(hwnd, BFFM_SETSELECTION, TRUE, lpData);
+
+	return 0;
+}
+
+	// https://stackoverflow.com/questions/12034943/win32-select-directory-dialog-from-c-c
+string BrowseFolder(string saved_path)
+{
+	TCHAR path[MAX_PATH];
+
+	const char * path_param = saved_path.c_str();
+
+	BROWSEINFO bi = { 0 };
+	bi.lpszTitle  = ("Browse for folder...");
+	bi.ulFlags    = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
+	bi.lpfn       = BrowseCallbackProc;
+	bi.lParam     = (LPARAM) path_param;
+
+	LPITEMIDLIST pidl = SHBrowseForFolder ( &bi );
+
+	if (pidl != 0) {
+		//get the name of the folder and put it in path
+		SHGetPathFromIDList ( pidl, path );
+
+		//free memory used
+		IMalloc * imalloc = 0;
+		if ( SUCCEEDED( SHGetMalloc ( &imalloc )) ) {
+			imalloc->Free ( pidl );
+			imalloc->Release ( );
+		}
+
+		return path;
+	}
+
+	return "";
+}
+
+enum MOD_SUBFOLDERS {
+	DIR_NONE,
+	DIR_ADDONS,
+	DIR_BIN,
+	DIR_CAMPAIGNS,
+	DIR_DTA,
+	DIR_WORLDS,
+	DIR_MISSIONS,
+	DIR_MPMISSIONS,
+	DIR_TEMPLATES,
+	DIR_SPTEMPLATES,
+	DIR_MISSIONSUSERS,
+	DIR_MPMISSIONSUSERS,
+	DIR_ISLANDCUTSCENES,
+	DIR_MAX
+};
+
+string mod_subfolders[] = {
+	"",
+	"Addons",
+	"Bin",
+	"Campaigns",
+	"Dta",
+	"Worlds",
+	"Missions",
+	"MPMissions",
+	"Templates",
+	"SPTemplates",
+	"MissionsUsers",
+	"MPMissionsUsers",
+	"IslandCutscenes"
+};
+		
+struct DIRECTORY_INFO {
+	int error_code;
+	int number_of_files;
+	int number_of_dirs;
+	int number_of_wanted_mods;
+	int number_of_mod_subfolders;
+	vector<wstring> file_list;
+	vector<DWORD> attributes_list;
+	vector<int> mod_sub_id_list;
+	vector<bool> is_mod_list;
+};
+
+	// Browse files in a given folder and return file list plus some other info
+DIRECTORY_INFO ScanDirectory(string path) 
+{
+	DIRECTORY_INFO output;	
+	output.error_code               = ERROR_NONE;
+	output.number_of_files          = 0;
+	output.number_of_dirs           = 0;
+	output.number_of_wanted_mods    = 0;
+	output.number_of_mod_subfolders = 0;
+	vector<wstring> files;
+	
+	WIN32_FIND_DATAW FileInformation;
+	wstring pattern = string2wide(path) + L"\\*";
+	HANDLE hFile    = FindFirstFileW(pattern.c_str(), &FileInformation);
+
+	if (hFile != INVALID_HANDLE_VALUE) {
+		do {
+			if (wcscmp(FileInformation.cFileName,L".")==0  ||  wcscmp(FileInformation.cFileName,L"..")==0  ||  wcscmp(FileInformation.cFileName,L"$PLUGINSDIR")==0)
+				continue;
+				
+			bool is_mod    = false;
+			int mod_sub_id = DIR_NONE;
+				
+			if (FileInformation.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+				output.number_of_dirs++;
+				is_mod = IsModName(wide2string(FileInformation.cFileName));
+				
+				if (is_mod)
+					output.number_of_wanted_mods++;
+				
+				for (int i=DIR_ADDONS; i<DIR_MAX && mod_sub_id==DIR_NONE; i++)
+					if (Equals(wide2string(FileInformation.cFileName),mod_subfolders[i])) {
+						output.number_of_mod_subfolders++;
+						mod_sub_id = i;
+					}
+					
+				output.file_list.push_back(FileInformation.cFileName);
+				output.attributes_list.push_back(FileInformation.dwFileAttributes);
+				output.is_mod_list.push_back(is_mod);
+				output.mod_sub_id_list.push_back(mod_sub_id);
+			} else {
+				output.number_of_files++;
+				files.push_back(FileInformation.cFileName);
+			}
+		} while(FindNextFileW(hFile, &FileInformation) == TRUE);
+		
+		// Files come after directories
+		for(int i=0; i<files.size(); i++) {
+			output.file_list.push_back(files[i]);
+			output.attributes_list.push_back(0);
+			output.is_mod_list.push_back(false);
+			output.mod_sub_id_list.push_back(DIR_NONE);
 		}
 		
-		fclose(f);
+		FindClose(hFile);
+	} else {
+		int error_code    = GetLastError();
+		output.error_code = ErrorMessage(STR_ERROR_FILE_LIST, "%STR% " + path + " - " + Int2Str(error_code) + " " + FormatError(error_code));
 	}
 
 	return output;
 }
+// -------------------------------------------------------------------------------------------------------
 
+
+
+
+// File writing ------------------------------------------------------------------------------------------
 
 	// Delete file or directory with its contents  http://stackoverflow.com/a/10836193
 int DeleteDirectory(const wstring &refcstrRootDirectory, bool bDeleteSubdirectories=true)
@@ -1125,27 +1441,28 @@ int DeleteDirectory(const wstring &refcstrRootDirectory, bool bDeleteSubdirector
 	
 	if (hFile != INVALID_HANDLE_VALUE) {
 		do {
-			if (FileInformation.cFileName[0] != '.') {
-				strFilePath.erase();
-				strFilePath = refcstrRootDirectory + L"\\" + FileInformation.cFileName;
+			if (wcscmp(FileInformation.cFileName,L".")==0  ||  wcscmp(FileInformation.cFileName,L"..")==0)
+				continue;
 
-				if (FileInformation.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-					if (bDeleteSubdirectories) {
-						// Delete subdirectory
-						int iRC = DeleteDirectory(strFilePath, bDeleteSubdirectories);
-						if (iRC)
-							return iRC;
-					} else
-						bSubdirectory = true;
-				} else {
-					// Set file attributes
-					if (SetFileAttributesW(strFilePath.c_str(), FILE_ATTRIBUTE_NORMAL) == FALSE)
-						return GetLastError();
+			strFilePath.erase();
+			strFilePath = refcstrRootDirectory + L"\\" + FileInformation.cFileName;
 
-					// Delete file
-					if (DeleteFileW(strFilePath.c_str()) == FALSE)
-						return GetLastError();
-				}
+			if (FileInformation.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+				if (bDeleteSubdirectories) {
+					// Delete subdirectory
+					int iRC = DeleteDirectory(strFilePath, bDeleteSubdirectories);
+					if (iRC)
+						return iRC;
+				} else
+					bSubdirectory = true;
+			} else {
+				// Set file attributes
+				if (SetFileAttributesW(strFilePath.c_str(), FILE_ATTRIBUTE_NORMAL) == FALSE)
+					return GetLastError();
+
+				// Delete file
+				if (DeleteFileW(strFilePath.c_str()) == FALSE)
+					return GetLastError();
 			}
 		}
 		while (FindNextFileW(hFile, &FileInformation) == TRUE);
@@ -1176,14 +1493,12 @@ int DeleteDirectory(const wstring &refcstrRootDirectory, bool bDeleteSubdirector
 	return 0;
 }
 
-
 int DeleteDirectory(const string &refcstrRootDirectory, bool bDeleteSubdirectories=true) 
 {
 	return DeleteDirectory(string2wide(refcstrRootDirectory), bDeleteSubdirectories);
 }
 
-
-int Download(string url, int options=0, string log_file_name="")
+int Download(string url, int options=FLAG_NONE, string log_file_name="")
 {
 	global.downloaded_filename = PathLastItem(UnQuote(url));
 
@@ -1257,7 +1572,7 @@ int Download(string url, int options=0, string log_file_name="")
 		find = url.find(output, find);
 	}
 
-	string arguments = options & OVERWRITE ? "" : " --no-clobber";
+	string arguments = options & FLAG_OVERWRITE ? "" : " --no-clobber";
 	arguments += " --tries=1 --user-agent=\"Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)\" --no-check-certificate --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ " + url;
 	unlink("fwatch\\tmp\\schedule\\downloadLog.txt");
 
@@ -1276,7 +1591,7 @@ int Download(string url, int options=0, string log_file_name="")
 		int errorCode = GetLastError();
 		return ErrorMessage(STR_ERROR_EXE, "%STR% wget.exe - " + Int2Str(errorCode) + " " + FormatError(errorCode));
 	} else
-		if (~options & SILENT_MODE)
+		if (~options & FLAG_SILENT_MODE)
 			global.logfile << "Downloading  " << (log_file_name.empty() ? url : log_file_name) << endl;
 
 
@@ -1296,7 +1611,7 @@ int Download(string url, int options=0, string log_file_name="")
 			Sleep(100);
 			string filename = "fwatch\\tmp\\" + global.downloaded_filename;
 			DeleteFile(filename.c_str());
-			return USER_ABORTED;
+			return ERROR_USER_ABORTED;
 		}
 
 		ParseWgetLog(message);
@@ -1330,184 +1645,17 @@ int Download(string url, int options=0, string log_file_name="")
 		}
 		
 		global.logfile << exit_code << " - " << exit_status << " - " << message << endl;
-		ErrorMessage(STR_DOWNLOAD_FAILED, "%STR%\\n" + global.downloaded_filename + "\\n\\n" + message, options & SILENT_MODE ? SCRIPT_ERROR : COMMAND_FAILED);		
+		ErrorMessage(STR_DOWNLOAD_FAILED, "%STR%\\n" + global.downloaded_filename + "\\n\\n" + message, options & FLAG_SILENT_MODE ? ERROR_WRONG_SCRIPT : ERROR_COMMAND_FAILED);
 		string filename = "fwatch\\tmp\\" + global.downloaded_filename;
 		DeleteFile(filename.c_str());
 	} else
-		if (~options & SILENT_MODE)
+		if (~options & FLAG_SILENT_MODE)
 			global.downloads.push_back(global.downloaded_filename);
 	
-	return (exit_code!=0 ? COMMAND_FAILED : NO_ERRORS);
+	return (exit_code!=0 ? ERROR_COMMAND_FAILED : ERROR_NONE);
 }
 
-
-int Download_Wrapper(const vector<string> &arg)
-{	
-	if (arg.size() == 0)
-		return ErrorMessage(STR_ERROR_ARG_COUNT);
-		
-	if (arg.size() == 1)
-		return Download(arg[0]);
-		
-	if (arg.size() == 2) {
-		string link_with_filename = arg[0] + " \"--output-document=" + arg[1] + "\"";
-		return Download(link_with_filename);
-	}
-
-	string original_url = arg[0];
-	string cookie_file  = "fwatch\\tmp\\__cookies.txt";
-	string token_file   = "fwatch\\tmp\\__downloadtoken";
-	string arguments    = "";
-	string new_url      = original_url;
-	string POST         = "";
-	int result          = 0;
-	bool found_phrase   = false;
-
-	DeleteFile(cookie_file.c_str());
-	DeleteFile(token_file.c_str());
-
-	for (int i=1; i<arg.size()-1; i++) {		
-		arguments = "";
-		
-		if (!POST.empty()) {
-			arguments += "--post-data=" + POST + " ";
-			POST = "";
-		}
-	
-		arguments += (i==1 ? "--keep-session-cookies --save-cookies " : "--load-cookies ") + cookie_file + " --output-document=" + token_file + " " + new_url;	
-		result     = Download(arguments, OVERWRITE, new_url);
-
-		if (result != 0)
-			return result;
-
-		// Parse downloaded file and find link
-		string token_file_buffer = "";
-		fstream token_file_handle;
-		token_file_handle.open(token_file.c_str(), ios::in);
-		
-		if (token_file_handle.is_open()) {
-		    string line = "";
-
-			while(getline(token_file_handle, line))
-				token_file_buffer += line;
-				
-			size_t find = token_file_buffer.find(arg[i]);
-
-			if (find != string::npos) {
-				size_t left_quote  = string::npos;
-				size_t right_quote = string::npos;
-				
-				for(int j=find; j>=0 && left_quote==string::npos; j--)
-					if (token_file_buffer[j]=='\"' || token_file_buffer[j]=='\'')
-						left_quote=j;
-						
-				for(int k=find; k<token_file_buffer.length() && right_quote==string::npos; k++)
-					if (token_file_buffer[k]=='\"' || token_file_buffer[k]=='\'')
-						right_quote=k;
-				
-				if (left_quote!=string::npos && right_quote!=string::npos) {
-					left_quote++;
-					found_phrase     = true;
-					string found_url = ReplaceAll(token_file_buffer.substr(left_quote, right_quote - left_quote), "&amp;", "&");
-					
-					// if relative address
-					if (found_url[0] == '/') {
-						int offset = 0;
-						size_t doubleslash = original_url.find("//");
-						
-						if (doubleslash != string::npos)
-							offset = doubleslash + 2;
-						
-						size_t slash = original_url.find_first_of("/", offset);
-						
-						if (slash != string::npos)
-							original_url = original_url.substr(0, slash);
-						
-						found_url = original_url + found_url;
-					} else
-						if (!IsURL(found_url)) {
-							size_t lastslash = new_url.find_last_of("/");
-							
-							if (lastslash != string::npos)
-								new_url = new_url.substr(0, lastslash+1);
-							
-							found_url = new_url + found_url;
-						}
-						
-					// Check if it's a form
-					if (left_quote>8 && token_file_buffer.substr(left_quote-8, 7)=="action=") {
-						size_t offset = 0;
-						string form  = GetTextBetween(token_file_buffer, "</form>", "<form", left_quote, true);
-						string input = GetTextBetween(form, "<input", ">", offset);
-						
-						while (!input.empty()) {							
-							vector<string> attributes;
-							Tokenize(input," ", attributes);
-							string name  = "";
-							string value = "";
-							
-							for (int j=0; j<attributes.size(); j++) {								
-								if (attributes[j].substr(0,5) == "name=")
-									name = ReplaceAll(attributes[j].substr(5), "\"", "");
-									
-								if (attributes[j].substr(0,6) == "value=")
-									value = ReplaceAll(attributes[j].substr(6), "\"", "");
-							}
-							
-							if (!name.empty()) {
-								size_t replacement = token_file_buffer.find("input[name="+name);
-								
-								if (replacement != string::npos) {
-									size_t new_value = token_file_buffer.find("'", replacement+13+name.length());
-									
-									if (new_value != string::npos) {
-										new_value++;
-										size_t end_value = token_file_buffer.find("'", new_value);
-										
-										if (end_value != string::npos)
-											value = token_file_buffer.substr(new_value, end_value-new_value);
-									}
-									
-								}
-								
-								POST += (POST.empty() ? "" : "&") + url_encode(name) + "=" + url_encode(value);
-							}
-							
-							input = GetTextBetween(form, "<input", ">", offset);
-						}
-					}
-					
-					new_url = found_url;
-				}
-			}
-
-			token_file_handle.close();
-		}
-
-		if (!found_phrase)
-			return ErrorMessage(STR_DOWNLOAD_FIND_ERROR, "%STR% " + arg[i]);
-			
-		token_file += Int2Str(i);
-	}
-
-	arguments  = "--load-cookies " + cookie_file;
-	
-	if (!POST.empty())
-		arguments += " --post-data=\"" + POST + "\" ";
-	
-	arguments +=  " \"--output-document=" + arg[arg.size()-1] + "\" " + new_url;
-	result     = Download(arguments, 0, new_url);
-
-	if (!global.test_mode) {
-		DeleteFile(cookie_file.c_str());
-		DeleteFile(token_file.c_str());
-	}
-
-	return result;
-}
-
-
-int Unpack(string file_name, string password="")
+int Unpack(string file_name, string password="", int options=FLAG_NONE)
 {
 	// Get subdirectories
 	string relative_path = PathNoLastItem(file_name);
@@ -1570,14 +1718,13 @@ int Unpack(string file_name, string password="")
 			CloseHandle(pi.hProcess);
 			CloseHandle(pi.hThread);
 			CloseHandle(logFile);
-			return USER_ABORTED;
+			return ERROR_USER_ABORTED;
 		}
 		
 		ParseUnpackLog(message, file_name);
 		GetExitCodeProcess(pi.hProcess, &exit_code);
 		Sleep(100);
-	}
-	while (exit_code == STILL_ACTIVE);
+	} while (exit_code == STILL_ACTIVE);
 
 	ParseUnpackLog(message, file_name);
 
@@ -1587,7 +1734,7 @@ int Unpack(string file_name, string password="")
 		if (message.find("Can not open the file as") != string::npos  &&  message.find("archive") != string::npos)
 			message += " - " + global.lang[STR_UNPACK_REDO_FILE];
 
-		if (global.unpack_set_error)
+		if (~options & FLAG_ALLOW_ERROR)
 			ErrorMessage(STR_UNPACK_ERROR, "%STR%\\n" + file_name + "\\n\\n" + message);
 	}
 
@@ -1595,9 +1742,8 @@ int Unpack(string file_name, string password="")
 	CloseHandle(pi.hThread);
 	CloseHandle(logFile);
 
-	return (exit_code!=0 ? COMMAND_FAILED : NO_ERRORS);
+	return (exit_code!=0 ? ERROR_COMMAND_FAILED : ERROR_NONE);
 }
-
 
 int MakeDir(string path)
 {
@@ -1612,102 +1758,29 @@ int MakeDir(string path)
 		result      = CreateDirectory(build_path.c_str(), NULL);
 
 		if (!result) {
-			int errorCode = GetLastError();
-			if (errorCode != 183)
-				return ErrorMessage(STR_MDIR_ERROR, "%STR% " + build_path + " " + Int2Str(errorCode) + " " + FormatError(errorCode));
+			int error_code = GetLastError();
+
+			if (error_code != ERROR_ALREADY_EXISTS)
+				return ErrorMessage(STR_MDIR_ERROR, "%STR% " + build_path + " " + Int2Str(error_code) + " " + FormatError(error_code));
 		} else
 			global.logfile << "Created directory " << build_path << endl;
 	}
 	
-	return NO_ERRORS;
+	return ERROR_NONE;
 }
-
-
-int CreateFileList(string source, string destination, vector<string> &sources, vector<string> &destinations, vector<bool> &dirs, int options, vector<string> &empty_dirs, int &buffer_size, int &recursion)
-{
-	WIN32_FIND_DATAW fd;
-	HANDLE hFind        = INVALID_HANDLE_VALUE;
-	wstring source_wide = string2wide(source);
-	hFind               = FindFirstFileW(source_wide.c_str(), &fd);
-	int result          = 0;
-
-	if (hFind == INVALID_HANDLE_VALUE) {
-		int errorCode = GetLastError();
-		if (options & ALLOW_ERROR && errorCode==2 || errorCode==3)
-			return 0;
-
-		return ErrorMessage(STR_ERROR_FILE_LIST, "%STR% " + source + "  - " + Int2Str(errorCode) + " " + FormatError(errorCode));
-	}
-
-	recursion++;
-	string base_source      = PathNoLastItem(source);
-	string base_destination = PathNoLastItem(destination);
-	string new_name         = PathLastItem(destination);
-
-	if (new_name.empty())
-		new_name = PathLastItem(source);
-		
-	bool is_source_wildcard      = source.find("*")!=string::npos    ||  source.find("?")!=string::npos;
-	bool is_destination_wildcard = new_name.find("*")!=string::npos  ||  new_name.find("?")!=string::npos;
-
-	do {
-		if (fd.cFileName[0] == '.')
-			continue;
-	    
-		string file_name       = wide2string(fd.cFileName);
-		string new_source      = base_source      + file_name;
-		string new_destination = base_destination + (is_destination_wildcard ? MaskNewName(file_name,new_name) : new_name);
-		bool   is_dir          = fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
-		int attributes         = GetFileAttributes(new_destination.c_str());
-
-		if (is_dir  &&  is_source_wildcard  &&  ~options & MATCH_DIRS)
-			continue;
-
-		// move modfolder to the game dir when using wildcards
-		if (is_dir  &&  options & MATCH_DIRS  &&  recursion==0  &&  Equals(destination,global.current_mod_new_name+"\\")  &&  IsModName(file_name)) {
-			new_destination = global.current_mod_new_name;
-			attributes      = GetFileAttributes(new_destination.c_str());
-		}
-
-		// If we need full paths and their totaled length
-		if (buffer_size != 0) {
-			new_destination = global.working_directory + "\\" + new_destination;
-			buffer_size    += new_destination.length() + 1;
-		}
-
-
-		// Check if destination directory already exists
-		if (is_dir  &&  (attributes != INVALID_FILE_ATTRIBUTES  &&  attributes & FILE_ATTRIBUTE_DIRECTORY  ||  ~options & MOVE_FILES)  &&  buffer_size==0) {
-			if (!~options & MOVE_FILES)
-				CreateDirectory(new_destination.c_str(), NULL);
-			else
-				empty_dirs.push_back(new_source);
-
-			// If dir already exists then move its contents
-			new_source      += "\\*";
-			new_destination += "\\";
-			result           = CreateFileList(new_source, new_destination, sources, destinations, dirs, options, empty_dirs, buffer_size, recursion);
-			if (result != 0)
-				break;
-		} else {
-			sources     .push_back(new_source);
-			destinations.push_back(new_destination);
-			dirs        .push_back(is_dir);
-		}
-	}
-	while (FindNextFileW(hFind, &fd) != 0);
-
-	recursion--;
-	FindClose(hFind);
-	return result;
-}
-
 
 int MoveFiles(string source, string destination, string new_name, int options)
 {
 	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_COPYING]+"...");
 
-
+	// Optionally create destination directory
+	if (options & FLAG_CREATE_DIR) {
+		int result = MakeDir(PathNoLastItem(destination));
+		
+		if (result != ERROR_NONE)
+			return result;
+	}
+	
 	// Find files and save them to a list
 	vector<string> source_list;
 	vector<string> destination_list;
@@ -1715,10 +1788,10 @@ int MoveFiles(string source, string destination, string new_name, int options)
 	vector<string> empty_dirs;
 	int buffer_size = 0;
 	int recursion   = -1;
-	
+
 	int result = CreateFileList(source, destination+new_name, source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
 
-	if (result != 0)
+	if (result != ERROR_NONE)
 		return result;
 	
 
@@ -1726,7 +1799,7 @@ int MoveFiles(string source, string destination, string new_name, int options)
 	bool FailIfExists = false;
 	int return_value  = 0;
 
-	if (~options & OVERWRITE) {
+	if (~options & FLAG_OVERWRITE) {
 		FailIfExists = true;
 		flags        = 0;
 	}
@@ -1734,121 +1807,56 @@ int MoveFiles(string source, string destination, string new_name, int options)
 	wstring source_wide;
 	wstring destination_wide;
 
-
 	// For each file in the list
 	for (int i=0;  i<source_list.size(); i++) {
 		if (Abort())
-			return USER_ABORTED;
+			return ERROR_USER_ABORTED;
 
 		// Format path for logging
-		string destinationLOG = PathNoLastItem(destination_list[i], NO_END_SLASH);
+		string destinationLOG = PathNoLastItem(destination_list[i], FLAG_NO_END_SLASH);
 
 		if (destinationLOG.empty())
 			destinationLOG = "the game folder";
 		
-		global.logfile << (options & MOVE_FILES ? "Moving" : "Copying") << "  " << ReplaceAll(source_list[i], "fwatch\\tmp\\_extracted\\", "") << "  to  " << destinationLOG;
+		global.logfile << (options & FLAG_MOVE_FILES ? "Moving" : "Copying") << "  " << ReplaceAll(source_list[i], "fwatch\\tmp\\_extracted\\", "") << "  to  " << destinationLOG;
 		
-		if (!new_name.empty())
+		if (!new_name.empty() && PathLastItem(source_list[i])!=PathLastItem(destination_list[i]))
 			global.logfile << "  as  " << PathLastItem(destination_list[i]);
 
 		source_wide      = string2wide(source_list[i]);
 		destination_wide = string2wide(destination_list[i]);
+		int success      = false;
 		
-		if (options & MOVE_FILES)
-			result = MoveFileExW(source_wide.c_str(), destination_wide.c_str(), flags);
+		if (options & FLAG_MOVE_FILES)
+			success = MoveFileExW(source_wide.c_str(), destination_wide.c_str(), flags);
 		else
-			result = CopyFileW(source_wide.c_str(), destination_wide.c_str(), FailIfExists);
+			success = CopyFileW(source_wide.c_str(), destination_wide.c_str(), FailIfExists);
 
-	    if (result == 0) {
-			return_value = GetLastError();
+	    if (!success) {
+			int error_code = GetLastError();
 			
-	    	if (~options & OVERWRITE  &&  return_value==183)
+	    	if (~options & FLAG_OVERWRITE  &&  error_code==ERROR_ALREADY_EXISTS)
 	    		global.logfile << "  - file already exists";
-			else
-				global.logfile << "  FAILED " << return_value << " " << FormatError(return_value);
+			else {
+				global.logfile << endl;
+				result = ErrorMessage(
+					options & FLAG_MOVE_FILES ? STR_MOVE_ERROR : STR_COPY_ERROR,
+					"%STR% " + source_list[i] + " " + global.lang[STR_MOVE_TO_ERROR] + " " + destination_list[i] + " - " + Int2Str(error_code) + " " + FormatError(error_code)
+				);
+				break;
+			}
 		}
-			
+
 		global.logfile << endl;
 	}
 
-
 	// Remove empty directories
-	if (options & MOVE_FILES)
+	if (options & FLAG_MOVE_FILES)
 		for (int i=empty_dirs.size()-1; i>=0; i--)
 			RemoveDirectory(empty_dirs[i].c_str());
 
-	return (return_value!=0 ? COMMAND_FAILED : NO_ERRORS);
+	return result;
 }
-
-
-int RequestExecution(string path_to_dir, string file_name)
-{		
-	global.logfile << "Asking the user to run " << file_name << endl;
-	
-	string message = global.lang[STR_ASK_EXE] + ":\\n" + file_name + "\\n\\n" + global.lang[STR_ALTTAB];
-	WriteProgressFile(INSTALL_WAITINGFORUSER, message);
-	
-	message = "You must manually run\n" + file_name + "\n\nPress OK to start\nPress CANCEL to skip installing this modfolder";
-	int msgboxID = MessageBox(NULL, message.c_str(), "Addon Installer", MB_ICONQUESTION | MB_OKCANCEL | MB_DEFBUTTON1);
-	
-	if (msgboxID == IDCANCEL)
-		global.skip_modfolder = true;
-	else {
-		CopyFile("Aspect_Ratio.hpp", "Aspect_Ratio.backup", false);
-		
-		// Execute program
-		PROCESS_INFORMATION pi;
-	    STARTUPINFO si; 
-		ZeroMemory( &si, sizeof(si) );
-		ZeroMemory( &pi, sizeof(pi) );
-		si.cb 		   = sizeof(si);
-		si.dwFlags 	   = STARTF_USESHOWWINDOW;
-		si.wShowWindow = SW_SHOW;
-		
-		string executable = path_to_dir + "\\" + file_name;
-		string arguments  = " " + global.working_directory;
-		
-		if (!CreateProcess(&executable[0], &arguments[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi)) {
-			MoveFileEx("Aspect_Ratio.backup", "Aspect_Ratio.hpp", MOVEFILE_REPLACE_EXISTING);
-			int errorCode = GetLastError();
-			global.logfile << "Failed to launch " << file_name << " - " << errorCode << " " << FormatError(errorCode);
-			return errorCode;
-		}
-	
-		// Wait for the program to finish its job
-		DWORD exit_code;
-		do {
-			GetExitCodeProcess(pi.hProcess, &exit_code);
-			Sleep(100);
-		}
-		while (exit_code == STILL_ACTIVE);
-		global.logfile << "Exit code: " << exit_code << endl;
-	
-		CloseHandle(pi.hProcess);
-		CloseHandle(pi.hThread);
-
-		MoveFileEx("Aspect_Ratio.backup", "Aspect_Ratio.hpp", MOVEFILE_REPLACE_EXISTING);
-	}
-	
-	//string path_to_file = path_to_dir + file_name;
-	//int result          = E_FAIL;
-	/*ITEMIDLIST *pIDL = ILCreateFromPath(path_to_file.c_str());
-	
-	if (pIDL != NULL) {
-		CoInitialize(NULL);
-	    int result = SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) == 0;	    
-		CoUninitialize();
-	    ILFree(pIDL);
-	};*/
-	
-	//if (result != S_OK)
-	//HINSTANCE result =
-	 
-	//ShellExecute(NULL, "open", path_to_dir.c_str(), NULL, NULL, SW_SHOWDEFAULT);
-
-	return NO_ERRORS;
-}
-
 
 int ExtractPBO(string source, string destination="", string file_to_unpack="", bool silent=false) 
 {
@@ -1929,7 +1937,7 @@ int ExtractPBO(string source, string destination="", string file_to_unpack="", b
 			CloseHandle(pi.hProcess);
 			CloseHandle(pi.hThread);
 			CloseHandle(logFile);
-			return USER_ABORTED;
+			return ERROR_USER_ABORTED;
 		}
 		
 		ParsePBOLog(error_message, exename, source);
@@ -1948,7 +1956,7 @@ int ExtractPBO(string source, string destination="", string file_to_unpack="", b
 			dir_name        = dir_name.substr(0, dir_name.length()-4);
 			source          = destination_temp + dir_name;
 			destination     = UnQuote(destination) + dir_name;
-			MoveFiles(source, destination, "", MOVE_FILES | OVERWRITE);	
+			MoveFiles(source, destination, "", FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_MATCH_DIRS);	
 		}
 
 	CloseHandle(pi.hProcess);
@@ -1956,415 +1964,473 @@ int ExtractPBO(string source, string destination="", string file_to_unpack="", b
 	CloseHandle(logFile);
 	Sleep(600);
 
-	return (exit_code!=0 ? COMMAND_FAILED : NO_ERRORS);
+	return (exit_code!=0 ? ERROR_COMMAND_FAILED : ERROR_NONE);
 }
 
+int ChangeFileDate(string file_name) 
+{	
+	//https://support.microsoft.com/en-us/help/167296/how-to-convert-a-unix-time-t-to-a-win32-filetime-or-systemtime
+	FILETIME ft;
+	LONGLONG ll;
+	ll                = Int32x32To64(global.current_mod_version_date, 10000000) + 116444736000000000;
+	ft.dwLowDateTime  = (DWORD)ll;
+	ft.dwHighDateTime = ll >> 32;
+   
+	HANDLE file_handle = CreateFile(file_name.c_str(), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	BOOL result        = SetFileTime(file_handle, (LPFILETIME)NULL, (LPFILETIME)NULL, &ft);
+	CloseHandle(file_handle);
+	
+	return result ? ERROR_NONE : GetLastError();
+}
 
-int ParseMissionSQM(string path) 
+	// Read directory and save file modification dates
+int CreateTimestampList(string path, int path_cut, vector<string> &namelist, vector<unsigned int> &timelist) 
 {
-	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_READMISSIONSQM]);
-	
-	ifstream file(path.c_str());
-	string buffer;
-	
-	if (file.is_open()) {
-		file.seekg(0, ios::end);   
-		buffer.reserve(file.tellg());
-		file.seekg(0, ios::beg);
-	
-		buffer.assign((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
-		file.close();
-	} else 
-		return NO_MISSIONSQM;
+	WIN32_FIND_DATAW fd;
+	string wildcard   = path + "\\*";
+	wstring wildcardW = string2wide(wildcard);
+	HANDLE hFind      = FindFirstFileW(wildcardW.c_str(), &fd);
+
+	if (hFind == INVALID_HANDLE_VALUE) {
+		int error_code = GetLastError();
 		
-	int expect       = PROPERTY;
-	int word_start   = -1;
-	int class_level  = 0;
-	int array_level  = 0;
-	int player_count = 0;
-	bool is_array    = false;
-	bool in_quote    = false;
-	bool in_mission  = false;
-	char separator   = ' ';
-	
-	for (int i=0; i<buffer.size(); i++) {
-		char c = buffer[i];
-		
-		switch (expect) {
-			case SEMICOLON : {
-				if (c == ';') {
-					expect = PROPERTY;
-					continue;
-				} else 
-					if (!isspace(c))
-						expect = PROPERTY;
-			}
-			
-			case PROPERTY : {
-				if (c == '}') {
-					class_level--;
+		if (error_code==ERROR_FILE_NOT_FOUND  ||  error_code==ERROR_PATH_NOT_FOUND)
+			return 0;
 
-					if (in_mission && class_level==0) {
-						i = buffer.size();
-						break;
-					}
-									
-					expect = SEMICOLON;
-					continue;
-				}
-				
-				if (isalnum(c) || c=='_' || c=='[' || c==']') {
-					if (word_start == -1)
-						word_start = i;
-				} else
-					if (word_start >= 0) {
-						string word = buffer.substr(word_start, i-word_start);
-	
-						if (word == "class") {
-							expect    = CLASS_NAME;
-						} else {
-							expect    = EQUALITY;
-							separator = '=';
-							is_array  = buffer[i-2]=='[' && buffer[i-1]==']';
-							
-							if (word == "player")
-								if (++player_count > 1)
-									return MULTI_PLAYER;
-						}
-
-						word_start = -1;
-					}
-				
-				if (separator == ' ')
-					break;
-			}
-			
-			case EQUALITY : {
-				if (c == separator) {
-					expect++;
-					separator = ' ';
-				} else 
-					if (!isspace(c)) {
-						i--;
-						separator = ' ';
-						expect    = SEMICOLON;
-					}
-				
-				break;
-			}
-			
-			case VALUE : {
-				if (c == '"')
-					in_quote = !in_quote;
-
-				if (!in_quote && c=='{')
-					array_level++;
-
-				if (!in_quote && c=='}')
-					array_level--;
-
-				if (word_start == -1) {
-					if (!isspace(c))
-						word_start = i;
-				} else {
-					if (!in_quote && array_level==0 && (c==';' || c=='\r' || c=='\n')) {				
-						word_start = -1;
-						expect     = PROPERTY;
-					}
-				}
-				
-				break;
-			}
-			
-			case CLASS_NAME : {
-				if (isalnum(c) || c=='_') {
-					if (word_start == -1)
-						word_start = i;
-				} else
-					if (word_start >= 0) {
-						if (buffer.substr(word_start, i-word_start) == "Mission")
-							in_mission = true;
-
-						word_start = -1;
-						expect     = CLASS_BRACKET;
-					}
-				
-				if (expect != CLASS_BRACKET)
-					break;
-			}
-			
-			case CLASS_BRACKET : {
-				if (c == '{') {
-					class_level++;
-					expect = PROPERTY;
-				} else
-					if (!isspace(c)) {
-						i--;
-						expect = SEMICOLON;
-					}
-				
-				break;
-			}
-		}
+		return ErrorMessage(STR_ERROR_FILE_LIST, "%STR% " + wildcard + "  - " + Int2Str(error_code) + " " + FormatError(error_code));
 	}
 	
-	return SINGLE_PLAYER;
+	do {
+		if (wcscmp(fd.cFileName,L".")==0  ||  wcscmp(fd.cFileName,L"..")==0)
+			continue;
+			
+		string file_name = wide2string(fd.cFileName);
+		string full_path = path + "\\" + file_name;
+
+		if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			CreateTimestampList(full_path, path_cut, namelist, timelist);
+		else {
+			//https://www.gamedev.net/forums/topic/565693-converting-filetime-to-time_t-on-windows/
+			ULARGE_INTEGER ull;
+			ull.LowPart  = fd.ftLastWriteTime.dwLowDateTime;
+			ull.HighPart = fd.ftLastWriteTime.dwHighDateTime;
+			time_t stamp = ull.QuadPart / 10000000ULL - 11644473600ULL;
+	
+			namelist.push_back(full_path.substr(path_cut));
+			timelist.push_back(stamp);
+		}
+	} while (FindNextFileW(hFind, &fd) != 0);
+	
+	FindClose(hFind);
+	return 0;
+}
+// -------------------------------------------------------------------------------------------------------
+
+
+
+
+// Installer commands that get reused --------------------------------------------------------------------
+
+int RequestExecution(string path_to_dir, string file_name)
+{		
+	DWORD exit_code = 0;
+	
+	global.logfile << "Asking the user to run " << file_name << endl;
+	
+	string message = global.lang[STR_ASK_EXE] + ":\\n" + file_name + "\\n\\n" + global.lang[STR_ALTTAB];
+	WriteProgressFile(INSTALL_WAITINGFORUSER, message);
+	
+	message = "File\n" + file_name + "must be manually run\n\nPress OK to start\nPress CANCEL to skip installing this modfolder";
+	int msgboxID = MessageBox(NULL, message.c_str(), "Addon Installer", MB_ICONQUESTION | MB_OKCANCEL | MB_DEFBUTTON1);
+	
+	if (msgboxID == IDCANCEL)
+		global.skip_modfolder = true;
+	else {
+		CopyFile("Aspect_Ratio.hpp", "Aspect_Ratio.backup", false);
+		
+		// Execute program
+		PROCESS_INFORMATION pi;
+	    STARTUPINFO si; 
+		ZeroMemory( &si, sizeof(si) );
+		ZeroMemory( &pi, sizeof(pi) );
+		si.cb 		   = sizeof(si);
+		si.dwFlags 	   = STARTF_USESHOWWINDOW;
+		si.wShowWindow = SW_SHOW;
+		
+		string executable = path_to_dir + "\\" + file_name;
+		string arguments  = " " + global.working_directory;
+		
+		if (!CreateProcess(&executable[0], &arguments[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi)) {
+			MoveFileEx("Aspect_Ratio.backup", "Aspect_Ratio.hpp", MOVEFILE_REPLACE_EXISTING);
+			int errorCode = GetLastError();
+			global.logfile << "Failed to launch " << file_name << " - " << errorCode << " " << FormatError(errorCode);
+			return errorCode;
+		}
+	
+		// Wait for the program to finish its job
+		do {
+			GetExitCodeProcess(pi.hProcess, &exit_code);
+			Sleep(100);
+		} while (exit_code == STILL_ACTIVE);
+		
+		global.logfile << "Exit code: " << exit_code << endl;
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+
+		MoveFileEx("Aspect_Ratio.backup", "Aspect_Ratio.hpp", MOVEFILE_REPLACE_EXISTING);
+	}
+	
+	//string path_to_file = path_to_dir + file_name;
+	//int result          = E_FAIL;
+	/*ITEMIDLIST *pIDL = ILCreateFromPath(path_to_file.c_str());
+	
+	if (pIDL != NULL) {
+		CoInitialize(NULL);
+	    int result = SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) == 0;	    
+		CoUninitialize();
+	    ILFree(pIDL);
+	};*/
+	
+	//if (result != S_OK)
+	//HINSTANCE result =
+	 
+	//ShellExecute(NULL, "open", path_to_dir.c_str(), NULL, NULL, SW_SHOWDEFAULT);
+
+	return (exit_code!=0 ? ERROR_COMMAND_FAILED : ERROR_NONE);
 }
 
+int Condition_If_version(const vector<string> &arg, int arg_id, int arg_num) 
+{
+	if (arg_num < 2)
+		return ErrorMessage(STR_ERROR_ARG_COUNT);
+	
+	// Process arguments (two or three)
+	string op          = "==";
+	float given_number = 0;
 
-int Auto_Install(string file, string password="")
+	if (arg_num >= 2) {
+		op           = arg[arg_id];
+		given_number = atof(arg[arg_id+1].c_str());
+	} else	
+		if (isdigit(arg[arg_id][0])  ||  arg[arg_id][0]=='.')
+			given_number = atof(arg[arg_id].c_str());
+		else
+			return ErrorMessage(STR_IF_NUMBER_ERROR);
+
+	
+	// Execute condition if not nested or if nested inside a valid condition
+	bool result = false;
+	
+	if (global.condition_index<0  ||  global.condition_index>=0 && global.condition[global.condition_index]) {
+		float game_version = atof(global.arguments_table["gameversion"].c_str());
+
+		if (op=="=="  ||  op=="=")
+			result = game_version == given_number;
+				
+		if (op=="!="  ||  op=="<>")
+			result = game_version != given_number;
+				
+		if (op=="<")
+			result = game_version < given_number;
+				
+		if (op==">")
+			result = game_version > given_number;	
+				
+		if (op=="<=")
+			result = game_version <= given_number;
+				
+		if (op==">=")
+			result = game_version >= given_number;
+	}
+	
+	global.condition_index++;
+	global.condition.push_back(result);
+	return ERROR_NONE;
+}
+
+int Condition_Else()
+{
+	// If not nested or nested inside a valid condition then reverse a flag which will enable execution of the commands that follow
+	if (global.condition_index==0  ||  (global.condition_index>0  &&  global.condition[global.condition_index-1]))
+		global.condition[global.condition_index] = !global.condition[global.condition_index];
+	
+	return ERROR_NONE;
+}
+
+int Condition_Endif()
+{
+	if (global.condition_index >= 0)
+		global.condition_index--;
+		
+	if (global.condition.size() > 0)
+		global.condition.pop_back();
+
+	return ERROR_NONE;
+}
+
+int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string password="")
 {
 	if (Abort())
-		return USER_ABORTED;
+		return ERROR_USER_ABORTED;
+
+	if (file.empty())
+		return ERROR_NONE;
 
 	string file_with_path = "fwatch\\tmp\\" + file;
 	string file_only      = PathLastItem(file);
-	bool FirstFile        = file.find_last_of("\\") == string::npos;
 	size_t dots           = count(file_only.begin(), file_only.end(), '.');
-	int attributes        = GetFileAttributesW(string2wide(file_with_path).c_str());
-
-
-	// Get file attributes to see if it's a directory
-	if (attributes == INVALID_FILE_ATTRIBUTES) {
-		int errorCode   = GetLastError();
-		string errorMSG = FormatError(errorCode);
+	
+	if (attributes & FILE_ATTRIBUTE_DIRECTORY) {
+		// Translate this bit to a local bool so that it won't get carried over
+		bool force_install = false;
 		
-		if (FirstFile)
-			return ErrorMessage(STR_AUTO_READ_ATTRI, "%STR% " + file + " - " + Int2Str(errorCode) + " " + errorMSG);
-		else {
-			global.logfile << "Failed to get attributes of " << file << " - " << errorCode + " " << errorMSG << endl;
-			return NO_ERRORS;
+		if (options & FLAG_DONT_IGNORE) {
+			options      &= ~FLAG_DONT_IGNORE;
+			force_install = true;
 		}
-	} else
-		if (attributes & FILE_ATTRIBUTE_DIRECTORY) {
-			// If it's a modfolder that we're installing
-			if (IsModName(file_only)) {
-				int result = MoveFiles(file_with_path, "", global.current_mod_new_name, MOVE_FILES | OVERWRITE | MATCH_DIRS);
-				
-				if (FirstFile && result != 0)
-					return result;
-				else
-					return NO_ERRORS;
-			} else {
-				string mod_subfolders[] = {
-					"addons",
-					"bin",
-					"campaigns",
-					"dta",
-					"worlds",
-					"missions",
-					"mpmissions"
-				};
-				
-				int max = sizeof(mod_subfolders) / sizeof(mod_subfolders[0]);
-				
-				// Check directory name
-				bool browse         = true;
-				bool test_modfolder = false;
 		
-				for (int i=0; i<max; i++) {
-					if (!test_modfolder) {
-						if (Equals(file_only,mod_subfolders[i])) {
-							wstring missions_sub_dir;
-							
-							// If "Missions" subfolder contains a single subfolder then move that subfolder instead
-							if (Equals(file_only,"missions")) {
-								int number_of_files = 0;
-								int number_of_dirs  = 0;
-								
-								HANDLE hFile;
-								WIN32_FIND_DATAW FileInformation;
-								wstring pattern = string2wide(file_with_path) + L"\\*.*";
-								hFile = FindFirstFileW(pattern.c_str(), &FileInformation);
-								
-								if (hFile != INVALID_HANDLE_VALUE) {
-									do {
-										if (FileInformation.cFileName[0] == '.')
-											continue;
-											
-										missions_sub_dir = FileInformation.cFileName;
-										
-										if (FileInformation.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-											number_of_dirs++;
-										else
-											number_of_files++;
-									} 
-									while(FindNextFileW(hFile, &FileInformation) == TRUE);
-									
-									FindClose(hFile);
-								}
+		// If the folder has the same name as the mod we're installing then merge it
+		if (IsModName(file_only)) {
+			options &= ~FLAG_RUN_EXE;
+			return MoveFiles(file_with_path, "", global.current_mod_new_name, FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_MATCH_DIRS);
+		}
 
-								if (number_of_files==0  &&  number_of_dirs==1) {
-									wstring src = string2wide(file_with_path);
-									wstring dst = src;
-									src         += L"\\" + missions_sub_dir;
-									dst         += L"\\Missions";
-									MoveFileW(src.c_str(), dst.c_str());
-									global.logfile << "Renaming " << wide2string(src) << " to " << wide2string(dst) << endl;
-									file += "\\Missions";
-								}
-							}
+		// If directory ends with _anim or _anims then move it to IslandCutscenes
+		if (file_only.length()>=4 && Equals(file_only.substr(file_only.length()-5),"anim") || file_only.length()>=5 && Equals(file_only.substr(file_only.length()-5),"_anim") || file_only.length()>=6 && Equals(file_only.substr(file_only.length()-5),"_anims")) {
+			options &= ~FLAG_RUN_EXE;
+			string destination = global.current_mod_new_name + "\\IslandCutscenes\\" + (options & FLAG_RES_ADDONS ? "_Res\\" : "") ;
+			return MoveFiles(file_with_path, destination, "", FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_CREATE_DIR | FLAG_MATCH_DIRS);
+		}
 
-							// Move the entire folder to the game\mod directory
-							MakeDir(global.current_mod_new_name);
-							int result = MoveFiles("fwatch\\tmp\\"+file, global.current_mod_new_name+"\\", "", MOVE_FILES | OVERWRITE);
-							
-							if (FirstFile  &&  result != 0)
-								return result;
-							else
-								return NO_ERRORS;
-						}
-					} else {
-						// Test if a subfolder is some other modfolder - if so then ignore it
-						if (mod_subfolders[i] == "missions"  ||  mod_subfolders[i] == "mpmissions")
-							continue;
-							
-						string mod_subpath = file_with_path + "\\" + mod_subfolders[i];
-						int attributes     = GetFileAttributesW(string2wide(mod_subpath).c_str());
-						
-						if (attributes != INVALID_FILE_ATTRIBUTES && attributes & FILE_ATTRIBUTE_DIRECTORY && !IsModName(file)) {
-							browse = false;
-							break;
-						}
-					}
-
-					if (!test_modfolder  &&  i == max-1  &&  !Equals(file_only,"_extracted")) {
-						i              = -1;
-						test_modfolder = true;
-					}
-				}
+		// If directory has a dot in its name then move it to Missions
+		if (dots > 0) {
+			string destination = GetMissionDestinationFromSQM(file_with_path+"\\mission.sqm");
 		
-				// If directory has a dot in its name then move it to missions
-				if (dots > 0) {
-					int result = ParseMissionSQM(file_with_path+"\\mission.sqm");
+			if (destination != "Addons") {
+				string file_lower = lowercase(file_only);	
 				
-					if (result != NO_MISSIONSQM) {
-						string destination = result==SINGLE_PLAYER ? "Missions" : "MPMissions";						
-						MakeDir(global.current_mod_new_name+"\\"+destination);
-						int result = MoveFiles(file_with_path, global.current_mod_new_name+"\\"+destination+"\\", "", MOVE_FILES | OVERWRITE);
-								
-						if (FirstFile && result != 0)
-							return result;
-						else
-							return NO_ERRORS;
-					}
-				}
-
-				if (!browse) 
-					return NO_ERRORS;
-
-
-
-				// Normal directory - search through its contents
-				HANDLE hFile;
-				WIN32_FIND_DATAW FileInformation;
-				wstring pattern = string2wide(file_with_path) + L"\\*";
-				hFile           = FindFirstFileW(pattern.c_str(), &FileInformation);
-
-				if (hFile == INVALID_HANDLE_VALUE) {
-					int errorCode   = GetLastError();
-					string errorMSG = FormatError(errorCode);
-					
-					if (FirstFile)
-						return ErrorMessage(STR_ERROR_FILE_LIST, "%STR% " + file + " - " + Int2Str(errorCode) + " " + errorMSG);
-					else {
-						global.logfile << "Failed to list files in " << file << " - " << errorCode + " " << errorMSG << endl;
-						return NO_ERRORS;
-					}
-				}
-
-				do {
-					if (FileInformation.cFileName[0] != '.') {
-						string path_to_this_file = file + "\\" + wide2string(FileInformation.cFileName);
-						Auto_Install(path_to_this_file);
-					}
-				} 
-				while(FindNextFileW(hFile, &FileInformation) == TRUE);
+				if ((Equals(destination,"Missions") || Equals(destination,"MPMissions")) && (options & FLAG_DEMO_MISSIONS || file_lower.find("demo")!=string::npos || file_lower.find("template")!=string::npos))
+					destination += "Users";
 				
-				FindClose(hFile);
+				options &= ~FLAG_RUN_EXE;
+				return MoveFiles(file_with_path, global.current_mod_new_name+"\\"+destination+"\\", "", FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_CREATE_DIR | FLAG_MATCH_DIRS);
 			}
 		}
-	else {
-		string file_extension = GetFileExtension(file);
-		bool extract          = false;
+
+		// Check if the folder name is addons/bin/dta/worlds/campaigns etc.
+		int index              = DIR_NONE;
+		bool contains_overview = false;
 		
+		for (int i=DIR_ADDONS; i<DIR_MAX && index==DIR_NONE; i++)
+			if (Equals(file_only,mod_subfolders[i]))
+				index = i;
+				
+		// Folder could be an sp missions folder but named differently
+		if (index == DIR_NONE) {
+			string overview = file_with_path + "\\overview.html";
+			
+			if (GetFileAttributes(overview.c_str()) != INVALID_FILE_ATTRIBUTES) {
+				index             = DIR_MISSIONS;
+				contains_overview = true;
+			}
+		}
+
+		// If so then move it to the modfolder
+		if (index != DIR_NONE) {
+			string destination = global.current_mod_new_name + "\\";
+			string new_name    = "";
+			
+			// If it's a Missions/MPMissions folder and it contains a single subfolder then move that subfolder instead
+			if (!contains_overview) {
+				if (index==DIR_MISSIONS  ||  index==DIR_MPMISSIONS) {
+					DIRECTORY_INFO dir = ScanDirectory(file_with_path);
+					
+					if (dir.error_code == ERROR_NONE) {
+						if (dir.number_of_files==0  &&  dir.number_of_dirs==1) {
+							file    += "\\" + wide2string(dir.file_list[0]);
+							new_name = DIR_MISSIONS ? "Missions" : "MPMissions";
+						}
+					} else
+						return dir.error_code;
+				}
+			} else
+				destination += "Missions\\";
+
+			options &= ~FLAG_RUN_EXE;
+			return MoveFiles("fwatch\\tmp\\"+file, destination, new_name, FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_CREATE_DIR | FLAG_MATCH_DIRS);
+		}
+		
+		bool scan_directory = true;
+		
+		// If the folder is some other modfolder then ignore it
+		if (!Equals(file_only,"_extracted") && !Equals(file_only,"Res") && !force_install)
+			for (int i=DIR_ADDONS; i<=DIR_WORLDS && scan_directory; i++) {
+				string mod_subpath = file_with_path + "\\" + mod_subfolders[i];
+				DWORD attributes   = GetFileAttributes(mod_subpath.c_str());
+				
+				if (attributes!=INVALID_FILE_ATTRIBUTES  &&  attributes & FILE_ATTRIBUTE_DIRECTORY)
+					scan_directory = false;
+			}
+
+		// Normal directory - scan its contents
+		if (scan_directory) {
+			DIRECTORY_INFO dir = ScanDirectory(file_with_path);
+			
+			if (dir.error_code != ERROR_NONE)
+				return dir.error_code;
+
+			// If archive contains a single dir then set option to force to scan it
+			if (dir.number_of_files==0  &&  dir.number_of_dirs==1  &&  Equals(file_with_path,"fwatch\\tmp\\_extracted"))
+				options |= FLAG_DONT_IGNORE;
+			
+			for (int i=0; i<dir.file_list.size(); i++) {
+				string file_inside       = wide2string(dir.file_list[i]);
+				string path_to_this_file = file + "\\" + file_inside;
+				int result               = ERROR_NONE;
+				bool is_dir              = dir.attributes_list[i] & FILE_ATTRIBUTE_DIRECTORY;
+				
+				// Files that are next to the wanted modfolder are moved without looking at them
+				if (dir.number_of_wanted_mods>0  &&  (!is_dir || is_dir && dir.mod_sub_id_list[i]!=DIR_MISSIONS && dir.mod_sub_id_list[i]!=DIR_MPMISSIONS && !dir.is_mod_list[i] && _wcsicmp(dir.file_list[i].c_str(),L"Res")!=0 && _wcsicmp(dir.file_list[i].c_str(),L"ResAddons")!=0)) {
+					string source      = file_with_path+"\\"+wide2string(dir.file_list[i]);
+					string destination = global.current_mod_new_name+"\\";
+					string new_name    = "";
+					
+					// If it's "addons" folder then it probably contains island cutscenes; move it with changed name
+					if (dir.mod_sub_id_list[i] == DIR_ADDONS)
+						new_name = "IslandCutscenes";
+					
+					options &= ~FLAG_RUN_EXE;
+					result = MoveFiles(source, destination, new_name, FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_CREATE_DIR | FLAG_MATCH_DIRS);
+				} else {
+					file_inside = lowercase(file_inside);
+
+					// If a folder contains keywords then set mission to transfer to "MissionsUsers" instead of "Missions"
+					enum KEYWORDS {
+						KEY_DEMO,
+						KEY_MISSION,
+						KEY_USER,
+						KEY_EDITOR,
+						KEY_TEMPLATE,
+						KEY_RES,
+						KEY_ADDONS
+					};
+					vector<string> keywords;
+					vector<bool> key_exists;
+					keywords.push_back("demo");
+					keywords.push_back("mission");
+					keywords.push_back("user");
+					keywords.push_back("editor");
+					keywords.push_back("template");
+					keywords.push_back("res");
+					keywords.push_back("addons");
+					key_exists.resize(keywords.size());
+					
+					for (int j=0; j<keywords.size(); j++)
+						key_exists[j] = file_inside.find(keywords[j]) != string::npos;
+					
+					if (((key_exists[KEY_DEMO] || key_exists[KEY_EDITOR] || key_exists[KEY_TEMPLATE]) && key_exists[KEY_MISSION]) || key_exists[KEY_USER])
+						options |= FLAG_DEMO_MISSIONS;
+						
+					// If folder name is "res" or contains words "res" and "addons" then island cutscenes inside will go to IslandCutscenes\_res
+					if (Equals(file_inside,"Res") || (key_exists[KEY_RES] && key_exists[KEY_ADDONS]))
+						options |= FLAG_RES_ADDONS;
+					
+					result = Auto_Install(path_to_this_file, dir.attributes_list[i], options, password);
+				}
+				
+				if (result != ERROR_NONE)
+					return result;
+			}
+		}
+	} else {
+		// If it's a file then check its extension
+		string file_extension = GetFileExtension(file);
+
 		if (file.substr(0,11) == "_extracted\\")
 			file = file.substr(11);
 		
 		file = WrapInQuotes(file);
-			
-		if (file_extension == "pbo") {
-			string destination = "addons";
-			
-			if (dots > 1) {
-				destination = "MPMissions";
-
-				if (ExtractPBO(global.working_directory+"\\"+file_with_path, "", "mission.sqm", 1) == 0) {
-					string extracted_dir = PathNoLastItem(file_with_path) + file.substr(0, file.length()-4);
-
-					switch(ParseMissionSQM(extracted_dir+"\\mission.sqm")) {
-						case NO_MISSIONSQM : destination="addons"; break;
-						case SINGLE_PLAYER : destination="Missions"; break;
-						case MULTI_PLAYER  : destination="MPMissions"; break;
+		
+		enum VALID_EXTENSIONS {
+			EXT_PBO,
+			EXT_RAR,
+			EXT_ZIP,
+			EXT_7Z,
+			EXT_ACE,
+			EXT_EXE,
+			EXT_CAB
+		};
+		
+		string valid_extensions[] = {
+			"pbo",
+			"rar",
+			"zip",
+			"7z",
+			"ace",
+			"exe",
+			"cab"
+		};
+		int number_of_extensions = sizeof(valid_extensions) / sizeof(valid_extensions[0]);
+		int extension_index      = -1;
+		
+		for (int i=0; i<number_of_extensions && extension_index<0; i++)
+			if (file_extension == valid_extensions[i])
+				extension_index = i;
+		
+		switch(extension_index) {
+			// Unpack PBO and detect if it's an addon or a mission
+			case EXT_PBO : {
+				options           &= ~FLAG_RUN_EXE;
+				string destination = "Addons";
+				
+				if (dots > 1) {
+					destination = "MPMissions";
+	
+					if (ExtractPBO(global.working_directory+"\\"+file_with_path, "", "mission.sqm", 1) == 0) {
+						string extracted_dir = PathNoLastItem(file_with_path) + file.substr(0, file.length()-4);
+						destination          = GetMissionDestinationFromSQM(extracted_dir+"\\mission.sqm");
+						DeleteDirectory(extracted_dir);
 					}
-					
-					DeleteDirectory(extracted_dir);
 				}
+					
+				return MoveFiles(file_with_path, global.current_mod_new_name+"\\"+destination+"\\", "", FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_CREATE_DIR);
 			}
 			
-			MakeDir(global.current_mod_new_name+"\\"+destination);
-			int result = MoveFiles(file_with_path, global.current_mod_new_name+"\\"+destination+"\\", "", MOVE_FILES | OVERWRITE);
-			
-			if (FirstFile  &&  result != 0)
-				return result;
-			else
-				return NO_ERRORS;
-		} else {
-			string archives[] = {
-				"rar",
-				"zip",
-				"7z",
-				"ace",
-				"exe"
-			};
-			
-			int max = sizeof(archives) / sizeof(archives[0]);
-			
-			for (int i=0; i<max; i++)
-				if (file_extension == archives[i])
-					extract = true;
-			
-			// Allow to extract only one executable
-			if (file_extension=="exe"  &&  !global.first_exe)
-				extract = false;
-							
-			if (extract) {
-				global.unpack_set_error = FirstFile  &&  file_extension!="exe";
-				int result              = Unpack(file_with_path.substr(11), password);
-				password                = "";
-				
-				// If exe unpacking failed then ask user to run it
-				if (file_extension == "exe") {
-					if (result > 0  &&  global.first_exe) {
-						global.first_exe = false;
-						result           = RequestExecution("", file);
-					}
-					
-					global.first_exe = false;
-				}
+			// Unpack archive and scan its contents
+			case EXT_RAR : 
+			case EXT_ZIP : 
+			case EXT_7Z  : 
+			case EXT_ACE : 
+			case EXT_CAB : {
+				int result = Unpack(file_with_path.substr(11), password);
 								
-				if (FirstFile  &&  result != 0)
+				if (result == ERROR_NONE)
+					return Auto_Install(PathNoLastItem(file_with_path.substr(11)) + "_extracted", FILE_ATTRIBUTE_DIRECTORY, options, password);
+				else
 					return result;
+			}
+
+			// Unpack exe and scan its contents; if failed to unpack and nothing else was installed then ask the user to run it
+			case EXT_EXE : {
+				int result = Unpack(file_with_path.substr(11), password, FLAG_ALLOW_ERROR);
+				
+				if (result == ERROR_NONE) {
+					string resource_path = PathNoLastItem(file_with_path) + "_extracted\\.rsrc";
 					
-				string extracted_files = PathNoLastItem(file_with_path.substr(11)) + "_extracted";
-				Auto_Install(extracted_files);
+					// Make sure that this exe is not a program
+					if (GetFileAttributes(resource_path.c_str()) == INVALID_FILE_ATTRIBUTES)
+						return Auto_Install(PathNoLastItem(file_with_path.substr(11))+"_extracted", FILE_ATTRIBUTE_DIRECTORY, options, password);
+				} else
+					if (options & FLAG_RUN_EXE)
+						return RequestExecution("", file);
+
+				break;
 			}
 		}
 	}
 	
-	return NO_ERRORS;
-};
-
+	return ERROR_NONE;
+}
 
 	// Clean downloads and save mod version
 void EndModVersion() 
@@ -2397,7 +2463,6 @@ void EndModVersion()
 	WriteModID(global.current_mod_new_name, global.current_mod_id+";"+global.current_mod_version, global.current_mod_keepname);	
 }
 
-
 	// Verify folder, clean up and reset variables
 void EndMod()
 {
@@ -2419,1314 +2484,16 @@ void EndMod()
 
 	EndModVersion();
 	
-	global.current_mod    = "";
-	global.first_exe      = true;
-	global.skip_modfolder = false;
-	global.game_ver_index = -1;
-	global.game_ver_cond.clear();
+	global.current_mod     = "";
+	global.skip_modfolder  = false;
+	global.condition_index = -1;
+	global.condition.clear();
 	global.current_mod_alias.clear();
 }
-
-
-	//https://support.microsoft.com/en-us/help/167296/how-to-convert-a-unix-time-t-to-a-win32-filetime-or-systemtime
-void UnixTimeToFileTime(time_t t, LPFILETIME pft)
-{
-	LONGLONG ll;
-	ll = Int32x32To64(t, 10000000) + 116444736000000000;
-	pft->dwLowDateTime = (DWORD)ll;
-	pft->dwHighDateTime = ll >> 32;
-}
-
-
-int ChangeFileDate(string file_name) 
-{
-	FILETIME ft;
-	UnixTimeToFileTime(global.current_mod_version_date, &ft);
-   
-	HANDLE file_handle = CreateFile(file_name.c_str(), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	bool result = SetFileTime(file_handle, (LPFILETIME)NULL, (LPFILETIME)NULL, &ft);
-	CloseHandle(file_handle);
-	
-	if (result)
-		return NO_ERRORS;
-	else
-		return GetLastError();
-}
-
-	//https://insanecoding.blogspot.com/2011/11/how-to-read-in-file-in-c.html
-string GetFileContents(string &filename)
-{
-	ifstream file(filename.c_str(), ios::in | ios::binary);
-	string contents;
-  
-	if (file) {
-		file.seekg(0, ios::end);
-		contents.resize(file.tellg());
-		file.seekg(0, ios::beg);
-		file.read(&contents[0], contents.size());
-		file.close();
-	}
-	
-	return contents;
-}
-
-	//https://www.gamedev.net/forums/topic/565693-converting-filetime-to-time_t-on-windows/
-time_t filetime_to_timet(FILETIME const& ft) 
-{
-	ULARGE_INTEGER ull;
-	ull.LowPart  = ft.dwLowDateTime;
-	ull.HighPart = ft.dwHighDateTime;
-	return ull.QuadPart / 10000000ULL - 11644473600ULL;
-}
-
-	// Read directory and save file modification dates
-int CreateTimestampList(string path, int path_cut, vector<string> &namelist, vector<unsigned int> &timelist) {
-	WIN32_FIND_DATAW fd;
-	string wildcard   = path + "\\*";
-	wstring wildcardW = string2wide(wildcard);
-	HANDLE hFind      = FindFirstFileW(wildcardW.c_str(), &fd);
-
-	if (hFind == INVALID_HANDLE_VALUE) {
-		int errorCode = GetLastError();
-		if (errorCode==2 || errorCode==3)
-			return 0;
-
-		return ErrorMessage(STR_ERROR_FILE_LIST, "%STR% " + wildcard + "  - " + Int2Str(errorCode) + " " + FormatError(errorCode));
-	}
-	
-	do {
-		string file_name = wide2string(fd.cFileName);
-		string full_path = path + "\\" + file_name;
-		
-		if (file_name == "." || file_name == "..")
-			continue;
-			
-		if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-			CreateTimestampList(full_path, path_cut, namelist, timelist);
-		else {
-			namelist.push_back(full_path.substr(path_cut));
-			timelist.push_back(filetime_to_timet(fd.ftLastWriteTime));
-		}
-	} while (FindNextFileW(hFind, &fd) != 0);
-	
-	FindClose(hFind);
-	return 0;
-}
 // -------------------------------------------------------------------------------------------------------
 
 
 
-
-
-
-
-
-
-
-// Scripting commands ------------------------------------------------------------------------------------
-
-int SCRIPT_Download(const vector<string> &arg) 	// Legacy
-{
-	return NO_ERRORS;
-}
-
-
-int SCRIPT_Unpack(const vector<string> &arg) 
-{
-	string file_name = "";
-	string password  = "";
-
-	for (int i=1, j=0;  i<arg.size();  i++) {
-		if (Equals(arg[i].substr(0,10), "/password:")) {
-			password = arg[i].substr(10);
-			continue;
-		}
-
-		if (file_name.empty())
-			file_name = arg[i];
-	}
-		
-	if (Equals(file_name,"<download>")  ||  Equals(file_name,"<dl>")  ||  file_name.empty())
-		file_name = global.downloaded_filename;
-
-	if (file_name.empty())
-		return ErrorMessage(STR_ERROR_NO_FILE);
-
-	return Unpack(file_name, password);
-}
-
-
-int SCRIPT_Move(const vector<string> &arg) 
-{
-	vector<string> path;
-	path.push_back("");
-	path.push_back("");
-	path.push_back("");
-
-	bool is_download_dir = true;
-	int options          = OVERWRITE | (Equals(arg[0],"move") ? MOVE_FILES : 0);
-	
-	for (int i=1, j=0;  i<arg.size();  i++) {
-		if (Equals(arg[i], "/no_overwrite")) {
-			options &= ~OVERWRITE;
-			continue;
-		}
-		
-		if (Equals(arg[i], "/match_dir")) {
-			options |= MATCH_DIRS;
-			continue;
-		}
-
-		if (j<3  &&  path[j].empty()) {
-			if (!VerifyPath(arg[i]))
-				return ErrorMessage(STR_ERROR_PATH);
-
-			if (arg[i] != ".")
-				path[j] = arg[i];
-			
-			j++;
-		}
-	}
-
-	
-	// Format source path
-	if (path[SOURCE].empty())
-		return ErrorMessage(STR_ERROR_NO_FILE);
-	
-	if (Equals(path[SOURCE],"<download>")  ||  Equals(path[SOURCE],"<dl>")) {
-		path[SOURCE] = "fwatch\\tmp\\" + global.downloaded_filename;
-		
-		if (options & MOVE_FILES)
-			global.downloads.pop_back();
-	} else 
-		if (Equals(path[SOURCE].substr(0,5),"<mod>")) {
-			path[SOURCE]    = global.current_mod_new_name + path[SOURCE].substr(5);
-			is_download_dir = false;
-		} else
-			if (Equals(path[SOURCE].substr(0,7),"<game>\\")) {
-				is_download_dir = false;
-				
-				if (~options & MOVE_FILES)
-					path[SOURCE] = path[SOURCE].substr(7);
-				else
-					return ErrorMessage(STR_MOVE_DST_PATH_ERROR);
-			} else
-				path[SOURCE] = "fwatch\\tmp\\_extracted\\" + path[SOURCE];
-
-	// If user selected directory then move it along with its sub-folders
-	bool source_is_dir = false;
-	
-	if (path[SOURCE].find("*")==string::npos && path[SOURCE].find("?")==string::npos && GetFileAttributes(path[SOURCE].c_str()) & FILE_ATTRIBUTE_DIRECTORY) {
-		options |= MATCH_DIRS;
-		source_is_dir = true;
-	}
-
-	// Format destination path
-	bool destination_passed = !path[DESTINATION].empty();
-	path[DESTINATION]       = global.current_mod_new_name + "\\" + path[DESTINATION];
-	
-	if (path[DESTINATION].substr(path[DESTINATION].length()-1) != "\\")
-		path[DESTINATION] += "\\";
-
-	// If user wants to move modfolder then change destination to the game directory
-	if (is_download_dir  &&  IsModName(PathLastItem(path[SOURCE]))  &&  !destination_passed) {
-		path[DESTINATION] = "";
-		path[NEW_NAME]    = Equals(global.current_mod,global.current_mod_new_name) ? "" : global.current_mod_new_name;
-		options          |= MATCH_DIRS;
-	} else {
-		// Otherwise create missing directories in the destination path
-		int result = 0;
-		
-		// if user wants to copy directory and give it a new name then first create a new directory with wanted name in the destination location
-		if (~options & MOVE_FILES  &&  source_is_dir  &&  !path[NEW_NAME].empty())
-			result = MakeDir(path[DESTINATION] + path[NEW_NAME]);
-		else
-			result = MakeDir(PathNoLastItem(path[DESTINATION]));
-			
-		if (result != 0)
-			return result;
-	}
-		
-
-	// Format new name 
-	// 3rd argument - new name
-	if (path[NEW_NAME].find("\\")!=string::npos  ||  path[NEW_NAME].find("/")!=string::npos)
-		return ErrorMessage(STR_RENAME_DST_PATH_ERROR);
-
-	return MoveFiles(path[SOURCE], path[DESTINATION], path[NEW_NAME], options);
-}
-
-
-int SCRIPT_MakeDir(const vector<string> &arg) 
-{
-	string directory = "";
-
-	if (arg.size() >= 2)
-		directory = arg[1];	
-	
-	if (!VerifyPath(directory))
-		return ErrorMessage(STR_ERROR_PATH);
-
-	return MakeDir(global.current_mod_new_name + "\\" + directory);
-}
-
-
-int SCRIPT_RequestExecution(const vector<string> &arg) 
-{
-	string file_name = "";
-
-	for (int i=1, j=0;  i<arg.size();  i++)
-		if (file_name.empty())
-			file_name = arg[i];
-
-	if (Equals(file_name,"<download>")  ||  Equals(file_name,"<dl>")  ||  file_name.empty())
-		file_name = global.downloaded_filename;
-
-	if (file_name.empty())
-		return ErrorMessage(STR_ERROR_NO_FILE);
-
-	if (!VerifyPath(file_name))
-		return ErrorMessage(STR_ERROR_PATH);
-
-	string path_to_dir = global.working_directory;
-	
-	if (file_name.substr(0,6) == "<mod>\\") {
-		file_name    = file_name.substr(6);
-		path_to_dir += "\\" + global.current_mod_new_name + "\\";
-	} else
-		path_to_dir += "\\fwatch\\tmp\\";
-
-	return RequestExecution(path_to_dir, file_name);
-}
-
-
-int SCRIPT_StartMod(const vector<string> &arg) 
-{
-	if (arg.size() < 5)
-		return ErrorMessage(STR_ERROR_INVALID_SCRIPT, "%STR%", SCRIPT_ERROR);
-	
-	if (!global.current_mod.empty())
-		EndMod();
-		
-	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_PREPARING]);
-
-	global.current_mod          = arg[1];
-	global.current_mod_id       = arg[2];
-	global.current_mod_keepname = arg[3];
-	global.command_line_num     = 0;
-	global.current_mod_version  = "";
-	
-	// Make a list of mod aliases for the entire installation
-	vector<string> aliases;
-	Tokenize(arg[4], " ", aliases);
-	
-	for (int i=0; i<aliases.size(); i++)
-		global.current_mod_alias.push_back(aliases[i]);
-		
-	global.saved_alias_array_size = global.current_mod_alias.size();
-	
-	
-	// Find to which folder we should install the mod
-	for (int i=0;  i<global.mod_id.size(); i++)
-		if (Equals(global.current_mod_id,global.mod_id[i]))
-			global.current_mod_new_name = global.mod_name[i];
-
-	if (global.current_mod_new_name.empty())
-		return ErrorMessage(STR_ERROR_INVALID_ARG, "%STR%", SCRIPT_ERROR);
-
-	
-	bool activate_rename = false;
-	
-	// Check if modfolder already exists
-	DWORD dir = GetFileAttributesA(global.current_mod_new_name.c_str());
-
-	if (dir != INVALID_FILE_ATTRIBUTES) {
-		activate_rename = true;
-		
-		if (dir & FILE_ATTRIBUTE_DIRECTORY) {
-			fstream id_file;
-			string id_file_name = global.current_mod_new_name+"\\__gs_id";
-			id_file.open(id_file_name.c_str(), ios::in);
-			
-			if (id_file.is_open()) {
-				string text;
-				getline(id_file, text);
-				vector<string> parts;
-				Tokenize(text, ";", parts);
-				
-				if (parts.size() > 0)
-					activate_rename = parts[0] != global.current_mod_id;
-						
-				id_file.close();
-			}
-		}
-	}	
-		
-	// Rename current modfolder to make space for a new one
-	if (activate_rename) {
-		string rename_src = global.current_mod_new_name;
-		string rename_dst = "";
-		int tries         = 1;
-		int last_error    = 0;
-		
-		do {
-			rename_dst = global.current_mod_new_name + "_old" + (tries>1 ? Int2Str(tries) : "");
-			if (MoveFileEx(rename_src.c_str(), rename_dst.c_str(), 0))
-				last_error = 0;
-			else {
-				tries++;
-				last_error = GetLastError();
-				if (last_error != 183) {
-					ErrorMessage(STR_MOVE_RENAME_ERROR, "%STR% " + rename_src + " "+global.lang[STR_MOVE_RENAME_TO_ERROR]+" " + rename_dst + " - " + Int2Str(last_error) + " " + FormatError(last_error));
-					return COMMAND_FAILED;
-				}
-			}
-		} while (last_error == 183);
-		
-		global.logfile << "Renaming existing " << rename_src << " to " << rename_dst << endl;
-	}
-
-	return NO_ERRORS;
-}
-
-
-int SCRIPT_Delete(const vector<string> &arg) 
-{
-	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+"...");
-
-
-	vector<string> path;
-	path.push_back("");
-	
-	int options = MOVE_FILES | ALLOW_ERROR;
-	
-	for (int i=1, j=0;  i<arg.size();  i++) {
-		if (Equals(arg[i], "/match_dir")) {
-			options |= MATCH_DIRS;
-			continue;
-		}
-
-		if (j<1  &&  path[j].empty()) {
-			if (!VerifyPath(arg[i]))
-				return ErrorMessage(STR_ERROR_PATH);
-			
-			path[j++] = arg[i];
-		}
-	}
-
-
-	// Format source path
-	bool trash = false;
-
-	if (Equals(path[SOURCE],"<download>")  ||  Equals(path[SOURCE],"<dl>")  ||  path[SOURCE].empty()) {
-		if (global.downloaded_filename.empty())
-			return ErrorMessage(STR_ERROR_NO_FILE);
-	
-		path[SOURCE] = "fwatch\\tmp\\" + global.downloaded_filename;
-	} else {
-		path[SOURCE] = global.current_mod_new_name + "\\" + path[SOURCE];
-		trash        = true;
-	}
-
-
-	// Find files and save them to a list
-	vector<string> source_list;
-	vector<string> destination_list;
-	vector<bool>   is_dir_list;
-	vector<string> empty_dirs;
-	int buffer_size  = 1;
-	int recursion    = -1;
-
-	int result = CreateFileList(path[SOURCE], PathNoLastItem(path[SOURCE]), source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
-
-	if (result != 0)
-		return result;
-
-
-	// Allocate buffer for the file list
-	char *file_list;
-	int base_path_len = global.working_directory.length() + 1;
-	int buffer_pos    = 0;
-	wstring temp;
-	
-	if (trash) {
-		file_list = new char[buffer_size*2];
-
-		if (!file_list)
-			return ErrorMessage(STR_ERROR_BUFFER, "%STR% " + Int2Str(buffer_size));
-	}
-
-  
-	// For each file in the list
-	for (int i=0; i<destination_list.size(); i++) {
-		if (Abort())
-			return USER_ABORTED;
-		
-		if (trash) {
-			temp            = string2wide(destination_list[i]);
-			int name_length = (temp.length()+1) * 2;
-			global.logfile << "Trashing " << destination_list[i].substr(base_path_len) << endl;
-			memcpy(file_list+buffer_pos, temp.c_str(), name_length);
-			buffer_pos     += name_length;
-		} else {
-			global.logfile << "Deleting  " << destination_list[i].substr(base_path_len);
-			int result = DeleteDirectory(destination_list[i]);
-			
-			if (result != 0)
-				global.logfile << "  FAILED " << result << " " << FormatError(result);
-				
-			global.logfile << endl;
-		}
-	}
-
-	if (trash) {
-		memcpy(file_list+buffer_pos, "\0\0", 2);
-
-		// Trash file
-		SHFILEOPSTRUCTW shfos;
-		shfos.hwnd   = NULL;
-		shfos.wFunc  = FO_DELETE;
-		shfos.pFrom  = (LPCWSTR)file_list;
-		shfos.pTo    = NULL;
-		shfos.fFlags = FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO;
-		int result   = SHFileOperationW(&shfos);
-				
-	    if (result != 0)
-			global.logfile << "Trashing FAILED " << result << " " << FormatError(result) << endl;
-
-		delete[] file_list;
-	}
-
-	return NO_ERRORS;
-}
-
-
-int SCRIPT_Rename(const vector<string> &arg) 
-{
-	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_RENAMING]+"...");
-
-	vector<string> path;
-	path.push_back("");
-	path.push_back("");
-
-	int options = MOVE_FILES;
-	
-	for (int i=1, j=0;  i<arg.size();  i++) {
-		if (Equals(arg[i], "/match_dir")) {
-			options |= MATCH_DIRS;
-			continue;
-		}
-
-		if (j<2  &&  path[j].empty()) {
-			if (!VerifyPath(arg[i]))
-				return ErrorMessage(STR_ERROR_PATH, "%STR%");
-			
-			path[j++] = arg[i];
-		}
-	}
-
-	// Format source path
-	if (path[SOURCE].empty())
-		return ErrorMessage(STR_RENAME_NO_NAME_ERROR, "%STR%");
-	
-	if (Equals(path[SOURCE],"<download>")  ||  Equals(path[SOURCE],"<dl>"))	{
-		if (global.downloaded_filename.empty())
-			return ErrorMessage(STR_ERROR_NO_FILE);
-		
-		path[SOURCE] = "fwatch\\tmp\\_extracted\\" + global.downloaded_filename;
-	} else
-		path[SOURCE] = global.current_mod_new_name + "\\" + path[SOURCE];
-
-	string relative_path = PathNoLastItem(path[SOURCE]);
-	string lastItem      = PathLastItem(path[SOURCE]);
-	bool source_wildcard = false;
-
-	if (relative_path.find("*")!=string::npos  ||  relative_path.find("?")!=string::npos)
-		return ErrorMessage(STR_RENAME_WILDCARD_ERROR, "%STR%");
-	
-
-	// Format new name
-	if (path[DESTINATION].empty())
-		return ErrorMessage(STR_RENAME_NO_NAME_ERROR);
-	
-	if (path[DESTINATION].find("\\")!=string::npos  ||  path[DESTINATION].find("/")!=string::npos)
-		return ErrorMessage(STR_RENAME_DST_PATH_ERROR);
-		
-			
-	// Find files and save them to a list
-	vector<string> source_list;
-	vector<string> destination_list;
-	vector<bool>   is_dir_list;
-	vector<string> empty_dirs;
-	int buffer_size = 0;
-	int recursion   = -1;
-	
-	int result = CreateFileList(path[SOURCE], relative_path+path[DESTINATION], source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
-
-	if (result != 0)
-		return result;
-
-	wstring source_wide;
-	wstring destination_wide;
-	
-
-	// For each file on the list
-	for (int i=0;  i<source_list.size(); i++) {
-		if (Abort())
-			return USER_ABORTED;
-
-		// Format path for logging
-		global.logfile << "Renaming  " << ReplaceAll(source_list[i], "fwatch\\tmp\\_extracted\\", "") << "  to  " << PathLastItem(destination_list[i]);
-		
-		// Rename
-		source_wide      = string2wide(source_list[i]);
-		destination_wide = string2wide(destination_list[i]);
-		result = MoveFileExW(source_wide.c_str(), destination_wide.c_str(), 0);
-			
-	    if (!result) {
-			int errorCode = GetLastError();
-			global.logfile << "  FAILED " << errorCode << " " << FormatError(errorCode);
-	    }
-	    
-	    global.logfile << endl;
-	}
-
-	return NO_ERRORS;
-}
-
-static int CALLBACK BrowseCallbackProc(HWND hwnd,UINT uMsg, LPARAM lParam, LPARAM lpData)
-{
-
-    if(uMsg == BFFM_INITIALIZED)
-    {
-        std::string tmp = (const char *) lpData;
-        //std::cout << "path: " << tmp << std::endl;
-        SendMessage(hwnd, BFFM_SETSELECTION, TRUE, lpData);
-    }
-
-    return 0;
-}
-
-//https://stackoverflow.com/questions/12034943/win32-select-directory-dialog-from-c-c
-std::string BrowseFolder(std::string saved_path)
-{
-    TCHAR path[MAX_PATH];
-
-    const char * path_param = saved_path.c_str();
-
-    BROWSEINFO bi = { 0 };
-    bi.lpszTitle  = ("Browse for folder...");
-    bi.ulFlags    = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
-    bi.lpfn       = BrowseCallbackProc;
-    bi.lParam     = (LPARAM) path_param;
-
-    LPITEMIDLIST pidl = SHBrowseForFolder ( &bi );
-
-    if ( pidl != 0 )
-    {
-        //get the name of the folder and put it in path
-        SHGetPathFromIDList ( pidl, path );
-
-        //free memory used
-        IMalloc * imalloc = 0;
-        if ( SUCCEEDED( SHGetMalloc ( &imalloc )) )
-        {
-            imalloc->Free ( pidl );
-            imalloc->Release ( );
-        }
-
-        return path;
-    }
-
-    return "";
-}
-
-
-int SCRIPT_RequestDownload(const vector<string> &arg) 
-{
-	if (arg.size() < 3)
-		return ErrorMessage(STR_ERROR_ARG_COUNT);
-
-	string file_name    = arg[1];
-	string url          = arg[2];
-	string download_dir = "";
-	int return_value    = NO_ERRORS;
-	bool move           = false;
-	fstream config;
-	
-	config.open("fwatch\\tmp\\schedule\\DownloadDir.txt", ios::in);
-	
-	if (config.is_open()) {
-		getline(config, download_dir);
-		config.close();
-	}
-			
-	// Check if file already exists
-	string path1 = download_dir + "\\" + file_name;
-	string path2 = "fwatch\\tmp\\" + file_name;
-	
-	if (GetFileAttributes(path1.c_str()) != INVALID_FILE_ATTRIBUTES) {
-		global.logfile << "Found " << path1 << endl;
-		move = true;
-	}
-	else
-		if (GetFileAttributes(path2.c_str()) != INVALID_FILE_ATTRIBUTES) {
-			global.downloaded_filename = file_name;
-			global.logfile << "Found " << path2 << endl;
-			global.downloads.push_back(global.downloaded_filename);
-		} else {
-			string message = global.lang[STR_ASK_DLOAD] + ":\\n" + file_name + "\\n\\n" + global.lang[STR_ALTTAB];
-			WriteProgressFile(INSTALL_WAITINGFORUSER, message);
-			
-			ShellExecute(0, 0, url.c_str(), 0, 0 , SW_SHOW);
-			global.logfile << "Opened " << url << endl;
-			
-			message      = "You must manually download\n" + file_name + "\n\nPress OK once download has finished\nPress CANCEL to skip installing this modfolder";
-			int msgboxID = MessageBox(NULL, message.c_str(), "Addon Installer", MB_ICONQUESTION | MB_OKCANCEL | MB_DEFBUTTON1);
-			
-			if (msgboxID == IDCANCEL)
-				global.skip_modfolder = true;
-			else {
-				if (download_dir.empty()  ||  GetFileAttributes(path1.c_str()) == INVALID_FILE_ATTRIBUTES) {
-					WriteProgressFile(INSTALL_WAITINGFORUSER, global.lang[STR_ASK_DLOAD_SELECT] + "\\n\\n" + global.lang[STR_ALTTAB]);
-					
-					download_dir = BrowseFolder("");
-					printf("%s", download_dir.c_str());
-					
-					config.open("fwatch\\tmp\\schedule\\DownloadDir.txt", ios::out | ios::trunc);
-	
-					if (config.is_open()) {
-						config << download_dir;
-						config.close();
-					}
-				}
-
-				move = true;
-			}
-		}
-		
-	if (move) {
-		WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_COPYINGDOWNLOAD]);
-		
-		string source      = download_dir + "\\" + file_name;
-		string destination = global.working_directory + "\\fwatch\\tmp\\" + file_name;
-		int result         = MoveFileEx(source.c_str(), destination.c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_REPLACE_EXISTING);
-		
-		global.logfile << "Moving " << source << "  to  " << destination << endl;
-		
-		if (result == 0) {
-			return_value = GetLastError();
-			global.logfile << "FAILED " << return_value << " " << FormatError(return_value);
-		} else {
-			global.downloaded_filename = file_name;
-			global.downloads.push_back(global.downloaded_filename);
-		}
-	}
-
-	return return_value;
-}
-
-
-int SCRIPT_If_version(const vector<string> &arg) 
-{
-	if (arg.size() < 2)
-		return ErrorMessage(STR_ERROR_ARG_COUNT);
-	
-	// Process arguments (two or three)
-	string op          = "==";
-	float given_number = 0;
-	
-	if (arg.size() >= 3) {
-		op           = arg[1];
-		given_number = atof(arg[2].c_str());
-	} else {
-		char first_letter = arg[1][0];
-		
-		if (isdigit(first_letter)  ||  first_letter=='.')
-			given_number = atof(arg[1].c_str());
-		else
-			return ErrorMessage(STR_IF_NUMBER_ERROR);
-	}
-
-	
-	// Execute condition
-	bool result = false;
-	
-	if (global.game_ver_index > 0  &&  !global.game_ver_cond[global.game_ver_index])
-		result = false;
-	else {	
-		float game_version = atof(global.arguments_table["gameversion"].c_str());
-
-		if (op=="=="  ||  op=="=")
-			result = game_version == given_number;
-				
-		if (op=="<>"  ||  op=="!=")
-			result = game_version != given_number;
-				
-		if (op=="<")
-			result = game_version < given_number;
-				
-		if (op==">")
-			result = game_version > given_number;	
-				
-		if (op=="<=")
-			result = game_version <= given_number;
-				
-		if (op==">=")
-			result = game_version >= given_number;
-	}
-	
-	global.game_ver_index++;
-	global.game_ver_cond.push_back(result);
-	return NO_ERRORS;
-}
-
-
-int SCRIPT_Else(const vector<string> &arg) 
-{
-	if (global.game_ver_index >= 0) {
-
-		if (global.game_ver_index > 0  &&  !global.game_ver_cond[global.game_ver_index-1]) {
-		} else
-			global.game_ver_cond[global.game_ver_index] = !global.game_ver_cond[global.game_ver_index];
-
-	}
-	
-	return NO_ERRORS;
-}
-
-
-int SCRIPT_Endif(const vector<string> &arg) 
-{
-	if (global.game_ver_index >= 0)
-		global.game_ver_index--;
-		
-	if (global.game_ver_cond.size() > 0)
-		global.game_ver_cond.pop_back();
-
-	return NO_ERRORS;
-}
-
-
-int SCRIPT_MakePBO(const vector<string> &arg) 
-{
-	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_PACKINGPBO]+"...");
-
-		
-	vector<string> path;
-	path.push_back("");
-	
-	bool delete_afterwards = true;
-	
-	for (int i=1, j=0;  i<arg.size();  i++) {
-		if (Equals(arg[i], "/no_delete")) {
-			delete_afterwards = !delete_afterwards;
-			continue;
-		}
-
-		if (j<1  &&  path[j].empty()) {
-			if (!VerifyPath(arg[i]))
-				return ErrorMessage(STR_ERROR_PATH);
-			
-			path[j++] = arg[i];
-		}
-	}
-
-
-	// Format source path
-	if (path[SOURCE].empty()) {
-		if (global.last_pbo_file.empty())
-			return ErrorMessage(STR_ERROR_NO_FILE);
-	
-		path[SOURCE] = global.last_pbo_file;
-	} else
-		path[SOURCE] = global.current_mod_new_name + "\\" + path[SOURCE];
-
-
-	// Create log file
-	SECURITY_ATTRIBUTES sa;
-    sa.nLength              = sizeof(sa);
-    sa.lpSecurityDescriptor = NULL;
-    sa.bInheritHandle       = TRUE;       
-
-    HANDLE logFile = CreateFile(TEXT("fwatch\\tmp\\schedule\\PBOLog.txt"),
-        FILE_APPEND_DATA,
-        FILE_SHARE_WRITE | FILE_SHARE_READ,
-        &sa,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL );
-        
-	// Execute program
-	PROCESS_INFORMATION pi;
-    STARTUPINFO si; 
-	ZeroMemory( &si, sizeof(si) );
-	ZeroMemory( &pi, sizeof(pi) );
-	si.cb 		   = sizeof(si);
-	si.dwFlags 	   = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-	si.wShowWindow = SW_SHOW;
-	si.hStdInput   = NULL;
-	si.hStdOutput  = logFile;
-	si.hStdError   = logFile;
-	
-	string exename         = "MakePbo.exe";
-	string executable      = "fwatch\\data\\" + exename;
-	string arguments       = " -NRK \"" + path[SOURCE] + "\"";
-	string pbo_name        = path[SOURCE] + ".pbo";
-	string pbo_name_backup = "";
-	
-	if (GetFileAttributes(pbo_name.c_str()) != INVALID_FILE_ATTRIBUTES) {
-		int tries         = 2;
-		int last_error    = 0;
-		
-		do {
-			pbo_name_backup = pbo_name + Int2Str(tries);
-			
-			if (MoveFileEx(pbo_name.c_str(), pbo_name_backup.c_str(), 0))
-				last_error = 0;
-			else {
-				tries++;
-				last_error = GetLastError();
-				if (last_error != 183) {
-					ErrorMessage(STR_MOVE_RENAME_ERROR, "%STR% " + pbo_name + " "+global.lang[STR_MOVE_RENAME_TO_ERROR]+" " + pbo_name_backup + " - " + Int2Str(last_error) + " " + FormatError(last_error));
-					return COMMAND_FAILED;
-				}
-			}
-		} while (last_error == 183);
-	}
-
-	if (!CreateProcess(&executable[0], &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {
-		if (!pbo_name_backup.empty())
-			MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
-		
-		int errorCode = GetLastError();
-		return ErrorMessage(STR_ERROR_EXE, "%STR% " + exename + " - " + Int2Str(errorCode) + " " + FormatError(errorCode));
-	} else
-		global.logfile << "Creating a PBO file out of " << path[SOURCE] << endl;
-		
-	Sleep(10);
-
-
-	// Wait for the program to finish its job
-	DWORD exit_code;	
-	string message = "";
-	
-	do {					
-		if (Abort()) {
-			TerminateProcess(pi.hProcess, 0);
-			CloseHandle(pi.hProcess);
-			CloseHandle(pi.hThread);
-			CloseHandle(logFile);
-			return USER_ABORTED;
-		}
-		
-		ParsePBOLog(message, exename, path[SOURCE]);
-		GetExitCodeProcess(pi.hProcess, &exit_code);
-		Sleep(100);
-	}
-	while (exit_code == STILL_ACTIVE);
-	
-	ParsePBOLog(message, exename, path[SOURCE]);
-
-	CloseHandle(pi.hProcess);
-	CloseHandle(pi.hThread);
-	CloseHandle(logFile);
-	Sleep(1000);
-	
-	
-	// Need to fix the pbo timestamps after makepbo
-	if (exit_code == 0) {
-		vector<string> sourcedir_name;
-		vector<unsigned int> sourcedir_time;
-		int result = CreateTimestampList(path[SOURCE], path[SOURCE].length()+1, sourcedir_name, sourcedir_time);
-
-		if (result == 0) {
-			FILE *f = fopen(pbo_name.c_str(), "rb");
-			if (f) {
-				fseek(f, 0, SEEK_END);
-				int file_size = ftell(f);
-				fseek(f, 0, SEEK_SET);
-				
-				char *buffer = (char*) malloc(file_size+1);
-				
-				if (buffer != NULL) {
-					memset(buffer, 0, file_size+1);
-					fread(buffer, 1, file_size, f);
-					
-					const int name_max  = 512;
-					char name[name_max] = "";
-					int name_len        = 0;
-					int file_count      = 0;
-					int file_pos        = 0;
-					 
-					while (file_pos < file_size) {
-						memset(name, 0, name_max);
-						name_len = 0;
-				
-						for (int i=0; i<name_max-1; i++) {
-							char c = buffer[file_pos++];
-				
-							if (c != '\0')
-								name[name_len++] = c;
-							else
-								break;
-						}
-				
-						unsigned long MimeType  = *((unsigned long*)&buffer[file_pos]);
-						unsigned long TimeStamp = *((unsigned long*)&buffer[file_pos+12]);
-						unsigned long Datasize  = *((unsigned long*)&buffer[file_pos+16]);
-				
-						file_pos += 20;
-				
-						if (name_len == 0) {
-							if (file_count==0 && MimeType==0x56657273 && TimeStamp==0 && Datasize==0) {
-								int value_len = 0;
-								bool is_name  = true;
-								
-								while (file_pos < file_size) {
-									if (buffer[file_pos++] != '\0')
-										value_len++;
-									else {
-										if (is_name && value_len==0)
-											break;
-										else {
-											is_name   = !is_name;
-											value_len = 0;
-										}
-									}
-								}
-							} else
-								break;
-						} else {
-							for (int i=0; i<sourcedir_name.size(); i++)
-								if (strcmp(sourcedir_name[i].c_str(), name) == 0) {
-									if (sourcedir_time[i] != TimeStamp)
-										memcpy(buffer+file_pos-8, &sourcedir_time[i], 4);
-									
-									break;
-								}
-						}
-							
-						file_count++;
-					}
-					
-					freopen(pbo_name.c_str(), "wb", f);
-					int bytes_written = 0;
-					
-					if (f) {
-						bytes_written = fwrite(buffer, 1, file_size, f);
-						fclose(f);
-					}
-					
-					free(buffer);
-						
-					if (bytes_written != file_size) {
-						if (!pbo_name_backup.empty())
-							MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
-						
-						ErrorMessage(STR_EDIT_READ_ERROR, "%STR% " + Int2Str(bytes_written) + "/" + Int2Str(file_size));
-						return COMMAND_FAILED;
-					}
-				}
-			} else {
-				if (!pbo_name_backup.empty())
-					MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
-				return ErrorMessage(STR_EDIT_READ_ERROR, "%STR% " + Int2Str(errno) + " - " + (string)strerror(errno));
-			}
-		} else {
-			if (!pbo_name_backup.empty())
-				MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
-			return result;
-		}
-
-		ChangeFileDate(pbo_name);
-		
-		if (delete_afterwards) {
-			WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+"...");
-			global.logfile << "Removing " << path[SOURCE] << " directory" << endl;
-			global.last_pbo_file = "";
-			DeleteDirectory(path[SOURCE]);
-		}
-	} else {
-		if (!pbo_name_backup.empty())
-			MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
-			
-		ErrorMessage(STR_PBO_MAKE_ERROR, "%STR% " + Int2Str(exit_code) + " - " + message);
-	}
-	
-	if (exit_code==0 && !pbo_name_backup.empty())
-		DeleteFile(pbo_name_backup.c_str());
-
-	return (exit_code!=0 ? COMMAND_FAILED : NO_ERRORS);
-}
-
-
-int SCRIPT_ExtractPBO(const vector<string> &arg) 
-{
-	// Verify source argument	
-	string source = "";
-	
-	if (arg.size() >= 2)
-		source = arg[1];
-	else
-		return ErrorMessage(STR_ERROR_NO_FILE);
-		
-	if (!VerifyPath(source))
-		return ErrorMessage(STR_UNPACKPBO_SRC_PATH_ERROR);
-	
-	if (GetFileExtension(source) != "pbo")
-		return ErrorMessage(STR_PBO_NAME_ERROR);
-	
-	bool game_dir = false;
-	
-	if (Equals(source.substr(0,7),"<game>\\")) {
-		global.last_pbo_file = "";
-		source               = source.substr(7);
-		game_dir             = true;
-	} else {
-		global.last_pbo_file = global.current_mod_new_name + "\\" + source.substr(0, source.length()-4);
-		source               = global.current_mod_new_name + "\\" + source;
-	}
-
-
-	// Verify destination argument
-	string destination = "";
-	
-	if (arg.size() >= 3) {
-		destination = arg[2];
-
-		if (!VerifyPath(destination))
-			return ErrorMessage(STR_UNPACKPBO_DST_PATH_ERROR);
-	}
-	
-	// Process optional 2nd argument: extraction destination
-	if (!destination.empty()  ||  game_dir) {
-		if (destination == ".")
-			destination = "";
-
-		int result = MakeDir(global.current_mod_new_name + "\\" + destination);
-
-		if (result != 0)
-			return result;
-
-		// Create path to the extracted directory for use with MakePbo function
-		global.last_pbo_file = global.current_mod_new_name + "\\" + destination + "\\" + PathLastItem(source.substr(0, source.length()-4));
-		destination          = global.working_directory    + "\\" + global.current_mod_new_name + "\\" + destination;
-		
-		if (destination.substr(destination.length()-1) != "\\")
-			destination += "\\";
-	}
-
-	return ExtractPBO(source, destination);
-}
-
-
-int SCRIPT_EditLine(const vector<string> &arg) 
-{
-	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_EDITING]+"...");
-
-	if (arg.size() < 3)
-		return ErrorMessage(STR_ERROR_ARG_COUNT);
-		
-	vector<string> arg2;
-	arg2.push_back("");
-	arg2.push_back("");
-	arg2.push_back("");
-
-	bool insert = false;
-	bool create = false;
-	bool append = false;
-
-	for (int i=1, j=0;  i<arg.size();  i++) {
-		if (Equals(arg[i], "/insert")) {
-			insert = true;
-			continue;
-		}
-		
-		if (Equals(arg[i], "/newfile")) {
-			create = true;
-			continue;
-		}
-		
-		if (Equals(arg[i], "/append")) {
-			append = true;
-			continue;
-		}
-
-		if (j<3  &&  arg2[j].empty())
-			arg2[j++] = arg[i];
-	}
-	
-
-	string file_name = arg2[0];	
-	int wanted_line  = atoi(arg2[1].c_str());
-
-	if (file_name.empty())
-		return ErrorMessage(STR_ERROR_NO_FILE);
-	
-	if (Equals(file_name,"<download>")  ||  Equals(file_name,"<dl>")) {
-		if (global.downloaded_filename.empty())
-			return ErrorMessage(STR_ERROR_NO_FILE);
-
-		file_name = "fwatch\\tmp\\" + global.downloaded_filename;
-	} else 
-		file_name = global.current_mod_new_name + "\\" + file_name;
-
-	if (!VerifyPath(file_name))
-		return ErrorMessage(STR_ERROR_PATH);
-
-	vector<string> contents;
-    fstream file;
-	int line_number = 0;
-	bool ends_with_newline = true;
-    
-    if (!create) {
-    	global.logfile << "Editing line " << wanted_line << " in " << file_name << endl;
-    	
-    	file.open(file_name.c_str(), ios::in);
-		if (file.is_open()) {
-			string line;
-		
-			while (getline(file, line)) {
-				line_number++;
-				
-				if (file.eof())
-					ends_with_newline = false;
-				
-				if (line_number == wanted_line) {					
-					string new_line = append ? line+arg2[2] : arg2[2];
-				
-					contents.push_back(new_line);
-					
-					if (insert) {
-						contents.push_back(line);
-						line_number++;
-					}
-				} else 
-					contents.push_back(line);
-			}
-			
-			if (insert && (wanted_line==0 || wanted_line > line_number)) {
-				contents.push_back(arg2[2]);
-				line_number++;
-			}
-			
-			file.close();
-		} else 
-			return ErrorMessage(STR_EDIT_READ_ERROR);
-	} else {
-		global.logfile << "Creating new file " << file_name << endl;
-		contents.push_back(arg2[2]);
-		
-		// Trash the file
-		int buffer_pos  = 0;
-		int buffer_size = file_name.length() + 3;
-		char *file_list = new char[buffer_size*2];
-
-		if (file_list) {
-			wstring file_name_wide = string2wide(file_name);
-			int name_length        = (file_name_wide.length()+1) * 2;
-			memcpy(file_list, file_name_wide.c_str(), name_length);
-			memcpy(file_list+name_length, "\0\0", 2);
-			
-			SHFILEOPSTRUCTW shfos;
-			shfos.hwnd   = NULL;
-			shfos.wFunc  = FO_DELETE;
-			shfos.pFrom  = (LPCWSTR)file_list;
-			shfos.pTo    = NULL;
-			shfos.fFlags = FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO;
-			int result   = SHFileOperationW(&shfos);
-
-			if (result!=0  &&  result!=1026  &&  result!=2)
-				global.logfile << "Trashing FAILED " << result << " " << FormatError(result) << endl;
-			
-			delete[] file_list;
-		}
-	}
-    	
-    	
-    // Write file
-	file.open(file_name.c_str(), ios::out | ios::trunc);
-	if (file.is_open()) {
-		for (int i=0; i<contents.size(); i++) {
-			file << contents[i];
-			
-			if (i+1 < line_number || i+1==line_number && ends_with_newline)
-				file << endl;
-		}
-
-		file.close();
-	} else
-		return ErrorMessage(STR_EDIT_WRITE_ERROR);
-
-    ChangeFileDate(file_name);
-
-	return NO_ERRORS;
-}
-
-
-int SCRIPT_StartVersion(const vector<string> &arg) 
-{
-	if (arg.size() < 3)
-		return ErrorMessage(STR_ERROR_INVALID_SCRIPT, "%STR%", SCRIPT_ERROR);
-
-	if (!global.current_mod_version.empty())
-		EndModVersion();
-	
-	global.current_mod_version      = arg[1];
-	global.current_mod_version_date = atoi(arg[2].c_str());
-	global.command_line_num         = 0;
-	return NO_ERRORS;
-}
-
-
-int SCRIPT_AutoInstall(const vector<string> &arg)
-{
-	string password = "";
-
-	for (int i=0, j=0;  i<arg.size();  i++) {
-		if (Equals(arg[i].substr(0,10), "/password:")) {
-			password = arg[i].substr(10);
-			continue;
-		}
-	}
-
-	global.logfile << "Auto installation" << endl;
-	return Auto_Install(global.downloaded_filename, password);
-}
-
-
-int SCRIPT_Alias(const vector<string> &arg)
-{
-	if (arg.size() == 0)
-		global.current_mod_alias.clear();
-	else 
-		for(int i=1; i<arg.size(); i++)
-			global.current_mod_alias.push_back(arg[i]);
-
-	return NO_ERRORS;
-}
-// -------------------------------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	// Main Program
 
 int main(int argc, char *argv[])
 {
@@ -3822,11 +2589,16 @@ int main(int argc, char *argv[])
 			"Source path is leaving current directory",
 			"Destination path is leaving current directory",
 			"Not allowed to move files out of the game directory",
+			"Failed to move",
+			"to",
+			"Failed to copy",
 			"Failed to rename",
 			"to",
 			"New file name contains slashes",
 			"Wildcards in the path",
 			"Missing new file name",
+			"Failed to delete",
+			"Failed to move to recycle bin",
 			"You must manually run",
 			"You must manually download",
 			"Select folder with the downloaded file",
@@ -3885,21 +2657,25 @@ int main(int argc, char *argv[])
 			"Исходный путь не соответствует текущей папке",		//43
 			"Путь назначения не соответствует текущей папке",		//44
 			"Невозможно переместить файлы из папки игры",		//45
-			"Ошибка при переименовании файла",		//46
+			"Ошибка при перемещении",		//46
 			"в",		//47
-			"Новое имя файла содержит слеши",		//48
-			"Путь содержит символы подстановки",		//49
-			"Отсутствует новое имя файла",		//50
-			"Необходимо запустить вручную",		//51
-			"Необходимо загрузить вручную",		//52
-			"Выберите папку с загруженным файлом",		//53
-			"Отсутствует номер версии",		//54
-			"Не файл типа PBO",		//55
-			"Ошибка при создании файла PBO",		//56
-			"Ошибка при извлечении из архива PBO",		//57
-			"Ошибка при считывании",		//58
-			"Ошибка при создании файла",	//59
-			"Считывание mission.sqm"		//60
+			"Ошибка при копировании",		//48
+			"Ошибка при переименовании файла",		//49
+			"в",		//50
+			"Новое имя файла содержит слеши",		//51
+			"Путь содержит символы подстановки",		//52
+			"Отсутствует новое имя файла",		//53
+			"Ошибка при удалении",		//54
+			"Ошибка при перемещении в Корзину",		//55
+			"Необходимо запустить вручную",		//56
+			"Необходимо загрузить вручную",		//57
+			"Выберите папку с загруженным файлом",		//58
+			"Отсутствует номер версии",		//59
+			"Не файл типа PBO",		//60
+			"Ошибка при создании файла PBO",		//61
+			"Ошибка при извлечении из архива PBO",		//62
+			"Ошибка при считывании",		//63
+			"Ошибка при создании файла"		//64
 		},
 		{
 			"Przygotowywanie",
@@ -3948,11 +2724,16 @@ int main(int argc, char *argv[])
 			"Њcieїka џrуdіowa wychodzi poza obecny katalog",
 			"Њcieїka docelowa wychodzi poza obecny katalog",
 			"Nie moїna przenosiж plikуw poza katalog z gr№",
+			"Nie moїna przenieњж",
+			"do",
+			"Nie moїna skopiowaж",
 			"Nie moїna zmieniж nazwy",
 			"na",
 			"Nowa nazwa pliku zawiera ukoњniki",
 			"Њcieїka zawiera symbole zastкpcze",
 			"Brakuje nowej nazwy pliku",
+			"Nie moїna skasowaж",
+			"Nie moїna przenieњж do kosza",
 			"Musisz rкcznie uruchomiж",
 			"Musisz rкcznie pobraж",
 			"Wybierz katalog z pobranym plikiem",
@@ -4015,7 +2796,7 @@ int main(int argc, char *argv[])
 
 	if (!global.logfile.is_open()) {
 		WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR]+"\\n"+global.lang[STR_ERROR_LOGFILE]));
-		return LOGFILE_ERROR;
+		return ERROR_LOGFILE;
 	}
 
 	SYSTEMTIME st;
@@ -4052,6 +2833,28 @@ int main(int argc, char *argv[])
 
 
 	// Define allowed commands
+	enum SCRIPTING_COMMANDS_ID {
+		COMMAND_AUTO_INSTALL,
+		COMMAND_DOWNLOAD,
+		COMMAND_UNPACK,
+		COMMAND_MOVE,
+		COMMAND_COPY,
+		COMMAND_MAKEDIR,
+		COMMAND_ASK_RUN,
+		COMMAND_BEGIN_MOD,
+		COMMAND_DELETE,
+		COMMAND_RENAME,
+		COMMAND_ASK_DOWNLOAD,
+		COMMAND_IF_VERSION,
+		COMMAND_ELSE,
+		COMMAND_ENDIF,
+		COMMAND_MAKEPBO,
+		COMMAND_EXTRACTPBO,
+		COMMAND_EDIT,
+		COMMAND_BEGIN_VERSION,
+		COMMAND_ALIAS
+	};
+	
 	string command_names[] = {
 		"auto_install",	
 		"download",		
@@ -4079,51 +2882,99 @@ int main(int argc, char *argv[])
 		"unpbo",		
 		"edit",			
 		"begin_ver",	
-		"alias"
+		"alias",
+		"merge_with"
+	};
+
+	int match_command_name_to_id[] = {
+		COMMAND_AUTO_INSTALL,
+		COMMAND_DOWNLOAD,
+		COMMAND_DOWNLOAD,
+		COMMAND_UNPACK,
+		COMMAND_UNPACK,
+		COMMAND_MOVE,
+		COMMAND_COPY,
+		COMMAND_MAKEDIR,
+		COMMAND_MAKEDIR,
+		COMMAND_ASK_RUN,
+		COMMAND_ASK_RUN,
+		COMMAND_BEGIN_MOD,
+		COMMAND_DELETE,
+		COMMAND_DELETE,
+		COMMAND_RENAME,
+		COMMAND_ASK_DOWNLOAD,
+		COMMAND_ASK_DOWNLOAD,
+		COMMAND_IF_VERSION,
+		COMMAND_ELSE,
+		COMMAND_ENDIF,
+		COMMAND_MAKEPBO,
+		COMMAND_EXTRACTPBO,
+		COMMAND_EXTRACTPBO,
+		COMMAND_EXTRACTPBO,
+		COMMAND_EDIT,
+		COMMAND_BEGIN_VERSION,
+		COMMAND_ALIAS,
+		COMMAND_ALIAS
 	};
 	
-	int (*command_function_pointers[])(const vector<string> &arg) = {
-		SCRIPT_AutoInstall,
-		SCRIPT_Download,
-		SCRIPT_Download,
-		SCRIPT_Unpack,
-		SCRIPT_Unpack,
-		SCRIPT_Move,
-		SCRIPT_Move,
-		SCRIPT_MakeDir,
-		SCRIPT_MakeDir,
-		SCRIPT_RequestExecution,
-		SCRIPT_RequestExecution,
-		SCRIPT_StartMod,
-		SCRIPT_Delete,
-		SCRIPT_Delete,
-		SCRIPT_Rename,
-		SCRIPT_RequestDownload,
-		SCRIPT_RequestDownload,
-		SCRIPT_If_version,
-		SCRIPT_Else,
-		SCRIPT_Endif,
-		SCRIPT_MakePBO,
-		SCRIPT_ExtractPBO,
-		SCRIPT_ExtractPBO,
-		SCRIPT_ExtractPBO,
-		SCRIPT_EditLine,
-		SCRIPT_StartVersion,
-		SCRIPT_Alias
+	int control_flow_commands[] = {
+		COMMAND_BEGIN_MOD,
+		COMMAND_BEGIN_VERSION,
+		COMMAND_IF_VERSION,
+		COMMAND_ELSE,
+		COMMAND_ENDIF
+	};
+	
+	enum COMMAND_SWITCHES {
+		SWITCH_NONE,
+		SWITCH_PASSWORD     = 0x1,
+		SWITCH_NO_OVERWRITE = 0x2,
+		SWITCH_MATCH_DIR    = 0x4,
+		SWITCH_KEEP_SOURCE  = 0x8,
+		SWITCH_INSERT       = 0x10,
+		SWITCH_NEWFILE      = 0x20,
+		SWITCH_APPEND       = 0x40,
+		SWITCH_MAX			= 0x80
 	};
 	
 	string command_switches_names[] = {
+		"",
 		"/password:",
 		"/no_overwrite",
 		"/match_dir",
-		"/no_delete",
+		"/keep_source",
 		"/insert",
 		"/newfile",
 		"/append"
 	};
+	
+	// Automatic filling with empty strings for a command when not enough arguments were passed
+	// This is for the commands that can be used with or without arguments
+	int command_minimal_arg[] = {
+		0,
+		0,
+		1,
+		3,
+		3,
+		1,
+		1,
+		0,
+		1,
+		2,
+		0,
+		0,
+		0,
+		0,
+		1,
+		2,
+		0,
+		0,
+		0
+	};
 
 	int number_of_commands = sizeof(command_names) / sizeof(command_names[0]);
 	int number_of_switches = sizeof(command_switches_names) / sizeof(command_switches_names[0]);
+	int number_of_ctrlflow = sizeof(control_flow_commands) / sizeof(control_flow_commands[0]);
 
 
 
@@ -4132,23 +2983,14 @@ int main(int argc, char *argv[])
 	if (!global.arguments_table["downloadscript"].empty()) {
 		WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_GETSCRIPT]);
 
-		string url = "";
-		fstream url_file;
-
-		url_file.open(global.arguments_table["downloadscript"].c_str(), ios::in);
-		if (url_file.is_open()) {
-			getline(url_file, url);
-			url_file.close();
-		}
-
-		url       += " --verbose \"--output-document=fwatch\\tmp\\installation script\"";
-		int result = Download(url, OVERWRITE | SILENT_MODE);
+		string url = GetFileContents(global.arguments_table["downloadscript"]) + " --verbose \"--output-document=fwatch\\tmp\\installation script\"";
+		int result = Download(url, FLAG_OVERWRITE | FLAG_SILENT_MODE);
 		DeleteFile(global.arguments_table["downloadscript"].c_str());
 
 		if (result > 0) {
 			global.logfile << "\n--------------\n\n";
 			global.logfile.close();
-			return NO_SCRIPT;
+			return ERROR_NO_SCRIPT;
 		}
 	}
 	
@@ -4164,30 +3006,46 @@ int main(int argc, char *argv[])
 		global.logfile << "Failed to open " << script_file_name << "\n\n--------------\n\n";
 		WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR]+"\\n"+global.lang[STR_ERROR_READSCRIPT]));
 		global.logfile.close();
-		return NO_SCRIPT;
+		return ERROR_NO_SCRIPT;
 	}	
 	
 	
 	// Parse installation script and store instructions in vectors
-	int word_begin            = -1;
-	int word_count            = 1;
+	int word_begin            = -1; //number of column where a phrase begins
+	int word_count            = 1;  //number of found phrases in the current line
 	int word_line_num         = 1;	//line count for the entire script
 	int word_line_num_local   = 1;  //line count for single version of the mod
 	int command_id            = -1;
 	int last_command_line_num = -1;
 	int last_url_list_id      = -1;
+	int url_arg_key           = -1;
 	bool in_quote             = false;
 	bool remove_quotes        = true;
 	bool url_block            = false;
 	bool url_line             = false;
 	
-	vector<int>    instruction_id;
-	vector<int>    instruction_key;
-	vector<int>    instruction_line;
-	vector<string> instruction_arg;
-	vector<int>    instruction_arg_id;
-	vector<string> url_list;
-	vector<int>    url_list_id;
+	// Table storing commands from the script
+	struct {
+		vector<int> id;				//command enum
+		vector<bool> ctrl_flow;		//is it a control flow command
+		vector<int> line_num;		//position in the text file
+		vector<int> switches;		//bit mask
+		vector<int> arg_start;		//arguments starting index in the other table
+		vector<int> arg_num;		//number of arguments passed to this command
+		vector<int> url_start;		//urls starting index in the other table
+		vector<int> url_num;		//number of urls passed to this command
+		vector<string> password;	//password switch passed to this command
+		vector<string> arguments;	//table storing arguments associated with commands (not parallel)
+	} current_script_command;
+
+	// Table storing download urls associated with the commands	
+	struct {
+		vector<int> arg_start;		//arguments starting index in the other table
+		vector<int> arg_num;		//number of arguments passed to this url
+		vector<int> line_num;		//position in the text file
+		vector<string> link;		//actual url
+		vector<string> arguments;	//table storing url arguments associated with the urls (not parallel)
+	} current_script_command_urls;
 	
 	for (int i=0; i<=script_file_content.length(); i++) {
 		bool end_of_word = i==script_file_content.length() || isspace(script_file_content[i]);
@@ -4203,10 +3061,21 @@ int main(int argc, char *argv[])
 			// if bracket is the first thing in the line then it's auto installation
 			if (word_count == 1) {
 				last_command_line_num = word_line_num;
-				instruction_id.push_back(0);
-				instruction_key.push_back(word_line_num);
-				instruction_line.push_back(word_line_num_local);
-			}
+				current_script_command.id.push_back(COMMAND_AUTO_INSTALL);
+				current_script_command.ctrl_flow.push_back(false);
+				current_script_command.line_num.push_back(word_line_num_local);
+				current_script_command.switches.push_back(SWITCH_NONE);
+				current_script_command.arg_start.push_back(current_script_command.arguments.size());
+				current_script_command.arg_num.push_back(0);
+				current_script_command.url_start.push_back(current_script_command_urls.link.size());
+				current_script_command.url_num.push_back(0);
+				current_script_command.password.push_back("");
+			} else
+				// if bracket is an argument for the command
+				if (command_id != -1) {
+					current_script_command.arguments.push_back("<dl>");
+					current_script_command.arg_num[current_script_command.arg_num.size()-1]++;
+				}
 			
 			continue;
 		}
@@ -4253,28 +3122,42 @@ int main(int argc, char *argv[])
 				
 				// Check if it's a valid command
 				if (IsURL(word))
-					command_id = 0;
+					command_id = COMMAND_AUTO_INSTALL;
 				else
 					for (int j=0; j<number_of_commands && command_id==-1; j++)
 						if (Equals(word, command_names[j]))
-							command_id = j;
+							command_id = match_command_name_to_id[j];
 				
 				// If so then add it to database, otherwise skip this line
 				if (command_id != -1) {
 					last_command_line_num = word_line_num;
-					instruction_id.push_back(command_id);
-					instruction_key.push_back(word_line_num);
-					instruction_line.push_back(word_line_num_local);
+					current_script_command.id.push_back(command_id);
+					current_script_command.ctrl_flow.push_back(false);
+					current_script_command.line_num.push_back(word_line_num_local);
+					current_script_command.switches.push_back(SWITCH_NONE);
+					current_script_command.arg_start.push_back(current_script_command.arguments.size());
+					current_script_command.arg_num.push_back(0);
+					current_script_command.url_start.push_back(current_script_command_urls.link.size());
+					current_script_command.url_num.push_back(0);
+					current_script_command.password.push_back("");
+					
+					// Check if it's a control flow type of command
+					for (int j=0; j<number_of_ctrlflow; j++)
+						if (command_id == control_flow_commands[j])
+							current_script_command.ctrl_flow[current_script_command.ctrl_flow.size()-1] = true;
 					
 					// If command is an URL then add it to the url database
-					if (command_id == 0) {
+					if (command_id == COMMAND_AUTO_INSTALL) {
 						url_line         = true;
-						last_url_list_id = url_list_id.size();
-						url_list.push_back(word);
-						url_list_id.push_back(last_command_line_num);
+						last_url_list_id = current_script_command_urls.link.size();
+						current_script_command_urls.arg_start.push_back(current_script_command_urls.arguments.size());
+						current_script_command_urls.arg_num.push_back(0);
+						current_script_command_urls.line_num.push_back(word_line_num);
+						current_script_command_urls.link.push_back(word);
+						current_script_command.url_num[current_script_command.url_num.size()-1]++;
 					}
 					
-					if (command_id==11 || command_id==25)
+					if (command_id==COMMAND_BEGIN_MOD || command_id==COMMAND_BEGIN_VERSION)
 						word_line_num_local = 0;
 				} else {
 					size_t end = script_file_content.find("\n", i);
@@ -4282,26 +3165,40 @@ int main(int argc, char *argv[])
 				}
 			} else {
 				// Check if URL starts here
-				if (!url_line)
+				if (!url_line  &&  command_id!=COMMAND_ASK_DOWNLOAD)
 					url_line = IsURL(word);
 					
 				// Check if it's a valid command switch
 				bool is_switch = false;
 				
-				for (int j=0; j<number_of_switches && !is_switch; j++)
-					is_switch = Equals(word.substr(0,command_switches_names[j].length()), command_switches_names[j]);
+				for (int switch_index=1, switch_enum=1 ; switch_index<number_of_switches && !is_switch; switch_enum*=2, switch_index++)				
+					if (Equals(word.substr(0,command_switches_names[switch_index].length()), command_switches_names[switch_index])) {
+						is_switch = true;
+						int last  = current_script_command.switches.size() - 1;
+						current_script_command.switches[last] |= switch_enum;
+						
+						if (switch_enum == SWITCH_PASSWORD)
+							current_script_command.password[last] = word.substr(command_switches_names[switch_index].length());
+					}
 
 				// Add word to the URL database or the arguments database
-				if (url_line && !is_switch) {
-					if (last_url_list_id == -1) {
-						last_url_list_id = url_list_id.size();
-						url_list.push_back(word);
-						url_list_id.push_back(last_command_line_num);
-					} else
-						url_list[last_url_list_id] += " " + word;
-				} else {
-					instruction_arg.push_back(word);
-					instruction_arg_id.push_back(last_command_line_num);
+				if (!is_switch) {
+					if (url_line) {
+						if (last_url_list_id == -1) {
+							last_url_list_id = word_line_num;
+							current_script_command_urls.arg_start.push_back(current_script_command_urls.arguments.size());
+							current_script_command_urls.arg_num.push_back(0);
+							current_script_command_urls.line_num.push_back(word_line_num);
+							current_script_command_urls.link.push_back(word);
+							current_script_command.url_num[current_script_command.url_num.size()-1]++;
+						} else {							
+							current_script_command_urls.arguments.push_back(word);
+							current_script_command_urls.arg_num[current_script_command_urls.arg_num.size()-1]++;
+						}
+					} else {
+						current_script_command.arguments.push_back(word);
+						current_script_command.arg_num[current_script_command.arg_num.size()-1]++;
+					}
 				}
 			}
 			
@@ -4316,7 +3213,15 @@ int main(int argc, char *argv[])
 		}
 		
 		// When new line
-		if (!in_quote && script_file_content[i] == '\n') {
+		if (!in_quote && (script_file_content[i]=='\n' || script_file_content[i]=='\0')) {
+			int last = current_script_command.id.size() - 1;
+			
+			// Maintain minimal number of arguments
+			while (!url_block && command_id!=-1 && current_script_command.arg_num[last] < command_minimal_arg[current_script_command.id[last]]) {
+				current_script_command.arguments.push_back("");
+				current_script_command.arg_num[last]++;
+			}
+			
 			word_count       = 1;
 			url_line         = false;
 			last_url_list_id = -1;
@@ -4325,6 +3230,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+
 	
 
 
@@ -4332,53 +3238,38 @@ int main(int argc, char *argv[])
 
 
 
-	int result = 0;
-	vector<string> url_list_for_current_command;
-	vector<string> download_arguments;
-	vector<string> command_arguments;
-	
-	// Simulate installation to figure out the number of steps
-	for (int i=0;  i<instruction_id.size(); i++) {
-		// if modfolder wasn't formally started OR skipping this mod
-		if ((global.current_mod.empty() || global.skip_modfolder)  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartMod)
-			continue;
-			
-		// if version wasn't formally started
-		if (!global.current_mod.empty()  &&  global.current_mod_version.empty()  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartVersion)
+
+	// Pretend to Install
+	// Figure out how many steps this installation script has so we can later display progress for the user
+	for (int i=0;  i<current_script_command.id.size(); i++) {
+		if (
+			// if modfolder wasn't formally started OR skipping this mod
+			((global.current_mod.empty() || global.skip_modfolder)  &&  current_script_command.id[i]!=COMMAND_BEGIN_MOD)
+			||
+			// if version wasn't formally started
+			(!global.current_mod.empty()  &&  global.current_mod_version.empty()  &&  current_script_command.id[i]!=COMMAND_BEGIN_VERSION)
+			||
+			// if inside condition block
+			(global.condition_index >= 0  &&  !global.condition[global.condition_index]  &&  !current_script_command.ctrl_flow[i])
+		)
 			continue;
 
-		// if inside condition block
-		if (global.game_ver_index >= 0  &&  !global.game_ver_cond[global.game_ver_index]  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartMod  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartVersion  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_If_version  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_Else  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_Endif)
-			continue;
-			
-		if (command_function_pointers[instruction_id[i]] == SCRIPT_StartMod)
-			global.current_mod = "parsetest";
-		else 
-			if (command_function_pointers[instruction_id[i]] == SCRIPT_StartVersion)
-				global.current_mod_version = "-1";
-			else
-				if (command_function_pointers[instruction_id[i]]==SCRIPT_If_version || command_function_pointers[instruction_id[i]]==SCRIPT_Else || command_function_pointers[instruction_id[i]]==SCRIPT_Endif) {
-					command_arguments.clear();
-					command_arguments.push_back(command_names[instruction_id[i]]);
-					
-					if (url_list_for_current_command.size() > 0)
-						command_arguments.push_back("<dl>");
-					
-					// Gather arguments for this command in a singe list
-					for (int j=0; j<instruction_arg_id.size(); j++)
-						if (instruction_arg_id[j] == instruction_key[i])
-							command_arguments.push_back(instruction_arg[j]);
-
-					command_function_pointers[instruction_id[i]](command_arguments);
-				} else
-					global.installation_steps_max++;
+		// Execute only control flow instructions
+		switch(current_script_command.id[i]) {
+			case COMMAND_BEGIN_MOD     : global.current_mod="?pretendtoinstall"; break;
+			case COMMAND_BEGIN_VERSION : global.current_mod_version="-1"; break;
+			case COMMAND_IF_VERSION    : Condition_If_version(current_script_command.arguments, current_script_command.arg_start[i], current_script_command.arg_num[i]); break;
+			case COMMAND_ELSE          : Condition_Else(); break;
+			case COMMAND_ENDIF         : Condition_Endif(); break;
+			default                    : global.installation_steps_max++;
+		}
 	}
 	
 	// Reset variables
 	global.current_mod         = "";
 	global.current_mod_version = "";
-	global.game_ver_index      = -1;
-	global.game_ver_cond.clear();
+	global.condition_index = -1;
+	global.condition.clear();
 	global.current_mod_alias.clear();
 	
 	if (global.test_mode) {
@@ -4395,82 +3286,1241 @@ int main(int argc, char *argv[])
 	
 	
 
-	// Execute instructions
-	for (int i=0;  i<instruction_id.size(); i++) {
+	// Install for Real
+	for (int i=0;  i<current_script_command.id.size(); i++) {
 		if (Abort())
-			return USER_ABORTED;
+			return ERROR_USER_ABORTED;
 
-		global.command_line_num = instruction_line[i];
-		global.command_line     = command_names[instruction_id[i]];
-		global.unpack_set_error = true;
+		// Find command name
+		for(int j=0; j<number_of_commands; j++)
+			if (current_script_command.id[i] == match_command_name_to_id[j])
+				global.command_line = command_names[j];
 
-		// if modfolder wasn't formally started OR skipping this mod
-		if ((global.current_mod.empty() || global.skip_modfolder)  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartMod)
+		global.mirror = false;
+
+		if (
+			// if modfolder wasn't formally started OR skipping this mod
+			((global.current_mod.empty() || global.skip_modfolder)  &&  current_script_command.id[i]!=COMMAND_BEGIN_MOD)
+			||
+			// if version wasn't formally started
+			(!global.current_mod.empty()  &&  global.current_mod_version.empty()  &&  current_script_command.id[i]!=COMMAND_BEGIN_VERSION)
+			||
+			// if inside condition block
+			(global.condition_index >= 0  &&  !global.condition[global.condition_index]  &&  !current_script_command.ctrl_flow[i])
+		)
 			continue;
-			
-		// if version wasn't formally started
-		if (!global.current_mod.empty()  &&  global.current_mod_version.empty()  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartVersion)
-			continue;
 
-		// if inside condition block
-		if (global.game_ver_index >= 0  &&  !global.game_ver_cond[global.game_ver_index]  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartMod  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartVersion  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_If_version  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_Else  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_Endif)
-			continue;
-
+		int command_result   = ERROR_NONE;
+		int failed_downloads = 0;
 
 		// Check if there's an URL list for this command
-		url_list_for_current_command.clear();
-		int failed_downloads = 0;
-		
-		for (int j=0; j<url_list_id.size(); j++)
-			if (url_list_id[j] == instruction_key[i])
-				url_list_for_current_command.push_back(url_list[j]);
-				
-		for (int j=0; j<url_list_for_current_command.size(); j++) {
-			global.mirror = j < url_list_for_current_command.size() - 1;
+		if (current_script_command.url_num[i] > 0) {
+			global.download_phase = true;
+			int last_url          = current_script_command.url_start[i] + current_script_command.url_num[i] - 1;
 			
-			download_arguments.clear();
-			Tokenize(url_list_for_current_command[j], " ", download_arguments);
-			result = Download_Wrapper(download_arguments);
+			// For each url
+			for (int j=current_script_command.url_start[i];  j<=last_url;  j++) {
+				global.mirror           = j != last_url;
+				global.command_line_num = current_script_command_urls.line_num[j];
 				
-			if (result == 0)
-				break;
-			else
-				failed_downloads++;
+				// Check how many url arguments
+				if (current_script_command_urls.arg_num[j] == 0)
+					command_result = Download(current_script_command_urls.link[j]);
+				else 
+				if (current_script_command_urls.arg_num[j] == 1)
+					command_result = Download(current_script_command_urls.link[j] + " \"--output-document=" + current_script_command_urls.arguments[j] + "\"");
+				else {
+					string original_url     = current_script_command_urls.link[j];
+					string cookie_file_name = "fwatch\\tmp\\__cookies.txt";
+					string token_file_name  = "fwatch\\tmp\\__downloadtoken";
+					string wget_arguments   = "";
+					string new_url          = original_url;
+					string POST             = "";
+					int result              = 0;
+					int last_url_arg        = current_script_command_urls.arg_start[j] + current_script_command_urls.arg_num[j] - 1;
+					bool found_phrase       = false;
+				
+					DeleteFile(cookie_file_name.c_str());
+					DeleteFile(token_file_name.c_str());
+				
+					for (int k=current_script_command_urls.arg_start[j]; k<last_url_arg; k++) {
+						wget_arguments = "";
+						
+						if (!POST.empty()) {
+							wget_arguments += "--post-data=" + POST + " ";
+							POST            = "";
+						}
+					
+						wget_arguments += (k==current_script_command_urls.arg_start[j] ? "--keep-session-cookies --save-cookies " : "--load-cookies ") + cookie_file_name + " --output-document=" + token_file_name + " " + new_url;
+						command_result  = Download(wget_arguments, FLAG_OVERWRITE, new_url);
+				
+						if (command_result != ERROR_NONE)
+							goto Finished_downloading;
+				
+						// Parse downloaded file and find link
+						string token_file_buffer = "";
+						fstream token_file_handle;
+						token_file_handle.open(token_file_name.c_str(), ios::in);
+						
+						if (token_file_handle.is_open()) {
+						    string line = "";
+				
+							while(getline(token_file_handle, line))
+								token_file_buffer += line;
+								
+							size_t find = token_file_buffer.find(current_script_command_urls.arguments[k]);
+				
+							if (find != string::npos) {
+								size_t left_quote  = string::npos;
+								size_t right_quote = string::npos;
+								
+								for(int j=find; j>=0 && left_quote==string::npos; j--)
+									if (token_file_buffer[j]=='\"' || token_file_buffer[j]=='\'')
+										left_quote=j;
+										
+								for(int k=find; k<token_file_buffer.length() && right_quote==string::npos; k++)
+									if (token_file_buffer[k]=='\"' || token_file_buffer[k]=='\'')
+										right_quote=k;
+								
+								if (left_quote!=string::npos && right_quote!=string::npos) {
+									left_quote++;
+									found_phrase     = true;
+									string found_url = ReplaceAll(token_file_buffer.substr(left_quote, right_quote - left_quote), "&amp;", "&");
+									
+									// if relative address
+									if (found_url[0] == '/') {
+										int offset         = 0;
+										size_t doubleslash = original_url.find("//");
+										
+										if (doubleslash != string::npos)
+											offset = doubleslash + 2;
+										
+										size_t slash = original_url.find_first_of("/", offset);
+										
+										if (slash != string::npos)
+											original_url = original_url.substr(0, slash);
+										
+										found_url = original_url + found_url;
+									} else
+										if (!IsURL(found_url)) {
+											size_t last_slash = new_url.find_last_of("/");
+											
+											if (last_slash != string::npos)
+												new_url = new_url.substr(0, last_slash+1);
+											
+											found_url = new_url + found_url;
+										}
+										
+									// Check if it's a form
+									if (left_quote>8  &&  token_file_buffer.substr(left_quote-8, 7)=="action=") {
+										size_t offset = 0;
+										string form   = GetTextBetween(token_file_buffer, "</form>", "<form", left_quote, true);
+										string input  = GetTextBetween(form, "<input", ">", offset);
+										
+										while (!input.empty()) {
+											vector<string> attributes;
+											Tokenize(input," ", attributes);
+											string name  = "";
+											string value = "";
+											
+											for (int j=0; j<attributes.size(); j++) {
+												if (attributes[j].substr(0,5) == "name=")
+													name = ReplaceAll(attributes[j].substr(5), "\"", "");
+													
+												if (attributes[j].substr(0,6) == "value=")
+													value = ReplaceAll(attributes[j].substr(6), "\"", "");
+											}
+											
+											if (!name.empty()) {
+												size_t replacement = token_file_buffer.find("input[name="+name);
+												
+												if (replacement != string::npos) {
+													size_t new_value = token_file_buffer.find("'", replacement+13+name.length());
+													
+													if (new_value != string::npos) {
+														new_value++;
+														size_t end_value = token_file_buffer.find("'", new_value);
+														
+														if (end_value != string::npos)
+															value = token_file_buffer.substr(new_value, end_value-new_value);
+													}
+												}
+												
+												POST += (POST.empty() ? "" : "&") + url_encode(name) + "=" + url_encode(value);
+											}
+											
+											input = GetTextBetween(form, "<input", ">", offset);
+										}
+									}
+									
+									new_url = found_url;
+								}
+							}
+
+							token_file_handle.close();
+						}
+
+						if (!found_phrase) {
+							command_result = ErrorMessage(STR_DOWNLOAD_FIND_ERROR, "%STR% " + current_script_command_urls.arguments[k]);
+							goto Finished_downloading;
+						}
+							
+						token_file_name += Int2Str(k - current_script_command_urls.arg_start[j]);
+					}
+
+					wget_arguments = "--load-cookies " + cookie_file_name;
+					
+					if (!POST.empty())
+						wget_arguments += " --post-data=\"" + POST + "\" ";
+					
+					wget_arguments +=  " \"--output-document=" + current_script_command_urls.arguments[last_url_arg] + "\" " + new_url;
+					command_result  = Download(wget_arguments, 0, new_url);
+				
+					if (!global.test_mode) {
+						DeleteFile(cookie_file_name.c_str());
+						DeleteFile(token_file_name.c_str());
+					}
+				}
+		
+				Finished_downloading:
+				if (command_result == ERROR_NONE)
+					break;
+				else
+					failed_downloads++;
+			}
 		}
+		
 		
 		
 		// If download was successful then execute command
-		if (url_list_for_current_command.size()==0 || (url_list_for_current_command.size()>0 && failed_downloads<url_list_for_current_command.size())) {
-			command_arguments.clear();
-			command_arguments.push_back(command_names[instruction_id[i]]);
-			
-			if (url_list_for_current_command.size() > 0)
-				command_arguments.push_back("<dl>");
-			
-			// Gather arguments for this command in a singe list
-			for (int j=0; j<instruction_arg_id.size(); j++)
-				if (instruction_arg_id[j] == instruction_key[i])
-					command_arguments.push_back(instruction_arg[j]);
+		if (current_script_command.url_num[i]==0 || (current_script_command.url_num[i]>0 && failed_downloads<current_script_command.url_num[i])) {
+			int first               = current_script_command.arg_num[i]>0 ? current_script_command.arg_start[i] : -1;
+			global.command_line_num = current_script_command.line_num[i];
+			global.download_phase   = false;
 	
-			// Advance in number of steps		
-			if (command_function_pointers[instruction_id[i]]!=SCRIPT_StartMod  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_StartVersion  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_If_version  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_Else  &&  command_function_pointers[instruction_id[i]]!=SCRIPT_Endif)
+			if (!current_script_command.ctrl_flow[i])
 				global.installation_steps_current++;
 			
-			result = command_function_pointers[instruction_id[i]](command_arguments);
+			switch(current_script_command.id[i]) {
+				case COMMAND_BEGIN_MOD : {
+					if (current_script_command.arg_num[i] < 4) {
+						command_result = ErrorMessage(STR_ERROR_INVALID_SCRIPT, "%STR%", ERROR_WRONG_SCRIPT);
+						break;
+					}
+					
+					if (!global.current_mod.empty())
+						EndMod();
+						
+					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_PREPARING]);
+				
+					global.current_mod          = current_script_command.arguments[first];
+					global.current_mod_id       = current_script_command.arguments[first + 1];
+					global.current_mod_keepname = current_script_command.arguments[first + 2];
+					global.command_line_num     = 0;
+					global.current_mod_version  = "";
+					
+					// Make a list of mod aliases for the entire installation
+					vector<string> aliases;
+					Tokenize(current_script_command.arguments[first + 3], " ", aliases);
+					
+					for (int j=0; j<aliases.size(); j++)
+						global.current_mod_alias.push_back(aliases[j]);
+						
+					global.saved_alias_array_size = global.current_mod_alias.size();
+					
+					
+					// Find to which folder we should install the mod
+					for (int j=0;  j<global.mod_id.size(); j++)
+						if (Equals(global.current_mod_id,global.mod_id[j]))
+							global.current_mod_new_name = global.mod_name[j];
+				
+					if (global.current_mod_new_name.empty()) {
+						command_result = ErrorMessage(STR_ERROR_INVALID_ARG, "%STR%", ERROR_WRONG_SCRIPT);
+						break;
+					}
+				
+					
+					bool activate_rename = false;
+					
+					// Check if modfolder already exists
+					DWORD dir = GetFileAttributesA(global.current_mod_new_name.c_str());
+				
+					if (dir != INVALID_FILE_ATTRIBUTES) {
+						activate_rename = true;
+						
+						if (dir & FILE_ATTRIBUTE_DIRECTORY) {						
+							string mod_id_filename = global.current_mod_new_name + "\\__gs_id";
+							string mod_id_contents = GetFileContents(mod_id_filename);
+							
+							if (!mod_id_contents.empty()) {
+								vector<string> mod_id_items;
+								Tokenize(mod_id_contents, ";", mod_id_items);
+								
+								if (mod_id_items.size() > 0)
+									activate_rename = mod_id_items[0] != global.current_mod_id;
+							}
+						}
+					}
+						
+					// Rename current modfolder to make space for a new one
+					if (activate_rename) {
+						string rename_src = global.current_mod_new_name;
+						string rename_dst = "";
+						int tries         = 1;
+						int last_error    = 0;
+						
+						do {
+							rename_dst = global.current_mod_new_name + "_old" + (tries>1 ? Int2Str(tries) : "");
+							
+							if (MoveFileEx(rename_src.c_str(), rename_dst.c_str(), 0))
+								last_error = 0;
+							else {
+								tries++;
+								last_error = GetLastError();
+								
+								if (last_error != ERROR_ALREADY_EXISTS) {
+									command_result = ErrorMessage(STR_MOVE_RENAME_ERROR, "%STR% " + rename_src + " " + global.lang[STR_MOVE_RENAME_TO_ERROR] + " " + rename_dst + " - " + Int2Str(last_error) + " " + FormatError(last_error));
+									goto End_command_execution;
+								}
+							}
+						} while (last_error == ERROR_ALREADY_EXISTS);
+						
+						global.logfile << "Renaming existing " << rename_src << " to " << rename_dst << endl;
+					}
+				
+					break;
+				}
+
+				case COMMAND_BEGIN_VERSION : {
+					if (current_script_command.arg_num[i] >= 2) {
+						if (!global.current_mod_version.empty())
+							EndModVersion();
+						
+						global.current_mod_version      = current_script_command.arguments[first];
+						global.current_mod_version_date = atoi(current_script_command.arguments[first+1].c_str());
+						global.command_line_num         = 0;
+					} else
+						command_result = ErrorMessage(STR_ERROR_INVALID_SCRIPT, "%STR%", ERROR_WRONG_SCRIPT);
+
+					break;
+				}
+				
+				case COMMAND_ALIAS : {
+					if (current_script_command.arg_num[i] == 0)
+						global.current_mod_alias.clear();
+					else 
+						for(int j=current_script_command.arg_start[i]; j<current_script_command.arg_start[i]+current_script_command.arg_num[i]; j++)
+							global.current_mod_alias.push_back(current_script_command.arguments[j]);
+					break;
+				}
+
+				case COMMAND_IF_VERSION : command_result=Condition_If_version(current_script_command.arguments, current_script_command.arg_start[i], current_script_command.arg_num[i]); break;
+				case COMMAND_ELSE       : command_result=Condition_Else(); break;
+				case COMMAND_ENDIF      : command_result=Condition_Endif(); break;
+
+				case COMMAND_AUTO_INSTALL :  {
+					global.logfile << "Auto installation" << endl; 
+					string file = global.downloaded_filename;
+					
+					if (current_script_command.arg_num[i] > 0)
+						file = current_script_command.arguments[first];
+					
+					string file_with_path = "fwatch\\tmp\\" + file;
+					DWORD attributes      = GetFileAttributes(file_with_path.c_str());
+					
+					if (attributes != INVALID_FILE_ATTRIBUTES)
+						command_result = Auto_Install(file, attributes, FLAG_RUN_EXE, current_script_command.password[i]);
+					else {
+						int error_code = GetLastError();
+						command_result = ErrorMessage(STR_AUTO_READ_ATTRI, "%STR% " + file + " - " + Int2Str(error_code) + " " + FormatError(error_code));
+					}
+					
+					break;
+				}
+
+				case COMMAND_UNPACK : {
+					string *file_name = &current_script_command.arguments[first];
+					
+					if (Equals(*file_name,"<download>")  ||  Equals(*file_name,"<dl>")  ||  (*file_name).empty())
+						*file_name = global.downloaded_filename;
+
+					if (!(*file_name).empty())
+						command_result = Unpack(*file_name, current_script_command.password[i]);
+					else
+						command_result = ErrorMessage(STR_ERROR_NO_FILE);
+						
+					break;
+				}
+				
+				case COMMAND_MOVE :  
+				case COMMAND_COPY : {
+					string *source      = &current_script_command.arguments[first];
+					string *destination = &current_script_command.arguments[first + 1];
+					string *new_name    = &current_script_command.arguments[first + 2];
+
+					if ((*source).empty()) {
+						command_result = ErrorMessage(STR_ERROR_NO_FILE);
+						break;
+					}
+
+					bool is_download_dir = true;
+					int options          = FLAG_OVERWRITE | (current_script_command.id[i]==COMMAND_MOVE ? FLAG_MOVE_FILES : FLAG_NONE);
+
+					if (current_script_command.switches[i] & SWITCH_NO_OVERWRITE)
+						options &= ~FLAG_OVERWRITE;
+
+					if (current_script_command.switches[i] & SWITCH_MATCH_DIR)
+						options |= FLAG_MATCH_DIRS;
+
+					for (int j=first; j<=first+2; j++)
+						if (!VerifyPath(current_script_command.arguments[j])) {
+							command_result = ErrorMessage(STR_ERROR_PATH);
+							goto End_command_execution;
+						}
+
+
+					// Format source path
+					if (Equals(*source,"<download>")  ||  Equals(*source,"<dl>")) {
+						*source = "fwatch\\tmp\\" + global.downloaded_filename;
+						
+						if (options & FLAG_MOVE_FILES)
+							global.downloads.pop_back();
+					} else 
+						if (Equals((*source).substr(0,5),"<mod>")) {
+							*source         = global.current_mod_new_name + (*source).substr(5);
+							is_download_dir = false;
+						} else
+							if (Equals((*source).substr(0,7),"<game>\\")) {
+								is_download_dir = false;
+								
+								if (~options & FLAG_MOVE_FILES)
+									*source = (*source).substr(7);
+								else {
+									command_result = ErrorMessage(STR_MOVE_DST_PATH_ERROR);
+									break;
+								}
+							} else
+								*source = "fwatch\\tmp\\_extracted\\" + *source;
+				
+					// If user selected directory then move it along with its sub-folders
+					bool source_is_dir = false;
+					
+					if ((*source).find("*")==string::npos && (*source).find("?")==string::npos && GetFileAttributes((*source).c_str()) & FILE_ATTRIBUTE_DIRECTORY) {
+						options      |= FLAG_MATCH_DIRS;
+						source_is_dir = true;
+					}
+				
+				
+					// Format destination path
+					bool destination_passed = !(*destination).empty();
+					
+					if (*destination == ".")
+						*destination = "";
+					
+					*destination = global.current_mod_new_name + "\\" + *destination;
+					
+					if ((*destination).substr((*destination).length()-1) != "\\")
+						*destination += "\\";
+				
+					// If user wants to move modfolder then change destination to the game directory
+					if (is_download_dir  &&  IsModName(PathLastItem(*source))  &&  !destination_passed) {
+						*source   = "";
+						*new_name = Equals(global.current_mod,global.current_mod_new_name) ? "" : global.current_mod_new_name;
+						options  |= FLAG_MATCH_DIRS;
+					} else {
+						// Otherwise create missing directories in the destination path
+						
+						// if user wants to copy directory and give it a new name then first create a new directory with wanted name in the destination location
+						if (~options & FLAG_MOVE_FILES  &&  source_is_dir  &&  !(*new_name).empty())
+							command_result = MakeDir(*destination + *new_name);
+						else
+							command_result = MakeDir(PathNoLastItem(*destination));
+							
+						if (command_result != 0)
+							break;
+					}
+						
+				
+					// Format new name 
+					// 3rd argument - new name
+					if ((*new_name).find("\\")!=string::npos  ||  (*new_name).find("/")!=string::npos) {
+						command_result = ErrorMessage(STR_RENAME_DST_PATH_ERROR);
+						break;
+					}
+
+					command_result = MoveFiles(*source, *destination, *new_name, options);
+					break;
+				}
+				
+				case COMMAND_MAKEDIR : {
+					string *path = &current_script_command.arguments[first];
+					
+					if (VerifyPath(*path))
+						command_result = MakeDir(global.current_mod_new_name + "\\" + *path);
+					else
+						command_result = ErrorMessage(STR_ERROR_PATH);
+				
+					break;
+				}
+				
+				case COMMAND_DELETE : {
+					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+"...");
+					
+					string *file_name = &current_script_command.arguments[first];
+					int options       = FLAG_MOVE_FILES | FLAG_ALLOW_ERROR;
+					
+					if (current_script_command.switches[i] & SWITCH_MATCH_DIR)
+						options |= FLAG_MATCH_DIRS;
+						
+					if (!VerifyPath(*file_name)) {
+						command_result = ErrorMessage(STR_ERROR_PATH);
+						break;
+					}
+				
+					// Format source path
+					bool trash = false;
+				
+					if (Equals(*file_name,"<download>")  ||  Equals(*file_name,"<dl>")  ||  (*file_name).empty()) {
+						if (global.downloaded_filename.empty()) {
+							command_result = ErrorMessage(STR_ERROR_NO_FILE);
+							break;
+						}
+					
+						*file_name = "fwatch\\tmp\\" + global.downloaded_filename;
+					} else {
+						*file_name = global.current_mod_new_name + "\\" + *file_name;
+						trash      = true;
+					}
+				
+				
+					// Find files and save them to a list
+					vector<string> source_list;
+					vector<string> destination_list;
+					vector<bool>   is_dir_list;
+					vector<string> empty_dirs;
+					int buffer_size = 1;
+					int recursion   = -1;
+				
+					command_result = CreateFileList(*file_name, PathNoLastItem(*file_name), source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
+				
+					if (command_result != ERROR_NONE)
+						break;
+				
+				
+					// Allocate buffer for the file list
+					char *file_list;
+					int base_path_len = global.working_directory.length() + 1;
+					int buffer_pos    = 0;
+					wstring temp;
+					
+					if (trash) {
+						file_list = new char[buffer_size*2];
+				
+						if (!file_list) {
+							command_result = ErrorMessage(STR_ERROR_BUFFER, "%STR% " + Int2Str(buffer_size));
+							break;
+						}
+					}
+				
+				  
+					// For each file in the list
+					for (int j=0; j<destination_list.size(); j++) {
+						if (Abort()) {
+							command_result = ERROR_USER_ABORTED;
+							goto End_command_execution;
+						}
+						
+						if (trash) {
+							temp            = string2wide(destination_list[j]);
+							int name_length = (temp.length()+1) * 2;
+							global.logfile << "Trashing " << destination_list[j].substr(base_path_len) << endl;
+							memcpy(file_list+buffer_pos, temp.c_str(), name_length);
+							buffer_pos     += name_length;
+						} else {
+							global.logfile << "Deleting  " << destination_list[j].substr(base_path_len);
+							int error_code = 0;
+							
+							if (is_dir_list[j])
+								error_code = DeleteDirectory(destination_list[j]);
+							else
+								if (!DeleteFileW(string2wide(destination_list[j]).c_str()))
+									error_code = GetLastError();
+
+							if (error_code != 0) {
+								command_result = ErrorMessage(STR_DELETE_PERMANENT_ERROR, "%STR% " + source_list[i] + "  - " + Int2Str(error_code) + " " + FormatError(error_code));
+								break;
+							}
+								
+							global.logfile << endl;
+						}
+					}
+				
+					if (trash) {
+						memcpy(file_list+buffer_pos, "\0\0", 2);
+				
+						// Trash file
+						SHFILEOPSTRUCTW shfos;
+						shfos.hwnd     = NULL;
+						shfos.wFunc    = FO_DELETE;
+						shfos.pFrom    = (LPCWSTR)file_list;
+						shfos.pTo      = NULL;
+						shfos.fFlags   = FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO;
+						int result     = SHFileOperationW(&shfos);
+								
+					    if (result != 0)
+							command_result = ErrorMessage(STR_DELETE_BIN_ERROR, "%STR% - " + Int2Str(result) + " " + FormatError(result));
+				
+						delete[] file_list;
+					}
+
+					break;
+				}
+				
+				case COMMAND_RENAME : {
+					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_RENAMING]+"...");
+				
+					string *source      = &current_script_command.arguments[first];
+					string *destination = &current_script_command.arguments[first + 1];
+					int options         = FLAG_MOVE_FILES;
+					
+					if (current_script_command.switches[i] & SWITCH_MATCH_DIR)
+						options |= FLAG_MATCH_DIRS;
+						
+					for (int j=first; j<=first+1; j++)
+						if (!VerifyPath(current_script_command.arguments[j])) {
+							command_result = ErrorMessage(STR_ERROR_PATH);
+							goto End_command_execution;
+						}
+
+				
+					// Format source path
+					if ((*source).empty()) {
+						command_result = ErrorMessage(STR_RENAME_NO_NAME_ERROR, "%STR%");
+						break;
+					}
+					
+					if (Equals(*source,"<download>")  ||  Equals(*source,"<dl>"))	{
+						if (global.downloaded_filename.empty()) {
+							command_result = ErrorMessage(STR_ERROR_NO_FILE);
+							break;
+						}
+						
+						*source = "fwatch\\tmp\\_extracted\\" + global.downloaded_filename;
+					} else
+						*source = global.current_mod_new_name + "\\" + *source;
+				
+					string relative_path = PathNoLastItem(*source);
+					bool source_wildcard = false;
+				
+					if (relative_path.find("*")!=string::npos  ||  relative_path.find("?")!=string::npos) {
+						command_result = ErrorMessage(STR_RENAME_WILDCARD_ERROR, "%STR%");
+						break;
+					}
+					
+				
+					// Format new name
+					if ((*destination).empty()) {
+						command_result = ErrorMessage(STR_RENAME_NO_NAME_ERROR);
+						break;
+					}
+					
+					if ((*destination).find("\\")!=string::npos  ||  (*destination).find("/")!=string::npos) {
+						command_result = ErrorMessage(STR_RENAME_DST_PATH_ERROR);
+						break;
+					}
+						
+							
+					// Find files and save them to a list
+					vector<string> source_list;
+					vector<string> destination_list;
+					vector<bool>   is_dir_list;
+					vector<string> empty_dirs;
+					int buffer_size = 0;
+					int recursion   = -1;
+
+					command_result = CreateFileList(*source, relative_path+*destination, source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
+
+					if (command_result != 0)
+						break;
+
+					wstring source_wide;
+					wstring destination_wide;
+
+
+					// For each file on the list
+					for (int j=0;  j<source_list.size(); j++) {
+						if (Abort()) {
+							command_result = ERROR_USER_ABORTED;
+							break;
+						}
+
+						// Format path for logging
+						global.logfile << "Renaming  " << ReplaceAll(source_list[j], "fwatch\\tmp\\_extracted\\", "") << "  to  " << PathLastItem(destination_list[j]);
+
+						// Rename
+						source_wide      = string2wide(source_list[j]);
+						destination_wide = string2wide(destination_list[j]);
+						int result       = MoveFileExW(source_wide.c_str(), destination_wide.c_str(), 0);
+
+					    if (!result) {
+							int error_code = GetLastError();
+							global.logfile << endl;
+							command_result = ErrorMessage(STR_MOVE_RENAME_ERROR, "%STR% " + source_list[j] + " " + global.lang[STR_MOVE_RENAME_TO_ERROR] + " " + destination_list[j] + " - " + Int2Str(error_code) + " " + FormatError(error_code));
+							break;
+					    }
+					    
+					    global.logfile << endl;
+					}
+
+					break;
+				}
+				
+				case COMMAND_ASK_RUN : {
+					string *file_name = &current_script_command.arguments[first];
+					
+					if (Equals(*file_name,"<download>")  ||  Equals(*file_name,"<dl>")  ||  (*file_name).empty())
+						*file_name = global.downloaded_filename;
+				
+					if ((*file_name).empty()) {
+						command_result = ErrorMessage(STR_ERROR_NO_FILE);
+						break;
+					}
+				
+					if (!VerifyPath(*file_name)) {
+						command_result = ErrorMessage(STR_ERROR_PATH);
+						break;
+					}
+				
+					string path_to_dir = global.working_directory;
+					
+					if ((*file_name).substr(0,6) == "<mod>\\") {
+						*file_name   = (*file_name).substr(6);
+						path_to_dir += "\\" + global.current_mod_new_name + "\\";
+					} else
+						path_to_dir += "\\fwatch\\tmp\\";
+				
+					command_result = RequestExecution(path_to_dir, *file_name);
+					break;
+				}
+
+				case COMMAND_ASK_DOWNLOAD : {
+					if (current_script_command.arg_num[i] < 2) {
+						command_result = ErrorMessage(STR_ERROR_ARG_COUNT);
+						break;
+					}
+					
+					string *file_name   = &current_script_command.arguments[first];
+					string *url         = &current_script_command.arguments[first + 1];
+					string download_dir = GetFileContents("fwatch\\tmp\\schedule\\DownloadDir.txt");
+					bool move           = false;
+					fstream config;
+					
+					// Check if file already exists
+					string path1 = download_dir + "\\" + *file_name;
+					string path2 = "fwatch\\tmp\\" + *file_name;
+					
+					if (GetFileAttributes(path1.c_str()) != INVALID_FILE_ATTRIBUTES) {
+						global.logfile << "Found " << path1 << endl;
+						move = true;
+					} else
+						if (GetFileAttributes(path2.c_str()) != INVALID_FILE_ATTRIBUTES) {
+							global.downloaded_filename = *file_name;
+							global.logfile << "Found " << path2 << endl;
+							global.downloads.push_back(global.downloaded_filename);
+						} else {
+							string message = global.lang[STR_ASK_DLOAD] + ":\\n" + *file_name + "\\n\\n" + global.lang[STR_ALTTAB];
+							WriteProgressFile(INSTALL_WAITINGFORUSER, message);
+							
+							ShellExecute(0, 0, (*url).c_str(), 0, 0 , SW_SHOW);
+							global.logfile << "Opened " << *url << endl;
+							
+							message      = "You must manually download\n" + *file_name + "\n\nPress OK once download has finished\nPress CANCEL to skip installing this modfolder";
+							int msgboxID = MessageBox(NULL, message.c_str(), "Addon Installer", MB_ICONQUESTION | MB_OKCANCEL | MB_DEFBUTTON1);
+							
+							if (msgboxID == IDCANCEL)
+								global.skip_modfolder = true;
+							else {
+								if (download_dir.empty()  ||  GetFileAttributes(path1.c_str()) == INVALID_FILE_ATTRIBUTES) {
+									WriteProgressFile(INSTALL_WAITINGFORUSER, global.lang[STR_ASK_DLOAD_SELECT] + "\\n\\n" + global.lang[STR_ALTTAB]);
+									
+									download_dir = BrowseFolder("");
+									printf("%s", download_dir.c_str());
+									
+									fstream config("fwatch\\tmp\\schedule\\DownloadDir.txt", ios::out | ios::trunc);
+					
+									if (config.is_open()) {
+										config << download_dir;
+										config.close();
+									}
+								}
+				
+								move = true;
+							}
+						}
+						
+					if (move) {
+						WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_COPYINGDOWNLOAD]);
+						
+						string source      = download_dir + "\\" + *file_name;
+						string destination = global.working_directory + "\\fwatch\\tmp\\" + *file_name;
+						int result         = MoveFileEx(source.c_str(), destination.c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_REPLACE_EXISTING);
+						
+						global.logfile << "Moving " << source << "  to  " << destination << endl;
+						
+						if (!result) {
+							int error_code = GetLastError();
+							command_result = ErrorMessage(STR_MOVE_ERROR, "%STR% " + source + " " + global.lang[STR_MOVE_TO_ERROR] + " " + destination + " - " + Int2Str(error_code) + " " + FormatError(error_code));
+						} else {
+							global.downloaded_filename = *file_name;
+							global.downloads.push_back(global.downloaded_filename);
+						}
+					}
+					
+					break;
+				}
+										
+				case COMMAND_MAKEPBO : {
+					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_PACKINGPBO]+"...");
+					
+					string *file_name = &current_script_command.arguments[first];
+										
+					if (!VerifyPath(*file_name)) {
+						command_result = ErrorMessage(STR_ERROR_PATH);
+						break;
+					}			
+				
+					// Format source path
+					if ((*file_name).empty()) {
+						if (global.last_pbo_file.empty()) {
+							command_result = ErrorMessage(STR_ERROR_NO_FILE);
+							break;
+						}
+					
+						*file_name = global.last_pbo_file;
+					} else
+						*file_name = global.current_mod_new_name + "\\" + *file_name;
+				
+				
+					// Create log file
+					SECURITY_ATTRIBUTES sa;
+				    sa.nLength              = sizeof(sa);
+				    sa.lpSecurityDescriptor = NULL;
+				    sa.bInheritHandle       = TRUE;       
+				
+				    HANDLE logFile = CreateFile(TEXT("fwatch\\tmp\\schedule\\PBOLog.txt"),
+				        FILE_APPEND_DATA,
+				        FILE_SHARE_WRITE | FILE_SHARE_READ,
+				        &sa,
+				        CREATE_ALWAYS,
+				        FILE_ATTRIBUTE_NORMAL,
+				        NULL );
+				        
+					// Execute program
+					PROCESS_INFORMATION pi;
+				    STARTUPINFO si; 
+					ZeroMemory( &si, sizeof(si) );
+					ZeroMemory( &pi, sizeof(pi) );
+					si.cb 		   = sizeof(si);
+					si.dwFlags 	   = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+					si.wShowWindow = SW_SHOW;
+					si.hStdInput   = NULL;
+					si.hStdOutput  = logFile;
+					si.hStdError   = logFile;
+					
+					string exename         = "MakePbo.exe";
+					string executable      = "fwatch\\data\\" + exename;
+					string arguments       = " -NRK \"" + *file_name + "\"";
+					string pbo_name        = *file_name + ".pbo";
+					string pbo_name_backup = "";
+					
+					if (GetFileAttributes(pbo_name.c_str()) != INVALID_FILE_ATTRIBUTES) {
+						int tries         = 2;
+						int last_error    = 0;
+						
+						do {
+							pbo_name_backup = pbo_name + Int2Str(tries);
+							
+							if (MoveFileEx(pbo_name.c_str(), pbo_name_backup.c_str(), 0))
+								last_error = 0;
+							else {
+								tries++;
+								last_error = GetLastError();
+								
+								if (last_error != ERROR_ALREADY_EXISTS) {
+									command_result = ErrorMessage(STR_MOVE_RENAME_ERROR, "%STR% " + pbo_name + " " + global.lang[STR_MOVE_RENAME_TO_ERROR] + " " + pbo_name_backup + " - " + Int2Str(last_error) + " " + FormatError(last_error));
+									goto End_command_execution;
+								}
+							}
+						} while (last_error == ERROR_ALREADY_EXISTS);
+					}
+				
+					if (!CreateProcess(&executable[0], &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {
+						if (!pbo_name_backup.empty())
+							MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
+						
+						int error_code = GetLastError();
+						command_result = ErrorMessage(STR_ERROR_EXE, "%STR% " + exename + " - " + Int2Str(error_code) + " " + FormatError(error_code));
+					} else
+						global.logfile << "Creating a PBO file out of " << *file_name << endl;
+						
+					Sleep(10);
+				
+
+					// Wait for the program to finish its job
+					DWORD exit_code;
+					string message = "";
+					
+					do {					
+						if (Abort()) {
+							TerminateProcess(pi.hProcess, 0);
+							CloseHandle(pi.hProcess);
+							CloseHandle(pi.hThread);
+							CloseHandle(logFile);
+							command_result = ERROR_USER_ABORTED;
+							goto End_command_execution;
+						}
+						
+						ParsePBOLog(message, exename, *file_name);
+						GetExitCodeProcess(pi.hProcess, &exit_code);
+						Sleep(100);
+					} while(exit_code == STILL_ACTIVE);
+					
+					ParsePBOLog(message, exename, *file_name);
+				
+					CloseHandle(pi.hProcess);
+					CloseHandle(pi.hThread);
+					CloseHandle(logFile);
+					Sleep(1000);
+					
+					
+					// Need to fix the pbo timestamps after makepbo
+					if (exit_code == 0) {
+						vector<string> sourcedir_name;
+						vector<unsigned int> sourcedir_time;
+						command_result = CreateTimestampList(*file_name, (*file_name).length()+1, sourcedir_name, sourcedir_time);
+				
+						if (command_result == ERROR_NONE) {
+							FILE *f = fopen(pbo_name.c_str(), "rb");
+							if (f) {
+								fseek(f, 0, SEEK_END);
+								int file_size = ftell(f);
+								fseek(f, 0, SEEK_SET);
+								
+								char *buffer = (char*) malloc(file_size+1);
+								
+								if (buffer != NULL) {
+									memset(buffer, 0, file_size+1);
+									fread(buffer, 1, file_size, f);
+									
+									const int name_max  = 512;
+									char name[name_max] = "";
+									int name_len        = 0;
+									int file_count      = 0;
+									int file_pos        = 0;
+									 
+									while (file_pos < file_size) {
+										memset(name, 0, name_max);
+										name_len = 0;
+								
+										for (int i=0; i<name_max-1; i++) {
+											char c = buffer[file_pos++];
+								
+											if (c != '\0')
+												name[name_len++] = c;
+											else
+												break;
+										}
+								
+										unsigned long MimeType  = *((unsigned long*)&buffer[file_pos]);
+										unsigned long TimeStamp = *((unsigned long*)&buffer[file_pos+12]);
+										unsigned long Datasize  = *((unsigned long*)&buffer[file_pos+16]);
+								
+										file_pos += 20;
+								
+										if (name_len == 0) {
+											if (file_count==0 && MimeType==0x56657273 && TimeStamp==0 && Datasize==0) {
+												int value_len = 0;
+												bool is_name  = true;
+												
+												while (file_pos < file_size) {
+													if (buffer[file_pos++] != '\0')
+														value_len++;
+													else {
+														if (is_name && value_len==0)
+															break;
+														else {
+															is_name   = !is_name;
+															value_len = 0;
+														}
+													}
+												}
+											} else
+												break;
+										} else {
+											for (int i=0; i<sourcedir_name.size(); i++)
+												if (strcmp(sourcedir_name[i].c_str(), name) == 0) {
+													if (sourcedir_time[i] != TimeStamp)
+														memcpy(buffer+file_pos-8, &sourcedir_time[i], 4);
+													
+													break;
+												}
+										}
+											
+										file_count++;
+									}
+									
+									freopen(pbo_name.c_str(), "wb", f);
+									int bytes_written = 0;
+									
+									if (f) {
+										bytes_written = fwrite(buffer, 1, file_size, f);
+										fclose(f);
+									}
+									
+									free(buffer);
+										
+									if (bytes_written != file_size) {
+										if (!pbo_name_backup.empty())
+											MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
+										
+										command_result = ErrorMessage(STR_EDIT_WRITE_ERROR, "%STR% " + Int2Str(bytes_written) + "/" + Int2Str(file_size));
+										break;
+									}
+								}
+							} else {
+								if (!pbo_name_backup.empty())
+									MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
+									
+								command_result = ErrorMessage(STR_EDIT_READ_ERROR, "%STR% " + Int2Str(errno) + " - " + (string)strerror(errno));
+								break;
+							}
+						} else {
+							if (!pbo_name_backup.empty())
+								MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
+							break;
+						}
+				
+						ChangeFileDate(pbo_name);
+						
+						if (~current_script_command.switches[i] & SWITCH_KEEP_SOURCE) {
+							WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+"...");
+							global.logfile << "Removing " << *file_name << " directory" << endl;
+							global.last_pbo_file = "";
+							DeleteDirectory(*file_name);
+						}
+					
+						if (!pbo_name_backup.empty())
+							DeleteFile(pbo_name_backup.c_str());
+					} else {
+						if (!pbo_name_backup.empty())
+							MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
+							
+						command_result = ErrorMessage(STR_PBO_MAKE_ERROR, "%STR% " + Int2Str(exit_code) + " - " + message);
+					}
+
+					break;
+				}
+				
+				case COMMAND_EXTRACTPBO : {
+					string *source      = &current_script_command.arguments[first];
+					string *destination = &current_script_command.arguments[first + 1];
+					
+					// Verify source argument
+					if ((*source).empty()) {
+						command_result = ErrorMessage(STR_ERROR_NO_FILE);
+						break;
+					}
+						
+					if (!VerifyPath(*source)) {
+						command_result = ErrorMessage(STR_UNPACKPBO_SRC_PATH_ERROR);
+						break;
+					}
+					
+					if (GetFileExtension(*source) != "pbo") {
+						command_result = ErrorMessage(STR_PBO_NAME_ERROR);
+						break;
+					}
+					
+					bool is_game_dir = false;
+					
+					if (Equals((*source).substr(0,7),"<game>\\")) {
+						global.last_pbo_file = "";
+						*source              = (*source).substr(7);
+						is_game_dir          = true;
+					} else {
+						global.last_pbo_file = global.current_mod_new_name + "\\" + (*source).substr(0, (*source).length()-4);
+						*source              = global.current_mod_new_name + "\\" + *source;
+					}
+				
+				
+					// Verify destination argument				
+					if (!VerifyPath(*destination)) {
+						command_result = ErrorMessage(STR_UNPACKPBO_DST_PATH_ERROR);
+						break;
+					}
+					
+					// Process optional 2nd argument: extraction destination
+					if (!(*destination).empty()  ||  is_game_dir) {
+						if (*destination == ".")
+							*destination = "";
+				
+						command_result = MakeDir(global.current_mod_new_name + "\\" + *destination);
+				
+						if (command_result != 0)
+							break;
+				
+						// Create path to the extracted directory for use with MakePbo function
+						global.last_pbo_file = global.current_mod_new_name + "\\" + *destination + "\\" + PathLastItem((*source).substr(0, (*source).length()-4));
+						*destination         = global.working_directory    + "\\" + global.current_mod_new_name + "\\" + *destination;
+						
+						if ((*destination).substr((*destination).length()-1) != "\\")
+							*destination += "\\";
+					}
+				
+					command_result = ExtractPBO(*source, *destination);
+					break;
+				}
+				
+				case COMMAND_EDIT : {
+					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_EDITING]+"...");
+				
+					if (current_script_command.arg_num[i] < 3) {
+						command_result = ErrorMessage(STR_ERROR_ARG_COUNT);
+						break;
+					}
+					
+					string *file_name   = &current_script_command.arguments[first];
+					string *wanted_text = &current_script_command.arguments[first + 2];
+					int wanted_line     = atoi(current_script_command.arguments[first+1].c_str());
+				
+					if ((*file_name).empty()) {
+						command_result = ErrorMessage(STR_ERROR_NO_FILE);
+						break;
+					}
+					
+					if (Equals(*file_name,"<download>")  ||  Equals(*file_name,"<dl>")) {
+						if (global.downloaded_filename.empty()) {
+							command_result = ErrorMessage(STR_ERROR_NO_FILE);
+							break;
+						}
+				
+						*file_name = "fwatch\\tmp\\" + global.downloaded_filename;
+					} else 
+						*file_name = global.current_mod_new_name + "\\" + *file_name;
+				
+					if (!VerifyPath(*file_name)) {
+						command_result = ErrorMessage(STR_ERROR_PATH);
+						break;
+					}
+				
+					vector<string> contents;
+				    fstream file;
+					int line_number        = 0;
+					bool ends_with_newline = true;
+				    
+				    if (~current_script_command.switches[i] & SWITCH_NEWFILE) {
+				    	global.logfile << "Editing line " << wanted_line << " in " << *file_name << endl;
+				    	
+				    	file.open((*file_name).c_str(), ios::in);
+				    	
+						if (file.is_open()) {
+							string line;
+						
+							while (getline(file, line)) {
+								line_number++;
+								
+								if (file.eof())
+									ends_with_newline = false;
+								
+								if (line_number == wanted_line) {
+									string new_line = current_script_command.switches[i] & SWITCH_APPEND ? line+*wanted_text : *wanted_text;
+								
+									contents.push_back(new_line);
+									
+									if (current_script_command.switches[i] & SWITCH_INSERT) {
+										contents.push_back(line);
+										line_number++;
+									}
+								} else 
+									contents.push_back(line);
+							}
+							
+							if (current_script_command.switches[i] & SWITCH_INSERT  &&  (wanted_line==0 || wanted_line > line_number)) {
+								contents.push_back(*wanted_text);
+								line_number++;
+							}
+							
+							file.close();
+						} else {
+							command_result = ErrorMessage(STR_EDIT_READ_ERROR);
+							break;
+						}
+					} else {
+						global.logfile << "Creating new file " << *file_name << endl;
+						contents.push_back(*wanted_text);
+						
+						// Trash the file
+						int buffer_pos  = 0;
+						int buffer_size = (*file_name).length() + 3;
+						char *file_list = new char[buffer_size*2];
+				
+						if (file_list) {
+							wstring file_name_wide = string2wide(*file_name);
+							int name_length        = (file_name_wide.length()+1) * 2;
+							memcpy(file_list, file_name_wide.c_str(), name_length);
+							memcpy(file_list+name_length, "\0\0", 2);
+							
+							SHFILEOPSTRUCTW shfos;
+							shfos.hwnd   = NULL;
+							shfos.wFunc  = FO_DELETE;
+							shfos.pFrom  = (LPCWSTR)file_list;
+							shfos.pTo    = NULL;
+							shfos.fFlags = FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO;
+							int result   = SHFileOperationW(&shfos);
+				
+							if (result!=0  &&  result!=1026  &&  result!=2)
+								global.logfile << "Trashing FAILED " << result << " " << FormatError(result) << endl;
+							
+							delete[] file_list;
+						}
+					}
+				    	
+				    	
+				    // Write file
+					file.open((*file_name).c_str(), ios::out | ios::trunc);
+					
+					if (file.is_open()) {
+						for (int j=0; j<contents.size(); j++) {
+							file << contents[j];
+							
+							if (j+1 < line_number  ||  j+1==line_number && ends_with_newline)
+								file << endl;
+						}
+				
+						file.close();
+					} else {
+						command_result = ErrorMessage(STR_EDIT_WRITE_ERROR);
+						break;
+					}
+				
+				    ChangeFileDate(*file_name);
+					break;
+				}
+			}
 		}
 
-
-		if (result == USER_ABORTED)
-			return result;
+		End_command_execution:
+		if (command_result == ERROR_USER_ABORTED)
+			return command_result;
 		else
-			if (result != NO_ERRORS) {
+			if (command_result != ERROR_NONE) {
 				global.logfile << "Installation error - aborting\n\n--------------\n\n";
 				global.logfile.close();
-				return result;
+				return command_result;
 			}
-    }
+	}
 
-	
+
 
 
 
@@ -4514,11 +4564,8 @@ int main(int argc, char *argv[])
 	 
 		if (CreateProcess("fwatch\\data\\gameRestart.exe", &param[0], NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi))
 			global.logfile << "Executing gameRestart.exe  " << global.gamerestart_arguments << endl;
-		else {
-			int errorCode   = GetLastError();
-			string errorMSG = FormatError(errorCode);
-			global.logfile << "Failed to launch gameRestart.exe " << errorMSG << endl;
-		}
+		else
+			global.logfile << "Failed to launch gameRestart.exe " << FormatError(GetLastError()) << endl;
 	 
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
@@ -4533,5 +4580,5 @@ int main(int argc, char *argv[])
 	global.end_thread = true;
 	Sleep(300);
 	
-    return NO_ERRORS;
+    return ERROR_NONE;
 }

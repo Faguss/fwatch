@@ -871,7 +871,7 @@ FUNCTION_STRINGTABLE = {
 			"[Њci№gnij mody]",				//82
 			"Dostкpne aktualizacje",		//83
 			"Pobierz nowy mod",				//84
-			"[Zamknij]"						//85
+			"[Zamknij Okno]"				//85
 		];
 	};
 	
@@ -962,7 +962,7 @@ FUNCTION_STRINGTABLE = {
 			"[Скачать моды]",		//82
 			"Обновить",				//83
 			"Добавить Новый",		//84
-			"[Закрыть]"				//85
+			"[Закрыть Окно]"		//85
 		];
 	};
 	
@@ -1053,7 +1053,7 @@ FUNCTION_STRINGTABLE = {
 			"[Download Mods]",				//82
 			"Available Updates",			//83
 			"Install New",					//84
-			"[Close]"						//85
+			"[Close Window]"				//85
 		];
 	};
 };

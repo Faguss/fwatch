@@ -12,8 +12,8 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2021,1,24,0,0,0,15,207,60,FALSE]
-	GS_MY_VERSION = 0.55
+	GS_FWATCH_MY_VERSION = [2021,2,5,5,3,46,51,539,60,FALSE]
+	GS_MY_VERSION = 0.56
 	GS_DEFAULT_URL = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
 
@@ -921,11 +921,12 @@
 		lbSetCurSel [6657, -1]
 		lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 36], 208]
 		lbSetValue  [6657, lbAdd [6657, Format [MAINMENU_STR select 42, (if (_auto_restart) then {MAINMENU_STR select 43} else {MAINMENU_STR select 44})]], 209]
-		lbSetValue  [6657, lbAdd [6657, ""], -1]
-		lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 85], 227]
 
 		? _auto_restart && _voice_name!=""         : if (!(GS_VOICE select (_server_voice select 0) select 1)) then {lbSetValue  [6657, lbAdd [6657, Format ["[%1: %2]", _voice_name, (if (_run_voice_program) then {MAINMENU_STR select 43} else {MAINMENU_STR select 44})]], 219]}
 		? _auto_restart && _server_uniqueid!="mod" : lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 31], 206]
+
+		lbSetValue  [6657, lbAdd [6657, ""], -1]
+		lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 85], 227]
 
 		_current_auto_restart = _auto_restart
 		_current_run_voice    = _run_voice_program

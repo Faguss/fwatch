@@ -138,7 +138,15 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 
 	// Create mailslot
-	HANDLE mailslot = CreateMailslot(TEXT("\\\\.\\mailslot\\fwatch_mailslot"), 0, MAILSLOT_WAIT_FOREVER, (LPSECURITY_ATTRIBUTES) NULL);
+	SECURITY_DESCRIPTOR sd;
+	InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION);
+	SetSecurityDescriptorDacl(&sd, true, NULL, false);
+
+	SECURITY_ATTRIBUTES sa;
+	sa.lpSecurityDescriptor = &sd;
+	sa.bInheritHandle       = true;
+
+	HANDLE mailslot = CreateMailslot(TEXT("\\\\.\\mailslot\\fwatch_mailslot"), 0, MAILSLOT_WAIT_FOREVER, &sa);
 
 	if (mailslot == INVALID_HANDLE_VALUE) {
 		DWORD error_code    = GetLastError();

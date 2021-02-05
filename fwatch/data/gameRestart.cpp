@@ -2014,92 +2014,92 @@ int main(int argc, char *argv[])
 			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 			return result;
 		}
-
 		
+		
+		// Try update from two mirrors
 		vector<string> download_mirrors;
 		download_mirrors.push_back("http://ofp-faguss.com/fwatch/download/fwatch_self_update.7z");
 		download_mirrors.push_back("http://faguss.paradoxstudio.uk/fwatch/download/fwatch_self_update.7z");
 		
 		for (int i=0; i<download_mirrors.size(); i++) {
 			result = Download(download_mirrors[i], error_text);
-			if (result == 0)
-				break;
-		}
-		
-		if (result != 0) {
-			global.logfile << "Download failed\n\n--------------\n\n";
-			global.logfile.close();
-			error_text += "\n\nYou have to download and update manually";
-			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
-			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
-			return result;
-		}
-		
-		// Delete files manually to make sure they're not being accessed
-		result = 0;
-		int tries = 4;
-		
-		do {
-			if (!DeleteFile("fwatch.dll")) {
-				result = GetLastError();
-				if (result == 2)
-					result = 0;
-				if (result != 0) {
-					Sleep(500);
-					tries--;
-				}
-				global.logfile << "Delete fwatch.dll " << result << endl;
-			} else {
-				global.logfile << "Delete fwatch.dll success" << endl;
-			}
-		} while (result != 0 && tries>=0);
-		
-		if (result != 0) {
-			global.logfile << "Delete failed\n\n--------------\n\n";
-			global.logfile.close();
-			error_text += "Failed to delete fwatch.dll " + FormatError(result);
-			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
-			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
-			return result;
-		}
-					
-		result = Unpack(global.downloaded_filename, "fwatch", error_text);
-		if (result != 0) {
-			global.logfile << "Unpacking failed\n\n--------------\n\n";
-			global.logfile.close();
 			
-			if (error_text.find("Can not open the file as") != string::npos)
+			if (result != 0 && i==download_mirrors.size()-1) {
+				global.logfile << "Download failed\n\n--------------\n\n";
+				global.logfile.close();
 				error_text += "\n\nYou have to download and update manually";
-			else
-				error_text += "\n\nYou have to unpack files manually";
-			
-			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
-			
-			if (error_text.find("Can not open the file as") != string::npos) {
+				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
 				ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
-			} else {
-				CHAR pwd[MAX_PATH];
-				GetCurrentDirectory(MAX_PATH,pwd);				
-				string path_to_file = (string)pwd + "\\" + global.downloaded_filename;
-				
-				#if USING_LOLE32 == 1
-					ITEMIDLIST *pIDL = ILCreateFromPath(path_to_file.c_str());
-					if (pIDL != NULL) {
-						CoInitialize(NULL);
-					    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
-					    	ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
-						CoUninitialize();
-					    ILFree(pIDL);
-					};
-				#else
-					ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
-				#endif
+				return result;
 			}
 			
-			return result;			
+			// Delete files manually to make sure they're not being accessed
+			result = 0;
+			int tries = 4;
+			
+			do {
+				if (!DeleteFile("fwatch.dll")) {
+					result = GetLastError();
+					if (result == 2)
+						result = 0;
+					if (result != 0) {
+						Sleep(500);
+						tries--;
+					}
+					global.logfile << "Delete fwatch.dll " << result << endl;
+				} else {
+					global.logfile << "Delete fwatch.dll success" << endl;
+				}
+			} while (result != 0 && tries>=0);
+			
+			if (result != 0) {
+				global.logfile << "Delete failed\n\n--------------\n\n";
+				global.logfile.close();
+				error_text += "Failed to delete fwatch.dll " + FormatError(result);
+				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+				ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+				return result;
+			}
+			
+			result = Unpack(global.downloaded_filename, "fwatch", error_text);
+			DeleteFile(global.downloaded_filename.c_str());
+			
+			if (result != 0 && i==download_mirrors.size()-1) {
+				global.logfile << "Unpacking failed\n\n--------------\n\n";
+				global.logfile.close();
+				
+				if (error_text.find("Can not open the file as") != string::npos)
+					error_text += "\n\nYou have to download and update manually";
+				else
+					error_text += "\n\nYou have to unpack files manually";
+				
+				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+				
+				if (error_text.find("Can not open the file as") != string::npos) {
+					ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+				} else {
+					CHAR pwd[MAX_PATH];
+					GetCurrentDirectory(MAX_PATH,pwd);				
+					string path_to_file = (string)pwd + "\\" + global.downloaded_filename;
+					
+					#if USING_LOLE32 == 1
+						ITEMIDLIST *pIDL = ILCreateFromPath(path_to_file.c_str());
+						if (pIDL != NULL) {
+							CoInitialize(NULL);
+						    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
+						    	ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
+							CoUninitialize();
+						    ILFree(pIDL);
+						};
+					#else
+						ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
+					#endif
+				}
+				
+				return result;			
+			}
 		}
-
-		DeleteFile(global.downloaded_filename.c_str());
+		
 		
 		if (steam) {
 			MessageBox(NULL, "Update complete. Start the Fwatch again", "Fwatch self-update", MB_OK | MB_ICONINFORMATION);
