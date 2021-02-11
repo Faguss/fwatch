@@ -12,8 +12,8 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2021,2,5,5,3,46,51,539,60,FALSE]
-	GS_MY_VERSION = 0.56
+	GS_FWATCH_MY_VERSION = [2021,2,11,4,22,9,25,228,60,FALSE]
+	GS_MY_VERSION = 0.57
 	GS_DEFAULT_URL = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
 
@@ -32,8 +32,18 @@
 	0.03 exec "..\fwatch\data\InputMulti.sqs"
 	@Format ["%1",count FWATCH_INPUT_MULTI] != "scalar"
 	
-	_ok = createDialog "MAINMENU_MODSLIST"
+	_silent_mode = "silent" in _this
+	_ok = if (!_silent_mode) then {createDialog "MAINMENU_MODSLIST"} else {true}
 	? !_ok : titleText [MAINMENU_STR select 0,"PLAIN DOWN",1]; exit
+
+	? !_silent_mode : goto "SkipSilent"
+	_start_time_old = ""
+	_start_time_new = call loadFile ":info starttime"
+	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  read:starttime"
+	? Format ["%1",_start_time_old] == Format ["%1",_start_time_new] : exit
+	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:starttimewrite:_start_time_old=%1", _start_time_old]
+	#SkipSilent
+	
 
 	; hide server details
 	_serverDialog = [6460, 6461, 6462, 6463,   6470, 6471, 6472,   6480, 6481, 6482,   6490, 6491, 6492,   6500, 6501, 6502,  6510, 6511,   6520, 6521,   6530, 6531,   6540, 6541,   6550,6551,  6464]
@@ -45,7 +55,7 @@
 	_my_cpp_version = 0
 	_required_cpp_version = 0.5
 	? ctrlVisible 6465 : if (ctrlText 6465 != "") then {_my_cpp_version=call (ctrlText 6465)}
-	? _my_cpp_version != _required_cpp_version : if (count (call loadFile ":mem modlist") == 0) then {goto "DisplayUpdateInformation"} else {titleText [MAINMENU_STR select 1,"PLAIN DOWN",1]}
+	? !_silent_mode && _my_cpp_version != _required_cpp_version : if (count (call loadFile ":mem modlist") == 0) then {goto "DisplayUpdateInformation"} else {titleText [MAINMENU_STR select 1,"PLAIN DOWN",1]}
 
 
 
@@ -55,6 +65,8 @@
 	LOADMOD_MODSELECTOR  = false
 	LOADMOD_MASTERSERVER = false
 	LOADMOD_SCHEDULE     = false
+	
+	? _silent_mode : goto "InitLocalVars"
 	
 	; Listbox position
 	_x = (_this select 0)
@@ -84,6 +96,7 @@
 		? _i < count _this-1                   : _i=_i+1; goto "ResourceInstructions"
 		#SkipResourceInstructions
 
+	#InitLocalVars
 	_cur            = -1
 	_lastCur        = -1
 	_mods           = []
@@ -103,6 +116,7 @@
 	
 	; Loop checking mouse cursor position -------------------------------------------------------------------------------
 	#ResetLMB
+	? _silent_mode : exit
 	_LMBtime = 0
 	_release = false
 	
@@ -122,7 +136,7 @@
 		_value   = lbValue [6657, _cur]
 		_lastCur = _cur
 		
-		? _value == 6   : goto "DisplayMod"
+		? _value == 6   : goto "DownloadMods_DisplayMod"
 		? _value == 201 : goto "DisplayServer"
 		? _value == 211 : goto "DisplayGameRestart"
 		#SkipSelectionCheck
@@ -237,6 +251,7 @@
 	"lbSetColor [6657, _x, [201/255,190/255,98/255,1]]" forEach [0,1]
 
 	_id = 0;
+	? _silent_mode : goto "DownloadMods"
 	"_id=lbAdd [6657, _x]; lbSetValue [6657, _id, 2]; if([_x,FWATCH_CURRMOD] call FUNCTION_FIND>=0) then {lbSetColor [6657,_id,[1,0.8,0.9,0.5]]}" forEach FWATCH_MODLIST
 	goto "ResetLMB"
 
@@ -275,9 +290,9 @@
 	
 	; Download new mods
 	#DownloadMods
-	lbClear 6657
-	lbSetCurSel [6657,-1]
-	(MAINMENU_STR select 10) call FUNCTION_MSG_LB
+	? !_silent_mode : lbClear 6657
+	? !_silent_mode : lbSetCurSel [6657,-1]
+	? !_silent_mode : (MAINMENU_STR select 10) call FUNCTION_MSG_LB
 	~0.01
 	
 		; Read save state
@@ -293,13 +308,13 @@
 		_access_code        = ""
 		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:savestate"
 		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
-		? _install_status >= 0 : goto "InstallDisplay"
+		? _install_status >= 0 : if (_silent_mode) then {_progress=call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"; titleText [_progress, "PLAIN", 0.1]; exit} else {goto "InstallDisplay"}
 	
-	_all_url  	 = +GS_DEFAULT_URL
-	_all_mirror  = []
-	_all_mods    = []
-	_all_modsID  = []
-	_all_modsURL = []
+	_all_url  	      = +GS_DEFAULT_URL
+	_all_mirror       = []
+	_all_mods         = []
+	_all_modsID       = []
+	_all_modsURL      = []
 	_update_available = false
 	_saved_version    = 0
 	
@@ -311,6 +326,9 @@
 	? !(_ok select 0) : titleText [Format[MAINMENU_STR select 13,_ok select 3],"PLAIN",1]; closeDialog 0; exit
 	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule  mode:check"]
 	? !(_ok select 0) : titleText [Format[MAINMENU_STR select 13,_ok select 3],"PLAIN",1]; closeDialog 0; exit
+		
+	? Format ["%1",GS_DOWNLOAD_MODSLIST] == "scalar bool array string 0xfcffffef" : GS_DOWNLOAD_MODSLIST=true
+	? !GS_DOWNLOAD_MODSLIST : call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  read:urlread:mods"; if (count _all_mods>0) then {_i=count _all_url; goto "DownloadMods_SkipURL"}
 	
 	_i          = 0
 	_done_url   = []
@@ -321,8 +339,8 @@
 		_all_mirror set [_i, _mirror]
 		? [_url,_done_url] call FUNCTION_FIND_URL >= 0 : goto "DownloadMods_SkipURL"
 
-		((call loadFile Format ["\:STRING DOMAIN %1", _url]) select 3) call FUNCTION_MSG_LB
-		(MAINMENU_STR select 14) call FUNCTION_MSG_LB
+		? !_silent_mode : ((call loadFile Format ["\:STRING DOMAIN %1", _url]) select 3) call FUNCTION_MSG_LB
+		? !_silent_mode : (MAINMENU_STR select 14) call FUNCTION_MSG_LB
 
 		; Download info about all mods
 		GS_DOWNLOAD_RESULT = []
@@ -341,7 +359,11 @@
 		#DownloadMods_SkipURL
 		? _i < count _all_url-1 : _i=_i+1; _mirror=0; goto "DownloadMods_ForEachURL"
 		
-	? _update_available : goto "DisplayUpdateInformation"
+	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modswrite:_all_mods=" + (_all_mods call FUNCTION_FORMAT_ARRAY) + ";_all_modsID=" + (_all_modsID call FUNCTION_FORMAT_ARRAY) + ";_all_modsURL=" + (_all_modsURL call FUNCTION_FORMAT_ARRAY))
+	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:urlwrite:_all_url=" + (_all_url call FUNCTION_FORMAT_ARRAY) + ";_all_mirror=" + (_all_mirror call FUNCTION_FORMAT_ARRAY) + Format[";_update_available=%1;GS_FWATCH_LAST_UPDATE=%2",_update_available,GS_FWATCH_LAST_UPDATE])
+	GS_DOWNLOAD_MODSLIST = false
+	
+	? _update_available : if (_silent_mode) then {titleText [MAINMENU_STR select 86,"PLAIN DOWN",1]; exit} else {goto "DisplayUpdateInformation"}
 	
 	; Verify modfolders
 	_missing_mods           = []
@@ -351,16 +373,38 @@
 	_missing_mods_myversion = []
 	_missing_mods_sizearray = [0,0,0]
 	_missing_mods_size      = ""
-	FUNCTION_IS_MOD_MISSING forEach _all_modsID
+	;FUNCTION_IS_MOD_MISSING forEach _all_modsID
+	
+		_i = 0
+		? count _all_modsID == 0 : goto "DownloadMods_CheckForMissingMods_Skip" 
+		#DownloadMods_CheckForMissingMods
+		_index = [_all_modsID select _i, _all_modsID] call FUNCTION_FIND
+		? _index == -1 : goto "DownloadMods_CheckForMissingMods_Skip"
+		_add_to_missing = true
+		_assign         = false
+		_my_version     = 0
+		_mod_name       = ""
+		_mod_sizearray  = []
+		_mod_version    = 0
+		call (_all_mods select _index)
 
-	lbClear 6657
-	lbSetCurSel [6657,-1]
-	lbSetValue  [6657, lbAdd [6657,MAINMENU_STR select 32], 5]
+		_index2 = [_all_modsID select _i, FWATCH_MODLISTID] call FUNCTION_FIND
+		? _index2 >= 0 : _mod_name=FWATCH_MODLIST select _index2; _my_version=FWATCH_MODLISTVER select _index2; _add_to_missing=_my_version < _mod_version
+		? _index2 <  0 : _index3 = [_mod_name,FWATCH_MODLIST] call FUNCTION_FIND; if (_index3 >= 0) then {_assign = (FWATCH_MODLISTID select _index3) == ""}
+		? _add_to_missing : _missing_mods set [count _missing_mods, _index]; _missing_mods_id set [count _missing_mods_id, _x]; _missing_mods_name set [count _missing_mods_name, _mod_name]; _missing_mods_assign set [count _missing_mods_assign, _assign]; _missing_mods_myversion set [count _missing_mods_myversion, _my_version]; _j=-1; 	while "_j=_j+1; _j<count _missing_mods_sizearray" do {_missing_mods_sizearray set [_j, (_missing_mods_sizearray select _j)+(_mod_sizearray select _j)]}
+
+		#DownloadMods_CheckForMissingMods_Skip
+		? _i < count _all_modsID-1 : _i=_i+1; goto "DownloadMods_CheckForMissingMods"
+
+	? !_silent_mode : lbClear 6657
+	? !_silent_mode : lbSetCurSel [6657,-1]
+	? !_silent_mode : lbSetValue  [6657, lbAdd [6657,MAINMENU_STR select 32], 5]
 	_i           = 0
 	_update_mods = []
 	_new_mods    = []
 	
 	"if ((_missing_mods_myversion select _i) != 0) then {_update_mods set [count _update_mods, [_i,_x]]} else {_new_mods set [count _new_mods, [_i,_x]]}; _i=_i+1" forEach _missing_mods
+	? _silent_mode : if (count _update_mods>0) then {titleText [Format [MAINMENU_STR select 87, count _update_mods], "PLAIN DOWN", 0.2]}; exit
 
 	? count _update_mods > 0 : lbSetColor [6657, lbAdd [6657, "==="+(MAINMENU_STR select 83)+"==="], [246/255, 40/255, 23/255, 1]]
 	"_index=lbAdd [6657,_missing_mods_name select (_x select 0)]; lbSetValue [6657, _index, 6]; lbSetData [6657, _index, Format[""%1"",_x select 1]]" forEach _update_mods
@@ -369,7 +413,7 @@
 	"_index=lbAdd [6657,_missing_mods_name select (_x select 0)]; lbSetValue [6657, _index, 6]; lbSetData [6657, _index, Format[""%1"",_x select 1]]" forEach _new_mods
 	goto "ResetLMB"
 	
-	#DisplayMod
+	#DownloadMods_DisplayMod
 	_mod_description = "";
 	_mod_size        = "";
 	call (_all_mods select (call _data))
@@ -385,6 +429,7 @@
 	_missing_mods_sizearray = [0,0,0]
 	_missing_mods_size      = ""
 	FUNCTION_IS_MOD_MISSING forEach [_all_modsID select (call _data)]
+	_url = (_all_url select (_all_modsURL select (call _data))) select (_all_mirror select (_all_modsURL select (call _data)))
 	goto "ResetLMB"
 	;===================================================================================================================
 
@@ -487,6 +532,7 @@
 	#Schedule
 	;buttonSetAction [6450, "closeDialog 0"]
 	buttonSetAction [6451, "LOADMOD_MASTERSERVER=true"]
+	GS_DOWNLOAD_MODSLIST = true
 
 	lbClear 6657
 	lbSetCurSel [6657, -1]
@@ -920,7 +966,7 @@
 		lbClear 6657
 		lbSetCurSel [6657, -1]
 		lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 36], 208]
-		lbSetValue  [6657, lbAdd [6657, Format [MAINMENU_STR select 42, (if (_auto_restart) then {MAINMENU_STR select 43} else {MAINMENU_STR select 44})]], 209]
+		lbSetValue  [6657, lbAdd [6657, Format [MAINMENU_STR select (if (_server_uniqueid=="mod") then {42} else {88}), (if (_auto_restart) then {MAINMENU_STR select 43} else {MAINMENU_STR select 44})]], 209]
 
 		? _auto_restart && _voice_name!=""         : if (!(GS_VOICE select (_server_voice select 0) select 1)) then {lbSetValue  [6657, lbAdd [6657, Format ["[%1: %2]", _voice_name, (if (_run_voice_program) then {MAINMENU_STR select 43} else {MAINMENU_STR select 44})]], 219]}
 		? _auto_restart && _server_uniqueid!="mod" : lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 31], 206]

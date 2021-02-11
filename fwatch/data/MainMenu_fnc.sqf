@@ -871,7 +871,10 @@ FUNCTION_STRINGTABLE = {
 			"[Њci№gnij mody]",				//82
 			"Dostкpne aktualizacje",		//83
 			"Pobierz nowy mod",				//84
-			"[Zamknij Okno]"				//85
+			"[Zamknij Okno]",				//85
+			"Jest dostpкpna aktualizacja nowa wersja testowa Fwatch 1.16",				//86
+			"Dostpкpne aktualizacje modуw: %1",		//87
+			"[Doі№cz po skoсczeniu: %1]"		//88
 		];
 	};
 	
@@ -962,7 +965,10 @@ FUNCTION_STRINGTABLE = {
 			"[Скачать моды]",		//82
 			"Обновить",				//83
 			"Добавить Новый",		//84
-			"[Закрыть Окно]"		//85
+			"[Закрыть Окно]",		//85
+			"Доступна новая тестовая версия Fwatch 1.16",				//86
+			"Обновить моды: %1",	//87
+			"[Подключиться после окончания: %1]"		//88
 		];
 	};
 	
@@ -1053,7 +1059,10 @@ FUNCTION_STRINGTABLE = {
 			"[Download Mods]",				//82
 			"Available Updates",			//83
 			"Install New",					//84
-			"[Close Window]"				//85
+			"[Close Window]",				//85
+			"There is a new test version of Fwatch 1.16 available",				//86
+			"Available mod updates: %1",	//87
+			"[Connect when done: %1]"		//88
 		];
 	};
 };

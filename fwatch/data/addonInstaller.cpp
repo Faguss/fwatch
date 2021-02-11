@@ -25,13 +25,15 @@ struct GLOBAL_VARIABLES
 	bool end_thread;
 	bool run_voice_program;
 	bool download_phase;
+	bool last_download_attempt;
 	int condition_index;
 	int command_line_num;
-	int mirror;
-	int current_mod_version_date;
 	int installation_steps_current;
 	int installation_steps_max;
 	int saved_alias_array_size;
+	time_t current_mod_version_date;
+	float installer_version;
+	float script_version;
 	string gamerestart_arguments;
 	string downloaded_filename;
 	string current_mod;
@@ -60,12 +62,14 @@ struct GLOBAL_VARIABLES
 	false,
 	true,
 	false,
+	false,
 	-1,
 	0,
 	0,
 	0,
 	0,
 	0,
+	0.57,
 	0,
 	"",
 	"",
@@ -142,6 +146,7 @@ enum STRINGTABLE
 	STR_ERROR,
 	STR_ERROR_LOGFILE,
 	STR_ERROR_READSCRIPT,
+	STR_ERROR_WRONG_VERSION,
 	STR_ERROR_INVERSION,
 	STR_ERROR_ONLINE,
 	STR_ERROR_EXE,
@@ -469,6 +474,13 @@ string Int2Str(int num)
     return text.str();
 }
 
+string Float2Str(float num)
+{
+    ostringstream text;
+    text << num;
+    return text.str();
+}
+
 bool IsURL(string text)
 {
 	return (
@@ -602,7 +614,7 @@ void WriteProgressFile(int status, string input)
 
 	if (!progressLog.is_open())
 		return;
-		
+	
 	if (status==INSTALL_PROGRESS  &&  global.installation_steps_current>0  &&  global.installation_steps_max>0)
 		input = global.lang[STR_PROGRESS] + " " + Int2Str(global.installation_steps_current) + "/" + Int2Str(global.installation_steps_max) + "\\n\\n" + input;
 
@@ -653,7 +665,7 @@ int ErrorMessage(int string_code, string message="%STR%", int error_code=ERROR_C
 	if (global.current_mod=="?pretendtoinstall" && global.current_mod_version=="-1")
 		return ERROR_NONE;
 	
-	int status              = global.mirror ? INSTALL_PROGRESS : INSTALL_ERROR;
+	int status              = global.last_download_attempt ? INSTALL_ERROR : INSTALL_PROGRESS;
 	string message_eng      = ReplaceAll(message, "%STR%", global.lang_eng[string_code]);
 	string message_local    = ReplaceAll(message, "%STR%", global.lang[string_code]);
 	string message_complete = "";
@@ -1967,20 +1979,38 @@ int ExtractPBO(string source, string destination="", string file_to_unpack="", b
 	return (exit_code!=0 ? ERROR_COMMAND_FAILED : ERROR_NONE);
 }
 
-int ChangeFileDate(string file_name) 
-{	
 	//https://support.microsoft.com/en-us/help/167296/how-to-convert-a-unix-time-t-to-a-win32-filetime-or-systemtime
-	FILETIME ft;
+void UnixTimeToFileTime(time_t t, LPFILETIME pft)
+{
 	LONGLONG ll;
-	ll                = Int32x32To64(global.current_mod_version_date, 10000000) + 116444736000000000;
-	ft.dwLowDateTime  = (DWORD)ll;
-	ft.dwHighDateTime = ll >> 32;
-   
+	ll = Int32x32To64(t, 10000000) + 116444736000000000;
+	pft->dwLowDateTime = (DWORD)ll;
+	pft->dwHighDateTime = ll >> 32;
+}
+
+int ChangeFileDate(string file_name, FILETIME *ft) 
+{   
 	HANDLE file_handle = CreateFile(file_name.c_str(), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	BOOL result        = SetFileTime(file_handle, (LPFILETIME)NULL, (LPFILETIME)NULL, &ft);
-	CloseHandle(file_handle);
+	DWORD error_code   = 0;
 	
-	return result ? ERROR_NONE : GetLastError();
+	if (file_handle != INVALID_HANDLE_VALUE) {
+		if (!SetFileTime(file_handle, (LPFILETIME)NULL, (LPFILETIME)NULL, ft))
+			error_code = GetLastError();
+		CloseHandle(file_handle);
+	} else
+		error_code = GetLastError();
+	
+	if (error_code != 0)
+		return ErrorMessage(STR_EDIT_WRITE_ERROR, "%STR% " + file_name + " - " + Int2Str(error_code) + " " + FormatError(error_code));
+	else
+		return ERROR_NONE;
+}
+
+int ChangeFileDate(string file_name, int timestamp)
+{
+	FILETIME ft;
+	UnixTimeToFileTime(timestamp, &ft);
+	return ChangeFileDate(file_name, &ft);
 }
 
 	// Read directory and save file modification dates
@@ -2567,6 +2597,7 @@ int main(int argc, char *argv[])
 			"ERROR",
 			"Can't create logfile",
 			"Can't read install script",
+			"Incorrect script version",
 			"In version",
 			"On line",
 			"Failed to launch",
@@ -2635,47 +2666,49 @@ int main(int argc, char *argv[])
 			"ОШИБКА",		//21
 			"Невозможно создать файл журнала установки",		//22
 			"Невозможно считать скрипт установки",		//23
-			"В версии",		//24
-			"В строке",		//25
-			"Ошибка при запуске",		//26
-			"Недостаточно аргументов функции",		//27
-			"Ошибка при создании списка файлов в папке ",		//28
-			"Отсутствует имя файла аргумента",		//29
-			"Путь не соответствует текущей папке",		//30
-			"Неверный скрипт установки",		//31
-			"Неверные аргументы мастера установки",		//32
-			"Ошибка при выделении понятий",		//33
-			"осталось",		//34
-			"всего",		//35
-			"Неверный путь установки",		//36
-			"Ошибка при загрузке",		//37
-			"Совпадений не найдено",		//38
-			"удалите этот файл и загрузите снова",		//39
-			"Ошибка при извлечении",		//40
-			"Ошибка при создании папки",		//41
-			"Ошибка при считывании атрибутов файла",		//42
-			"Исходный путь не соответствует текущей папке",		//43
-			"Путь назначения не соответствует текущей папке",		//44
-			"Невозможно переместить файлы из папки игры",		//45
-			"Ошибка при перемещении",		//46
-			"в",		//47
-			"Ошибка при копировании",		//48
-			"Ошибка при переименовании файла",		//49
-			"в",		//50
-			"Новое имя файла содержит слеши",		//51
-			"Путь содержит символы подстановки",		//52
-			"Отсутствует новое имя файла",		//53
-			"Ошибка при удалении",		//54
-			"Ошибка при перемещении в Корзину",		//55
-			"Необходимо запустить вручную",		//56
-			"Необходимо загрузить вручную",		//57
-			"Выберите папку с загруженным файлом",		//58
-			"Отсутствует номер версии",		//59
-			"Не файл типа PBO",		//60
-			"Ошибка при создании файла PBO",		//61
-			"Ошибка при извлечении из архива PBO",		//62
-			"Ошибка при считывании",		//63
-			"Ошибка при создании файла"		//64
+			"Неверная версия скрипта установки",		//24
+			"В версии",		//25
+			"В строке",		//26
+			"Ошибка при запуске",		//27
+			"Недостаточно аргументов функции",		//28
+			"Ошибка при создании списка файлов в папке ",		//29
+			"Отсутствует имя файла аргумента",		//30
+			"Путь не соответствует текущей папке",		//31
+			"Неверный скрипт установки",		//32
+			"Неверные аргументы мастера установки",		//33
+			"Ошибка при выделении понятий",		//34
+			"осталось",		//35
+			"всего",		//36
+			"Неверный путь установки",		//37
+			"Ошибка при загрузке",		//38
+			"Совпадений не найдено",		//39
+			"удалите этот файл и загрузите снова",		//40
+			"Ошибка при извлечении",		//41
+			"Ошибка при создании папки",		//42
+			"Ошибка при считывании атрибутов файла",		//43
+			"Исходный путь не соответствует текущей папке",		//44
+			"Путь назначения не соответствует текущей папке",		//45
+			"Невозможно переместить файлы из папки игры",		//46
+			"Ошибка при перемещении",		//47
+			"в",		//48
+			"Ошибка при копировании",		//49
+			"Ошибка при переименовании файла",		//50
+			"в",		//51
+			"Новое имя файла содержит слеши",		//52
+			"Путь содержит символы подстановки",		//53
+			"Отсутствует новое имя файла",		//54
+			"Ошибка при удалении",		//55
+			"Ошибка при перемещении в Корзину",		//56
+			"Необходимо запустить вручную",		//57
+			"Необходимо загрузить вручную",		//58
+			"Выберите папку с загруженным файлом",		//59
+			"Отсутствует номер версии",		//60
+			"Не файл типа PBO",		//61
+			"Ошибка при создании файла PBO",		//62
+			"Ошибка при извлечении из архива PBO",		//63
+			"Ошибка при считывании",		//64
+			"Ошибка при создании файла",		//65
+			"Считывание mission.sqm"		//66
 		},
 		{
 			"Przygotowywanie",
@@ -2702,6 +2735,7 @@ int main(int argc, char *argv[])
 			"BЈҐD",
 			"Nie moїna utworzyж zapisu instalacji",
 			"Nie moїna odczytaж skryptu instalacyjnego",
+			"Niepoprawna wersja skryptu instalacyjnego",
 			"W wersji",
 			"W linijce",
 			"Nie moїna uruchomiж",
@@ -2852,7 +2886,9 @@ int main(int argc, char *argv[])
 		COMMAND_EXTRACTPBO,
 		COMMAND_EDIT,
 		COMMAND_BEGIN_VERSION,
-		COMMAND_ALIAS
+		COMMAND_ALIAS,
+		COMMAND_FILEDATE,
+		COMMAND_INSTALL_VERSION
 	};
 	
 	string command_names[] = {
@@ -2883,7 +2919,9 @@ int main(int argc, char *argv[])
 		"edit",			
 		"begin_ver",	
 		"alias",
-		"merge_with"
+		"merge_with",
+		"filedate",
+		"install_version"
 	};
 
 	int match_command_name_to_id[] = {
@@ -2914,7 +2952,9 @@ int main(int argc, char *argv[])
 		COMMAND_EDIT,
 		COMMAND_BEGIN_VERSION,
 		COMMAND_ALIAS,
-		COMMAND_ALIAS
+		COMMAND_ALIAS,
+		COMMAND_FILEDATE,
+		COMMAND_INSTALL_VERSION
 	};
 	
 	int control_flow_commands[] = {
@@ -2922,7 +2962,8 @@ int main(int argc, char *argv[])
 		COMMAND_BEGIN_VERSION,
 		COMMAND_IF_VERSION,
 		COMMAND_ELSE,
-		COMMAND_ENDIF
+		COMMAND_ENDIF,
+		COMMAND_INSTALL_VERSION
 	};
 	
 	enum COMMAND_SWITCHES {
@@ -2969,7 +3010,9 @@ int main(int argc, char *argv[])
 		2,
 		0,
 		0,
-		0
+		0,
+		0,
+		1
 	};
 
 	int number_of_commands = sizeof(command_names) / sizeof(command_names[0]);
@@ -3244,10 +3287,10 @@ int main(int argc, char *argv[])
 	for (int i=0;  i<current_script_command.id.size(); i++) {
 		if (
 			// if modfolder wasn't formally started OR skipping this mod
-			((global.current_mod.empty() || global.skip_modfolder)  &&  current_script_command.id[i]!=COMMAND_BEGIN_MOD)
+			((global.current_mod.empty() || global.skip_modfolder)  &&  current_script_command.id[i]!=COMMAND_BEGIN_MOD  &&  current_script_command.id[i]!=COMMAND_INSTALL_VERSION)
 			||
 			// if version wasn't formally started
-			(!global.current_mod.empty()  &&  global.current_mod_version.empty()  &&  current_script_command.id[i]!=COMMAND_BEGIN_VERSION)
+			(!global.current_mod.empty()  &&  global.current_mod_version.empty()  &&  current_script_command.id[i]!=COMMAND_BEGIN_VERSION  &&  current_script_command.id[i]!=COMMAND_INSTALL_VERSION)
 			||
 			// if inside condition block
 			(global.condition_index >= 0  &&  !global.condition[global.condition_index]  &&  !current_script_command.ctrl_flow[i])
@@ -3256,19 +3299,20 @@ int main(int argc, char *argv[])
 
 		// Execute only control flow instructions
 		switch(current_script_command.id[i]) {
-			case COMMAND_BEGIN_MOD     : global.current_mod="?pretendtoinstall"; break;
-			case COMMAND_BEGIN_VERSION : global.current_mod_version="-1"; break;
-			case COMMAND_IF_VERSION    : Condition_If_version(current_script_command.arguments, current_script_command.arg_start[i], current_script_command.arg_num[i]); break;
-			case COMMAND_ELSE          : Condition_Else(); break;
-			case COMMAND_ENDIF         : Condition_Endif(); break;
-			default                    : global.installation_steps_max++;
+			case COMMAND_INSTALL_VERSION : global.script_version=atof(current_script_command.arguments[current_script_command.arg_start[i]].c_str()); break;
+			case COMMAND_BEGIN_MOD       : global.current_mod="?pretendtoinstall"; break;
+			case COMMAND_BEGIN_VERSION   : global.current_mod_version="-1"; break;
+			case COMMAND_IF_VERSION      : Condition_If_version(current_script_command.arguments, current_script_command.arg_start[i], current_script_command.arg_num[i]); break;
+			case COMMAND_ELSE            : Condition_Else(); break;
+			case COMMAND_ENDIF           : Condition_Endif(); break;
+			default                      : global.installation_steps_max++;
 		}
 	}
 	
 	// Reset variables
 	global.current_mod         = "";
 	global.current_mod_version = "";
-	global.condition_index = -1;
+	global.condition_index     = -1;
 	global.condition.clear();
 	global.current_mod_alias.clear();
 	
@@ -3283,6 +3327,14 @@ int main(int argc, char *argv[])
 			global.current_mod_new_name = global.arguments_table["testdir"];
 	}
 	
+	// If wrong version
+	if (global.script_version==0  ||  global.installer_version < global.script_version) {		
+		global.logfile << "Version mismatch. Script version: " << global.script_version << "  Program version: " << global.installer_version << "\n\n--------------\n\n";
+		WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR_WRONG_VERSION] + "\\n" + Int2Str(global.script_version) + " vs " + Float2Str(global.installer_version)));
+		global.logfile.close();
+		return ERROR_WRONG_SCRIPT;
+	}
+	
 	
 	
 
@@ -3291,12 +3343,16 @@ int main(int argc, char *argv[])
 		if (Abort())
 			return ERROR_USER_ABORTED;
 
-		// Find command name
+		// Update global variables
 		for(int j=0; j<number_of_commands; j++)
 			if (current_script_command.id[i] == match_command_name_to_id[j])
 				global.command_line = command_names[j];
 
-		global.mirror = false;
+		if (!current_script_command.ctrl_flow[i])
+			global.installation_steps_current++;
+
+		global.command_line_num      = current_script_command.line_num[i];
+		global.last_download_attempt = false;
 
 		if (
 			// if modfolder wasn't formally started OR skipping this mod
@@ -3320,8 +3376,8 @@ int main(int argc, char *argv[])
 			
 			// For each url
 			for (int j=current_script_command.url_start[i];  j<=last_url;  j++) {
-				global.mirror           = j != last_url;
-				global.command_line_num = current_script_command_urls.line_num[j];
+				global.last_download_attempt = j == last_url;
+				global.command_line_num      = current_script_command_urls.line_num[j];
 				
 				// Check how many url arguments
 				if (current_script_command_urls.arg_num[j] == 0)
@@ -3495,11 +3551,7 @@ int main(int argc, char *argv[])
 		// If download was successful then execute command
 		if (current_script_command.url_num[i]==0 || (current_script_command.url_num[i]>0 && failed_downloads<current_script_command.url_num[i])) {
 			int first               = current_script_command.arg_num[i]>0 ? current_script_command.arg_start[i] : -1;
-			global.command_line_num = current_script_command.line_num[i];
 			global.download_phase   = false;
-	
-			if (!current_script_command.ctrl_flow[i])
-				global.installation_steps_current++;
 			
 			switch(current_script_command.id[i]) {
 				case COMMAND_BEGIN_MOD : {
@@ -4300,17 +4352,21 @@ int main(int argc, char *argv[])
 							break;
 						}
 				
-						ChangeFileDate(pbo_name);
+						command_result = ChangeFileDate(pbo_name, global.current_mod_version_date);
 						
-						if (~current_script_command.switches[i] & SWITCH_KEEP_SOURCE) {
-							WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+"...");
-							global.logfile << "Removing " << *file_name << " directory" << endl;
-							global.last_pbo_file = "";
-							DeleteDirectory(*file_name);
-						}
-					
-						if (!pbo_name_backup.empty())
-							DeleteFile(pbo_name_backup.c_str());
+						if (command_result == ERROR_NONE) {
+							if (~current_script_command.switches[i] & SWITCH_KEEP_SOURCE) {
+								WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+"...");
+								global.logfile << "Removing " << *file_name << " directory" << endl;
+								global.last_pbo_file = "";
+								DeleteDirectory(*file_name);
+							}
+						
+							if (!pbo_name_backup.empty())
+								DeleteFile(pbo_name_backup.c_str());
+						} else
+							if (!pbo_name_backup.empty())
+								MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
 					} else {
 						if (!pbo_name_backup.empty())
 							MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
@@ -4498,12 +4554,53 @@ int main(int argc, char *argv[])
 						}
 				
 						file.close();
+				    	command_result = ChangeFileDate(*file_name, global.current_mod_version_date);
 					} else {
 						command_result = ErrorMessage(STR_EDIT_WRITE_ERROR);
 						break;
 					}
 				
-				    ChangeFileDate(*file_name);
+					break;
+				}
+				
+				case COMMAND_FILEDATE : {
+					if (current_script_command.arg_num[i] < 2) {
+						command_result = ErrorMessage(STR_ERROR_ARG_COUNT);
+						break;
+					}
+					
+					string *file_name = &current_script_command.arguments[first];
+					string *date_text = &current_script_command.arguments[first + 1];
+					
+					if (!VerifyPath(*file_name)) {
+						command_result = ErrorMessage(STR_ERROR_PATH);
+						break;
+					}
+
+					*file_name = global.current_mod_new_name + "\\" + *file_name;
+					
+					FILETIME ft;
+					vector<string> date_item;
+					Tokenize(*date_text, "-T:+ ", date_item);
+					
+					if (date_item.size() == 1)
+						command_result = ChangeFileDate(*file_name, atoi((*date_text).c_str()));
+					else {
+						while(date_item.size() < 6)
+							date_item.push_back("0");
+							
+						SYSTEMTIME st;
+						st.wYear         = atoi(date_item[0].c_str());
+						st.wMonth        = atoi(date_item[1].c_str());
+						st.wDay          = atoi(date_item[2].c_str());
+						st.wHour         = atoi(date_item[3].c_str());
+						st.wMinute       = atoi(date_item[4].c_str());
+						st.wSecond       = atoi(date_item[5].c_str());
+						st.wMilliseconds = 0;
+						SystemTimeToFileTime(&st, &ft);
+						command_result = ChangeFileDate(*file_name, &ft);
+					}
+						
 					break;
 				}
 			}
