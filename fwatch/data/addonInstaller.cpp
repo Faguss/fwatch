@@ -3384,7 +3384,7 @@ int main(int argc, char *argv[])
 					command_result = Download(current_script_command_urls.link[j]);
 				else 
 				if (current_script_command_urls.arg_num[j] == 1)
-					command_result = Download(current_script_command_urls.link[j] + " \"--output-document=" + current_script_command_urls.arguments[j] + "\"");
+					command_result = Download(current_script_command_urls.link[j] + " \"--output-document=" + current_script_command_urls.arguments[current_script_command_urls.arg_start[j]] + "\"");
 				else {
 					string original_url     = current_script_command_urls.link[j];
 					string cookie_file_name = "fwatch\\tmp\\__cookies.txt";
