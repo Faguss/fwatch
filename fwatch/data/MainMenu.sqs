@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2021,2,12,5,0,50,5,500,60,FALSE]
+	GS_FWATCH_MY_VERSION = [2021,2,12,5,2,32,8,86,60,FALSE]
 	GS_MY_VERSION = 0.57
 	GS_DEFAULT_URL = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -378,6 +378,7 @@
 		_i = 0
 		? count _all_modsID == 0 : goto "DownloadMods_CheckForMissingMods_Skip" 
 		#DownloadMods_CheckForMissingMods
+		~(if (_silent_mode) then {0.01} else {0})
 		_index = [_all_modsID select _i, _all_modsID] call FUNCTION_FIND
 		? _index == -1 : goto "DownloadMods_CheckForMissingMods_Skip"
 		_add_to_missing = true

@@ -31,6 +31,7 @@ struct GLOBAL_VARIABLES
 	int installation_steps_current;
 	int installation_steps_max;
 	int saved_alias_array_size;
+	int download_iterator;
 	time_t current_mod_version_date;
 	float installer_version;
 	float script_version;
@@ -64,6 +65,7 @@ struct GLOBAL_VARIABLES
 	false,
 	false,
 	-1,
+	0,
 	0,
 	0,
 	0,
@@ -117,7 +119,8 @@ enum ERROR_CODES
 	ERROR_LOGFILE,
 	ERROR_NO_SCRIPT,
 	ERROR_COMMAND_FAILED,
-	ERROR_WRONG_SCRIPT
+	ERROR_WRONG_SCRIPT,
+	ERROR_WRONG_ARCHIVE
 };
 
 enum STRINGTABLE 
@@ -1723,6 +1726,7 @@ int Unpack(string file_name, string password="", int options=FLAG_NONE)
 	// Wait for the program to finish its job
 	DWORD exit_code;	
 	string message = "";
+	int output     = ERROR_NONE;
 
 	do {					
 		if (Abort()) {
@@ -1741,10 +1745,13 @@ int Unpack(string file_name, string password="", int options=FLAG_NONE)
 	ParseUnpackLog(message, file_name);
 
 	if (exit_code != 0) {
+		output = ERROR_COMMAND_FAILED;
 		global.logfile << exit_code << " - " << message << endl;
 		
-		if (message.find("Can not open the file as") != string::npos  &&  message.find("archive") != string::npos)
+		if (message.find("Can not open the file as") != string::npos  &&  message.find("archive") != string::npos) {
 			message += " - " + global.lang[STR_UNPACK_REDO_FILE];
+			output   = ERROR_WRONG_ARCHIVE;
+		}
 
 		if (~options & FLAG_ALLOW_ERROR)
 			ErrorMessage(STR_UNPACK_ERROR, "%STR%\\n" + file_name + "\\n\\n" + message);
@@ -1754,7 +1761,7 @@ int Unpack(string file_name, string password="", int options=FLAG_NONE)
 	CloseHandle(pi.hThread);
 	CloseHandle(logFile);
 
-	return (exit_code!=0 ? ERROR_COMMAND_FAILED : ERROR_NONE);
+	return output;
 }
 
 int MakeDir(string path)
@@ -3325,15 +3332,15 @@ int main(int argc, char *argv[])
 			global.current_mod_new_name = global.arguments_table["testmod"];
 		else
 			global.current_mod_new_name = global.arguments_table["testdir"];
-	}
+	} else
+		// If wrong version
+		if (global.script_version==0  ||  global.installer_version < global.script_version) {
+			global.logfile << "Version mismatch. Script version: " << global.script_version << "  Program version: " << global.installer_version << "\n\n--------------\n\n";
+			WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR_WRONG_VERSION] + "\\n" + Int2Str(global.script_version) + " vs " + Float2Str(global.installer_version)));
+			global.logfile.close();
+			return ERROR_WRONG_SCRIPT;
+		}
 	
-	// If wrong version
-	if (global.script_version==0  ||  global.installer_version < global.script_version) {		
-		global.logfile << "Version mismatch. Script version: " << global.script_version << "  Program version: " << global.installer_version << "\n\n--------------\n\n";
-		WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR_WRONG_VERSION] + "\\n" + Int2Str(global.script_version) + " vs " + Float2Str(global.installer_version)));
-		global.logfile.close();
-		return ERROR_WRONG_SCRIPT;
-	}
 	
 	
 	
@@ -3352,7 +3359,8 @@ int main(int argc, char *argv[])
 			global.installation_steps_current++;
 
 		global.command_line_num      = current_script_command.line_num[i];
-		global.last_download_attempt = false;
+		global.last_download_attempt = true;
+		global.download_iterator     = current_script_command.url_start[i];
 
 		if (
 			// if modfolder wasn't formally started OR skipping this mod
@@ -3371,11 +3379,13 @@ int main(int argc, char *argv[])
 
 		// Check if there's an URL list for this command
 		if (current_script_command.url_num[i] > 0) {
+			Download_Phase:
 			global.download_phase = true;
 			int last_url          = current_script_command.url_start[i] + current_script_command.url_num[i] - 1;
 			
 			// For each url
-			for (int j=current_script_command.url_start[i];  j<=last_url;  j++) {
+			for (;  global.download_iterator<=last_url;  global.download_iterator++) {
+				int j                        = global.download_iterator;
 				global.last_download_attempt = j == last_url;
 				global.command_line_num      = current_script_command_urls.line_num[j];
 				
@@ -3692,13 +3702,23 @@ int main(int argc, char *argv[])
 
 				case COMMAND_UNPACK : {
 					string *file_name = &current_script_command.arguments[first];
-					
+
 					if (Equals(*file_name,"<download>")  ||  Equals(*file_name,"<dl>")  ||  (*file_name).empty())
 						*file_name = global.downloaded_filename;
 
-					if (!(*file_name).empty())
+					if (!(*file_name).empty()) {
 						command_result = Unpack(*file_name, current_script_command.password[i]);
-					else
+						
+						// If not an archive but there are still backup links then go back to download
+						if (!global.last_download_attempt && command_result==ERROR_WRONG_ARCHIVE) {
+							*file_name = "fwatch\\tmp\\" + *file_name;
+							int result = DeleteFile((*file_name).c_str());
+							*file_name = "<dl>";
+							global.downloads.pop_back();
+							global.download_iterator++;
+							goto Download_Phase;
+						}
+					} else
 						command_result = ErrorMessage(STR_ERROR_NO_FILE);
 						
 					break;
