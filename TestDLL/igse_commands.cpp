@@ -2023,12 +2023,8 @@ case C_IGSE_DB:
 				}
 
 				// Shift current values to make room for the new data
-				if (difference != 0) {					
-					// I can't use memcpy here because it copies characters starting from the beginning and it will overwrite itself
-					// Instead I need to copy manually from the end
-					for (int i=final_text_buffer_size+difference; i>=val_end+difference; i--)
-						text_buffer[i] = text_buffer[i-difference];
-					
+				if (difference != 0) {
+					shift_text_in_buffer(text_buffer, final_text_buffer_size, val_end+difference-1, difference);
 					final_text_buffer_size += difference;
 					offsets[final_keys]     = final_text_buffer_size;
 				}

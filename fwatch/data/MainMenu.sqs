@@ -12,9 +12,9 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2021,2,12,5,2,32,8,86,60,FALSE]
-	GS_MY_VERSION = 0.57
-	GS_DEFAULT_URL = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
+	GS_FWATCH_MY_VERSION = [2021,2,26,5,17,29,47,178,60,FALSE]
+	GS_MY_VERSION        = 0.58
+	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
 
 	; Won't work with older version
@@ -33,7 +33,7 @@
 	@Format ["%1",count FWATCH_INPUT_MULTI] != "scalar"
 	
 	_silent_mode = "silent" in _this
-	_ok = if (!_silent_mode) then {createDialog "MAINMENU_MODSLIST"} else {true}
+	_ok          = if (!_silent_mode) then {createDialog "MAINMENU_MODSLIST"} else {true}
 	? !_ok : titleText [MAINMENU_STR select 0,"PLAIN DOWN",1]; exit
 
 	? !_silent_mode : goto "SkipSilent"
@@ -97,16 +97,22 @@
 		#SkipResourceInstructions
 
 	#InitLocalVars
-	_cur            = -1
-	_lastCur        = -1
-	_mods           = []
-	_pressed        = ""
-	_myVersion      = (call loadFile ":info version extended") select 4
-	_install_status = -1
-	_install_timing = 0
-	_install_hanged = false
-	_jump_to_server = ""
-	_timeout        = 0
+	_cur                 = -1
+	_lastCur             = -1
+	_mods                = []
+	_pressed             = ""
+	_myVersion           = (call loadFile ":info version extended") select 4
+	_install_status      = -1
+	_install_timing      = 0
+	_install_hanged      = false
+	_jump_to_server      = ""
+	_timeout             = 0
+	_color_fireenginered = [246/255, 40/255 , 23/255 , 1]
+	_color_coral         = [255/255, 127/255, 80/255 , 1]
+	_color_sandybrown    = [238/255, 154/255, 77/255 , 1]
+	_color_gingerbrown   = [201/255, 190/255, 98/255 , 1]
+	_color_yellowgreen   = [82/255 , 208/255, 23/255 , 1]
+	_color_sand          = [194/255, 178/255, 128/255, 1]
 	
 	if (!_m_moved && (_mx<_x || _mx>_w || _my<_y || _my>_h)) then {loadFile Format [":mem setcursor %1 %2", _w, _y]; _m_moved=nil}
 	goto "GetModfolders"
@@ -213,6 +219,7 @@
 	? _value == 225 : loadFile ("\:EXE WEBSITE "+([_url,_server_modfolders,[]] call FUNCTION_BUILD_PREVIEW_LINK))
 	? _value == 226 : _ok=call loadFile Format ["\:RESTART CLIENT -updateresource=%1",(call loadFile ":info version extended") select 4]; if (!(_ok select 0)) then {titleText [_ok select 3, "PLAIN DOWN", 1.5]} else {closeDialog 0; exit}
 	? _value == 227 : closeDialog 0; exit
+	? _value == 228 : _Input= _access_code_mod; _Label="SaveModAccessCode"; _Input_Note=MAINMENU_STR select 90; goto "INPUT"
 	goto "ResetLMB"
 
 
@@ -237,6 +244,7 @@
 	FWATCH_USERNAME    = "";
 	FWATCH_CURRMOD     = call loadFile ":mem modlist"
 	call FUNCTION_REFRESH_MODLIST
+	? _silent_mode : goto "DownloadMods"
 
 	; Put directories to the listbox
 	#ListModfolders
@@ -246,12 +254,10 @@
 
 	lbClear 6657
 	lbSetCurSel [6657,-1]
-	lbSetValue  [6657, lbAdd [6657,MAINMENU_STR select 6], 1]
-	lbSetValue  [6657, lbAdd [6657,MAINMENU_STR select 82], 4]
-	"lbSetColor [6657, _x, [201/255,190/255,98/255,1]]" forEach [0,1]
+	[MAINMENU_STR select 6, 1, _color_gingerbrown] call FUNCTION_LBADD
+	[MAINMENU_STR select 82, 4, _color_gingerbrown] call FUNCTION_LBADD
 
 	_id = 0;
-	? _silent_mode : goto "DownloadMods"
 	"_id=lbAdd [6657, _x]; lbSetValue [6657, _id, 2]; if([_x,FWATCH_CURRMOD] call FUNCTION_FIND>=0) then {lbSetColor [6657,_id,[1,0.8,0.9,0.5]]}" forEach FWATCH_MODLIST
 	goto "ResetLMB"
 
@@ -305,7 +311,8 @@
 		_voice_name         = ""
 		_run_voice_program  = false
 		_playingNow         = false
-		_access_code        = ""
+		_access_code_mod    = ""
+		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  read:accesscodemod"
 		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:savestate"
 		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
 		? _install_status >= 0 : if (_silent_mode) then {_progress=call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"; titleText [_progress, "PLAIN", 0.1]; exit} else {goto "InstallDisplay"}
@@ -343,8 +350,8 @@
 		? !_silent_mode : (MAINMENU_STR select 14) call FUNCTION_MSG_LB
 
 		; Download info about all mods
-		GS_DOWNLOAD_RESULT = []
-		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 "+_url+"?mod=all&mode=mods"), "schedule\schedule.sqf", "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+		GS_DOWNLOAD_RESULT = []		
+		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 "+_url+"?mod=all&mode=mods"+(_access_code_mod call FUNCTION_FORMAT_PASSWORD_STRING)), "schedule\schedule.sqf", "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
 			
 			"DownloadMods_ForEachURL" call FUNCTION_READ_DOWNLOADED_FILE
@@ -397,9 +404,11 @@
 		#DownloadMods_CheckForMissingMods_Skip
 		? _i < count _all_modsID-1 : _i=_i+1; goto "DownloadMods_CheckForMissingMods"
 
-	? !_silent_mode : lbClear 6657
-	? !_silent_mode : lbSetCurSel [6657,-1]
-	? !_silent_mode : lbSetValue  [6657, lbAdd [6657,MAINMENU_STR select 32], 5]
+	? !_silent_mode : lbClear 6657;	lbSetCurSel [6657, -1]
+	[MAINMENU_STR select 32, 5, _color_gingerbrown] call FUNCTION_LBADD
+	[MAINMENU_STR select 89, 228, _color_gingerbrown] call FUNCTION_LBADD
+	
+	#DownloadMods_SkipOptions
 	_i           = 0
 	_update_mods = []
 	_new_mods    = []
@@ -407,10 +416,10 @@
 	"if ((_missing_mods_myversion select _i) != 0) then {_update_mods set [count _update_mods, [_i,_x]]} else {_new_mods set [count _new_mods, [_i,_x]]}; _i=_i+1" forEach _missing_mods
 	? _silent_mode : if (count _update_mods>0) then {titleText [Format [MAINMENU_STR select 87, count _update_mods], "PLAIN DOWN", 0.2]}; exit
 
-	? count _update_mods > 0 : lbSetColor [6657, lbAdd [6657, "==="+(MAINMENU_STR select 83)+"==="], [246/255, 40/255, 23/255, 1]]
+	? count _update_mods > 0 : ["==="+(MAINMENU_STR select 83)+"===", -1, _color_fireenginered] call FUNCTION_LBADD
 	"_index=lbAdd [6657,_missing_mods_name select (_x select 0)]; lbSetValue [6657, _index, 6]; lbSetData [6657, _index, Format[""%1"",_x select 1]]" forEach _update_mods
 	
-	? count _new_mods > 0 : lbSetColor [6657, lbAdd [6657, "==="+(MAINMENU_STR select 84)+"==="], [201/255, 190/255, 98/255, 1]]
+	? count _new_mods > 0 : ["==="+(MAINMENU_STR select 84)+"===", -1, _color_sandybrown] call FUNCTION_LBADD
 	"_index=lbAdd [6657,_missing_mods_name select (_x select 0)]; lbSetValue [6657, _index, 6]; lbSetData [6657, _index, Format[""%1"",_x select 1]]" forEach _new_mods
 	goto "ResetLMB"
 	
@@ -737,8 +746,7 @@
 	_upcomingLabel = false
 
 	FUNCTION_SERVERS_TO_LISTBOX forEach _all_serverID
-
-	lbSetValue [6657, lbAdd [6657,MAINMENU_STR select 25], 215]
+	[MAINMENU_STR select 25, 215, _color_gingerbrown] call FUNCTION_LBADD
 	goto "ResetLMB"
 
 
@@ -844,13 +852,13 @@
 	
 	lbClear 6657
 	lbSetCurSel [6657, -1]
-	? _server_version in [0,_myVersion]  &&  count _missing_mods==0 : if (_server_uniqueid in _today_game_servers && !_playingNow && _gamerestart_pid==0) then {lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 26], 220]}; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 27], 221]; 
-	? count _missing_mods > 0                                       : lbSetValue [6657, lbAdd [6657, Format [MAINMENU_STR select 28, _missing_mods_size]], 204]; lbSetValue [6657, lbAdd [6657, Format [MAINMENU_STR select 29, _missing_mods_size]], 224]
+	? _server_version in [0,_myVersion]  &&  count _missing_mods==0 : if (_server_uniqueid in _today_game_servers && !_playingNow && _gamerestart_pid==0) then {[MAINMENU_STR select 26, 220, _color_yellowgreen] call FUNCTION_LBADD}; [MAINMENU_STR select 27, 221, _color_yellowgreen] call FUNCTION_LBADD
+	? count _missing_mods > 0                                       : [Format [MAINMENU_STR select 28, _missing_mods_size], 204, _color_fireenginered] call FUNCTION_LBADD; lbSetValue [6657, lbAdd [6657, Format [MAINMENU_STR select 29, _missing_mods_size]], 224]
 	? _voice_name != ""                                             : lbSetValue [6657, lbAdd [6657, Format [_voice_format,_voice_name]], 222]
 	? count _missing_mods==0 && count _server_modfolders > 0        : lbSetValue [6657, lbAdd [6657, Format [MAINMENU_STR select 29, _missing_mods_size]], 225]
 	? _server_website != ""                                         : lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 30], 205]
 	? _server_version == _myVersion                                 : lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 31], 206]
-
+	
 	lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 32], 207]
 	~0.1
 	goto "ResetLMB"
@@ -1049,18 +1057,32 @@
 
 
 
+	; Save passwords for private mods
+	#SaveModAccessCode
+	_Input               = loadFile Format ["\:STRING TRIM  left:1  right:1  text:%1", _Input]
+	_access_code_mod     = _Input
+	GS_DOWNLOAD_MODSLIST = true
+	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  key:accesscodemodwrite:_access_code_mod=""%1""", _Input]
+	@!(ctrlVisible 6901)
+	goto "DownloadMods"
+
+
 
 	; Display information about patch
 	#DisplayUpdateInformation
-	_name = MAINMENU_STR select 80
-	_update_name = "Fwatch"
+	_name         = MAINMENU_STR select 80
+	_update_name  = "Fwatch"
 	_option_value = 216
 	? Format ["%1", count GS_FWATCH_LAST_UPDATE] == "scalar" : GS_FWATCH_LAST_UPDATE=GS_FWATCH_MY_VERSION
 	_new = ["@Y MM d 0h:0i",GS_FWATCH_LAST_UPDATE] call FLIB_FORMATDATE
 	_old = ["@Y MM d 0h:0i",GS_FWATCH_MY_VERSION] call FLIB_FORMATDATE
 	? _my_cpp_version != _required_cpp_version : _name=MAINMENU_STR select 81; _new=_required_cpp_version; _old=_my_cpp_version; _option_value=226; _update_name="Resource.cpp"
 	
-	lbSetValue [6657, lbAdd [6657,Format [MAINMENU_STR select 48, _update_name]], _option_value]
+	lbClear 6657
+	lbSetCurSel [6657, -1]
+	[Format [MAINMENU_STR select 48, _update_name], _option_value, _color_fireenginered] call FUNCTION_LBADD
+	lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 85], 227]
+	
 	"ctrlShow [_x,false]" forEach _serverDialog
 	"ctrlShow [_x,true ]" forEach [6460, 6463]
 	ctrlSetText [6463, Format [MAINMENU_STR select 49, _name, _new, _old]]
@@ -1092,8 +1114,8 @@
 		? !dialog || !ctrlVisible 6901 : goto "InputEnd"
 		
 		_keys = FWATCH_INPUT_MULTI select 0
-		? "ENTER" in _keys   : _enter=true; goto "InputEnd"
-		? "RBUTTON" in _keys : closeDialog 0
+		? "ENTER" in _keys || "TAB" in _keys : _enter=true; goto "InputEnd"
+		? "RBUTTON" in _keys                 : closeDialog 0
 		
 		_Input = ctrlText 6901
 		goto "InputLoop"

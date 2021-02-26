@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include "..\testdll\testdll.h"		// sharing global vars, enums, structs with dll
 #include <tlhelp32.h>				// for findProcess()
 #include "winsock2.h"				// for reporting server
@@ -144,7 +145,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	SECURITY_ATTRIBUTES sa;
 	sa.lpSecurityDescriptor = &sd;
-	sa.bInheritHandle       = true;
+	sa.bInheritHandle       = false;
 
 	HANDLE mailslot = CreateMailslot(TEXT("\\\\.\\mailslot\\fwatch_mailslot"), 0, MAILSLOT_WAIT_FOREVER, &sa);
 
@@ -396,7 +397,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 				if (RegQueryValueEx(hKey, "SteamExe" , 0, &dwType, (BYTE*)SteamExe , &SteamExeSize) == ERROR_SUCCESS) {
 					String command_line;
 					String_init(command_line);
-					String_append(command_line, "\"\"");
+					String_append(command_line, "\"start \"\" \"");
 					String_append(command_line, SteamExe);
 					String_append(command_line, "\" -applaunch 65790 ");
 					String_append(command_line, (add_nomap ? "-nomap " : ""));
@@ -1884,9 +1885,9 @@ void WatchProgram(ThreadArguments *arg)
 							char *token = Tokenize(message_buffer, "|", value_pos, message_size, false, false);
 
 							switch(value_index++) {
-								case 0 : CommandID=atoi(token); break;
-								case 1 : db_id=atoi(token); break;
-								case 2 : params=token; break;
+								case 0 : CommandID = atoi(token); break;
+								case 1 : db_id     = atoi(token); break;
+								case 2 : params    = token; break;
 							}
 						}
 
@@ -1954,6 +1955,120 @@ void WatchProgram(ThreadArguments *arg)
 										Sleep(5);
 										GetExitCodeProcess(pi.hProcess, &info.exit_code);
 									} while (info.exit_code == STILL_ACTIVE);
+
+									if (CommandID==C_EXE_MAKEPBO  &&  info.exit_code==0) {
+										//Extract path from arguments
+										String path_dir;
+										String path_pbo;
+										String path_dir_file;
+										String_init(path_dir);
+										String_init(path_pbo);
+										String_init(path_dir_file);
+
+										for (int i=strlen(params),quot=0; i>=0; i--) {
+											if (params[i] == '"') {
+												quot++;
+
+												if (quot == 1)
+													params[i] = '\0';
+
+												if (quot == 2)
+													String_append(path_dir, params+i+1);
+											}
+										}
+										
+										String_append(path_pbo, path_dir.pointer);
+										String_append(path_pbo, ".pbo");
+
+										String_append(path_dir_file, path_dir.pointer);
+										String_append(path_dir_file, "\\");
+										
+										String buffer_pbo;
+										int result = String_readfile(buffer_pbo, path_pbo.pointer);
+
+										if (result == 0) {
+											const int name_max  = 512;
+											char name[name_max] = "";
+											int name_len        = 0;
+											int file_count      = 0;
+											int file_pos        = 0;
+											bool save_file      = false;
+											 
+											while (file_pos < buffer_pbo.current_length) {
+												memset(name, 0, name_max);
+												name_len = 0;
+
+												for (int i=0; i<name_max-1; i++) {
+													char c = buffer_pbo.pointer[file_pos++];
+
+													if (c != '\0')
+														name[name_len++] = c;
+													else
+														break;
+												}
+
+												unsigned long pbo_mime_type  = *((unsigned long*)&buffer_pbo.pointer[file_pos]);
+												unsigned long pbo_time_stamp = *((unsigned long*)&buffer_pbo.pointer[file_pos+12]);
+												unsigned long pbo_data_size  = *((unsigned long*)&buffer_pbo.pointer[file_pos+16]);
+
+												file_pos += 20;
+
+												if (name_len == 0) {
+													if (file_count==0 && pbo_mime_type==0x56657273 && pbo_time_stamp==0 && pbo_data_size==0) {
+														int value_len = 0;
+														bool is_name  = true;
+														
+														while (file_pos < buffer_pbo.current_length) {
+															if (buffer_pbo.pointer[file_pos++] != '\0')
+																value_len++;
+															else {
+																if (is_name && value_len==0)
+																	break;
+																else {
+																	is_name   = !is_name;
+																	value_len = 0;
+																}
+															}
+														}
+													} else
+														break;
+												} else {
+													path_dir_file.current_length = path_dir.current_length + 1;
+													String_append(path_dir_file, name);
+													
+													WIN32_FILE_ATTRIBUTE_DATA fd;
+													GetFileAttributesEx(path_dir_file.pointer, GetFileExInfoStandard, &fd);
+													
+													ULARGE_INTEGER ull;
+													ull.LowPart              = fd.ftLastWriteTime.dwLowDateTime;
+													ull.HighPart             = fd.ftLastWriteTime.dwHighDateTime;
+													ULONGLONG n1             = (ULONGLONG)10000000;
+													ULONGLONG n2             = UInt32x32To64(116444736, 100);
+													unsigned long file_stamp = (unsigned long)(ull.QuadPart / n1 - n2);
+
+													if (file_stamp != pbo_time_stamp) {
+														memcpy(buffer_pbo.pointer+file_pos-8, &file_stamp, 4);
+														save_file = true;
+													}
+												}
+													
+												file_count++;
+											}
+											
+											if (save_file) {
+												FILE *f = fopen(path_pbo.pointer, "wb");
+												if (f) {
+													fwrite(buffer_pbo.pointer, 1, buffer_pbo.current_length, f);
+													fclose(f);
+												}
+											}
+										}
+
+										String_end(path_dir);
+										String_end(path_pbo);
+										String_end(path_dir_file);
+										String_end(buffer_pbo);
+									}
 
 									db_pid_save(info);
 								}

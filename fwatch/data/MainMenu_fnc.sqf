@@ -404,39 +404,27 @@ FUNCTION_GET_CLOSEST_GAME_TIME = {
 
 
 
-FUNCTION_SERVERS_TO_LISTBOX = {	
-	private ["_color1", "_color2", "_color3", "_color"];
-	
-	_color1 = [ 246, 40, 23 ];	// Fire Engine Red
-	//_color2 = [ 255, 127, 80 ];	// Coral
-	_color2 = [238, 154, 77  ]; // Sandy Brown
-	_color3 = [ 201, 190, 98 ]; // Ginger Brown
-	
+FUNCTION_SERVERS_TO_LISTBOX = {
 	if ((_closest_game_times select _i) == 0) then {
 		if (!_nowLabel) then {
 			_nowLabel = true;
-			_color    = []; 
-			"_color=_color+[_x/255]" foreach _color1;
-			lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 59] ,_color + [1]]
+			lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 59], _color_fireenginered]
 		}
 	} else {
 		if (_x in _today_game_servers) then {
 			if (!_todayLabel) then {
 				_todayLabel = true;
-				_color      = [];
-				"_color=_color+[_x/255]" foreach _color2;
-				lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 60] ,_color + [1]]			
+				lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 60], _color_sandybrown]
 			}
 		} else {
 			if (!_upcomingLabel) then {
 				_upcomingLabel = true;
-				_color         = []; 
-				"_color=_color+[_x/255]" foreach _color3;
-				lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 61] ,_color + [1]]
+				lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 61], _color_sand]
 			}
 		}
 	};
-
+	
+	private ["_entry"];
 	_entry = lbAdd [6657, _all_serverNames select _i]; 
 	lbSetData  [6657, _entry, Format ["%1",_i]];
 	lbSetValue [6657, _entry, 201]; 
@@ -547,21 +535,9 @@ FUNCTION_WRITE_INSTALL = {
 
 
 FUNCTION_BUILD_QUERY_STRING = {
-	private ["_output", "_values", "_array", "_i", "_mod", "_ver"];
-	_output = "";
-	_values = "";
-	_i      = -1;
-	_array  = call loadFile Format ["\:STRING TOKENIZE  text:%1delimiter: ", _access_code];
+	private ["_output", "_i", "_mod", "_ver"];
+	_output = (if (_server_uniqueid=="mod") then {_access_code_mod} else {_access_code}) call FUNCTION_FORMAT_PASSWORD_STRING;
 	
-	while "_i=_i+1; _i<count _array" do {
-		_values = _values + (if (_i==0) then {""} else {","}) + (_array select _i);
-	};
-	
-	if (_values != "") then {
-		_output = _output + "&password=" + _values;
-	};
-	
-
 	if ((_this select 0) == "modcheck") then {
 		_mod = "";
 		_ver = "";
@@ -735,6 +711,7 @@ FUNCTION_READ_DOWNLOADED_FILE = {
 };
 
 
+
 FUNCTION_VOICE_URL_FIND = {
 	private ["_i", "_found"];
 
@@ -788,7 +765,7 @@ FUNCTION_STRINGTABLE = {
 		MAINMENU_STR = [
 			"Interfejs niedostêpny. SprawdŸ swój bin\resource.cpp.",	//0
 			"Plik bin\resource.cpp jest przestarza³y. Œci¹gnij now¹ wersjê OFP Aspect Ratio",	//1
-			"PLAN ROZGRYWEK",	//2
+			"ROZK£AD ROZGRYWEK",	//2
 			"SERWER PRZEGL¥DARKI GIER",	//3
 			"Jest ju¿ w³¹czony!",		//4
 			"Napisz has³a do prywatnych serwerów",	//5
@@ -866,15 +843,17 @@ FUNCTION_STRINGTABLE = {
 			"Nie mo¿esz zaktualizowaæ %1 bo s¹ w³¹czone.\n\nCzy chcia³byœ uruchomiæ grê bez modów?",	//77
 			"Plan rozgrywek",	//78
 			"Serwer przegl¹darki gier",	//79		
-			"nowa wersja testowa Fwatch 1.16",	//80
-			"nowa wersja Resource.cpp",		//81
+			"nowej wersji testowej Fwatch 1.16",	//80
+			"nowej wersji Resource.cpp",		//81
 			"[Œci¹gnij mody]",				//82
 			"Dostêpne aktualizacje",		//83
 			"Pobierz nowy mod",				//84
 			"[Zamknij Okno]",				//85
-			"Jest dostpêpna aktualizacja nowa wersja testowa Fwatch 1.16",				//86
+			"Jest dostpêpna aktualizacja nowej wersji testowej Fwatch 1.16",				//86
 			"Dostpêpne aktualizacje modów: %1",		//87
-			"[Do³¹cz po skoñczeniu: %1]"		//88
+			"[Do³¹cz po skoñczeniu: %1]",		//88
+			"[Poka¿ prywatne mody]",			//89
+			"Napisz has³a do prywatnych modów"	//90
 		];
 	};
 	
@@ -968,7 +947,9 @@ FUNCTION_STRINGTABLE = {
 			"[Çàêðûòü Îêíî]",		//85
 			"Äîñòóïíà íîâàÿ òåñòîâàÿ âåðñèÿ Fwatch 1.16",				//86
 			"Îáíîâèòü ìîäû: %1",	//87
-			"[Ïîäêëþ÷èòüñÿ ïîñëå îêîí÷àíèÿ: %1]"		//88
+			"[Ïîäêëþ÷èòüñÿ ïîñëå îêîí÷àíèÿ: %1]",		//88
+			"[Ïîêàçàòü ÷àñòíûå ìîäû]",			//89
+			"Ââåäèòå ïàðîëü, ÷òîáû ïðîñìîòðåòü ìîäû"	//90
 		];
 	};
 	
@@ -1062,7 +1043,40 @@ FUNCTION_STRINGTABLE = {
 			"[Close Window]",				//85
 			"There is a new test version of Fwatch 1.16 available",				//86
 			"Available mod updates: %1",	//87
-			"[Connect when done: %1]"		//88
+			"[Connect when done: %1]",		//88
+			"[Show Private Mods]",			//89
+			"Type in password(s) to show private mod(s)"	//90
 		];
 	};
 };
+
+
+
+FUNCTION_FORMAT_PASSWORD_STRING = {
+	private ["_output", "_values", "_array", "_i"];
+	_output = "";
+	_values = "";
+	_i      = -1;
+	_array  = call loadFile Format ["\:STRING TOKENIZE  text:%1delimiter: ", _this];
+	
+	while "_i=_i+1; _i<count _array" do {
+		_values = _values + (if (_i==0) then {""} else {","}) + (_array select _i);
+	};
+	
+	if (_values != "") then {
+		_output = _output + "&password=" + _values;
+	};
+	
+	_output
+};
+
+
+
+FUNCTION_LBADD = {
+	private ["_entry"];
+	if (!_silent_mode) then {		
+		_entry = lbAdd [6657, _this select 0];
+		lbSetValue [6657, _entry, _this select 1];
+		lbSetColor [6657, _entry, _this select 2];
+	}
+}
