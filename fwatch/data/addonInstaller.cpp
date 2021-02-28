@@ -3824,9 +3824,9 @@ int main(int argc, char *argv[])
 				
 					// If user wants to move modfolder then change destination to the game directory
 					if (is_download_dir  &&  IsModName(PathLastItem(*source))  &&  !destination_passed) {
-						*source   = "";
-						*new_name = Equals(global.current_mod,global.current_mod_new_name) ? "" : global.current_mod_new_name;
-						options  |= FLAG_MATCH_DIRS;
+						*destination = "";
+						*new_name    = Equals(global.current_mod,global.current_mod_new_name) ? "" : global.current_mod_new_name;
+						options     |= FLAG_MATCH_DIRS;
 					} else {
 						// Otherwise create missing directories in the destination path
 						
