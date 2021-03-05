@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2021,2,28,0,2,44,16,641,60,FALSE]
+	GS_FWATCH_MY_VERSION = [2021,3,5,5,15,0,21,760,60,FALSE]
 	GS_MY_VERSION        = 0.58
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -86,7 +86,7 @@
 		_instruction = (_this select _i)
 		? _instruction select 0 == "moverel"   : loadFile Format [":mem setcursor %1 %2", _mx+(_instruction select 1),_my+(_instruction select 2)]; _m_moved=true
 		? _instruction select 0 == "moveabs"   : loadFile Format [":mem setcursor %1 %2", (_instruction select 1),(_instruction select 2)]; _m_moved=true
-		? _instruction select 0 == "movetop"   : loadFile Format [":mem setcursor %1 %2", _x+(_this select 2)/2, _y+0.05]; _m_moved=true
+		? _instruction select 0 == "movetop"   : loadFile Format [":mem setcursor %1 %2", _x++0.05, _y+0.05]; _m_moved=true
 		? _instruction select 0 == "extendx"   : _x=_x+(_instruction select 1); _w=_w+abs (_instruction select 1)
 		? _instruction select 0 == "extendy"   : _y=_y+(_instruction select 1); _h=_h+abs (_instruction select 1)
 		? _instruction select 0 == "extendw"   : _w=_w+(_instruction select 1)

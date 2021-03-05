@@ -72,7 +72,7 @@ struct GLOBAL_VARIABLES
 	0,
 	0,
 	0,
-	0.58,
+	0.59,
 	0,
 	"",
 	"",
@@ -2269,20 +2269,22 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 		}
 
 		// Check if the folder name is addons/bin/dta/worlds/campaigns etc.
-		int index              = DIR_NONE;
-		bool contains_overview = false;
+		int index                        = DIR_NONE;
+		bool missions_but_different_name = false;
 		
-		for (int i=DIR_ADDONS; i<DIR_MAX && index==DIR_NONE; i++)
-			if (Equals(file_only,mod_subfolders[i]))
-				index = i;
+		if (!Equals(file_only,"_extracted")) {
+			for (int i=DIR_ADDONS; i<DIR_MAX && index==DIR_NONE; i++)
+				if (Equals(file_only,mod_subfolders[i]))
+					index = i;
 				
-		// Folder could be an sp missions folder but named differently
-		if (index == DIR_NONE) {
-			string overview = file_with_path + "\\overview.html";
-			
-			if (GetFileAttributes(overview.c_str()) != INVALID_FILE_ATTRIBUTES) {
-				index             = DIR_MISSIONS;
-				contains_overview = true;
+			// Folder could be an sp missions folder but named differently
+			if (index == DIR_NONE) {
+				string overview = file_with_path + "\\overview.html";
+				
+				if (GetFileAttributes(overview.c_str()) != INVALID_FILE_ATTRIBUTES) {
+					index                       = DIR_MISSIONS;
+					missions_but_different_name = true;
+				}
 			}
 		}
 
@@ -2291,24 +2293,31 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 			string destination = global.current_mod_new_name + "\\";
 			string new_name    = "";
 			
-			// If it's a Missions/MPMissions folder and it contains a single subfolder then move that subfolder instead
-			if (!contains_overview) {
+			if (!missions_but_different_name) {
+				// If it's a Missions/MPMissions folder and it contains a single subfolder then move that subfolder instead
 				if (index==DIR_MISSIONS  ||  index==DIR_MPMISSIONS) {
-					DIRECTORY_INFO dir = ScanDirectory(file_with_path);
+					string destination_overview_path = global.current_mod_new_name + "\\Missions\\overview.html";
+					DIRECTORY_INFO dir               = ScanDirectory(file_with_path);
 					
 					if (dir.error_code == ERROR_NONE) {
 						if (dir.number_of_files==0  &&  dir.number_of_dirs==1) {
-							file    += "\\" + wide2string(dir.file_list[0]);
-							new_name = DIR_MISSIONS ? "Missions" : "MPMissions";
+							file_only = wide2string(dir.file_list[0]);
+							
+							// If that subfolder matches mod name then merge files; otherwise copy the entire subfolder
+							if ((index==DIR_MISSIONS && IsModName(file_only)) || index==DIR_MPMISSIONS) {
+								file          += "\\" + file_only;
+								file_with_path = "fwatch\\tmp\\" + file;
+								new_name       = DIR_MISSIONS ? "Missions" : "MPMissions";
+							}
 						}
 					} else
 						return dir.error_code;
 				}
 			} else
 				destination += "Missions\\";
-
+	
 			options &= ~FLAG_RUN_EXE;
-			return MoveFiles("fwatch\\tmp\\"+file, destination, new_name, FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_CREATE_DIR | FLAG_MATCH_DIRS);
+			return MoveFiles(file_with_path, destination, new_name, FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_CREATE_DIR | FLAG_MATCH_DIRS);
 		}
 		
 		bool scan_directory = true;
@@ -3219,7 +3228,7 @@ int main(int argc, char *argv[])
 							current_script_command.ctrl_flow[current_script_command.ctrl_flow.size()-1] = true;
 					
 					// If command is an URL then add it to the url database
-					if (command_id == COMMAND_AUTO_INSTALL) {
+					if (IsURL(word)) {
 						url_line         = true;
 						last_url_list_id = current_script_command_urls.link.size();
 						current_script_command_urls.arg_start.push_back(current_script_command_urls.arguments.size());
