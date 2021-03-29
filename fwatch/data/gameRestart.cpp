@@ -1589,11 +1589,16 @@ int main(int argc, char *argv[])
 				strcpy(module_name, "ijl15.dll");
 			
 			int result = GetProcessParams(game.pid, &game_handle, module_name, dedicated_server ? 0x4FF20 : 0x2C154, all_game_arguments);
-			if (result == 0) {				
+			if (result == 0) {
 				string log_arguments = "";
 				
 				for (int i=0; i<all_game_arguments.size(); i++) {
-					log_arguments = log_arguments + all_game_arguments[i] + " ";	// log every legible param
+					if (
+						!Equals(all_game_arguments[i].substr(0,9),"-connect=") &&
+						!Equals(all_game_arguments[i].substr(0,6),"-port=") &&
+						!Equals(all_game_arguments[i].substr(0,10),"-password=")
+					)
+						log_arguments = log_arguments + all_game_arguments[i] + " ";	// log params except for the ones that could be hidden
 					
 					if (
 						!Equals(all_game_arguments[i].substr(0,5),"-mod=") &&
@@ -1623,8 +1628,8 @@ int main(int argc, char *argv[])
 				
 
 		// Shutdown the game
-		bool close 	   = PostMessage(game.handle, WM_CLOSE, 0, 0);
-		int tries 	   = 0;			
+		bool close = PostMessage(game.handle, WM_CLOSE, 0, 0);
+		int tries  = 0;
 			
 		do {
 			game = find_game_instance(game.pid, game_window);
@@ -2063,6 +2068,9 @@ int main(int argc, char *argv[])
 			
 			result = Unpack(global.downloaded_filename, "fwatch", error_text);
 			DeleteFile(global.downloaded_filename.c_str());
+			
+			if (result == 0)
+				break;
 			
 			if (result != 0 && i==download_mirrors.size()-1) {
 				global.logfile << "Unpacking failed\n\n--------------\n\n";

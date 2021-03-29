@@ -72,7 +72,7 @@ struct GLOBAL_VARIABLES
 	0,
 	0,
 	0,
-	0.59,
+	0.6,
 	0,
 	"",
 	"",
@@ -1599,8 +1599,15 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 		find = url.find(output, find);
 	}
 
-	string arguments = options & FLAG_OVERWRITE ? "" : " --no-clobber";
-	arguments += " --tries=1 --user-agent=\"Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)\" --no-check-certificate --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ " + url;
+	string arguments = " --tries=1 --no-check-certificate --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ ";
+	
+	if (~options & FLAG_OVERWRITE)
+		arguments += "--no-clobber ";
+	
+	if (~options & FLAG_SILENT_MODE)
+		arguments += "--user-agent=\"Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)\" ";
+
+	arguments += url;
 	unlink("fwatch\\tmp\\schedule\\downloadLog.txt");
 
 
@@ -2032,6 +2039,31 @@ int ChangeFileDate(string file_name, int timestamp)
 	FILETIME ft;
 	UnixTimeToFileTime(timestamp, &ft);
 	return ChangeFileDate(file_name, &ft);
+}
+
+int ChangeFileDate(string file_name, string timestamp)
+{
+	FILETIME ft;
+	vector<string> date_item;
+	Tokenize(timestamp, "-T:+ ", date_item);
+	
+	if (date_item.size() == 1)
+		return ChangeFileDate(file_name, atoi(timestamp.c_str()));
+	else {
+		while(date_item.size() < 6)
+			date_item.push_back("0");
+			
+		SYSTEMTIME st;
+		st.wYear         = atoi(date_item[0].c_str());
+		st.wMonth        = atoi(date_item[1].c_str());
+		st.wDay          = atoi(date_item[2].c_str());
+		st.wHour         = atoi(date_item[3].c_str());
+		st.wMinute       = atoi(date_item[4].c_str());
+		st.wSecond       = atoi(date_item[5].c_str());
+		st.wMilliseconds = 0;
+		SystemTimeToFileTime(&st, &ft);
+		return ChangeFileDate(file_name, &ft);
+	}
 }
 
 	// Read directory and save file modification dates
@@ -3011,7 +3043,8 @@ int main(int argc, char *argv[])
 		SWITCH_NEWFILE        = 0x20,
 		SWITCH_APPEND         = 0x40,
 		SWITCH_MATCH_DIR_ONLY = 0x80,
-		SWITCH_MAX            = 0x100
+		SWITCH_TIMESTAMP      = 0x100,
+		SWITCH_MAX            = 0x200
 	};
 	
 	string command_switches_names[] = {
@@ -3023,7 +3056,8 @@ int main(int argc, char *argv[])
 		"/insert",
 		"/newfile",
 		"/append",
-		"/match_dir_only"
+		"/match_dir_only",
+		"/timestamp:"
 	};
 	
 	// Automatic filling with empty strings for a command when not enough arguments were passed
@@ -3117,6 +3151,7 @@ int main(int argc, char *argv[])
 		vector<int> url_num;		//number of urls passed to this command
 		vector<string> password;	//password switch passed to this command
 		vector<string> arguments;	//table storing arguments associated with commands (not parallel)
+		vector<string> timestamp;   //timestamp switch passed to this command
 	} current_script_command;
 
 	// Table storing download urls associated with the commands	
@@ -3151,6 +3186,7 @@ int main(int argc, char *argv[])
 				current_script_command.url_start.push_back(current_script_command_urls.link.size());
 				current_script_command.url_num.push_back(0);
 				current_script_command.password.push_back("");
+				current_script_command.timestamp.push_back("");
 			} else
 				// if bracket is an argument for the command
 				if (command_id != -1) {
@@ -3221,6 +3257,7 @@ int main(int argc, char *argv[])
 					current_script_command.url_start.push_back(current_script_command_urls.link.size());
 					current_script_command.url_num.push_back(0);
 					current_script_command.password.push_back("");
+					current_script_command.timestamp.push_back("");
 					
 					// Check if it's a control flow type of command
 					for (int j=0; j<number_of_ctrlflow; j++)
@@ -3268,6 +3305,9 @@ int main(int argc, char *argv[])
 						
 						if (switch_enum == SWITCH_PASSWORD)
 							current_script_command.password[last] = switch_arg;
+							
+						if (switch_enum == SWITCH_TIMESTAMP)
+							current_script_command.timestamp[last] = switch_arg;
 					}
 
 				// Add word to the URL database or the arguments database
@@ -3395,12 +3435,9 @@ int main(int argc, char *argv[])
 			if (current_script_command.id[i] == match_command_name_to_id[j])
 				global.command_line = command_names[j];
 
-		if (!current_script_command.ctrl_flow[i])
-			global.installation_steps_current++;
-
 		global.command_line_num      = current_script_command.line_num[i];
-		global.last_download_attempt = true;
 		global.download_iterator     = current_script_command.url_start[i];
+		global.last_download_attempt = true;
 
 		if (
 			// if modfolder wasn't formally started OR skipping this mod
@@ -3414,6 +3451,9 @@ int main(int argc, char *argv[])
 		)
 			continue;
 
+		if (!current_script_command.ctrl_flow[i])
+			global.installation_steps_current++;
+		
 		int command_result   = ERROR_NONE;
 		int failed_downloads = 0;
 
@@ -3724,9 +3764,19 @@ int main(int argc, char *argv[])
 					string file_with_path = "fwatch\\tmp\\" + file;
 					DWORD attributes      = GetFileAttributes(file_with_path.c_str());
 					
-					if (attributes != INVALID_FILE_ATTRIBUTES)
+					if (attributes != INVALID_FILE_ATTRIBUTES) {
 						command_result = Auto_Install(file, attributes, FLAG_RUN_EXE, current_script_command.password[i]);
-					else {
+						
+						// If not an archive but there are still backup links then go back to download
+						if (!global.last_download_attempt && command_result==ERROR_WRONG_ARCHIVE) {
+							file = "fwatch\\tmp\\" + file;
+							int result = DeleteFile(file.c_str());
+							file       = "<dl>";
+							global.downloads.pop_back();
+							global.download_iterator++;
+							goto Download_Phase;
+						}
+					} else {
 						int error_code = GetLastError();
 						command_result = ErrorMessage(STR_AUTO_READ_ATTRI, "%STR% " + file + " - " + Int2Str(error_code) + " " + FormatError(error_code));
 					}
@@ -4409,8 +4459,11 @@ int main(int argc, char *argv[])
 							break;
 						}
 				
-						command_result = ChangeFileDate(pbo_name, global.current_mod_version_date);
-						
+						if (current_script_command.switches[i] & SWITCH_TIMESTAMP)
+							command_result = ChangeFileDate(pbo_name, current_script_command.timestamp[i]);
+						else
+							command_result = ChangeFileDate(pbo_name, global.current_mod_version_date);
+
 						if (command_result == ERROR_NONE) {
 							if (~current_script_command.switches[i] & SWITCH_KEEP_SOURCE) {
 								WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+"...");
@@ -4611,7 +4664,11 @@ int main(int argc, char *argv[])
 						}
 				
 						file.close();
-				    	command_result = ChangeFileDate(*file_name, global.current_mod_version_date);
+						
+						if (current_script_command.switches[i] & SWITCH_TIMESTAMP)
+							command_result = ChangeFileDate(*file_name, current_script_command.timestamp[i]);
+						else
+				    		command_result = ChangeFileDate(*file_name, global.current_mod_version_date);
 					} else {
 						command_result = ErrorMessage(STR_EDIT_WRITE_ERROR);
 						break;
@@ -4635,29 +4692,7 @@ int main(int argc, char *argv[])
 					}
 
 					*file_name = global.current_mod_new_name + "\\" + *file_name;
-					
-					FILETIME ft;
-					vector<string> date_item;
-					Tokenize(*date_text, "-T:+ ", date_item);
-					
-					if (date_item.size() == 1)
-						command_result = ChangeFileDate(*file_name, atoi((*date_text).c_str()));
-					else {
-						while(date_item.size() < 6)
-							date_item.push_back("0");
-							
-						SYSTEMTIME st;
-						st.wYear         = atoi(date_item[0].c_str());
-						st.wMonth        = atoi(date_item[1].c_str());
-						st.wDay          = atoi(date_item[2].c_str());
-						st.wHour         = atoi(date_item[3].c_str());
-						st.wMinute       = atoi(date_item[4].c_str());
-						st.wSecond       = atoi(date_item[5].c_str());
-						st.wMilliseconds = 0;
-						SystemTimeToFileTime(&st, &ft);
-						command_result = ChangeFileDate(*file_name, &ft);
-					}
-						
+					command_result = ChangeFileDate(*file_name, *date_text);
 					break;
 				}
 			}
