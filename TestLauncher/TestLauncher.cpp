@@ -37,21 +37,21 @@ enum GAME_TYPES {
 };
 
 enum COMMAND_ID {
-	C_INFO_ERRORLOG = 6,
-	C_RESTART_SERVER = 105,
-	C_RESTART_CLIENT,
-	C_EXE_SPIG = 123,
-	C_EXE_ADDONTEST,
-	C_EXE_WGET,
-	C_EXE_UNPBO,
-	C_EXE_PREPROCESS,
-	C_EXE_ADDONINSTALL,
-	C_EXE_WEBSITE,
-	C_EXE_MAKEPBO
+	C_INFO_ERRORLOG    = 2670383007,
+	C_RESTART_SERVER   = 1698669191,
+	C_RESTART_CLIENT   = 1040407795,
+	C_SPIG_EXE         = 3206713566,
+	C_EXE_ADDONTEST    = 501781933,
+	C_EXE_WGET         = 3861629986,
+	C_EXE_UNPBO        = 1304888561,
+	C_EXE_PREPROCESS   = 2891211499,
+	C_EXE_ADDONINSTALL = 367297688,
+	C_EXE_WEBSITE      = 226367578,
+	C_EXE_MAKEPBO      = 3754554022
 };
 
 unsigned long GetIP(char *host);
-char* Tokenize(char *string, char *delimiter, int &i, int string_length, bool square_brackets, bool reverse);
+char* Tokenize(char *string, char *delimiter, size_t &i, size_t string_length, bool square_brackets, bool reverse);
 void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT);
 int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_name);
 void ModfolderMissionsReturn(bool is_dedicated_server);
@@ -118,6 +118,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		"fwatch/data/7z.dll",
 		"fwatch/data/7z.exe",
 		"fwatch/data/MakePbo.exe",
+		"fwatch/data/Format.sqf",
 		NULL,
 	};
 
@@ -277,7 +278,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			int close[] = {'\"', '}'};
 
 			for (int i=0; i<2; i++) {
-				char *quote = strchr(ip_list.pointer, open[i]);
+				char *quote = strchr(ip_list.text, open[i]);
 
 				if (quote != NULL) {
 					quote++;
@@ -354,15 +355,13 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 		String command_line;
 		String_init(command_line);
-		String_append(command_line, " ");
-		String_append(command_line, (add_nomap ? "-nomap " : ""));
-		String_append(command_line, lpCmdLine);
+		String_append_format(command_line, " %s%s", (add_nomap ? "-nomap " : ""), lpCmdLine);
 
 		for (int i=0; i<global_exe_num; i++) {
 			if (custom_exe!=-1 && custom_exe!=i || strstr(global_exe_name[i],"_server.exe"))
 				continue;
 
-			if (CreateProcess(global_exe_name[i], command_line.pointer, NULL, NULL, false, 0, NULL,NULL,&si,&pi)) {
+			if (CreateProcess(global_exe_name[i], command_line.text, NULL, NULL, false, 0, NULL,NULL,&si,&pi)) {
 				launched = true;
 				break;
 			}
@@ -397,13 +396,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 				if (RegQueryValueEx(hKey, "SteamExe" , 0, &dwType, (BYTE*)SteamExe , &SteamExeSize) == ERROR_SUCCESS) {
 					String command_line;
 					String_init(command_line);
-					String_append(command_line, "\"start \"\" \"");
-					String_append(command_line, SteamExe);
-					String_append(command_line, "\" -applaunch 65790 ");
-					String_append(command_line, (add_nomap ? "-nomap " : ""));
-					String_append(command_line, lpCmdLine);
-					String_append(command_line, "\"");
-					system(command_line.pointer);
+					String_append_format(command_line, "\"start \"\" \"%s\" -applaunch 65790 %s%s\"", SteamExe, (add_nomap ? "-nomap " : ""), lpCmdLine);
+					system(command_line.text);
 					String_end(command_line);
 				}
 
@@ -463,7 +457,7 @@ unsigned long GetIP(char *host)
 
 
 // Split string by given characters; each call returns the next part; must supply current pos and length
-char* Tokenize(char *string, char *delimiter, int &i, int string_length, bool square_brackets, bool reverse) 
+char* Tokenize(char *string, char *delimiter, size_t &i, size_t string_length, bool square_brackets, bool reverse) 
 {
 	int delimiter_len = strlen(delimiter);
 	bool in_brackets  = false;
@@ -518,11 +512,11 @@ void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, i
 	memset(customINT, 0, sizeof(customINT));
 
 	char *token		= "";
-	int config_pos  = 0;
+	size_t config_pos  = 0;
 	int value_index = -1;
 	
-	while (config_pos < config.current_length) {
-		char *setting = Tokenize(config.pointer, ";", config_pos, config.current_length, true, false);
+	while (config_pos < config.length) {
+		char *setting = Tokenize(config.text, ";", config_pos, config.length, true, false);
 
 		char *equality = strchr(setting, '=');
 		if (equality == NULL)
@@ -544,9 +538,9 @@ void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, i
 		if (value_index < 0)
 			continue;
 
-		setting        = setting + pos + 1;
-		int values_len = strlen(setting);
-		int values_pos = 0;
+		setting           = setting + pos + 1;
+		size_t values_len = strlen(setting);
+		size_t values_pos = 0;
 
 		while (values_pos < values_len) {
 			char *value = Tokenize(setting, ",", values_pos, values_len, true, false);
@@ -737,14 +731,14 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 	if (String_readfile(mission_list, filename) != 0)
 		return;
 
-	int i                       = 0;
+	size_t i                    = 0;
 	int word_start              = 0;
 	char backup_buffer[1024]    = "";
 	wchar_t source_w[1024]      = L"";
 	wchar_t destination_w[1024] = L"";
 				
-	while (i < mission_list.current_length) {
-		char *destination = Tokenize(mission_list.pointer, "\r\n", i, mission_list.current_length, false, false);
+	while (i < mission_list.length) {
+		char *destination = Tokenize(mission_list.text, "\r\n", i, mission_list.length, false, false);
 		char *source      = strchr(destination,'\\');
 		bool remove_line  = false;
 		
@@ -789,28 +783,28 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 			remove_line = true;
 		
 		if (i > 0)
-			mission_list.pointer[i-1] = '\r';
+			mission_list.text[i-1] = '\r';
 		
 		// Cut text in the middle of the buffer and close the gap
 		if (remove_line) {
-			if (mission_list.pointer[i] == '\n') 
+			if (mission_list.text[i] == '\n') 
 				i++;
 				
-			memcpy(mission_list.pointer+word_start, mission_list.pointer+i, mission_list.current_length-i);
+			memcpy(mission_list.text+word_start, mission_list.text+i, mission_list.length-i);
 			
-			int len                      = i - word_start;
-			i                           -= len;
-			mission_list.current_length -= len;
+			int len              = i - word_start;
+			i                   -= len;
+			mission_list.length -= len;
 		}
 
 		word_start = i;
 	}
 
-	mission_list.pointer[mission_list.current_length] = '\0';
+	mission_list.text[mission_list.length] = '\0';
 	
 	FILE *f = fopen(filename, "wb");
 	if (f) {
-		fwrite(mission_list.pointer, 1, mission_list.current_length, f);
+		fwrite(mission_list.text, 1, mission_list.length, f);
 		fclose(f);
 	}
 
@@ -926,7 +920,7 @@ void FwatchPresence(ThreadArguments *arg)
 
 				String config;
 				if (String_readfile(config, "Aspect_Ratio.sqf") == 0) {
-					char *token = strtok(config.pointer, ";\n\t ");
+					char *token = strtok(config.text, ";\n\t ");
 
 					while (token != NULL) {
 						char *eq = strchr(token, '=');
@@ -1090,9 +1084,9 @@ void FwatchPresence(ThreadArguments *arg)
 			for (int i=0; i<game_param_max; i++) {
 				if (game_param[i] == '\0') {
 					if (strncmp(game_param+word_start,"-mod=",5) == 0) {
-						char *value   = game_param + word_start + 5;
-						int value_len = strlen(value);
-						int value_pos = 0;
+						char *value      = game_param + word_start + 5;
+						size_t value_len = strlen(value);
+						size_t value_pos = 0;
 
 						while (value_pos < value_len  &&  game_mods_num < game_mods_max)
 							game_mods[game_mods_num++] = Tokenize(value, ";", value_pos, value_len, false, false);
@@ -1439,10 +1433,13 @@ void FwatchPresence(ThreadArguments *arg)
 			if (*arg->mailslot != INVALID_HANDLE_VALUE) {
 				DWORD message_size   = 0;
 				DWORD message_number = 0;
-
-				if (GetMailslotInfo(*arg->mailslot, (LPDWORD)NULL, &message_size, &message_number, (LPDWORD)NULL))
+//FILE *fd=fopen("fwatch_debug2.txt","a");
+				if (GetMailslotInfo(*arg->mailslot, (LPDWORD)NULL, &message_size, &message_number, (LPDWORD)NULL)) {
+					//fprintf(fd,"message_size:%d\n",message_size);
 					if (message_size != MAILSLOT_NO_MESSAGE)
 						_beginthread((void(*)(void*))WatchProgram, 0, arg);
+				}
+				//fclose(fd);
 			}
 		}
 
@@ -1865,8 +1862,6 @@ void WatchProgram(ThreadArguments *arg)
 
 		if (GetMailslotInfo(*arg->mailslot, (LPDWORD)NULL, &message_size, &message_number, (LPDWORD)NULL)) {
 			if (message_size != MAILSLOT_NO_MESSAGE) {
-
-				//void *message_buffer = GlobalAlloc(GMEM_FIXED, message_size);
 				HGLOBAL hGbl = GlobalAlloc(GMEM_ZEROINIT|GMEM_MOVEABLE|GMEM_DDESHARE, message_size);
 				
 				if (hGbl) {
@@ -1874,20 +1869,19 @@ void WatchProgram(ThreadArguments *arg)
 					DWORD bytes_read     = 0;
 
 					if (ReadFile(*arg->mailslot, message_buffer, message_size, &bytes_read, 0)) {
-						int CommandID = 0;
-						int db_id     = 0;
-						char *params  = "";
-
-						int value_pos   = 0;
-						int value_index = 0;
+						unsigned int hash = 0;
+						int db_id         = 0;
+						char *params      = "";
+						size_t value_pos  = 0;
+						int value_index   = 0;
 
 						while (value_pos < (int)message_size) {
 							char *token = Tokenize(message_buffer, "|", value_pos, message_size, false, false);
 
 							switch(value_index++) {
-								case 0 : CommandID = atoi(token); break;
-								case 1 : db_id     = atoi(token); break;
-								case 2 : params    = token; break;
+								case 0 : hash   = strtoul(token, NULL, 0); break;
+								case 1 : db_id  = atoi(token); break;
+								case 2 : params = token; break;
 							}
 						}
 
@@ -1895,7 +1889,7 @@ void WatchProgram(ThreadArguments *arg)
 						char exe_name[64] = "";
 						char exe_path[64] = "fwatch\\data\\";
 
-						switch(CommandID) {
+						switch(hash) {
 							case C_EXE_ADDONINSTALL : strcpy(exe_name, "addonInstarrer.exe"); break;
 							case C_EXE_ADDONTEST    : strcpy(exe_name, "addontest.exe"); strcpy(exe_path, "@addontest\\ModData\\"); break;
 							case C_EXE_UNPBO        : strcpy(exe_name, "extractpbo.exe"); break;
@@ -1944,19 +1938,19 @@ void WatchProgram(ThreadArguments *arg)
 							si.hStdOutput  = logFile;
 							si.hStdError   = logFile;
 							ZeroMemory(&pi, sizeof(pi));
-							
-							if (CreateProcess(exe_path, params, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {						
+
+							if (CreateProcess(exe_path, params, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
 								WatchProgramInfo info = {db_id, pi.dwProcessId, STILL_ACTIVE, 0};
 								db_pid_save(info);
 
 								// Run another program monitoring the first program
-								if (CommandID != C_RESTART_CLIENT) {
+								if (hash != C_RESTART_CLIENT) {
 									do {
 										Sleep(5);
 										GetExitCodeProcess(pi.hProcess, &info.exit_code);
 									} while (info.exit_code == STILL_ACTIVE);
 
-									if (CommandID==C_EXE_MAKEPBO  &&  info.exit_code==0) {
+									if (hash==C_EXE_MAKEPBO  &&  info.exit_code==0) {
 										//Extract path from arguments
 										String path_dir;
 										String path_pbo;
@@ -1977,29 +1971,26 @@ void WatchProgram(ThreadArguments *arg)
 											}
 										}
 										
-										String_append(path_pbo, path_dir.pointer);
-										String_append(path_pbo, ".pbo");
-
-										String_append(path_dir_file, path_dir.pointer);
-										String_append(path_dir_file, "\\");
+										String_append_format(path_pbo, "%s.pbo", path_dir.text);
+										String_append_format(path_dir_file, "%s\\", path_dir.text);
 										
 										String buffer_pbo;
-										int result = String_readfile(buffer_pbo, path_pbo.pointer);
+										int result = String_readfile(buffer_pbo, path_pbo.text);
 
 										if (result == 0) {
 											const int name_max  = 512;
 											char name[name_max] = "";
 											int name_len        = 0;
 											int file_count      = 0;
-											int file_pos        = 0;
+											size_t file_pos     = 0;
 											bool save_file      = false;
 											 
-											while (file_pos < buffer_pbo.current_length) {
+											while (file_pos < buffer_pbo.length) {
 												memset(name, 0, name_max);
 												name_len = 0;
 
 												for (int i=0; i<name_max-1; i++) {
-													char c = buffer_pbo.pointer[file_pos++];
+													char c = buffer_pbo.text[file_pos++];
 
 													if (c != '\0')
 														name[name_len++] = c;
@@ -2007,9 +1998,9 @@ void WatchProgram(ThreadArguments *arg)
 														break;
 												}
 
-												unsigned long pbo_mime_type  = *((unsigned long*)&buffer_pbo.pointer[file_pos]);
-												unsigned long pbo_time_stamp = *((unsigned long*)&buffer_pbo.pointer[file_pos+12]);
-												unsigned long pbo_data_size  = *((unsigned long*)&buffer_pbo.pointer[file_pos+16]);
+												unsigned long pbo_mime_type  = *((unsigned long*)&buffer_pbo.text[file_pos]);
+												unsigned long pbo_time_stamp = *((unsigned long*)&buffer_pbo.text[file_pos+12]);
+												unsigned long pbo_data_size  = *((unsigned long*)&buffer_pbo.text[file_pos+16]);
 
 												file_pos += 20;
 
@@ -2018,8 +2009,8 @@ void WatchProgram(ThreadArguments *arg)
 														int value_len = 0;
 														bool is_name  = true;
 														
-														while (file_pos < buffer_pbo.current_length) {
-															if (buffer_pbo.pointer[file_pos++] != '\0')
+														while (file_pos < buffer_pbo.length) {
+															if (buffer_pbo.text[file_pos++] != '\0')
 																value_len++;
 															else {
 																if (is_name && value_len==0)
@@ -2033,11 +2024,11 @@ void WatchProgram(ThreadArguments *arg)
 													} else
 														break;
 												} else {
-													path_dir_file.current_length = path_dir.current_length + 1;
+													path_dir_file.length = path_dir.length+ 1;
 													String_append(path_dir_file, name);
 													
 													WIN32_FILE_ATTRIBUTE_DATA fd;
-													GetFileAttributesEx(path_dir_file.pointer, GetFileExInfoStandard, &fd);
+													GetFileAttributesEx(path_dir_file.text, GetFileExInfoStandard, &fd);
 													
 													ULARGE_INTEGER ull;
 													ull.LowPart              = fd.ftLastWriteTime.dwLowDateTime;
@@ -2047,7 +2038,7 @@ void WatchProgram(ThreadArguments *arg)
 													unsigned long file_stamp = (unsigned long)(ull.QuadPart / n1 - n2);
 
 													if (file_stamp != pbo_time_stamp) {
-														memcpy(buffer_pbo.pointer+file_pos-8, &file_stamp, 4);
+														memcpy(buffer_pbo.text+file_pos-8, &file_stamp, 4);
 														save_file = true;
 													}
 												}
@@ -2056,9 +2047,9 @@ void WatchProgram(ThreadArguments *arg)
 											}
 											
 											if (save_file) {
-												FILE *f = fopen(path_pbo.pointer, "wb");
+												FILE *f = fopen(path_pbo.text, "wb");
 												if (f) {
-													fwrite(buffer_pbo.pointer, 1, buffer_pbo.current_length, f);
+													fwrite(buffer_pbo.text, 1, buffer_pbo.length, f);
 													fclose(f);
 												}
 											}

@@ -17,67 +17,10 @@ char* stripq(char *str) {
 
 
 
-
-// "Tokenize" string, ignoring substrings (inside quotation marks)
-// Ugly
-char* strtok2(char* str) {
-	char c;
-	int i = 0, y = 0;
-	bool x = false;
-
-	// Replace spaces with null character
-	do {
-		c = str[i];
-
-		if(c == '"')
-			x=!x;
-
-		if(c == ' ' && !x)
-			str[i] = '\n';
-		i++;
-	} while(c != '\0');
-	
-	i = 0, y = 0;
-	// Remove double-null characters
-	do {
-		str[y] = str[i];
-		if(str[i] != '\0')
-			if(str[i] != '\n' || str[i+1] != '\n')
-				y++;
-		i++;
-	} while(str[y] != '\0');
-
-	return str;
-}
-
-
-
-
-
-
-
-// Find matching command and return ID or -1 if not found
-int matchCmd(char *cmd) {
-	int cc = 0, i = 0;
-	do {
-		cc = cmdsList[i].id;
-		if(!strcmp(cmd, (const char *) &cmdsList[i].cmd))
-			return cc;
-		i++;
-	} while(cc != -1);
-	return -1;
-}
-
-
-
-
-
-
-
-void QWrite(char* str, HANDLE file) {
+void QWrite(const char *str) {
 	DWORD foo;
 	unsigned int l = strlen(str);
-	WriteFile(file, str, l, &foo, NULL);
+	WriteFile(global.out, str, l, &foo, NULL);
 
 	if(foo < l)
 		DebugMessage("WARNING! Wanted to write %d bytes but only %d written", strlen(str), foo);
@@ -91,7 +34,7 @@ void QWrite(char* str, HANDLE file) {
 
 
 // Return "TRUE" or "FALSE"
-inline char* getBool(short b) {
+const char* getBool(short b) {
 	if(b != 0)
 		return "TRUE";
 	else
@@ -106,251 +49,246 @@ inline char* getBool(short b) {
 
 
 // Format special keys to string
-char *formatKey(int c) {
+void QWrite_formatKey(int c) {
+	//v1.13 updated key list
+	//http://msdn.microsoft.com/en-us/library/windows/desktop/dd375731%28v=vs.85%29.aspx
+	#define VK_XBUTTON1		0x05
+	#define VK_XBUTTON2		0x06
+	#define VK_KANA			0x15
+	#define VK_JUNJA		0x17
+	#define VK_FINAL		0x18
+	#define VK_KANJI		0x19
+	#define VK_ACCEPT		0x1E
+	#define VK_MODECHANGE	0x1F
+	#define VK_PRINT		0x2A
+	#define VK_SLEEP		0x5F
+	#define VK_SEPARATOR	0x6C
+
+	#define VK_BROWSER_BACK			0xA6
+	#define VK_BROWSER_FORWARD		0xA7
+	#define VK_BROWSER_REFRESH		0xA8
+	#define VK_BROWSER_STOP			0xA9
+	#define VK_BROWSER_SEARCH		0xAA
+	#define VK_BROWSER_FAVORITES	0xAB
+	#define VK_BROWSER_HOME			0xAC
+	#define VK_VOLUME_MUTE			0xAD
+	#define VK_VOLUME_DOWN			0xAE
+	#define VK_VOLUME_UP			0xAF
+	#define	VK_MEDIA_NEXT_TRACK		0xB0
+	#define VK_MEDIA_PREV_TRACK		0xB1
+	#define VK_MEDIA_STOP			0xB2
+	#define VK_MEDIA_PLAY_PAUSE		0xB3
+	#define VK_LAUNCH_MAIL			0xB4
+	#define VK_LAUNCH_MEDIA_SELECT	0xB5
+	#define VK_LAUNCH_APP1			0xB6
+	#define VK_LAUNCH_APP2			0xB7
+
+	#define VK_OEM_1		0xBA
+	#define VK_OEM_PLUS		0xBB
+	#define VK_OEM_COMMA	0xBC
+	#define VK_OEM_MINUS	0xBD
+	#define VK_OEM_PERIOD	0xBE
+	#define VK_OEM_2		0xBF
+	#define VK_OEM_3		0xC0
+	#define VK_ABNT_C1		0xC1
+	#define VK_ABNT_C2		0xC2
+	#define VK_OEM_4		0xDB
+	#define VK_OEM_5		0xDC
+	#define VK_OEM_6		0xDD
+	#define VK_OEM_7		0xDE
+	#define VK_OEM_8		0xDF
+	#define VK_OEM_102		0xE2
+	#define VK_PROCESSKEY	0xE5
+	#define VK_PACKET		0xE7
+
 	switch(c) {
+		case VK_LBUTTON: QWrite("\"LBUTTON\""); break; 
+		case VK_RBUTTON: QWrite("\"RBUTTON\""); break;
+		case VK_MBUTTON: QWrite("\"MBUTTON\""); break;
+		case VK_CANCEL: QWrite("\"CANCEL\""); break;
+		case VK_XBUTTON1 : QWrite("\"4BUTTON\""); break;  // 4th mouse button
+		case VK_XBUTTON2 : QWrite("\"5BUTTON\""); break;  // 5th mouse button
 
-//v1.13 updated key list
-//http://msdn.microsoft.com/en-us/library/windows/desktop/dd375731%28v=vs.85%29.aspx
-#define VK_XBUTTON1		0x05
-#define VK_XBUTTON2		0x06
-#define VK_KANA			0x15
-#define VK_JUNJA		0x17
-#define VK_FINAL		0x18
-#define VK_KANJI		0x19
-#define VK_ACCEPT		0x1E
-#define VK_MODECHANGE	0x1F
-#define VK_PRINT		0x2A
-#define VK_SLEEP		0x5F
-#define VK_SEPARATOR	0x6C
+		case VK_BACK: QWrite("\"BACKSPACE\""); break;
+		case VK_TAB: QWrite("\"TAB\""); break;
+		case VK_CLEAR: QWrite("\"CLEAR\""); break;        // numpad5 while numlock is off
+		case VK_RETURN: QWrite("\"ENTER\""); break;
 
-#define VK_BROWSER_BACK			0xA6
-#define VK_BROWSER_FORWARD		0xA7
-#define VK_BROWSER_REFRESH		0xA8
-#define VK_BROWSER_STOP			0xA9
-#define VK_BROWSER_SEARCH		0xAA
-#define VK_BROWSER_FAVORITES	0xAB
-#define VK_BROWSER_HOME			0xAC
-#define VK_VOLUME_MUTE			0xAD
-#define VK_VOLUME_DOWN			0xAE
-#define VK_VOLUME_UP			0xAF
-#define	VK_MEDIA_NEXT_TRACK		0xB0
-#define VK_MEDIA_PREV_TRACK		0xB1
-#define VK_MEDIA_STOP			0xB2
-#define VK_MEDIA_PLAY_PAUSE		0xB3
-#define VK_LAUNCH_MAIL			0xB4
-#define VK_LAUNCH_MEDIA_SELECT	0xB5
-#define VK_LAUNCH_APP1			0xB6
-#define VK_LAUNCH_APP2			0xB7
+		case VK_SHIFT: QWrite("\"SHIFT\""); break;
+		case VK_CONTROL: QWrite("\"CTRL\""); break;
+		case VK_MENU: QWrite("\"ALT\""); break;
+		case VK_PAUSE: QWrite("\"PAUSE\""); break;        // pause break
+		case VK_CAPITAL: QWrite("\"CAPSLOCK\""); break;
 
-#define VK_OEM_1		0xBA
-#define VK_OEM_PLUS		0xBB
-#define VK_OEM_COMMA	0xBC
-#define VK_OEM_MINUS	0xBD
-#define VK_OEM_PERIOD	0xBE
-#define VK_OEM_2		0xBF
-#define VK_OEM_3		0xC0
-#define VK_ABNT_C1		0xC1
-#define VK_ABNT_C2		0xC2
-#define VK_OEM_4		0xDB
-#define VK_OEM_5		0xDC
-#define VK_OEM_6		0xDD
-#define VK_OEM_7		0xDE
-#define VK_OEM_8		0xDF
-#define VK_OEM_102		0xE2
-#define VK_PROCESSKEY	0xE5
-#define VK_PACKET		0xE7
+		case VK_KANA: QWrite("\"KANA\""); break;
+		case VK_JUNJA: QWrite("\"JUNJA\""); break;
+		case VK_FINAL: QWrite("\"FINAL\""); break;
+		case VK_HANJA: QWrite("\"HANJA\""); break;
 
+		case VK_ESCAPE: QWrite("\"ESC\""); break;
+		case VK_CONVERT : QWrite("\"CONVERT\""); break;
+		case VK_NONCONVERT : QWrite("\"NONCONVERT\""); break;
+		case VK_ACCEPT : QWrite("\"ACCEPT\""); break;
+		case VK_MODECHANGE : QWrite("\"MODECHANGE\""); break;
 
-		case VK_LBUTTON: return "\"LBUTTON\"";
-		case VK_RBUTTON: return "\"RBUTTON\"";
-		case VK_MBUTTON: return "\"MBUTTON\"";
-		case VK_CANCEL: return "\"CANCEL\"";
-		case VK_XBUTTON1 : return "\"4BUTTON\"";	// 4th mouse button
-		case VK_XBUTTON2 : return "\"5BUTTON\"";	// 5th mouse button
+		case VK_SPACE: QWrite("\"SPACE\""); break;
+		case VK_PRIOR: QWrite("\"PAGEUP\""); break;
+		case VK_NEXT: QWrite("\"PAGEDOWN\""); break;
+		case VK_END: QWrite("\"END\""); break;
+		case VK_HOME: QWrite("\"HOME\""); break;
+		case VK_LEFT: QWrite("\"LEFT\""); break;
+		case VK_RIGHT: QWrite("\"RIGHT\""); break;
+		case VK_UP: QWrite("\"UP\""); break;
+		case VK_DOWN: QWrite("\"DOWN\""); break;
+		case VK_SELECT: QWrite("\"SELECT\""); break;
+		case VK_PRINT: QWrite("\"PRINT\""); break;
+		case VK_EXECUTE: QWrite("\"EXECUTE\""); break;
+		case VK_SNAPSHOT: QWrite("\"PRINTSCREEN\""); break;
+		case VK_INSERT: QWrite("\"INSERT\""); break;
+		case VK_DELETE: QWrite("\"DELETE\""); break;
+		case VK_HELP: QWrite("\"HELP\""); break;
 
-		case VK_BACK: return "\"BACKSPACE\"";
-		case VK_TAB: return "\"TAB\"";
-		case VK_CLEAR: return "\"CLEAR\"";			// numpad5 while numlock is off
-		case VK_RETURN: return "\"ENTER\"";
+		case 0x30 : QWrite("\"0\""); break;
+		case 0x31 : QWrite("\"1\""); break;
+		case 0x32 : QWrite("\"2\""); break;
+		case 0x33 : QWrite("\"3\""); break;
+		case 0x34 : QWrite("\"4\""); break;
+		case 0x35 : QWrite("\"5\""); break;
+		case 0x36 : QWrite("\"6\""); break;
+		case 0x37 : QWrite("\"7\""); break;
+		case 0x38 : QWrite("\"8\""); break;
+		case 0x39 : QWrite("\"9\""); break;
+		case 0x41 : QWrite("\"A\""); break;
+		case 0x42 : QWrite("\"B\""); break;
+		case 0x43 : QWrite("\"C\""); break;
+		case 0x44 : QWrite("\"D\""); break;
+		case 0x45 : QWrite("\"E\""); break;
+		case 0x46 : QWrite("\"F\""); break;
+		case 0x47 : QWrite("\"G\""); break;
+		case 0x48 : QWrite("\"H\""); break;
+		case 0x49 : QWrite("\"I\""); break;
+		case 0x4A : QWrite("\"J\""); break;
+		case 0x4B : QWrite("\"K\""); break;
+		case 0x4C : QWrite("\"L\""); break;
+		case 0x4D : QWrite("\"M\""); break;
+		case 0x4E : QWrite("\"N\""); break;
+		case 0x4F : QWrite("\"O\""); break;
+		case 0x50 : QWrite("\"P\""); break;
+		case 0x51 : QWrite("\"Q\""); break;
+		case 0x52 : QWrite("\"R\""); break;
+		case 0x53 : QWrite("\"S\""); break;
+		case 0x54 : QWrite("\"T\""); break;
+		case 0x55 : QWrite("\"U\""); break;
+		case 0x56 : QWrite("\"V\""); break;
+		case 0x57 : QWrite("\"W\""); break;
+		case 0x58 : QWrite("\"X\""); break;
+		case 0x59 : QWrite("\"Y\""); break;
+		case 0x5A : QWrite("\"Z\""); break;
 
-		case VK_SHIFT: return "\"SHIFT\"";
-		case VK_CONTROL: return "\"CTRL\"";
-		case VK_MENU: return "\"ALT\"";
-		case VK_PAUSE: return "\"PAUSE\"";			// pause break
-		case VK_CAPITAL: return "\"CAPSLOCK\"";
+		case VK_LWIN: QWrite("\"LWIN\""); break;
+		case VK_RWIN: QWrite("\"RWIN\""); break;
+		case VK_APPS: QWrite("\"APPS\""); break;
+		case VK_SLEEP: QWrite("\"SLEEP\""); break;
 
-		case VK_KANA: return "\"KANA\"";
-		case VK_JUNJA: return "\"JUNJA\"";
-		case VK_FINAL: return "\"FINAL\"";
-		case VK_HANJA: return "\"HANJA\"";
+		case VK_NUMPAD0: QWrite("\"NUMPAD0\""); break;
+		case VK_NUMPAD1: QWrite("\"NUMPAD1\""); break;
+		case VK_NUMPAD2: QWrite("\"NUMPAD2\""); break;
+		case VK_NUMPAD3: QWrite("\"NUMPAD3\""); break;
+		case VK_NUMPAD4: QWrite("\"NUMPAD4\""); break;
+		case VK_NUMPAD5: QWrite("\"NUMPAD5\""); break;
+		case VK_NUMPAD6: QWrite("\"NUMPAD6\""); break;
+		case VK_NUMPAD7: QWrite("\"NUMPAD7\""); break;
+		case VK_NUMPAD8: QWrite("\"NUMPAD8\""); break;
+		case VK_NUMPAD9: QWrite("\"NUMPAD9\""); break;
+		case VK_MULTIPLY: QWrite("\"MULTIPLY\""); break;   // numpad asterisk	1.11 fixed
+		case VK_ADD: QWrite("\"ADD\""); break;             // numpad plus
+		case VK_SEPARATOR: QWrite("\"SEPARATOR\""); break;
+		case VK_SUBTRACT: QWrite("\"SUBTRACT\""); break;   // numpad minus
+		case VK_DECIMAL: QWrite("\"DECIMAL\""); break;     // numpad decimal mark
+		case VK_DIVIDE: QWrite("\"DIVIDE\""); break;       // numpad slash
 
-		case VK_ESCAPE: return "\"ESC\"";
-		case VK_CONVERT : return "\"CONVERT\"";
-		case VK_NONCONVERT : return "\"NONCONVERT\"";
-		case VK_ACCEPT : return "\"ACCEPT\"";
-		case VK_MODECHANGE : return "\"MODECHANGE\"";
+		case VK_F1: QWrite("\"F1\""); break;
+		case VK_F2: QWrite("\"F2\""); break;
+		case VK_F3: QWrite("\"F3\""); break;
+		case VK_F4: QWrite("\"F4\""); break;
+		case VK_F5: QWrite("\"F5\""); break;
+		case VK_F6: QWrite("\"F6\""); break;
+		case VK_F7: QWrite("\"F7\""); break;
+		case VK_F8: QWrite("\"F8\""); break;
+		case VK_F9: QWrite("\"F9\""); break;
+		case VK_F10: QWrite("\"F10\""); break;
+		case VK_F11: QWrite("\"F11\""); break;
+		case VK_F12: QWrite("\"F12\""); break;
+		case VK_F13: QWrite("\"F13\""); break;
+		case VK_F14: QWrite("\"F14\""); break;
+		case VK_F15: QWrite("\"F15\""); break;
+		case VK_F16: QWrite("\"F16\""); break;
+		case VK_F17: QWrite("\"F17\""); break;
+		case VK_F18: QWrite("\"F18\""); break;
+		case VK_F19: QWrite("\"F19\""); break;
+		case VK_F20: QWrite("\"F20\""); break;
+		case VK_F21: QWrite("\"F21\""); break;
+		case VK_F22: QWrite("\"F22\""); break;
+		case VK_F23: QWrite("\"F23\""); break;
+		case VK_F24: QWrite("\"F24\""); break;
 
-		case VK_SPACE: return "\"SPACE\"";
-		case VK_PRIOR: return "\"PAGEUP\"";
-		case VK_NEXT: return "\"PAGEDOWN\"";
-		case VK_END: return "\"END\"";
-		case VK_HOME: return "\"HOME\"";
-		case VK_LEFT: return "\"LEFT\"";
-		case VK_RIGHT: return "\"RIGHT\"";
-		case VK_UP: return "\"UP\"";
-		case VK_DOWN: return "\"DOWN\"";
-		case VK_SELECT: return "\"SELECT\"";
-		case VK_PRINT: return "\"PRINT\"";
-		case VK_EXECUTE: return "\"EXECUTE\"";
-		case VK_SNAPSHOT: return "\"PRINTSCREEN\"";
-		case VK_INSERT: return "\"INSERT\"";
-		case VK_DELETE: return "\"DELETE\"";
-		case VK_HELP: return "\"HELP\"";
+		case VK_NUMLOCK: QWrite("\"NUMLOCK\""); break;
+		case VK_SCROLL: QWrite("\"SCROLLOCK\""); break;
+		case VK_LSHIFT: QWrite("\"LSHIFT\""); break;
+		case VK_RSHIFT: QWrite("\"RSHIFT\""); break;
+		case VK_LCONTROL: QWrite("\"LCTRL\""); break;
+		case VK_RCONTROL: QWrite("\"RCTRL\""); break;
+		case VK_LMENU: QWrite("\"LALT\""); break;
+		case VK_RMENU: QWrite("\"RALT\""); break;
 
-		case 0x30 : return "\"0\"";
-		case 0x31 : return "\"1\"";
-		case 0x32 : return "\"2\"";
-		case 0x33 : return "\"3\"";
-		case 0x34 : return "\"4\"";
-		case 0x35 : return "\"5\"";
-		case 0x36 : return "\"6\"";
-		case 0x37 : return "\"7\"";
-		case 0x38 : return "\"8\"";
-		case 0x39 : return "\"9\"";
-		case 0x41 : return "\"A\"";
-		case 0x42 : return "\"B\"";
-		case 0x43 : return "\"C\"";
-		case 0x44 : return "\"D\"";
-		case 0x45 : return "\"E\"";
-		case 0x46 : return "\"F\"";
-		case 0x47 : return "\"G\"";
-		case 0x48 : return "\"H\"";
-		case 0x49 : return "\"I\"";
-		case 0x4A : return "\"J\"";
-		case 0x4B : return "\"K\"";
-		case 0x4C : return "\"L\"";
-		case 0x4D : return "\"M\"";
-		case 0x4E : return "\"N\"";
-		case 0x4F : return "\"O\"";
-		case 0x50 : return "\"P\"";
-		case 0x51 : return "\"Q\"";
-		case 0x52 : return "\"R\"";
-		case 0x53 : return "\"S\"";
-		case 0x54 : return "\"T\"";
-		case 0x55 : return "\"U\"";
-		case 0x56 : return "\"V\"";
-		case 0x57 : return "\"W\"";
-		case 0x58 : return "\"X\"";
-		case 0x59 : return "\"Y\"";
-		case 0x5A : return "\"Z\"";
+		case VK_BROWSER_BACK: QWrite("\"WEBBACK\""); break;   // multimedia keyboard keys
+		case VK_BROWSER_FORWARD: QWrite("\"WEBFORWARD\""); break;
+		case VK_BROWSER_REFRESH: QWrite("\"WEBREFRESH\""); break;
+		case VK_BROWSER_STOP: QWrite("\"WEBSTOP\""); break;
+		case VK_BROWSER_SEARCH: QWrite("\"WEBSEARCH\""); break;
+		case VK_BROWSER_FAVORITES: QWrite("\"WEBFAVORITES\""); break;
+		case VK_BROWSER_HOME: QWrite("\"WEBHOME\""); break;
+		case VK_VOLUME_MUTE: QWrite("\"VOLUMEMUTE\""); break;
+		case VK_VOLUME_DOWN: QWrite("\"VOLUMEDOWN\""); break;
+		case VK_VOLUME_UP: QWrite("\"VOLUMEUP\""); break;
+		case VK_MEDIA_NEXT_TRACK: QWrite("\"MEDIANEXT\""); break;
+		case VK_MEDIA_PREV_TRACK: QWrite("\"MEDIAPREV\""); break;
+		case VK_MEDIA_STOP: QWrite("\"MEDIASTOP\""); break;
+		case VK_MEDIA_PLAY_PAUSE: QWrite("\"MEDIAPLAY\""); break;
+		case VK_LAUNCH_MAIL: QWrite("\"MAIL\""); break;
+		case VK_LAUNCH_MEDIA_SELECT: QWrite("\"MEDIASELECT\""); break;
+		case VK_LAUNCH_APP1: QWrite("\"MYCOMPUTER\""); break;
+		case VK_LAUNCH_APP2: QWrite("\"CALCULATOR\""); break;
 
-		case VK_LWIN: return "\"LWIN\"";
-		case VK_RWIN: return "\"RWIN\"";
-		case VK_APPS: return "\"APPS\"";
-		case VK_SLEEP: return "\"SLEEP\"";
+		case VK_OEM_1: QWrite("\";\""); break;      // semi-colon
+		case VK_OEM_PLUS: QWrite("\"=\""); break;   // equality
+		case VK_OEM_COMMA: QWrite("\",\""); break;  // comma
+		case VK_OEM_MINUS: QWrite("\"-\""); break;  // minus
+		case VK_OEM_PERIOD: QWrite("\".\""); break; // dot
+		case VK_OEM_2: QWrite("\"/\""); break;      // slash
+		case VK_OEM_3: QWrite("\"`\""); break;      // grave accent
+		case VK_OEM_4: QWrite("\"[\""); break;      // open bracket
+		case VK_OEM_5: QWrite("\"\\\""); break;     // backslash
+		case VK_OEM_6: QWrite("\"]\""); break;      // close bracket
+		case VK_OEM_7: QWrite("\"'\""); break;      // apostrophe
 
-		case VK_NUMPAD0: return "\"NUMPAD0\"";
-		case VK_NUMPAD1: return "\"NUMPAD1\"";
-		case VK_NUMPAD2: return "\"NUMPAD2\"";
-		case VK_NUMPAD3: return "\"NUMPAD3\"";
-		case VK_NUMPAD4: return "\"NUMPAD4\"";
-		case VK_NUMPAD5: return "\"NUMPAD5\"";
-		case VK_NUMPAD6: return "\"NUMPAD6\"";
-		case VK_NUMPAD7: return "\"NUMPAD7\"";
-		case VK_NUMPAD8: return "\"NUMPAD8\"";
-		case VK_NUMPAD9: return "\"NUMPAD9\"";
-		case VK_MULTIPLY: return "\"MULTIPLY\"";	// numpad asterisk	1.11 fixed
-		case VK_ADD: return "\"ADD\"";				// numpad plus
-		case VK_SEPARATOR: return "\"SEPARATOR\"";
-		case VK_SUBTRACT: return "\"SUBTRACT\"";	// numpad minus
-		case VK_DECIMAL: return "\"DECIMAL\"";		// numpad decimal mark
-		case VK_DIVIDE: return "\"DIVIDE\"";		// numpad slash
-
-		case VK_F1: return "\"F1\"";
-		case VK_F2: return "\"F2\"";
-		case VK_F3: return "\"F3\"";
-		case VK_F4: return "\"F4\"";
-		case VK_F5: return "\"F5\"";
-		case VK_F6: return "\"F6\"";
-		case VK_F7: return "\"F7\"";
-		case VK_F8: return "\"F8\"";
-		case VK_F9: return "\"F9\"";
-		case VK_F10: return "\"F10\"";
-		case VK_F11: return "\"F11\"";
-		case VK_F12: return "\"F12\"";
-		case VK_F13: return "\"F13\"";
-		case VK_F14: return "\"F14\"";
-		case VK_F15: return "\"F15\"";
-		case VK_F16: return "\"F16\"";
-		case VK_F17: return "\"F17\"";
-		case VK_F18: return "\"F18\"";
-		case VK_F19: return "\"F19\"";
-		case VK_F20: return "\"F20\"";
-		case VK_F21: return "\"F21\"";
-		case VK_F22: return "\"F22\"";
-		case VK_F23: return "\"F23\"";
-		case VK_F24: return "\"F24\"";
-
-		case VK_NUMLOCK: return "\"NUMLOCK\"";
-		case VK_SCROLL: return "\"SCROLLOCK\"";
-		case VK_LSHIFT: return "\"LSHIFT\"";
-		case VK_RSHIFT: return "\"RSHIFT\"";
-		case VK_LCONTROL: return "\"LCTRL\"";
-		case VK_RCONTROL: return "\"RCTRL\"";
-		case VK_LMENU: return "\"LALT\"";
-		case VK_RMENU: return "\"RALT\"";
-
-		case VK_BROWSER_BACK: return "\"WEBBACK\"";			// multimedia keyboard keys
-		case VK_BROWSER_FORWARD: return "\"WEBFORWARD\"";
-		case VK_BROWSER_REFRESH: return "\"WEBREFRESH\"";
-		case VK_BROWSER_STOP: return "\"WEBSTOP\"";
-		case VK_BROWSER_SEARCH: return "\"WEBSEARCH\"";
-		case VK_BROWSER_FAVORITES: return "\"WEBFAVORITES\"";
-		case VK_BROWSER_HOME: return "\"WEBHOME\"";
-		case VK_VOLUME_MUTE: return "\"VOLUMEMUTE\"";
-		case VK_VOLUME_DOWN: return "\"VOLUMEDOWN\"";
-		case VK_VOLUME_UP: return "\"VOLUMEUP\"";
-		case VK_MEDIA_NEXT_TRACK: return "\"MEDIANEXT\"";
-		case VK_MEDIA_PREV_TRACK: return "\"MEDIAPREV\"";
-		case VK_MEDIA_STOP: return "\"MEDIASTOP\"";
-		case VK_MEDIA_PLAY_PAUSE: return "\"MEDIAPLAY\"";
-		case VK_LAUNCH_MAIL: return "\"MAIL\"";
-		case VK_LAUNCH_MEDIA_SELECT: return "\"MEDIASELECT\"";
-		case VK_LAUNCH_APP1: return "\"MYCOMPUTER\"";
-		case VK_LAUNCH_APP2: return "\"CALCULATOR\"";
-
-		case VK_OEM_1: return "\";\"";				// semi-colon
-		case VK_OEM_PLUS: return "\"=\"";			// equality
-		case VK_OEM_COMMA: return "\",\"";			// comma
-		case VK_OEM_MINUS: return "\"-\"";			// minus
-		case VK_OEM_PERIOD: return "\".\"";			// dot
-		case VK_OEM_2: return "\"/\"";				// slash
-		case VK_OEM_3: return "\"`\"";				// grave accent
-		case VK_OEM_4: return "\"[\"";				// open bracket
-		case VK_OEM_5: return "\"\\\"";				// backslash
-		case VK_OEM_6: return "\"]\"";				// close bracket
-		case VK_OEM_7: return "\"'\"";				// apostrophe
-
-		case VK_OEM_8: return "\"OEM8\"";
-		case VK_OEM_102: return "\"OEM102\"";
-		case VK_ABNT_C1 : return "\"ABNT_C1\"";
-		case VK_ABNT_C2 : return "\"ABNT_C2\"";
-		case VK_PROCESSKEY: return "\"PROCESS\"";
-		case VK_PACKET: return "\"PACKET\"";
-		case VK_ATTN: return "\"ATTN\"";
-		case VK_CRSEL: return "\"CRSEL\"";
-		case VK_EXSEL: return "\"EXSEL\"";
-		case VK_EREOF: return "\"ERASEEOF\""; 
-		case VK_PLAY: return "\"PLAY\""; 
-		case VK_ZOOM: return "\"ZOOM\""; 
-		case VK_NONAME: return "\"NONAME\""; 
-		case VK_PA1: return "\"PA1\""; 
-		case VK_OEM_CLEAR: return "\"OEMCLEAR\"";
+		case VK_OEM_8: QWrite("\"OEM8\""); break;
+		case VK_OEM_102: QWrite("\"OEM102\""); break;
+		case VK_ABNT_C1 : QWrite("\"ABNT_C1\""); break;
+		case VK_ABNT_C2 : QWrite("\"ABNT_C2\""); break;
+		case VK_PROCESSKEY: QWrite("\"PROCESS\""); break;
+		case VK_PACKET: QWrite("\"PACKET\""); break;
+		case VK_ATTN: QWrite("\"ATTN\""); break;
+		case VK_CRSEL: QWrite("\"CRSEL\""); break;
+		case VK_EXSEL: QWrite("\"EXSEL\""); break;
+		case VK_EREOF: QWrite("\"ERASEEOF\""); break; 
+		case VK_PLAY: QWrite("\"PLAY\""); break; 
+		case VK_ZOOM: QWrite("\"ZOOM\""); break; 
+		case VK_NONAME: QWrite("\"NONAME\""); break; 
+		case VK_PA1: QWrite("\"PA1\""); break; 
+		case VK_OEM_CLEAR: QWrite("\"OEMCLEAR\""); break;
 	
-		default:
-			static char s[8];
-			sprintf(s, "\"0x%x\"", c);		// format number to char   1.13 returns number instead of char
-			return s;
+		default: QWritef("\"0x%x\"", c);
 	}
 }
 
@@ -376,134 +314,9 @@ bool checkActiveWindow(void) {
 
 
 
-
-
-
-
-//v1.13 Extract extension out of file name
-void getAttributes(WIN32_FIND_DATA &fd, char *data, int systime)
-{
-	strcpy(data, "");
-	
-	// Name without extension and then extension alone
-	int pos	  = 0;
-	char *dot = strrchr(fd.cFileName,'.');
-	char *ext = "";
-
-	if (dot != NULL) 
-		pos               = dot - fd.cFileName, 
-		fd.cFileName[pos] = '\0', 
-		ext               = fd.cFileName + pos + 1;
-
-	sprintf(data, "[\"%s\",\"%s\",[", fd.cFileName, ext);
-
-
-	// List of attributes
-	if ((fd.dwFileAttributes & 128) == 0)
-	{
-		bool addComma	= false;
-		int i			= 1;
-		int j			= 0;
-
-		char attribute[][40] = 
-		{
-			"readonly",
-			"hidden",
-			"system",
-			"",
-			"directory",
-			"archive",
-			"device",
-			"",
-			"temporary",
-			"sparse",
-			"reparse",
-			"compressed",
-			"offline",
-			"notcontentindexed",
-			"encrypted",
-			"integritystream",
-			"virtual",
-			"noscrubdata"
-		};
-
-		while (i < 131072)
-		{
-			if (i!=8  &&  i!=128  &&  (fd.dwFileAttributes & i)!=0)
-			{
-				if (addComma) 
-					strcat(data, ","); 
-				else 
-					addComma = true;
-
-				strcat(data, "\""); 
-				strcat(data, attribute[j]); 
-				strcat(data, "\"");
-			};
-
-			i *= 2; 
-			j++;
-		};
-	};
-	strcat(data, "],");
-
-
-	// Creation, last access and last write time
-	FILETIME curr;
-	bool addComma = false;
-
-	for (int i=0; i<3; i++)
-	{
-		if (addComma) 
-			strcat(data, ","); 
-		else 
-			addComma = true;
-
-		switch(i)	// Select FILETIME struct from file attribute data
-		{
-			case 0: curr=fd.ftCreationTime; break;
-			case 1: curr=fd.ftLastAccessTime; break;
-			case 2: curr=fd.ftLastWriteTime; break;
-		};
-
-		FormatFileTime(curr, systime, data);
-	};
-
-
-	// Size
-	double bytes	 = fd.nFileSizeLow;
-	double kilobytes = 0;
-	double megabytes = 0;
-
-	if (bytes >= 1048576) 
-		megabytes  = bytes / 1048576,
-		megabytes -= fmod(megabytes, 1),
-		bytes     -= megabytes * 1048576;
-
-	if (bytes >= 1024)
-		kilobytes  = bytes / 1024,
-		kilobytes -= fmod(kilobytes, 1),
-		bytes     -= kilobytes * 1024;
-
-	sprintf(data, "%s,[%f,%f,%f]]", data, bytes, kilobytes, megabytes);
-};
-
-
-
-
-
-
-
-
-
-
-
-
-
 //v1.12 Replace all occurrences in a string
 // http://someboringsite.com/2009/09/ansi-c-string-replacement-function.html
-char* str_replace(const char *strbuf, const char *strold, const char *strnew, int matchWord, int caseSens) 
-{
+char* str_replace(const char *strbuf, const char *strold, const char *strnew, int options) {
 	char *strret;
 	char *posnews;
 	char *posold;
@@ -518,25 +331,24 @@ char* str_replace(const char *strbuf, const char *strold, const char *strnew, in
 	if (!strold  ||  !strnew) 
 		return strdup(strbuf);
 
-	p = strstr2(strbuf, strold, matchWord, caseSens);
+	p = strstr2(strbuf, strlen(strbuf), strold, strlen(strold), options);
 
 	if (!p) 
 		return strdup(strbuf);
 
-	while (n > 0)
-	{
-		if (!(p = strstr2(p+1, strold, matchWord, caseSens))) 
+	while (n > 0) {
+		if (!(p = strstr2(p+1, strlen(strbuf), strold, strlen(strold), options))) 
 			break;
 
 		n++;
-	};
+	}
 
-	strret = (char*) malloc (strlen(strbuf)-(n*szold)+(n*sznew)+1);
+	strret = (char*) malloc(strlen(strbuf)-(n*szold)+(n*sznew)+1);
 
-	if (strret == NULL) 
+	if (!strret) 
 		return NULL;
 
-	p = strstr2(strbuf, strold, matchWord, caseSens);
+	p = strstr2(strbuf, strlen(strbuf), strold, strlen(strold), options);
 
 	strncpy(strret, strbuf, (p-strbuf));
 
@@ -547,9 +359,8 @@ char* str_replace(const char *strbuf, const char *strold, const char *strnew, in
 	strcpy(posnews, strnew);
 	posnews += sznew;
 
-	while (n > 0) 
-	{
-		if (!(p = strstr2(p+1, strold, matchWord, caseSens))) 
+	while (n > 0) {
+		if (!(p = strstr2(p+1, strlen(p+1), strold, strlen(strold), options))) 
 			break;
 
 		strncpy(posnews, posold, p-posold);
@@ -561,15 +372,11 @@ char* str_replace(const char *strbuf, const char *strold, const char *strnew, in
 
 		posnews += sznew;
 		posold   = p+szold;
-	};
+	}
 
 	strcpy(posnews, posold);
 	return strret;
-};
-
-
-
-
+}
 
 
 
@@ -579,70 +386,44 @@ char* str_replace(const char *strbuf, const char *strold, const char *strnew, in
 
 //v1.13 Search for string insensitive
 //http://www.codeguru.com/cpp/cpp/string/article.php/c5641/Case-Insensitive-strstr.htm
-char *strstr2(const char *arg1, const char *arg2, int matchWord, int caseSens)
-{
-	const char *a;
-	const char *b;
-	bool cond			= 0;
-	unsigned int pos	= 0; 
-	unsigned int len	= strlen(arg1);
+char* strstr2(const char *arg1, size_t arg1_len, const char *arg2, size_t arg2_len, int options) {
+	if (arg1_len==0 || arg2_len==0)
+		return NULL;
+	
+	for (size_t pos=0;  pos<arg1_len;  pos++) {
+		size_t pos_arg1 = pos;
+		size_t pos_arg2 = 0;
 
-	// For each letter in arg1
-	for( ; *arg1; *arg1++, pos++)
-	{
-		a = arg1;
-		b = arg2;
-
-		if (caseSens) 
-			cond = *a++ == *b++; 
-		else 
-			cond = (*a++ | 32) == (*b++ | 32);
-
-
-		// Run a comparison with arg2
-		while (cond)
-		{
-			// If got to the end
-			if (!*b)
-			{
-				// If matching word - occurrence musn't be surrounded by alphanum chars
-				bool LeftEmpty  = false;
-				bool RightEmpty = false;
-
-				if (matchWord)
-				{
-					if (pos == 0) 
-						LeftEmpty = true; 
-					else 
-						if (!isalnum(arg1[-1])  &&  arg1[-1]!='_') 
-							LeftEmpty = true;
-
-					if (pos+strlen(arg2) >=  len) 
-						RightEmpty = true; 
-					else 
-						if (!isalnum(arg1[strlen(arg2)])  &&  arg1[strlen(arg2)]!='_') 
-							RightEmpty = true;
-				};
-			
-				// Return pointer to the occurence
-				if (!matchWord  ||  matchWord  &&  LeftEmpty  &&  RightEmpty) 
-					return ((char *)arg1);
+		// Compare arg1+pos with arg2
+		while (
+			options & OPTION_CASESENSITIVE 
+				? arg1[pos_arg1++] == arg2[pos_arg2++] 
+				: (arg1[pos_arg1++] | 32) == (arg2[pos_arg2++] | 32)
+		) {
+			if (pos_arg2 == arg2_len) {
+				if (~options & OPTION_MATCHWORD  
+					||  
+					// If matching the whole word then occurrence musn't be surrounded by graphic characters
+					(options & OPTION_MATCHWORD && 
+						// If left side of the match is empty
+						(pos==0  ||  (pos>0  &&  !isalnum(arg1[pos-1])  &&  arg1[pos-1]!='_')) 
+						&& 
+						// If right side of the match is empty
+						(pos+arg2_len>=arg1_len  ||  (pos+arg2_len<arg1_len  &&  !isalnum(arg1[pos+arg2_len])  &&  arg1[pos+arg2_len]!='_'))
+					)
+				) 
+					return (char*)(arg1+pos);
 				
-				// If failed to match word then move forward
-				if (pos+strlen(arg2)  <  len) 
-					arg1 += strlen(arg2), 
-					pos  += strlen(arg2);
-			};
-
-			if (caseSens) 
-				cond = *a++ == *b++; 
-			else 
-				cond = (*a++ | 32) == (*b++ | 32);
-		};
+				// If failed to match the whole word then move forward
+				pos += arg2_len;
+				break;
+			}
+		}
 	}
 
-	return(NULL);
-};
+	return NULL;
+}
+
 
 
 
@@ -650,51 +431,48 @@ char *strstr2(const char *arg1, const char *arg2, int matchWord, int caseSens)
 
 
 // v1.13 Move given file to the system recycle bin
-bool trashFile(char* path, int CommandID, HANDLE out, int ErrorBehaviour)
-{
+bool trashFile(char *path, int len, int error_behaviour) {
 	// Allocate buffer
-	int varLen	= 256 + 1 + strlen(path) + 2;
-	char *var	= (char*) malloc (varLen);
+	int buffer_length = 256 + 1 + len + 2;
+	char *buffer      = (char*) malloc(buffer_length);
 
-	if (var == NULL)
-	{
-		FWerror(10,0,CommandID,"trashFile:var","",varLen,0,out);
+	if (!buffer) {
+		if (error_behaviour != -1)
+			QWrite_err(FWERROR_MALLOC, 2, "trashFile", buffer_length);
+
 		return false;
-	};
-	
+	}
 
 	// Build path
-	GetCurrentDirectory(256, var);
-	strcat(var, "\\");
-	strcat(var, path);
-	var[strlen(var)+1] = 0;
-
+	GetCurrentDirectory(256, buffer);
+	strcat(buffer, "\\");
+	strcat(buffer, path);
+	buffer[strlen(buffer)+1] = '\0';
 
 	// Trash file
 	SHFILEOPSTRUCT shfos;
 	shfos.hwnd   = NULL;
 	shfos.wFunc  = FO_DELETE;
-	shfos.pFrom  = var;
+	shfos.pFrom  = buffer;
 	shfos.pTo    = NULL;
 	shfos.fFlags = FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO;
-	int val	= SHFileOperation(&shfos);
+	int result   = SHFileOperation(&shfos);
 
+	// Special mode - if file not found then return true
+	if (error_behaviour==1  &&  (result==1026 || result==ERROR_FILE_NOT_FOUND)) 
+		result = 0;
 
-		// Special mode - if file not found then return true
-		if (ErrorBehaviour==1  &&  (val==1026 || val==2)) 
-			val = 0;
+	free(buffer);
 
-
-	free(var);
-
-	if (val == 0)	
+	if (result == 0)	
 		return true; 
-	else 
-	{
-		FWerror(6,val,CommandID,"","",0,0,out);
+	else {
+		if (error_behaviour != -1)
+			QWrite_err(FWERROR_SHFILEOP, 1, result);
+
 		return false;
-	};
-};
+	}
+}
 
 
 
@@ -703,8 +481,7 @@ bool trashFile(char* path, int CommandID, HANDLE out, int ErrorBehaviour)
 
 
 // v1.13 Convert radians to degrees
-double rad2deg (double num) 
-{
+double rad2deg(double num) {
 	num *= 180 / 3.14159265;
 
 	// if error then return zero
@@ -715,7 +492,8 @@ double rad2deg (double num)
 		num = 0;
 
 	return num;
-};
+}
+
 
 
 
@@ -723,8 +501,7 @@ double rad2deg (double num)
 
 
 // v1.13 Convert degrees to radians
-double deg2rad (double num)
-{
+double deg2rad(double num) {
 	num *= 3.14159265 / 180;
 
 	// if error then return zero
@@ -735,7 +512,8 @@ double deg2rad (double num)
 		num = 0;
 
 	return num;
-};
+}
+
 
 
 
@@ -743,15 +521,12 @@ double deg2rad (double num)
 
 
 // v1.13 Format time structure to a OFP array
-void FormatTime(SYSTEMTIME &st, int systime, char *data)
-{
+void SystemTimeToString(SYSTEMTIME &st, bool systime, char *str) {
 	TIME_ZONE_INFORMATION TimeZoneInfo;
 	int result = GetTimeZoneInformation (&TimeZoneInfo);
 	int dst    = result==TIME_ZONE_ID_DAYLIGHT ? TimeZoneInfo.DaylightBias : 0;
 
-	char tmp[64] = "";
-
-	sprintf(tmp, "[%d,%d,%d,%d,%d,%d,%d,%d,%d,%s]",
+	sprintf(str, "[%d,%d,%d,%d,%d,%d,%d,%d,%ld,%s]",
 		st.wYear, 
 		st.wMonth, 
 		st.wDay, 
@@ -761,10 +536,9 @@ void FormatTime(SYSTEMTIME &st, int systime, char *data)
 		st.wSecond, 
 		st.wMilliseconds, 
 		(TimeZoneInfo.Bias + dst) * -1, 
-		getBool(systime));
-
-	strcat(data, tmp);
-};
+		getBool(systime)
+	);
+}
 
 
 
@@ -773,22 +547,20 @@ void FormatTime(SYSTEMTIME &st, int systime, char *data)
 
 
 // v1.13 Convert time structure and format it
-void FormatFileTime(FILETIME &ft, int systime, char *data)
-{
+void FileTimeToString(FILETIME &ft, bool systime, char *str) {
 	SYSTEMTIME st;
-	FILETIME ft2;
-
 
 	// Convert FILETIME to computer local time
-	if (!systime)	
-		FileTimeToLocalFileTime(&ft,  &ft2),
-		FileTimeToSystemTime(   &ft2, &st);
-	else 
+	if (!systime) {
+		FILETIME ft2;
+		FileTimeToLocalFileTime(&ft, &ft2);
+		FileTimeToSystemTime(&ft2, &st);
+	} else 
 		FileTimeToSystemTime(&ft, &st);
 
+	SystemTimeToString(st, systime, str);
+}
 
-	FormatTime(st, systime, data);
-};
 
 
 
@@ -796,93 +568,61 @@ void FormatFileTime(FILETIME &ft, int systime, char *data)
 
 
 // v1.13 Copy data to clipboard
-bool CopyToClip(char *txt, bool append, int CommandID, HANDLE out)
-{
-	// Open it
-	if (!OpenClipboard(NULL)) 
-	{
-		FWerror(20,GetLastError(),CommandID,"","",0,0,out);
+bool CopyToClip(char *input, int input_length, bool append) {
+	if (!OpenClipboard(NULL)) {
+		QWrite_err(FWERROR_CLIP_OPEN, 1, GetLastError());
 		return false;
-	};
+	}
 
-
-	HANDLE hClipboardData;
-	char *pchData;
-	int l1 = 0;
-	int l2 = strlen(txt);
-
+	HANDLE clip_handle;
+	char *clip      = NULL;
+	int clip_length = 0;
 
 	// Get existing text
-	if (append)
-	{
+	if (append) {
 		// Validate data type
-		if (!::IsClipboardFormatAvailable(CF_TEXT))
-		{
-			FWerror(21,0,CommandID,"","",0,0,out);
+		if (!::IsClipboardFormatAvailable(CF_TEXT)) {
+			QWrite_err(FWERROR_CLIP_FORMAT, 0);
 			return false;
-		};
+		}
 
-		hClipboardData = GetClipboardData(CF_TEXT);
-		pchData		   = (char*)GlobalLock(hClipboardData);
-		l1			   = strlen(pchData);
-		
-	};
-	
-
-	// Allocate buffer for the old + new text
-	char *newTxt = (char*) malloc (l1+l2+1);
-	if (newTxt == NULL) 
-	{
-		FWerror(10,0,CommandID,"newTxt","",l1+l2+1,0,out);
-		GlobalUnlock(hClipboardData);
-		CloseClipboard(); 
-		return false;
-	};
+		clip_handle = GetClipboardData(CF_TEXT);
+		clip        = (char*)GlobalLock(clip_handle);
+		clip_length = strlen(clip);
+	}
 
 
-	// Copy text to the buffer
-	if (append) 
-		strcpy(newTxt, pchData), 
-		strcat(newTxt, txt);
-	else 
-		strcpy(newTxt, txt);
+	// Allocate new buffer for transfering text to the clipboard
+	HGLOBAL clip_new_buffer = GlobalAlloc(GMEM_ZEROINIT|GMEM_FIXED, clip_length + input_length + 1);
+	char *clip_new          = (char*)GlobalLock(clip_new_buffer);
 
-	GlobalUnlock(hClipboardData);
+	if (append) {
+		memcpy(clip_new            , clip , clip_length);
+		memcpy(clip_new+clip_length, input, input_length);
+	} else
+		memcpy(clip_new, input, input_length);
 
-
-	// Allocate 2nd buffer for transfering to the clip
-	HGLOBAL glob = GlobalAlloc(GMEM_FIXED, l1+l2+1);
-	LPVOID GlobalLock(glob);
-	memcpy(glob, newTxt, l1+l2+1);
-
+	GlobalUnlock(clip_handle);
 
 	// Clear clip
-	if(!EmptyClipboard())
-	{
-		FWerror(22,GetLastError(),CommandID,"","",0,0,out);
-		GlobalUnlock(glob);
+	if(!EmptyClipboard()) {
+		QWrite_err(FWERROR_CLIP_CLEAR, 1, GetLastError());
+		GlobalUnlock(clip_new_buffer);
 		CloseClipboard();
-		free(newTxt);
 		return false;
-	};
-
+	}
 
 	// Copy to clip
-	HANDLE ok = ::SetClipboardData( CF_TEXT, glob );
+	HANDLE ok = ::SetClipboardData(CF_TEXT, clip_new_buffer);
 
 	if (!ok) 
-		FWerror(23,GetLastError(),CommandID,"","",0,0,out);
+		QWrite_err(FWERROR_CLIP_COPY, 1, GetLastError());
 
-
-	GlobalUnlock(glob);
-	free(newTxt); 
+	GlobalUnlock(clip_new_buffer);
 	CloseClipboard();
+	return ok ? 1 : 0;
+}
 
-	if (ok) 
-		return true; 
-	else 
-		return false;
-};
 
 
 
@@ -890,513 +630,63 @@ bool CopyToClip(char *txt, bool append, int CommandID, HANDLE out)
 
 
 // v1.13 Custom handling of escape sequences
-char* EscSequences(char *txt, int mode, int quantity)
-{
+char* EscSequences(char *txt, int mode, int quantity) {
 	bool shift = false;
 	int count  = 0;
 
-	for (int i=0;  txt[i]!='\0';  i++)
-	{
-		if (txt[i] == '\\')
-		{
+	for (int i=0;  txt[i]!='\0';  i++) {
+		if (txt[i] == '\\') {
 			// Replace char
-			if (mode==0  &&  txt[i+1]=='t')
-				count++,
-				shift  = true, 
+			if (mode==OPTION_TAB  &&  txt[i+1]=='t') {
+				count++;
+				shift  = true;
 				txt[i] = '\t';
+			}
 
-			if (mode==1  &&  txt[i+1]=='n') 
-				count++,
-				shift  = true, 
+			if (mode==OPTION_LF  &&  txt[i+1]=='n') {
+				count++;
+				shift  = true;
 				txt[i] = '\n';
+			}
 
-			if (mode==2  &&  txt[i+1]=='n') 
-				count++,
-				txt[i]   = '\r', 
+			if (mode==OPTION_CRLF  &&  txt[i+1]=='n') {
+				count++;
+				txt[i]   = '\r';
 				txt[i+1] = '\n';
-
+			}
 
 			// Shift other chars to the left (thus making the string shorter)
-			for (int j=i+1; shift; j++)
-			{
+			for (int j=i+1; shift; j++) {
 				txt[j] = txt[j+1]; 
 
 				if (txt[j] == '\0') 
 					shift = false;
-			};
-		};
+			}
+		}
 
 		if (count>=quantity  &&  quantity>=0)
 			break;
-	};
+	}
 
 	return txt;
-};
+}
 
 
 
-
-
-// v1.13 Output error code and message
-void FWerror(int code, int secondaryCode, int CommandID, char* str1, char* str2, int num1, int num2, HANDLE out)
-{
-	if (out==NULL  ||  CommandID==-1) 
-		return;
-
-	LPVOID lpMsgBuf = NULL;
-	bool shfileop   = code == 6;
-	char msg[512]   = "";
-	char desc[512]  = ""; 
-	char *descPTR   = desc;
-
-
-	// Find command name
-	char *cmd = "";
-	for (int i=0;  cmdsList[i].id!=-1;  i++)
-		if (cmdsList[i].id == CommandID) {
-			cmd = cmdsList[i].cmd; 
-			break;
-		}
-
-
-	// SHFileOp error description
-	if (shfileop) {
-		switch (secondaryCode) {
-			case 0x71 : strcpy(desc,"The source and destination files are the same file."); break;
-			case 0x72 : strcpy(desc,"Multiple file paths were specified in the source buffer, but only one destination file path."); break;
-			case 0x73 : strcpy(desc,"Rename operation was specified but the destination path is a different directory. Use the move operation instead."); break;
-			case 0x74 : strcpy(desc,"The source is a root directory, which cannot be moved or renamed."); break;
-			case 0x75 : strcpy(desc,"The operation was canceled by the user, or silently canceled."); break;
-			case 0x76 : strcpy(desc,"The destination is a subtree of the source."); break;
-			case 0x78 :	strcpy(desc,"Security settings denied access to the source."); break;
-			case 0x79 : strcpy(desc,"The source or destination path exceeded or would exceed MAX_PATH."); break;
-			case 0x7A : strcpy(desc,"The operation involved multiple destination paths, which can fail in the case of a move operation."); break;
-			case 0x7C : strcpy(desc,"The path in the source or destination or both was invalid."); break;
-			case 0x7D : strcpy(desc,"The source and destination have the same parent folder."); break;
-			case 0x7E : strcpy(desc,"The destination path is an existing file."); break;
-			case 0x80 : strcpy(desc,"The destination path is an existing folder."); break;
-			case 0x81 : strcpy(desc,"The name of the file exceeds MAX_PATH."); break;
-			case 0x82 : strcpy(desc,"The destination is a read-only CD-ROM, possibly unformatted."); break;
-			case 0x83 : strcpy(desc,"The destination is a read-only DVD, possibly unformatted."); break;
-			case 0x84 : strcpy(desc,"The destination is a writable CD-ROM, possibly unformatted."); break;
-			case 0x85 : strcpy(desc,"The file involved in the operation is too large for the destination media or file system."); break;
-			case 0x86 : strcpy(desc,"The source is a read-only CD-ROM, possibly unformatted."); break;
-			case 0x87 : strcpy(desc,"The source is a read-only DVD, possibly unformatted."); break;
-			case 0x88 : strcpy(desc,"The source is a writable CD-ROM, possibly unformatted."); break;
-			case 0xB7 : strcpy(desc,"MAX_PATH was exceeded during the operation."); break;
-			case 0x402 : strcpy(desc,"An unknown error occurred. This is typically due to an invalid path in the source or destination."); break;
-			case 0x10000 : strcpy(desc,"An unspecified error occurred on the destination."); break;
-			case 0x10074 : strcpy(desc,"Destination is a root directory and cannot be renamed."); break;
-
-			default : shfileop=false;
-		}
-	}
-
-
-	// Fwatch error description
-	if (code!=5  &&  code!=6  &&  code!=7  &&  code!=20 && code!=22 && code!=23) {
-		switch(code) {
-			// General 0-99
-			case 0: sprintf(desc, ""); break;
-			case 1: sprintf(desc, "Unknown command"); break;
-			case 2: sprintf(desc, "Couldn't find %s process", str1); break;
-			case 3: sprintf(desc, "Game Window not in front"); break;
-			case 4: sprintf(desc, "Command not allowed on the dedicated server"); break;
-			case 5: sprintf(desc, "Winapi"); break;
-			case 6: sprintf(desc, "SHFileOperation"); break;
-			case 7: sprintf(desc, "Errno"); break;
-
-			// Memory
-			case 10: sprintf(desc, "Failed to allocate memory block %s %d bytes", str1, num1); break;
-			case 11: sprintf(desc, "Failed to reallocate memory block %s %d bytes", str1, num1); break;
-			case 12: sprintf(desc, "Failed to perform str_replace %s %d bytes", str1, num1); break;
-
-			// Clipboard
-			case 20: sprintf(desc, "Couldn't open clipboard"); break;
-			case 21: sprintf(desc, "Clipboard data incompatible format"); break;
-			case 22: sprintf(desc, "Couldn't clear clipboard"); break;
-			case 23: sprintf(desc, "Couldn't copy text to clipboard"); break;
-			case 24: sprintf(desc, "Clipboard is empty"); break;
-			case 25: sprintf(desc, "Invalid preferred effect value"); break;
-
-			// Parameters 100-199
-			case 100: sprintf(desc, "Not enough parameters %d/%d", num1,num2); break;
-			case 101: sprintf(desc, "Parameter is less than zero %s=%d", str1,num1); break;
-			case 102: sprintf(desc, "Parameter is zero or less %s=%d", str1,num1); break;
-			case 103: sprintf(desc, "Parameter is one or less %s=%d", str1,num1); break;
-			case 104: sprintf(desc, "Range start is larger than range end %d/%d",num1,num2); break;
-			case 105: sprintf(desc, "Path leads outside source directory"); break;
-			case 106: sprintf(desc, "Action was not specified"); break;
-			case 107: sprintf(desc, "Parameter(s) are empty: %s", str1); break;
-			case 108: sprintf(desc, "Restricted location"); break;
-
-			// File 200-299
-			case 200: sprintf(desc, "File is empty"); break;
-			case 201: sprintf(desc, "File is not a directory"); break;
-			case 202: sprintf(desc, "Moving file from outside to the tmp directory"); break;
-			case 203: sprintf(desc, "Couldn't find variable %s", str2); break;
-			case 204: sprintf(desc, "Couldn't find line %d", num1); break;
-			case 205: sprintf(desc, "Couldn't append to %s too long line (%d chars)", str2,num1); break;
-			case 206: sprintf(desc, "Couldn't replace line %d with %d (end of file)",num1,num2); break;
-			case 207: sprintf(desc, "File already exists"); break;
-			case 208: sprintf(desc, "Directory already exists"); break;
-			case 209: sprintf(desc, "Read only %d bytes from a %d file",num1, num2); break;
-			case 210: sprintf(desc, "Written only %d bytes from a %d buffer",num1, num2); break;
-
-			// Classes
-			case 250: sprintf(desc, "Couldn't find parent class %s %d/%d",str2,num1,num2); break;
-			case 251: sprintf(desc, "Class %s already exists", str2); break;
-			case 252: sprintf(desc, "Couldn't find class %s", str2); break;
-			case 253: sprintf(desc, "Couldn't find property %s", str2); break;
-			case 254: sprintf(desc, "Couldn't find item %d in array %s",num1,str2); break;
-			case 255: sprintf(desc, "Property %s is not an array",str2); break;
-			case 256: sprintf(desc, "Syntax error: %s at line %d column %d", str2, num1, num2); break;
-
-			default: sprintf(desc, "Unknown error %d",code); break;
-		}
-	}
-	else
-		// Winapi error description
-		if (code==5  ||  code==6  &&  !shfileop  ||  code==20  ||  code==22  ||  code==23) {
-			FormatMessage(
-			FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-			NULL,
-			secondaryCode, 
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-			(LPTSTR) &lpMsgBuf,
-			0,
-			NULL);
-			descPTR   = (char*)lpMsgBuf;
-		} else
-			// Errno error description
-			if (code == 7) {
-				switch(secondaryCode) {
-					case EPERM: sprintf(desc, "Operation not permitted"); break;
-					case ENOENT: sprintf(desc, "No such file or directory"); break;
-					case ESRCH: sprintf(desc, "No such process"); break;
-					case EINTR: sprintf(desc, "Interrupted function call"); break;
-					case EIO: sprintf(desc, "Input/output error"); break;
-					case ENXIO: sprintf(desc, "No such device or address"); break;
-					case E2BIG: sprintf(desc, "Argument list too long"); break;
-					case ENOEXEC: sprintf(desc, "Exec format error"); break;
-					case EBADF: sprintf(desc, "Bad file descriptor"); break;
-					case ECHILD: sprintf(desc, "No child processes"); break;
-					case EAGAIN: sprintf(desc, "Resource temporarily unavailable"); break;
-					case ENOMEM: sprintf(desc, "Not enough memory available for the attempted operator"); break;
-					case EACCES: sprintf(desc, "Permission denied"); break;
-					case EFAULT: sprintf(desc, "Bad address"); break;
-					case EBUSY: sprintf(desc, "Device or resource busy"); break;
-					case EEXIST: sprintf(desc, "File exists"); break;
-					case EXDEV: sprintf(desc, "Cross-device link. An attempt was made to move a file to a different device"); break;
-					case ENODEV: sprintf(desc, "No such device"); break;
-					case ENOTDIR: sprintf(desc, "Not a directory"); break;
-					case EISDIR: sprintf(desc, "Is a directory"); break;
-					case EINVAL: sprintf(desc, "Invalid argument"); break;
-					case ENFILE: sprintf(desc, "Too many open files in system"); break;
-					case EMFILE: sprintf(desc, "Too many open files"); break;
-					case ENOTTY: sprintf(desc, "Inappropriate I/O control operation"); break;
-					case EFBIG: sprintf(desc, "File too large"); break;
-					case ENOSPC: sprintf(desc, "No space left on device"); break;
-					case ESPIPE: sprintf(desc, "Invalid seek"); break;
-					case EROFS: sprintf(desc, "Read-only file system"); break;
-					case EMLINK: sprintf(desc, "Too many links"); break;
-					case EPIPE: sprintf(desc, "Broken pipe"); break;
-					case EDOM: sprintf(desc, "Invalid math argument"); break;
-					case ERANGE: sprintf(desc, "Result too large"); break;
-					case EDEADLK: sprintf(desc, "Command would cause a deadlock"); break;
-					case ENAMETOOLONG: sprintf(desc, "Filename too long"); break;
-					case ENOLCK: sprintf(desc, "Too many segment locks open, lock table is full"); break;
-					case ENOSYS: sprintf(desc, "Function not supported"); break;
-					case ENOTEMPTY: sprintf(desc, "Directory not empty"); break;
-					case EILSEQ: sprintf(desc, "Illegal sequence of bytes"); break;
-
-					default: sprintf(desc, "Unknown error %d", secondaryCode); break;
-				}
-			}
-
-
-
-	// Special formatting for a command that features multiple error arrays
-	if (ErrorWithinError) {
-		sprintf(msg, "[%s,%d,%d,\"", getBool(!code), code, secondaryCode);
-
-		if (code != 0)
-			sprintf(msg, "%s%s - ", msg, cmd);
-
-		QWrite(msg, out);
-		PrintDoubleQ(descPTR, out);
-
-		// If file error then add filename
-		if (code==7  ||  code==105  ||  code>=200)
-			QWrite(" - ", out),
-			PrintDoubleQ(str1, out);
-
-		QWrite("\"]", out);
-
-		if (lpMsgBuf != NULL)
-			LocalFree(lpMsgBuf);
-
-		return;
-	}
-
-
-	// If this function was used before then semi-colon is required
-	if (firstErrorMSG)
-		firstErrorMSG = 0;
-	else
-		QWrite(";", out);
-
-
-	// Set separate _fwatch_error variable for these commands:
-	if (CommandID == C_FILE_READ ||
-		CommandID == C_FILE_READ2 ||
-		CommandID == C_FILE_WRITE ||
-		CommandID == C_FILE_AWRITE
-		)
-	{
-		if (!code)
-			QWrite("_fwatch_error=[true,0,0,\"\"];", out);
-		else {
-			sprintf(msg, "_fwatch_error=[%s,%d,%d,\"", getBool(!code), code, secondaryCode);
-			QWrite(msg, out);
-
-			if (code != 0)
-				sprintf(msg, "%s - ", cmd),
-				QWrite(msg, out);
-
-			PrintDoubleQ(descPTR, out);
-
-			// If file error then add filename
-			if (code==7  ||  code==105  ||  code==108  ||  code>=200)
-				QWrite(" - ", out),
-				PrintDoubleQ(str1, out);
-		
-			QWrite("\"];", out);
-		}
-	}
-
-	// Normal error array
-	else {
-		if (!SuppressNextError) {
-			// first items are error codes
-			sprintf(msg, "[%s,%d,%d,\"", getBool(!code), code, secondaryCode);
-			QWrite(msg, out);
-
-			// format description
-			if (code > 0) {
-				QWrite(cmd, out);
-				QWrite(" - ", out);
-				PrintDoubleQ(descPTR, out);
-
-				// If file error then add filename
-				if 
-				(
-					code == 7    &&  (CommandID!=C_IGSE_RENAME || CommandID==C_IGSE_RENAME && secondaryCode!=17) ||
-					code == 105  ||  
-					code == 108  ||  
-					code >= 200  ||
-					(CommandID == C_IGSE_COPY  ||  C_IGSE_NEWFILE)  &&  secondaryCode == 2  ||  
-					CommandID == C_IGSE_LIST						&&  (secondaryCode == 2 || secondaryCode == 3)
-				)
-					QWrite(" - ", out),
-					PrintDoubleQ(str1, out);
-
-				// Destination file already exists
-				if 
-				(
-					CommandID == C_IGSE_COPY    &&  secondaryCode==80  ||
-					CommandID == C_IGSE_RENAME  &&  secondaryCode==17
-				)
-					QWrite(" - ", out),
-					PrintDoubleQ(str2, out);
-			}
-
-			// If it's a command that doesn't return additional data then close array
-			if (CommandID == C_CLIPBOARD_COPY || 
-				CommandID == C_CLIPBOARD_TOFILE ||
-				CommandID == C_CLIPBOARD_FROMFILE ||
-				CommandID == C_CLIPBOARD_COPYFILE ||
-				CommandID == C_CLIPBOARD_CUTFILE ||
-				CommandID == C_FILE_RENAMEMISSIONS ||
-				CommandID == C_IGSE_WRITE ||
-				CommandID == C_IGSE_NEWFILE ||
-				CommandID == C_IGSE_RENAME ||
-				CommandID == C_IGSE_COPY ||
-				CommandID == C_MEM_ERROR ||
-				CommandID == C_CLASS_READSQM
-				) 
-				QWrite("\"]",out); 
-			else 
-				QWrite("\",",out);
-		} else
-			SuppressNextError = false;
-	}
-
-
-	// Log errors
-	if (global.ErrorLog_Enabled  &&  code>0) {
-		HANDLE mailslot = CreateFile(TEXT("\\\\.\\mailslot\\fwatch_mailslot_error"), GENERIC_WRITE, FILE_SHARE_READ, (LPSECURITY_ATTRIBUTES)NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, (HANDLE)NULL);
-	
-		if (mailslot != INVALID_HANDLE_VALUE) {
-			String message;
-			String_init(message);
-			char temp[32] = "";
-
-			HANDLE phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
-
-			// Get mission time
-			if (phandle != 0) {
-				SIZE_T stBytes  = 0;
-				int missionTime = 0;
-				int base		= !global.DedicatedServer ? (!global.CWA ? 0x7DD028 : 0x7CBFE8) : (!global.CWA ? 0x75A2E0 : 0x75A370);
-				ReadProcessMemory(phandle, (LPVOID)base, &missionTime, 4, &stBytes);
-
-				int seconds = missionTime / 1000;
-				int minutes = seconds / 60;
-
-				sprintf(temp, "%s%d:%s%d  ", minutes<10 ? "0" : "", minutes, seconds<10 ? "0" : "", seconds);
-				String_append(message, temp);
-				CloseHandle(phandle);
-			}
-
-			// Trim error description
-			for (unsigned int i=strlen(descPTR)-1;   descPTR[i]=='\r' || descPTR[i]=='\n';   i--)
-				descPTR[i] = '\0';
-
-			sprintf(temp, "%d %d - ", code, secondaryCode);
-			String_append(message, temp);
-			String_append(message, cmd);
-			String_append(message, " - ");
-			String_append(message, descPTR);
-
-			// If file error then add filename
-			if (code==7  ||  code==105  ||  code==108  ||  code>=200) {
-				String_append(message, " - ");
-				String_append(message, str1);
-			}
-
-			DWORD bytes_written = 0;
-			WriteFile(mailslot, message.pointer, message.current_length+1, &bytes_written, (LPOVERLAPPED)NULL);
-			String_end(message);
-		}
-		/*FILE *f = fopen(!global.DedicatedServer ? "fwatch\\idb\\_errorLog.txt" : "fwatch\\idb\\_errorLogDedi.txt", "a");
-
-		if (f) {
-			HANDLE phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
-			SIZE_T stBytes = 0;
-
-			if (!global.ErrorLog_Started)
-				WriterHeaderInErrorLog(&f, &phandle, 1);
-
-			// output command input
-			fprintf(f, "\t%s\n", global.com_ptr);
-
-			// Get mission time
-			if (phandle != 0) {
-				int missionTime = 0;
-				int base		= !global.DedicatedServer ? (!global.CWA ? 0x7DD028 : 0x7CBFE8) : (!global.CWA ? 0x75A2E0 : 0x75A370);
-				ReadProcessMemory(phandle, (LPVOID)base, &missionTime, 4, &stBytes);
-
-				int seconds = missionTime / 1000;
-				int minutes = seconds / 60;
-
-				if (minutes < 10)
-					fprintf(f, "0");
-
-				fprintf(f, "%d:", minutes);
-
-				if (seconds < 10)
-					fprintf(f, "0");
-
-				fprintf(f, "%d  ", seconds);
-				CloseHandle(phandle);
-			}
-
-			// Trim error description
-			for (unsigned int a=strlen(descPTR)-1;   descPTR[a]=='\r' || descPTR[a]=='\n';   a--)
-				descPTR[a] = '\0';
-
-			fprintf(f, "%d %d - %s - %s", code, secondaryCode, cmd, descPTR);
-
-			// If file error then add filename
-			if (code==7  ||  code==105  ||  code==108  ||  code>=200)
-				fprintf(f, " - %s", str1);
-
-			fprintf(f, "\n");
-			fclose(f);
-		}*/
-	}
-
-	if (lpMsgBuf != NULL)
-		LocalFree(lpMsgBuf);
-};
 
 
 
 
 
 // v1.14 Like QWrite but doubles the quotes
-void PrintDoubleQ(char *txt, HANDLE out)
-{
-	char *quote = strchr(txt, '\"');
+void QWriteDoubleQ(char *txt) {
+	for (int i=0; txt[i]!='\0'; i++) {
+		if (txt[i] == '\"') 
+			QWritel("\"", 1);
 
-	if (quote == NULL) 
-		QWrite(txt, out); 
-	else {
-		char tmp[2] = "";
-
-		for (unsigned int i=0; i<strlen(txt); i++) {
-			if (txt[i] == '\"') 
-				QWrite("\"", out);
-
-			sprintf(tmp, "%c", txt[i]);
-			QWrite(tmp, out);
-		}
+		QWritel(txt+i, 1);
 	}
-};
-
-
-
-
-// v1.14 Like QWrite but splits strings into parts of given length and doubles the quotes
-void SplitStringIntoParts(char *txt, int cut, bool addComma, HANDLE out)
-{
-	int len = strlen(txt);
-	
-	if (len <= cut) {
-		if (addComma) 
-			QWrite(",",out); 
-		else 
-			addComma = true;
-
-		QWrite("\""     , out),
-		PrintDoubleQ(txt, out),
-		QWrite("\""     , out);
-	} else {
-		char *txt2 = txt;
-
-		for (int i=0;  i<len;  i+=cut, txt2=txt+i) {
-			int len2 = strlen(txt2);
-
-			if (cut > len2) 
-				cut = len2;
-
-			char prev = txt2[cut];
-			txt2[cut] = '\0';
-
-			if (addComma) 
-				QWrite(",",out); 
-			else 
-				addComma = true;
-
-			QWrite("\""      , out);
-			PrintDoubleQ(txt2, out);
-			QWrite("\""      , out);
-
-			txt2[cut] = prev;
-		}
-	}
-};
+}
 
 
 
@@ -1404,11 +694,10 @@ void SplitStringIntoParts(char *txt, int cut, bool addComma, HANDLE out)
 
 
 
-void ReadJoystick(char *data, int customJoyID)
-{
+void QWrite_Joystick(int customJoyID) {
 	// If passed -2 then quit this function
 	if (customJoyID == -2) {
-		strcat(data, "[]");
+		QWrite("[]");
 		return;
 	}
 	
@@ -1435,7 +724,7 @@ void ReadJoystick(char *data, int customJoyID)
 			device = joyGetDevCapsA(joyID, &joyCaps, sizeof(joyCaps));
 		
 		// end here if user passed arg OR successfully read both dev and inp OR reached ID limit
-		if (customJoyID>=0  ||  device==JOYERR_NOERROR  &&  input==JOYERR_NOERROR  ||  joyID==15) 
+		if (customJoyID>=0  ||  (device==JOYERR_NOERROR  &&  input==JOYERR_NOERROR)  ||  joyID==15) 
 			break;
 
 		joyID++;
@@ -1446,24 +735,17 @@ void ReadJoystick(char *data, int customJoyID)
 	// Return error value
 	if (device!=JOYERR_NOERROR  ||  input!=JOYERR_NOERROR) {
 		//strcat(data, "[\"couldn't find\"]");
-		char info[100] = "";
+		QWrite("[\"");
 
-		if (input == MMSYSERR_NODRIVER) 
-			strcpy(info, "The joystick driver is not present.");
+		switch (input) {
+			case MMSYSERR_NODRIVER    : QWrite("The joystick driver is not present."); break;
+			case MMSYSERR_INVALPARAM  : QWrite("An invalid parameter was passed."); break;
+			case MMSYSERR_BADDEVICEID : QWrite("The specified joystick identifier is invalid."); break;
+			case JOYERR_UNPLUGGED     : QWrite("The specified joystick is not connected to the system."); break;
+			case JOYERR_PARMS         : QWrite("The specified joystick identifier is invalid."); break;
+		};
 
-		if (input == MMSYSERR_INVALPARAM) 
-			strcpy(info, "An invalid parameter was passed.");
-
-		if (input == MMSYSERR_BADDEVICEID) 
-			strcpy(info, "The specified joystick identifier is invalid.");
-
-		if (input == JOYERR_UNPLUGGED) 
-			strcpy(info, "The specified joystick is not connected to the system.");
-
-		if (input == JOYERR_PARMS) 
-			strcpy(info,"The specified joystick identifier is invalid.");
-
-		sprintf(data, "%s[\"%s\",%d]", data, info, joyID);
+		QWritef("[\",%d]", joyID);
 		return;
 	}
 
@@ -1484,103 +766,89 @@ void ReadJoystick(char *data, int customJoyID)
 
 
 	//* Read input *//
-	// ARRAY WITH AXES NAMES ==========================================================
-	int Axes[6];
+	// Axes names array
+	DWORD Axes[6]  = {joy.dwXpos, joy.dwYpos};
 	int count_axis = 2;
 
-	Axes[0] = joy.dwXpos;	// always read basic X,Y
-	Axes[1] = joy.dwYpos;
+	QWrite("[[\"X\",\"Y\"");
 
-	strcat(data, "[[\"X\",\"Y\"");
-
-	// detect which axes joy has
 	if (joyCaps.wCaps & JOYCAPS_HASZ) {
-		strcat(data, ",\"Z\"");
+		QWrite(",\"Z\"");
 		Axes[count_axis++] = joy.dwZpos;
 	}
 
 	if (joyCaps.wCaps & JOYCAPS_HASR) {
-		strcat(data, ",\"R\"");
+		QWrite(",\"R\"");
 		Axes[count_axis++] = joy.dwRpos;
 	}
 
 	if (joyCaps.wCaps & JOYCAPS_HASU) {
-		strcat(data, ",\"U\"");
+		QWrite(",\"U\"");
 		Axes[count_axis++] = joy.dwUpos;
 	}
 
 	if (joyCaps.wCaps & JOYCAPS_HASV) {
-		strcat(data, ",\"V\"");
+		QWrite(",\"V\"");
 		Axes[count_axis++] = joy.dwVpos;
 	}
-	// ================================================================================
 
 
-	// ARRAY WITH AXES ================================================================
-	bool ADDcomma = false;
+	// Axes values array
+	bool add_comma = false;
 
-	strcat(data, "],[");
+	QWrite("],[");
 
-	for (int i=0; i<count_axis; i++) {		// Loop each axis
-		// format array
-		if (ADDcomma) 
-			strcat(data, ","); 
+	for (int i=0; i<count_axis; i++) {
+		if (add_comma) 
+			QWrite(","); 
 		else 
-			ADDcomma = true;
+			add_comma = true;
 
-		sprintf(data, "%s%d", data, Axes[i]);
+		QWritef("%u", Axes[i]);
 	}
-	// ================================================================================
 
 
-	// ARRAY WITH BUTTONS =============================================================
-	int Buttons[32];
+	// Buttons array
+	int Buttons[32] = {0};
 
 	maxButtons = joyCaps.wNumButtons;
-	sprintf(data, "%s],%d,[", data, maxButtons);
+	QWritef("%s],%d,[", maxButtons);
 
-	ADDcomma = false;
-	int buts = joy.dwButtons;
+	add_comma = false;
+	int buts  = joy.dwButtons;
 
 	for (i=0; i<maxButtons; i++) {	// Loop each button
 		Buttons[i] = buts & (1 << i);
 
 		if (Buttons[i] > 0) {
-			if (ADDcomma) 
-				strcat(data, ","); 
+			if (add_comma) 
+				QWrite(","); 
 			else 
-				ADDcomma = true;
+				add_comma = true;
 
-			sprintf(data, "%s\"JOY%d\"", data, i+1);
+			QWritef("\"JOY%d\"", i+1);
 		}
 	}
-	// ================================================================================
 
 
-	// POV ============================================================================
+	// POV array
 	if (strcmp(POVtype,"NOPOV") != 0) {
-		if (joy.dwPOV!=65535  &&  ADDcomma) 
-			strcat(data, ",");
+		if (joy.dwPOV!=65535  &&  add_comma) 
+			QWrite(",");
 
 		switch (joy.dwPOV) {
-			case 0     : strcat(data, "\"JOYPOVUP\""); break;
-			case 4500  : strcat(data, "\"JOYPOVUPLEFT\""); break;
-			case 9000  : strcat(data, "\"JOYPOVLEFT\""); break;
-			case 13500 : strcat(data, "\"JOYPOVDOWNLEFT\""); break;
-			case 18000 : strcat(data, "\"JOYPOVDOWN\""); break;
-			case 22500 : strcat(data, "\"JOYPOVDOWNRIGHT\""); break;
-			case 27000 : strcat(data, "\"JOYPOVRIGHT\""); break;
-			case 31500 : strcat(data, "\"JOYPOVUPRIGHT\""); break;
+			case 0     : QWrite("\"JOYPOVUP\""); break;
+			case 4500  : QWrite("\"JOYPOVUPLEFT\""); break;
+			case 9000  : QWrite("\"JOYPOVLEFT\""); break;
+			case 13500 : QWrite("\"JOYPOVDOWNLEFT\""); break;
+			case 18000 : QWrite("\"JOYPOVDOWN\""); break;
+			case 22500 : QWrite("\"JOYPOVDOWNRIGHT\""); break;
+			case 27000 : QWrite("\"JOYPOVRIGHT\""); break;
+			case 31500 : QWrite("\"JOYPOVUPRIGHT\""); break;
 		}
 	}
 
-	sprintf(data, "%s],[\"%s\",%d]", data, POVtype, joy.dwPOV);
-	// ================================================================================
-
-
-	// ARRAY WITH JOY INFORMATION =====================================================
-	sprintf(data, "%s,[%d,%d,%d]]", data, joyID, joyCaps.wMid, joyCaps.wPid);
-	// ================================================================================
+	QWritef("],[\"%s\",%d],[%d,%d,%d]]", POVtype, joy.dwPOV, joyID, joyCaps.wMid, joyCaps.wPid);
 }
 
 
@@ -1590,9 +858,8 @@ void ReadJoystick(char *data, int customJoyID)
 
 
 // Write mission path information
-void createPathSqf(LPCSTR lpFileName, int len, int offset)
-{
-	int ticks = GetTickCount();
+void createPathSqf(LPCSTR lpFileName, int len, int offset) {
+	DWORD ticks = GetTickCount();
 
 	// Don't write multiple times at once
 	if (ticks < global.mission_path_savetime+1000)
@@ -1600,7 +867,7 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset)
 
 	global.mission_path_savetime = ticks;	
 	
-	FILE *f      = fopen(!global.DedicatedServer ? "fwatch\\data\\path.sqf" : "fwatch\\data\\pathDedi.sqf", "w");
+	FILE *f      = fopen(!global.is_server ? "fwatch\\data\\path.sqf" : "fwatch\\data\\pathDedi.sqf", "w");
 	int pathType = -1;
 
 
@@ -1614,7 +881,7 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset)
 	if (!strncmp("Users\\", lpFileName, 6)) {
 		char *nextBackSlash = strchr(lpFileName+6, '\\');
 
-		if (nextBackSlash != NULL) {
+		if (nextBackSlash) {
 			if (!strncmp("missions", nextBackSlash+1, 8)) 
 				pathType = 4;
 
@@ -1656,22 +923,23 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset)
 	// Mission path length
 	int len2 = offset<0 ? len+offset : offset;
 
-	fprintf(f,"[%d,%d,[\"", pathType, len2);
+	fprintf(f, "[%d,%d,[\"", pathType, len2);
 
 	// output mission path
-	strcpy(global.mission_path, "");
+	size_t mission_path_len = 0;
 
 	for (int i=0; i<len2; i++)
 		if (lpFileName[i]=='\\'  ||  lpFileName[i]=='/') {
 			if (i != len2-1)
 				fprintf(f, "\",\"");
 
-			strcat(global.mission_path, "\\");
+			global.mission_path[mission_path_len++] = '\\';
 		} else {
 			fprintf(f, "%c", lpFileName[i]);
-			sprintf(global.mission_path, "%s%c", global.mission_path, lpFileName[i]);
+			global.mission_path[mission_path_len++] = lpFileName[i];
 		}
 
+	global.mission_path[mission_path_len] = '\0';
 	fprintf(f, "\"]]");
 	fclose(f);
 
@@ -1680,20 +948,30 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset)
 	if (strcmp(global.mission_path_previous, global.mission_path) !=0)
 		strcpy(global.mission_path_previous, global.mission_path);
 	else {
+		int base = 0;
+
+		switch(global_exe_version[global.exe_index]) {
+			case VER_196        : base=0x7DD028; break;
+			case VER_199        : base=0x7CBFE8; break;
+			case VER_196_SERVER : base=0x75A2E0; break;
+			case VER_199_SERVER : base=0x75A370; break;
+		}
+
 		// Is this is a mission restart?
 		// Check mission time
-		HANDLE phandle  = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
+		if (base) {
+			HANDLE phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, global.pid);
 
-		if (phandle != 0) {
-			int time_address = !global.DedicatedServer ? (!global.CWA ? 0x7DD028 : 0x7CBFE8) : (!global.CWA ? 0x75A2E0 : 0x75A370);
-			int time_value   = 0;
-			SIZE_T stBytes   = 0;
+			if (phandle) {
+				int time_value = 0;
+				SIZE_T stBytes = 0;
 
-			ReadProcessMemory(phandle, (LPVOID)time_address, &time_value, 4, &stBytes);
-			CloseHandle(phandle);
+				ReadProcessMemory(phandle, (LPVOID)base, &time_value, 4, &stBytes);
+				CloseHandle(phandle);
 
-			if (time_value > 500)
-				return;
+				if (time_value > 500)
+					return;
+			}
 		}
 	}
 
@@ -1712,28 +990,8 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset)
 
 
 
-// Check if string is empty
-bool IsWhiteSpace(char *txt)
-{
-	while (*txt != '\0') {
-		if (!isspace(*txt)) 
-			return false;
-
-		txt++;
-	}
-
-	return true;
-}
-
-
-
-
-
-
-
 // Interpret bool value from a text
-bool String2Bool(char *txt)
-{
+bool String2Bool(char *txt) {
 	txt = Trim(txt);
 
 	if (strcmpi(txt,"false") == 0  ||  strcmpi(txt,"") == 0)
@@ -1742,10 +1000,7 @@ bool String2Bool(char *txt)
 	if (strcmpi(txt,"true") == 0)
 		return true;
 
-	if (atoi(txt))
-		return true;
-	else
-		return false;
+	return atoi(txt) ? 1 : 0;
 }
 
 
@@ -1753,179 +1008,43 @@ bool String2Bool(char *txt)
 
 
 
-// Return first two words from a text line
-void GetFirstTwoWords(char* text, char *buffer, int maxSize)
-{
-	int words     = 0;
-	int wordStart = -1;
-	int size      = 0;
-	int length    = strlen(text);
 
-	for (int i=0;  i<=length && words<2;  i++)
-		if (isspace(text[i])  ||  i==length) {			
-			if (wordStart >= 0) {
-				if (size + i-wordStart + 1 >= maxSize)
-					break;
+// Convert input numbers meant to indicate position in a string
+StringPos ConvertStringPos(char *range_start, char *range_end, char *range_length, size_t text_length) {
+	StringPos range = {0, text_length};
 
-				strncat(buffer, text+wordStart, i-wordStart);
+	if (range_start[0]) {
+		// Negative number means counting from the end of the string
+		if (range_start[0] == '-') {
+			range.start = text_length - strtoul(range_start+1, NULL, 0);
 
-				if (words == 0)
-					strcat(buffer, " ");
-
-				size += i-wordStart + 1;
-				wordStart = -1;
-				words++;
-			}
+			// If too much negative then it's beginning of the string
+			if (range.start > text_length)
+				range.start = 0;
 		} else
-			if (wordStart < 0)
-				wordStart = i;
+			range.start = strtoul(range_start, NULL, 0);
+	}
 
-	for (int j=0;  j<maxSize; j++)
-		buffer[j] = tolower(buffer[j]);
-}
+	if (range_end[0]) {
+		if (range_end[0] == '-') {
+			range.end = text_length - strtoul(range_end+1, NULL, 0);
 
-
-
-
-
-
-
-// Similar to strtok2 but for the named argument system
-char* strtok3(char* str, int CommandID) 
-{
-	char c;
-	int i							= 0;
-	int y							= 0;
-	int QuotePos					= -1;
-	int wordStart					= -1;
-	bool inQuote					= false;
-	bool newWord					= true;
-	bool waitForSpecialSeparator	= false;
-	bool prevCharWasSpace			= false;
-
-
-	// For each character
-	do {
-		c = str[i];
-
-		// Entered/left quote
-		if (c=='"'  &&  (!inQuote && str[i-1]=='\a' || inQuote && (str[i+1]==' ' || str[i+1]=='\0'))  &&  !waitForSpecialSeparator) {
-			inQuote = !inQuote;
-
-			if (QuotePos < 0)
-				QuotePos = i;
-			else
-				str[QuotePos] = '\a',
-				str[i]		  = '\a',
-				QuotePos	  = -1;
-		}
-
-
-		// Special separator
-		if (c == 0x1F) {
-			c = ' ';
-			waitForSpecialSeparator = false;
-		}
-
-
-		// Replace spaces with \a
-		if (c==' '  &&  !inQuote) {
-			if (!waitForSpecialSeparator)
-				str[i]			 = '\a',
-				prevCharWasSpace = true;
+			if (range.end > text_length)
+				range.end = 0;
 		} else
-			if (prevCharWasSpace  &&  c!='\"') {
-				prevCharWasSpace = false;
+			range.end = strtoul(range_end, NULL, 0);
+	}
 
-				char c2;
-				int j	= i-1;
+	if (range_length[0])
+		range.end = range.start + strtoul(range_length, NULL, 0);
 
-				do
-					c2 = str[++j];
-				while 
-					(c2!='\0'  &&  c2!=' '  &&  c2!=':');
+	if (range.start > text_length)
+		range.start = text_length;
 
-				if 
-				(
-					strncmpi(str+i,"text:"     ,j-i+1) == 0 ||
-					strncmpi(str+i,"text1:"    ,j-i+1) == 0 || 
-					strncmpi(str+i,"text2:"    ,j-i+1) == 0 || 
-					strncmpi(str+i,"prefix:"   ,j-i+1) == 0 || 
-					strncmpi(str+i,"suffix:"   ,j-i+1) == 0 || 
-					strncmpi(str+i,"find:"     ,j-i+1) == 0  && CommandID != C_CLASS_READ && CommandID != C_CLASS_READ2 ||
-					strncmpi(str+i,"replace:"  ,j-i+1) == 0 ||
-					strncmpi(str+i,"delimiter:",j-i+1) == 0 ||
-					strncmpi(str+i,"merge:"    ,j-i+1) == 0 ||
-					(CommandID == C_STRING_RANGE2 &&  strncmpi(str+i,"startfind",j-i+1) == 0) ||
-					(CommandID == C_STRING_RANGE2 &&  strncmpi(str+i,"endfind"  ,j-i+1) == 0) ||
-					(CommandID == C_CLASS_MODTOK  &&  strncmpi(str+i,"add:"	    ,j-i+1) == 0) ||
-					(CommandID == C_CLASS_MODTOK  &&  strncmpi(str+i,"append:"  ,j-i+1) == 0) ||
-					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"key:"	    ,j-i+1) == 0) ||
-					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"read:"    ,j-i+1) == 0) ||
-					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"write:"   ,j-i+1) == 0) ||
-					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"append:"  ,j-i+1) == 0) ||
-					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"rename:"  ,j-i+1) == 0) ||
-					(CommandID == C_IGSE_DB       &&  strncmpi(str+i,"remove:"  ,j-i+1) == 0)
-				)
-					waitForSpecialSeparator=true;
-			}
+	if (range.end > text_length)
+		range.end = text_length;
 
-		i++;
-	} while (c != '\0');
-
-	i = 0; 
-	y = 0;
-
-	// Remove double-null characters
-	do {
-		str[y] = str[i];
-
-		if (str[i] != '\0')
-			if(str[i]!='\a'  ||  str[i+1]!='\a')
-				y++;
-
-		i++;
-	} while (str[y] != '\0');
-
-	return str;
-}
-
-
-
-
-
-
-
-
-// If numbers out of bounds then fix them
-void CorrectStringPos(int *start, int *end, int length, bool endSet, bool lengthSet, int textSize)
-{
-	// If end argument was not given then assume end of the string
-	if (!endSet)
-		*end = textSize;
-
-	// Convert relative value to absolute
-	if (lengthSet)
-		*end = *start + length;
-
-	// If range coordinates are out of bounds
-	if (*start < 0)
-		*start += textSize;
-
-	if (*start < 0)
-		*start = 0;
-
-	if (*start > textSize)
-		*start = textSize;
-
-	if (*end < 0)
-		*end += textSize;
-
-	if (*end < 0)
-		*end = 0;
-
-	if (*end > textSize)
-		*end = textSize;
+	return range;
 }
 
 
@@ -1935,18 +1054,17 @@ void CorrectStringPos(int *start, int *end, int length, bool endSet, bool length
 
 
 // Return character number type
-int GetCharType(char c)
-{
+int GetCharType(char c) {
 	if (c=='\r'  ||  c=='\n')
-		return 0;
+		return CHAR_TYPE_NEW_LINE;
 	else
 		if (c<0x20  ||  c==' ')
-			return 1;
+			return CHAR_TYPE_SPACE;
 		else
 			if (c>=0x80  ||  isalnum(c)  ||  c=='_')
-				return 2;
+				return CHAR_TYPE_LETTER;
 			else
-				return 3;
+				return CHAR_TYPE_MISC;
 }
 
 
@@ -1956,14 +1074,13 @@ int GetCharType(char c)
 
 
 // Restore memory values that were changed in the game
-void RestoreMemValues(bool isMissionEditor)
-{
+void RestoreMemValues(bool isMissionEditor) {
 	int max_loops  = (sizeof(global.restore_memory) / sizeof(global.restore_memory[0]));
 	HANDLE phandle = NULL;
 	SIZE_T stBytes = 0;
-	phandle        = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
+	phandle        = OpenProcess(PROCESS_ALL_ACCESS, 0, global.pid);
 
-	if (phandle == NULL)
+	if (!phandle)
 		return;
 
 	for (int i=0; i<max_loops; i++) {
@@ -1971,17 +1088,29 @@ void RestoreMemValues(bool isMissionEditor)
 			continue;
 
 		if (i == RESTORE_BRIGHTNESS) {	
-			int base    = !global.CWA ? 0x789D88 : 0x778E80;
+			int base    = 0;
 			int pointer = 0;
 
-			ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
-			WriteProcessMemory(phandle,(LPVOID)(pointer+0x2C),  &global.restore_float[FLOAT_BRIGHTNESS], 4, &stBytes);
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196 : base=0x789D88; break;
+				case VER_199 : base=0x778E80; break;
+			}
+
+			if (base) {
+				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
+				WriteProcessMemory(phandle,(LPVOID)(pointer+0x2C),  &global.restore_float[FLOAT_BRIGHTNESS], 4, &stBytes);
+			}
 		}
 
 		if (i>=RESTORE_OBJECT_SHADOWS  &&  i<=RESTORE_CLOUDLETS) {
-			int base    = !global.CWA ? 0x79F8D0 : 0x78E9C8;
+			int base    = 0;
 			int	pointer = 0;
 			int offset  = 0;
+
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196 : base=0x79F8D0; break;
+				case VER_199 : base=0x78E9C8; break;
+			}
 
 			if (i == RESTORE_VEHICLE_SHADOWS) 
 				offset = 1;
@@ -1989,25 +1118,71 @@ void RestoreMemValues(bool isMissionEditor)
 			if (i == RESTORE_CLOUDLETS) 
 				offset = 2;
 
-			ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
-			WriteProcessMemory(phandle, (LPVOID)(pointer+0x5B0+offset), &global.restore_byte[BYTE_OBJECT_SHADOWS+offset], 1, &stBytes);
+			if (base) {
+				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
+				WriteProcessMemory(phandle, (LPVOID)(pointer+0x5B0+offset), &global.restore_byte[BYTE_OBJECT_SHADOWS+offset], 1, &stBytes);
+			}
 		}
 
 		if (i>=RESTORE_BULLETS  &&  i<RESTORE_CADET) {
-			int offset[] = {
-				!global.DedicatedServer ? (!global.CWA ? 0x71D518 : 0x710520) : (!global.CWA ? 0x6ABDE8 : 0x6ABDA8), //gravity acceleration	9.8065996170043945
-				!global.DedicatedServer ? (!global.CWA ? 0x5F1570 : 0x5F818C) : (!global.CWA ? 0x5374B8 : 0x537671), //bullet lifetime		3
-				!global.DedicatedServer ? (!global.CWA ? 0x5F16D2 : 0x5F7ACB) : (!global.CWA ? 0x534F9C : 0x53517D), //shell  lifetime		20
-				!global.DedicatedServer ? (!global.CWA ? 0x5F1527 : 0x4857B3) : (!global.CWA ? 0x533A91 : 0x533C4A), //rocket lifetime		10
-				!global.DedicatedServer ? (!global.CWA ? 0x5F147B : 0x487867) : (!global.CWA ? 0x5357C7 : 0x5359A8), //bomb lifetime		120
-				!global.DedicatedServer ? (!global.CWA ? 0x5F178F : 0x487986) : (!global.CWA ? 0x5371A1 : 0x53735A), //smoke lifetime		60
-				!global.DedicatedServer ? (!global.CWA ? 0x5F12AD : 0x5F7D5D) : (!global.CWA ? 0x536D09 : 0x536EEA), //flare lifetime		17
-				!global.DedicatedServer ? (!global.CWA ? 0x7137A0 : 0x7067A0) : (!global.CWA ? 0x6A66C0 : 0x6A66C0), //flare duration		15
-				!global.DedicatedServer ? (!global.CWA ? 0x5F14BF : 0x485820) : (!global.CWA ? 0x5345F9 : 0x5347DA), //pipebomb lifetime	3.402823466E38 (7F7FFFFF)
-				!global.DedicatedServer ? (!global.CWA ? 0x5F1818 : 0x5F789B) : (!global.CWA ? 0x5347F7 : 0x5349D8)  //timebomb lifetime	20
-			};
+			int offset[10] = {0};
 
-			WriteProcessMemory(phandle, (LPVOID)offset[i-4], &global.restore_float[i-3], 4, &stBytes);	
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196 : 
+					offset[0] = 0x71D518;
+					offset[1] = 0x5F1570;
+					offset[2] = 0x5F16D2;
+					offset[3] = 0x5F1527;
+					offset[4] = 0x5F147B;
+					offset[5] = 0x5F178F;
+					offset[6] = 0x5F12AD;
+					offset[7] = 0x7137A0;
+					offset[8] = 0x5F14BF;
+					offset[9] = 0x5F1818;
+					break;
+
+				case VER_199 : 
+					offset[0] = 0x710520;
+					offset[1] = 0x5F818C;
+					offset[2] = 0x5F7ACB;
+					offset[3] = 0x4857B3;
+					offset[4] = 0x487867;
+					offset[5] = 0x487986;
+					offset[6] = 0x5F7D5D;
+					offset[7] = 0x7067A0;
+					offset[8] = 0x485820;
+					offset[9] = 0x5F789B;
+					break;
+
+				case VER_196_SERVER : 
+					offset[0] = 0x6ABDE8;
+					offset[1] = 0x5374B8;
+					offset[2] = 0x534F9C;
+					offset[3] = 0x533A91;
+					offset[4] = 0x5357C7;
+					offset[5] = 0x5371A1;
+					offset[6] = 0x536D09;
+					offset[7] = 0x6A66C0;
+					offset[8] = 0x5345F9;
+					offset[9] = 0x5347F7;
+					break;
+
+				case VER_199_SERVER : 
+					offset[0] = 0x6ABDA8;
+					offset[1] = 0x537671;
+					offset[2] = 0x53517D;
+					offset[3] = 0x533C4A;
+					offset[4] = 0x5359A8;
+					offset[5] = 0x53735A;
+					offset[6] = 0x536EEA;
+					offset[7] = 0x6A66C0;
+					offset[8] = 0x5347DA;
+					offset[9] = 0x5349D8;
+					break;
+			}
+
+			if (offset[i-4])
+				WriteProcessMemory(phandle, (LPVOID)offset[i-4], &global.restore_float[i-3], 4, &stBytes);	
 		}
 
 		if (i>=RESTORE_CADET  &&  i<RESTORE_RADAR) {
@@ -2016,7 +1191,7 @@ void RestoreMemValues(bool isMissionEditor)
 				{0x7CC088, 0x7CC094, 0x75A410, 0x75A41C}	//cwa
 			};
 
-			int j    = !global.CWA ? 0 : 1;	// which game
+			int j    = global_exe_version[global.exe_index]!=VER_199 ? 0 : 1;	// which game
 			int k    = 0;				// which difficulty
 			int base = RESTORE_CADET;
 
@@ -2025,7 +1200,7 @@ void RestoreMemValues(bool isMissionEditor)
 				base = RESTORE_VETERAN;
 			}
 
-			if (global.DedicatedServer) 
+			if (global.is_server) 
 				k += 2;
 
 			int offset = offsets[j][k];
@@ -2033,118 +1208,222 @@ void RestoreMemValues(bool isMissionEditor)
 			WriteProcessMemory(phandle, (LPVOID)(offset+i-base), &global.restore_byte[i-11],  1, &stBytes);
 		}
 
-		if (i == RESTORE_RADAR)
-			WriteProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD074 : 0x7CC034), &global.restore_float[FLOAT_RADAR], 4, &stBytes);
+		if (i == RESTORE_RADAR) {
+			int base = 0;
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196 : base=0x7DD074; break;
+				case VER_199 : base=0x7CC034; break;
+			}
+			if (base)
+				WriteProcessMemory(phandle,(LPVOID)base, &global.restore_float[FLOAT_RADAR], 4, &stBytes);
+		}
 
-		if (i == RESTORE_MAX_OBJECTS)
-			WriteProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD07C : 0x7CC03C), &global.restore_int[INT_MAX_OBJECTS], 4, &stBytes);
+		if (i == RESTORE_MAX_OBJECTS) {
+			int base = 0;
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196 : base=0x7DD07C; break;
+				case VER_199 : base=0x7CC03C; break;
+				default      : base=0;
+			}
+			if (base)
+				WriteProcessMemory(phandle,(LPVOID)base, &global.restore_int[INT_MAX_OBJECTS], 4, &stBytes);
+		}
 
-		if (i == RESTORE_TRACK1)
-			WriteProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD080 : 0x7CC040), &global.restore_float[FLOAT_TRACK1], 4, &stBytes);
+		if (i == RESTORE_TRACK1) {
+			int base = 0;
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196 : base=0x7DD080; break;
+				case VER_199 : base=0x7CC040; break;
+			}
+			if (base)
+				WriteProcessMemory(phandle,(LPVOID)base, &global.restore_float[FLOAT_TRACK1], 4, &stBytes);
+		}
 
-		if (i == RESTORE_TRACK2)
-			WriteProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD084 : 0x7CC044), &global.restore_float[FLOAT_TRACK2], 4, &stBytes);
+		if (i == RESTORE_TRACK2) {
+			int base = 0;
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196 : base=0x7DD084; break;
+				case VER_199 : base=0x7CC044; break;
+				default      : base=0;
+			}
+			if (base)
+				WriteProcessMemory(phandle,(LPVOID)base, &global.restore_float[FLOAT_TRACK2], 4, &stBytes);
+		}
 
-		if (i == RESTORE_MAX_LIGHTS)
-			WriteProcessMemory(phandle,(LPVOID)(!global.CWA ? 0x7DD08C : 0x7CC04C), &global.restore_int[INT_MAX_LIGHTS], 4, &stBytes);
+		if (i == RESTORE_MAX_LIGHTS) {
+			int base = 0;
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196 : base=0x7DD08C; break;
+				case VER_199 : base=0x7CC04C; break;
+			}
+			if (base)
+				WriteProcessMemory(phandle,(LPVOID)base, &global.restore_int[INT_MAX_LIGHTS], 4, &stBytes);
+		}
 
 		if (i == RESTORE_TIDE) {
-			int base = !global.DedicatedServer ? (!global.CWA ? 0x72F8E4 : 0x72295C) : (!global.CWA ? 0x6BE184 : 0x6BE144);
-			WriteProcessMemory(phandle,(LPVOID)base, &global.restore_float[FLOAT_TIDE], 4, &stBytes);
+			int base = 0;
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196        : base=0x72F8E4; break;
+				case VER_199        : base=0x72295C; break;
+				case VER_196_SERVER : base=0x6BE184; break;
+				case VER_199_SERVER : base=0x6BE144; break;
+			}
+			if (base)
+				WriteProcessMemory(phandle,(LPVOID)base, &global.restore_float[FLOAT_TIDE], 4, &stBytes);
 		}
 
 		if (i == RESTORE_WAVE) {
-			int base = !global.DedicatedServer ? (!global.CWA ? 0x72F8E4 : 0x72295C) : (!global.CWA ? 0x6BE184 : 0x6BE144);
-			WriteProcessMemory(phandle,(LPVOID)(base+4), &global.restore_float[FLOAT_WAVE], 4, &stBytes);
+			int base = 0;
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196        : base=0x72F8E4; break;
+				case VER_199        : base=0x72295C; break;
+				case VER_196_SERVER : base=0x6BE184; break;
+				case VER_199_SERVER : base=0x6BE144; break;
+			}
+			if (base)
+				WriteProcessMemory(phandle,(LPVOID)(base+4), &global.restore_float[FLOAT_WAVE], 4, &stBytes);
 		}
 
 		if (i == RESTORE_EXTCAMPOS) {
-			int pointer[]	= {0x7894A0,0,0};
-			int	modif[]		= {0x5C, 0x69C};
-			int	max_loops	= (sizeof(pointer) / sizeof(pointer[0])) - 1;
+			int pointer[3] = {0};
+			int	modif[]    = {0x5C, 0x69C};
+			int	max_loops  = (sizeof(pointer) / sizeof(pointer[0])) - 1;
 
-			if (global.CWA) 
-				pointer[0] = 0x778590,
-				modif[1]   = 0x6A0;
-
-			for (int i=0; i<max_loops; i++) {
-				ReadProcessMemory(phandle, (LPVOID)pointer[i], &pointer[i+1], 4, &stBytes);
-				pointer[i+1] = pointer[i+1] + modif[i];
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196 : pointer[0]=0x7894A0; break;
+				case VER_199 : pointer[0]=0x778590; modif[1]=0x6A0; break;
 			}
-			
-			WriteProcessMemory(phandle, (LPVOID)(global.extCamOffset+0), &global.restore_float[FLOAT_EXTCAMX], 4, &stBytes);
-			WriteProcessMemory(phandle, (LPVOID)(global.extCamOffset+4), &global.restore_float[FLOAT_EXTCAMZ], 4, &stBytes);
-			WriteProcessMemory(phandle, (LPVOID)(global.extCamOffset+8), &global.restore_float[FLOAT_EXTCAMY], 4, &stBytes);
+
+			if (pointer[0]) {
+				for (int i=0; i<max_loops; i++) {
+					ReadProcessMemory(phandle, (LPVOID)pointer[i], &pointer[i+1], 4, &stBytes);
+					pointer[i+1] = pointer[i+1] + modif[i];
+				}
+				
+				WriteProcessMemory(phandle, (LPVOID)(global.extCamOffset+0), &global.restore_float[FLOAT_EXTCAMX], 4, &stBytes);
+				WriteProcessMemory(phandle, (LPVOID)(global.extCamOffset+4), &global.restore_float[FLOAT_EXTCAMZ], 4, &stBytes);
+				WriteProcessMemory(phandle, (LPVOID)(global.extCamOffset+8), &global.restore_float[FLOAT_EXTCAMY], 4, &stBytes);
+			}
 		}
 
 		if (i == RESTORE_WAVE_SPEED) {
-			int base	= !global.DedicatedServer ? (!global.CWA ? 0x7B3ACC : 0x7A2C0C) : (!global.CWA ? 0x73392C : 0x7339C4);
+			int base	= 0;
 			int pointer = 0;
 
-			ReadProcessMemory (phandle, (LPVOID)base, &pointer, 4, &stBytes);
-			WriteProcessMemory(phandle, (LPVOID)(pointer+0x2059C), &global.restore_float[FLOAT_WAVE_SPEED], 4, &stBytes);
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196        : base=0x7B3ACC; break;
+				case VER_199        : base=0x7A2C0C; break;
+				case VER_196_SERVER : base=0x73392C; break;
+				case VER_199_SERVER : base=0x7339C4; break;
+			}
+
+			if (base) {
+				ReadProcessMemory (phandle, (LPVOID)base, &pointer, 4, &stBytes);
+				WriteProcessMemory(phandle, (LPVOID)(pointer+0x2059C), &global.restore_float[FLOAT_WAVE_SPEED], 4, &stBytes);
+			}
 		}
 
 		if (!isMissionEditor) {
 			if (i == RESTORE_FOVLEFT) {
-				int base    = !global.CWA ? 0x789D88 : 0x778E80;
+				int base    = 0;
 				int pointer = 0;
 
-				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
-				pointer += 0x40;
+				switch(global_exe_version[global.exe_index]) {
+					case VER_196 : base=0x789D88; break;
+					case VER_199 : base=0x778E80; break;
+				}
 
-				WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_FOVLEFT], 4, &stBytes);
+				if (base) {
+					ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
+					pointer += 0x40;
+
+					WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_FOVLEFT], 4, &stBytes);
+				}
 			}
 		
 			if (i == RESTORE_FOVTOP) {
-				int base    = !global.CWA ? 0x789D88 : 0x778E80;
+				int base    = 0;
 				int pointer = 0;
 
-				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
-				pointer += 0x40 + 4;
+				switch(global_exe_version[global.exe_index]) {
+					case VER_196 : base=0x789D88; break;
+					case VER_199 : base=0x778E80; break;
+				}
 
-				WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_FOVTOP], 4, &stBytes);
+				if (base) {
+					ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
+					pointer += 0x40 + 4;
+
+					WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_FOVTOP], 4, &stBytes);
+				}
 			}
 		
 			if (i == RESTORE_UITOPLEFTX) {
-				int base    = !global.CWA ? 0x789D88 : 0x778E80;
+				int base    = 0;
 				int pointer = 0;
 
-				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
-				pointer += 0x40 + 8;
+				switch(global_exe_version[global.exe_index]) {
+					case VER_196 : base=0x789D88; break;
+					case VER_199 : base=0x778E80; break;
+				}
 
-				WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_UITOPLEFTX], 4, &stBytes);
+				if (base) {
+					ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
+					pointer += 0x40 + 8;
+
+					WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_UITOPLEFTX], 4, &stBytes);
+				}
 			}
 		
-			if (i == RESTORE_UITOPLEFTY)
-			{
-				int base    = !global.CWA ? 0x789D88 : 0x778E80;
+			if (i == RESTORE_UITOPLEFTY) {
+				int base    = 0;
 				int pointer = 0;
 
-				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
-				pointer += 0x40 + 12;
+				switch(global_exe_version[global.exe_index]) {
+					case VER_196 : base=0x789D88; break;
+					case VER_199 : base=0x778E80; break;
+				}
 
-				WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_UITOPLEFTY], 4, &stBytes);
+				if (base) {
+					ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
+					pointer += 0x40 + 12;
+
+					WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_UITOPLEFTY], 4, &stBytes);
+				}
 			}
 		
 			if (i == RESTORE_UIBOTTOMRIGHTX) {
-				int base    = !global.CWA ? 0x789D88 : 0x778E80;
+				int base    = 0;
 				int pointer = 0;
 
-				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
-				pointer += 0x40 + 16;
+				switch(global_exe_version[global.exe_index]) {
+					case VER_196 : base=0x789D88; break;
+					case VER_199 : base=0x778E80; break;
+				}
 
-				WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_UIBOTTOMRIGHTX], 4, &stBytes);
+				if (base) {
+					ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
+					pointer += 0x40 + 16;
+
+					WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_UIBOTTOMRIGHTX], 4, &stBytes);
+				}
 			}
 		
 			if (i == RESTORE_UIBOTTOMRIGHTY) {
-				int base    = !global.CWA ? 0x789D88 : 0x778E80;
+				int base    = 0;
 				int pointer = 0;
 
-				ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
-				pointer += 0x40 + 20;
+				switch(global_exe_version[global.exe_index]) {
+					case VER_196 : base=0x789D88; break;
+					case VER_199 : base=0x778E80; break;
+				}
 
-				WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_UIBOTTOMRIGHTY], 4, &stBytes);
+				if (base) {
+					ReadProcessMemory(phandle, (LPVOID)base, &pointer, 4, &stBytes);
+					pointer += 0x40 + 20;
+
+					WriteProcessMemory(phandle,(LPVOID)pointer, &global.restore_float[FLOAT_UIBOTTOMRIGHTY], 4, &stBytes);
+				}
 			}
 		}
 
@@ -2176,7 +1455,7 @@ void RestoreMemValues(bool isMissionEditor)
 			}
 		}
 
-		if (!isMissionEditor  ||  isMissionEditor && (i<RESTORE_FOVLEFT || i>RESTORE_UIBOTTOMRIGHTY))
+		if (!isMissionEditor  ||  (isMissionEditor && (i<RESTORE_FOVLEFT || i>RESTORE_UIBOTTOMRIGHTY)))
 			global.restore_memory[i] = 0;
 	}
 
@@ -2359,8 +1638,12 @@ strnatcasecmp(nat_char const *a, nat_char const *b) {
 }
 
 
-int VerifyPath(char **ptr_filename, String &str, int options, int CommandID, HANDLE out) 
-{
+
+
+
+
+
+int VerifyPath(char **ptr_filename, String &str, int options) {
 	int i             = 0;
 	int item_start    = 0;
 	int item_index    = 0;
@@ -2381,7 +1664,7 @@ int VerifyPath(char **ptr_filename, String &str, int options, int CommandID, HAN
 	};
 	int allowed_dirs_num = sizeof(allowed_dirs) / sizeof(allowed_dirs[0]);
 
-	while(true) {
+	while (true) {
 		if (path[i]=='\\' || path[i]=='/' || path[i]=='\0') {
 			char backup = path[i];
 			path[i]     = '\0';
@@ -2448,59 +1731,74 @@ int VerifyPath(char **ptr_filename, String &str, int options, int CommandID, HAN
 		i++;
 	}
 	
-	
-
 	if (illegal_dir) {
-		if (~options & SUPPRESS_ERROR)
-			FWerror(108,0,CommandID,path,"",0,0,out);
+		if (~options & OPTION_SUPPRESS_ERROR)
+			QWrite_err(FWERROR_PARAM_PATH_RESTRICTED, 1, path);
 	} else
-		if (root_dir && !fwatch_dir && !allowed_dir && options & RESTRICT_TO_MISSION_DIR) {
-			if (~options & SUPPRESS_ERROR)
-				FWerror(105,0,CommandID,path,"",0,0,out);
+		if (root_dir && !fwatch_dir && !allowed_dir && options & OPTION_RESTRICT_TO_MISSION_DIR) {
+			if (~options & OPTION_SUPPRESS_ERROR)
+				QWrite_err(FWERROR_PARAM_PATH_LEAVING, 1, path);
 		} else
 			if (level >= 0) {
-				if (~options & SUPPRESS_CONVERSION)
+				if (~options & OPTION_SUPPRESS_CONVERSION) {
 					if (root_dir)
 						*ptr_filename += 3;
 					else {
-						String_append(str, global.mission_path);
-						String_append(str, *ptr_filename);
-						*ptr_filename = str.pointer;
+						String_append_format(str, "%s%s", global.mission_path, *ptr_filename);
+						*ptr_filename = str.text;
 					}
+				}
 
-				return download_dir ? DOWNLOAD_DIR : LEGAL_PATH;
+				return download_dir ? PATH_DOWNLOAD_DIR : PATH_LEGAL;
 			}
 
-	return ILLEGAL_PATH;
+	return PATH_ILLEGAL;
 }
 
+
+
+
+
+
+
 //https://stackoverflow.com/questions/11413860/best-string-hashing-function-for-short-filenames
-unsigned int fnv_hash(unsigned int hash, char* text, int text_length)
-{
+unsigned int fnv1a_hash(unsigned int hash, char *text, int text_length, bool lowercase) {
     for (int i=0; i<text_length; i++)
-        hash = (hash*16777619) ^ text[i];
+		hash = (hash ^ (lowercase ? tolower(text[i]) : text[i])) * FNV_PRIME;
 
     return hash;
 }
 
+
+
+
+
+
+
 void PurgeComments(char *text, int string_start, int string_end) {
+	enum COMMENT_TYPE {
+		COMMENT_NONE,
+		COMMENT_LINE,
+		COMMENT_BLOCK
+	};
+	
 	int comment_start = -1;
-	int comment_type  = 0;
+	int comment_type  = COMMENT_NONE;
 	int new_end       = string_end;
 	
 	for (int j=string_start; text[j]!='\0'; j++) {
 		if (comment_start == -1) {
 			if (text[j]=='/' && text[j+1]=='*') {
 				comment_start = j;
-				comment_type  = 2;
+				comment_type  = COMMENT_BLOCK;
 			} else
 				if (text[j]=='/' && text[j+1]=='/') {
 					comment_start = j;
-					comment_type  = 1;
+					comment_type  = COMMENT_LINE;
 				}
 		} else {
-			if (comment_type==2 && text[j]=='*' && text[j+1]=='/' || comment_type==1 && (text[j]=='\r' || text[j]=='\n')) {
-				if (comment_type == 2)
+			if ((comment_type==2 && text[j]=='*' && text[j+1]=='/') || (comment_type==COMMENT_LINE && (text[j]=='\r' || text[j]=='\n'))) {
+				if (comment_type == COMMENT_BLOCK)
 					j += 2;
 					
 				memcpy(text+comment_start, text+j, new_end-j);
@@ -2514,6 +1812,12 @@ void PurgeComments(char *text, int string_start, int string_end) {
 		}
 	}
 }
+
+
+
+
+
+
 
 char* Output_Nested_Array(char *temp, int level, char *output_strings_name, int j, int *subclass_count) {
 	strcpy(temp,"");
@@ -2541,14 +1845,20 @@ char* Output_Nested_Array(char *temp, int level, char *output_strings_name, int 
 	return temp;
 }
 
+
+
+
+
+
+
 	// Delete file or directory with its contents  http://stackoverflow.com/a/10836193
-int DeleteWrapper(char *refcstrRootDirectory)
-{
-	if (~GetFileAttributes(refcstrRootDirectory) & FILE_ATTRIBUTE_DIRECTORY)
+int DeleteWrapper(char *refcstrRootDirectory) {
+	if (~GetFileAttributes(refcstrRootDirectory) & FILE_ATTRIBUTE_DIRECTORY) {
 		if (DeleteFile(refcstrRootDirectory))
 			return 0;
 		else
 			return GetLastError();
+	}
 	
 	int             return_value = 0;
 	bool            bDeleteSubdirectories = true;
@@ -2560,24 +1870,22 @@ int DeleteWrapper(char *refcstrRootDirectory)
 
 	String_init(strFilePath);
 	String_init(strPattern);
-	String_append(strFilePath, refcstrRootDirectory);
-	String_append(strFilePath, "\\");
-	String_append(strPattern, refcstrRootDirectory);
-	String_append(strPattern, "\\*.*");
+	String_append_format(strFilePath, "%s\\", refcstrRootDirectory);
+	String_append_format(strPattern, "%s\\*.*", refcstrRootDirectory);
 	
-	int saved_length = strFilePath.current_length;
-	hFile = FindFirstFile(strPattern.pointer, &FileInformation);
+	int saved_length = strFilePath.length;
+	hFile            = FindFirstFile(strPattern.text, &FileInformation);
 	
 	if (hFile != INVALID_HANDLE_VALUE) {
 		do {
 			if (FileInformation.cFileName[0] != '.') {
-				strFilePath.current_length = saved_length;
+				strFilePath.length = saved_length;
 				String_append(strFilePath, FileInformation.cFileName);
 
 				if (FileInformation.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 					if (bDeleteSubdirectories) {
 						// Delete subdirectory
-						int result = DeleteWrapper(strFilePath.pointer);
+						int result = DeleteWrapper(strFilePath.text);
 						if (result) {
 							return_value = result;
 							goto DeleteDirectory_return;
@@ -2586,13 +1894,13 @@ int DeleteWrapper(char *refcstrRootDirectory)
 						bSubdirectory = true;
 				} else {
 					// Set file attributes
-					if (SetFileAttributes(strFilePath.pointer, FILE_ATTRIBUTE_NORMAL) == FALSE) {
+					if (SetFileAttributes(strFilePath.text, FILE_ATTRIBUTE_NORMAL) == FALSE) {
 						return_value = GetLastError();
 						goto DeleteDirectory_return;
 					}
 
 					// Delete file
-					if (DeleteFile(strFilePath.pointer) == FALSE) {
+					if (DeleteFile(strFilePath.text) == FALSE) {
 						return_value = GetLastError();
 						goto DeleteDirectory_return;
 					}
@@ -2626,16 +1934,20 @@ int DeleteWrapper(char *refcstrRootDirectory)
 		}
 	}
 
-DeleteDirectory_return:
+	DeleteDirectory_return:
 	String_end(strFilePath);
 	String_end(strPattern);
 	return return_value;
 }
 
 
+
+
+
+
+
 // Send message to fwatch.exe to enable/disable error logging there
-void NotifyFwatchAboutErrorLog()
-{
+void NotifyFwatchAboutErrorLog() {
 	HANDLE mailslot = CreateFile(TEXT("\\\\.\\mailslot\\fwatch_mailslot"), GENERIC_WRITE, FILE_SHARE_READ, (LPSECURITY_ATTRIBUTES)NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, (HANDLE)NULL);
 	
 	if (mailslot != INVALID_HANDLE_VALUE) {
@@ -2646,11 +1958,15 @@ void NotifyFwatchAboutErrorLog()
 		WriteFile(mailslot, temp, strlen(temp)+1, &bytes_written, (LPOVERLAPPED)NULL);
 		CloseHandle(mailslot);
 	}
-};
+}
 
 
-void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle, bool notify)
-{
+
+
+
+
+
+void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle, bool notify) {
 	FILE **logfile  = (FILE **)ptr_logfile;
 	HANDLE *phandle = (HANDLE *)ptr_phandle;
 	
@@ -2692,74 +2008,854 @@ void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle, bool notify)
 	if (*phandle != 0) {
 		// mission name
 		char buffer[256] = "";
-		int base		 = !global.DedicatedServer ? (!global.CWA ? 0x7DD0E0 : 0x7CC0A0) : (!global.CWA ? 0x75A398 : 0x75A428);
+		int base		 = 0;
 		int pointer		 = 0;
 		DWORD stBytes    = 0;
-		ReadProcessMemory(*phandle, (LPVOID)base, &buffer, 80, &stBytes);
+
+		switch(global_exe_version[global.exe_index]) {
+			case VER_196        : base=0x7DD0E0; break;
+			case VER_199        : base=0x7CC0A0; break;
+			case VER_196_SERVER : base=0x75A398; break;
+			case VER_199_SERVER : base=0x75A428; break;
+		}
+
+		if (base)
+			ReadProcessMemory(*phandle, (LPVOID)base, &buffer, 80, &stBytes);
+
 
 		// if packed pbo
 		if (strcmp(buffer,"__cur_sp")==0  ||  strcmp(buffer,"__cur_mp")==0) {
-			base = !global.DedicatedServer ? (!global.CWA ? 0x7DD180 : 0x7CC140) : (!global.CWA ? 0x75A438 : 0x75A4C8);
+			switch(global_exe_version[global.exe_index]) {
+				case VER_196        : base=0x7DD180; break;
+				case VER_199        : base=0x7CC140; break;
+				case VER_196_SERVER : base=0x75A438; break;
+				case VER_199_SERVER : base=0x75A4C8; break;
+				default             : base=0;
+			}
 
-			ReadProcessMemory(*phandle, (LPVOID)base, &pointer, 4, &stBytes);
+			if (base) {
+				ReadProcessMemory(*phandle, (LPVOID)base, &pointer, 4, &stBytes);
 
-			if (pointer != 0)
-				ReadProcessMemory(*phandle, (LPVOID)(pointer+0x8),			 &buffer,  255, &stBytes);
+				if (pointer != 0)
+					ReadProcessMemory(*phandle, (LPVOID)(pointer+0x8), &buffer, 255, &stBytes);
+			}
 		}
 	
 		fprintf(*logfile, "%s", buffer);
+		buffer[0] = '\0';
+
 
 		// island name
-		base = !global.DedicatedServer ? (!global.CWA ? 0x7DD130 : 0x7CC0F0) : (!global.CWA ? 0x75A3E8 : 0x75A478);
-		ReadProcessMemory(*phandle, (LPVOID)base, &buffer, 80, &stBytes);
+		switch(global_exe_version[global.exe_index]) {
+			case VER_196        : base=0x7DD130; break;
+			case VER_199        : base=0x7CC0F0; break;
+			case VER_196_SERVER : base=0x75A3E8; break;
+			case VER_199_SERVER : base=0x75A478; break;
+			default             : base=0;
+		}
+
+		if (base)
+			ReadProcessMemory(*phandle, (LPVOID)base, &buffer, 80, &stBytes);
+
 		fprintf(*logfile, ".%s\t", buffer);
+		buffer[0] = '\0';
+
 
 		// briefing title
-		strcpy(buffer, "");
-		base = !global.DedicatedServer ? (!global.CWA ? 0x78324C : 0x77233C) : (!global.CWA ? 0x7030AC : 0x7030FC);
-		ReadProcessMemory(*phandle, (LPVOID)base, &pointer, 4,	 &stBytes);
+		switch(global_exe_version[global.exe_index]) {
+			case VER_196        : base=0x78324C; break;
+			case VER_199        : base=0x77233C; break;
+			case VER_196_SERVER : base=0x7030AC; break;
+			case VER_199_SERVER : base=0x7030FC; break;
+			default             : base=0;
+		}
 
-		if (pointer != 0) 
-			ReadProcessMemory(*phandle, (LPVOID)(pointer+0x114), &buffer, 255, &stBytes);
-		else {
-			base = !global.DedicatedServer ? (!global.CWA ? 0x786880 : 0x775968) : (!global.CWA ? 0x7066D8 : 0x706728);
+		if (base) {
 			ReadProcessMemory(*phandle, (LPVOID)base, &pointer, 4,	 &stBytes);
 
-			if (pointer != 0)
-				ReadProcessMemory(*phandle, (LPVOID)(pointer+0x8), &buffer, 255, &stBytes);
+			if (pointer) 
+				ReadProcessMemory(*phandle, (LPVOID)(pointer+0x114), &buffer, 255, &stBytes);
+			else {
+				switch(global_exe_version[global.exe_index]) {
+					case VER_196        : base=0x786880; break;
+					case VER_199        : base=0x775968; break;
+					case VER_196_SERVER : base=0x7066D8; break;
+					case VER_199_SERVER : base=0x706728; break;
+					default             : base=0;
+				}
+
+				if (base) {
+					ReadProcessMemory(*phandle, (LPVOID)base, &pointer, 4,	 &stBytes);
+
+					if (pointer)
+						ReadProcessMemory(*phandle, (LPVOID)(pointer+0x8), &buffer, 255, &stBytes);
+				}
+			}
 		}
 
 		fprintf(*logfile, "%s\n", buffer);
 	}
 }
 
-void shift_text_in_buffer(char *buffer, int buffer_size, int shift_origin, int shift_size)
-{
-	if (shift_size > 0) {
-		for (int i=buffer_size+shift_size; i>shift_origin; i--)
-			buffer[i] = buffer[i-shift_size];
-	} else
-		if (shift_size < 0)
-			for (int i=shift_origin; i<buffer_size; i++)
-				buffer[i] = buffer[i-shift_size];
+
+
+
+
+
+// Shift substring in a string buffer to the left or right
+void shift_buffer_chunk(char *buffer, size_t chunk_start, size_t chunk_end, size_t shift_distance, bool rightwards) {
+	if (rightwards)
+		for (size_t i=chunk_end+shift_distance;  i>=chunk_start+shift_distance;  i--)
+			buffer[i] = buffer[i-shift_distance];
+	else
+		for (size_t i=chunk_start;  i<chunk_end;  i++)
+			buffer[i-shift_distance] = buffer[i];
 }
 
-void printbuf(FILE **fd, char *buffer, int size)
-{
-	for (int k=0; k<size; k++) {
-		if (buffer[k]=='\r') {
-			fprintf(*fd,"\\r");
-		} else 
-			if (buffer[k]=='\n') {
-				fprintf(*fd,"\\n");
-			} else 
-				if (buffer[k]=='\0') {
-					fprintf(*fd,"\0");
-				} else {
-					fprintf(*fd,"%c",buffer[k]);
-				}
-		
+
+
+
+
+
+// Output formatted text to the game
+void QWritef(const char *format, ...) {
+	if (!global.outf) {
+		int out_id  = _open_osfhandle((long)global.out, _O_BINARY|_O_APPEND);
+		global.outf = _fdopen(out_id, "a");
+		setvbuf(global.outf, NULL, _IONBF, 0);
 	}
 
-	fprintf(*fd,"\n");
+	va_list args;
+	va_start(args, format);
+	vfprintf(global.outf, format, args);
+	va_end(args);
+}
+
+
+
+
+
+
+// Output text to the game with specified length
+void QWritel(const char *input, unsigned int input_length) {
+	if (input_length > 0) {
+		DWORD bytes_written;
+		WriteFile(global.out, input, input_length, &bytes_written, NULL);
+
+		if (bytes_written < input_length)
+			DebugMessage("WARNING! Wanted to write %d bytes but only %d written", input_length, bytes_written);
+	}
+}
+
+
+
+
+
+
+// Search for an int in an int array
+int binary_search(unsigned int item_to_find, unsigned int *array, int low, int high) {
+	if (high >= low) {
+		int mid                 = low + (high - low) / 2;
+		unsigned int *mid_value = array + mid;
+		
+		if (*mid_value == item_to_find)
+			return mid;
+		else
+			return binary_search(
+				item_to_find,
+				array,
+				*mid_value > item_to_find ? low   : mid+1,
+				*mid_value > item_to_find ? mid-1 : high
+			);
+	}
+
+	return -1;
+}
+
+
+
+
+
+
+// Search for an unsigned int in a string buffer
+BinarySearchResult binary_search_str(char *buffer, size_t array_size, unsigned int value_to_find, size_t low, size_t high) {
+	if (array_size  &&  high>=low) {
+		size_t mid        = low + (high - low) / 2;
+		size_t *mid_value = (size_t*)(buffer + mid*sizeof(size_t));
+
+		if (*mid_value == value_to_find) {
+			BinarySearchResult out = {mid,1};
+			return out;
+		} else
+			if (*mid_value > value_to_find) {
+				if (mid > 0)
+					return binary_search_str(buffer, array_size, value_to_find, low, mid-1);
+				else {
+					// target key should be at the start of the array
+					BinarySearchResult out = {low, 0};
+					return out;
+				}
+			} else
+				if (mid < array_size-1)
+					return binary_search_str(buffer, array_size, value_to_find, mid+1, high);
+				else {
+					// target key should be at the end of the array
+					BinarySearchResult out = {mid+1, 0};
+					return out;
+				}
+	}
+	
+	BinarySearchResult out = {low,0};
+	return out;
+}
+
+
+
+
+
+
+
+void QWrite_err(int code_primary, int arg_num, ...) {
+	if (!global.out) {
+		return;
+	}
+
+	char format[128]     = "";
+	DWORD code_secondary = ERROR_SUCCESS;
+	LPVOID winapi_msg    = NULL;
+
+	va_list arg_list;
+	va_start(arg_list, arg_num);
+
+	switch (code_primary) {
+		case FWERROR_NONE : 
+		case FWERROR_UNKNOWN_COMMAND : 
+		case FWERROR_GAME_WINDOW_NOT_IN_FRONT : 
+		case FWERROR_COMMAND_ILLEGAL_ON_SERVER : break;
+
+		case FWERROR_ERRNO : {
+			if (arg_num > 0)
+				code_secondary = va_arg(arg_list, DWORD);
+		} break;
+
+		case FWERROR_WINAPI : 
+		case FWERROR_SHFILEOP : 
+		case FWERROR_CLIP_OPEN :
+		case FWERROR_CLIP_CLEAR :
+		case FWERROR_CLIP_COPY :
+		case FWERROR_CLIP_LOCK : {
+			if (arg_num > 0)
+				code_secondary = va_arg(arg_list, DWORD);
+			
+			FormatMessage(
+			FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+			NULL,
+			code_secondary, 
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+			(LPTSTR) &winapi_msg,
+			0,
+			NULL);
+		} break;
+		
+		case FWERROR_NO_PROCESS  : strcpy(format,"Couldn't find %s process"); break;
+
+		case FWERROR_MALLOC      : strcpy(format,"Failed to allocate memory block %s %u bytes"); break;
+		case FWERROR_REALLOC     : strcpy(format,"Failed to reallocate memory block %s %u bytes"); break;
+		case FWERROR_STR_REPLACE : strcpy(format,"Failed to perform str_replace %s %u bytes"); break;
+
+		case FWERROR_CLIP_FORMAT : strcpy(format,"Clipboard data incompatible format"); break;
+		case FWERROR_CLIP_EMPTY  : strcpy(format,"Clipboard is empty"); break;
+		case FWERROR_CLIP_EFFECT : strcpy(format,"Invalid preferred effect value"); break;
+
+		case FWERROR_PARAM_FEW             : strcpy(format,"Not enough parameters %u/%u"); break;
+		case FWERROR_PARAM_LTZERO          : strcpy(format,"Parameter is less than zero %s=%d"); break;
+		case FWERROR_PARAM_ZERO            : strcpy(format,"Parameter is zero or less %s=%d"); break;
+		case FWERROR_PARAM_ONE             : strcpy(format,"Parameter is one or less %s=%d"); break;
+		case FWERROR_PARAM_RANGE           : strcpy(format,"Range start %s is larger than range end %s %d>%d"); break;
+		case FWERROR_PARAM_PATH_LEAVING    : strcpy(format,"Path leads outside source directory %s"); break;
+		case FWERROR_PARAM_ACTION          : strcpy(format,"Action was not specified"); break;
+		case FWERROR_PARAM_EMPTY           : strcpy(format,"Parameter is empty: %s"); break;
+		case FWERROR_PARAM_PATH_RESTRICTED : strcpy(format,"Restricted location %s"); break;
+
+		case FWERROR_FILE_EMPTY       : strcpy(format,"File is empty"); break;
+		case FWERROR_FILE_NOTDIR      : strcpy(format,"File is not a directory"); break;
+		case FWERROR_FILE_MOVETOTMP   : strcpy(format,"Moving file from outside to the tmp directory %s %s"); break;
+		case FWERROR_FILE_NOVAR       : strcpy(format,"Couldn't find variable %s in file %s"); break;
+		case FWERROR_FILE_NOLINE      : strcpy(format,"Couldn't find line %d in file %s"); break;
+		case FWERROR_FILE_APPEND      : strcpy(format,"Couldn't append to %s too long line (%u chars) in file %s"); break;
+		case FWERROR_FILE_LINEREPLACE : strcpy(format,"Couldn't replace line %d with %d (end of file)"); break;
+		case FWERROR_FILE_EXISTS      : strcpy(format,"File %s already exists"); break;
+		case FWERROR_FILE_DIREXISTS   : strcpy(format,"Directory %s already exists"); break;
+		case FWERROR_FILE_READ        : strcpy(format,"Read only %u/%u bytes from file %s"); break;
+		case FWERROR_FILE_WRITE       : strcpy(format,"Written only %u/%u bytes to file %s"); break;
+
+		case FWERROR_CLASS_PARENT   : strcpy(format,"Couldn't find parent class %s %d/%d in file %s"); break; 
+		case FWERROR_CLASS_EXISTS   : strcpy(format,"Class %s already exists in file %s"); break;
+		case FWERROR_CLASS_NOCLASS  : strcpy(format,"Couldn't find class %s in file %s"); break;
+		case FWERROR_CLASS_NOVAR    : strcpy(format,"Couldn't find property %s in file %s"); break;
+		case FWERROR_CLASS_NOITEM   : strcpy(format,"Couldn't find item %d in array %s in file %s"); break;
+		case FWERROR_CLASS_NOTARRAY : strcpy(format,"Property %s is not an array in file %s"); break;
+		case FWERROR_CLASS_SYNTAX   : strcpy(format,"Syntax error: %s at line %d column %d in file %s"); break;
+
+		case FWERROR_DB_SIGNATURE   : strcpy(format,"Incorrect database signature 0x%I64x (should be 0x%I64x) in file %s"); break;
+		case FWERROR_DB_VERSION     : strcpy(format,"Database version not supported %d (should be <=%d) in file %s"); break;
+		case FWERROR_DB_SMALL       : strcpy(format,"Database is too small %u bytes (should be at least %u bytes) in file %s"); break;
+		case FWERROR_DB_COLLISION   : strcpy(format,"Collision between key hashes %s (%u) and %s (%u) in file %s"); break;
+		case FWERROR_DB_HASHORDER   : strcpy(format,"Incorrect hash order for keys %u and %u in file %s"); break;
+		case FWERROR_DB_PTRORDER    : strcpy(format,"Database pointer #%u (%u) is smaller than or equal to pointer #%u (%u) in file %s"); break;
+		case FWERROR_DB_PTRSMALL    : strcpy(format,"Database pointer %u/%u value %u is too small (minimal is %u) in file %s"); break;
+		case FWERROR_DB_PTRBIG      : strcpy(format,"Database pointer %u/%u value %u is too big (maximal is %u) in file %s"); break;
+		case FWERROR_DB_PTRFIRST    : strcpy(format,"Database first pointer value %u is incorrect (should be %u) in file %s"); break;
+		case FWERROR_DB_CONSISTENCY : strcpy(format,"Database consistency error (item %u/%u at %u) in file %s"); break;
+		
+		default : sprintf(format, "Unknown error %d", code_primary);
+	}
+
+	// Handle error within error
+	// Log errors to file
+	if (~global.option_error_output & OPTION_ERROR_ARRAY_SUPPRESS) {
+		// If this function was used before then semi-colon is required
+		if (global.option_error_output & OPTION_ERROR_ARRAY_STARTED)
+			QWrite(";");
+		else
+			global.option_error_output |= OPTION_ERROR_ARRAY_STARTED;
+
+		// Start output
+		if (global.option_error_output & OPTION_ERROR_ARRAY_LOCAL)
+			QWrite("_fwatch_error=");
+
+		QWritef("[%s,%d,%d,\"", getBool(code_primary==FWERROR_NONE), code_primary, code_secondary);
+
+		if (winapi_msg) {
+			switch (code_primary) {
+				case FWERROR_CLIP_OPEN  : QWrite("Couldn't open clipboard -"); break;
+				case FWERROR_CLIP_CLEAR : QWrite("Couldn't clear clipboard"); break;
+				case FWERROR_CLIP_COPY  : QWrite("Couldn't copy text to clipboard"); break;
+				case FWERROR_CLIP_LOCK  : QWrite("GlobalLock failed"); break;
+			}
+
+			Trim((char*)winapi_msg);
+			QWriteDoubleQ((char*)winapi_msg);
+			LocalFree(winapi_msg);
+
+			for (int i=1; i<arg_num; i++) {
+				QWrite(" - ");
+				QWriteDoubleQ(va_arg(arg_list, char*));
+			}
+		} else
+			if (code_primary == FWERROR_ERRNO) {
+				QWriteDoubleQ(strerror(code_secondary));
+
+				for (int i=1; i<arg_num; i++) {
+					QWrite(" - ");
+					char *arg = va_arg(arg_list, char*);
+					QWriteDoubleQ(arg);
+				}
+			} else {
+				vfprintf(global.outf, format, arg_list);
+			}
+
+		va_end(arg_list);
+
+		if (global.option_error_output & OPTION_ERROR_ARRAY_CLOSE)
+			QWrite("\"]");
+		else
+			if (global.option_error_output & OPTION_ERROR_ARRAY_LOCAL)
+				QWrite("\"];");
+			else
+				QWrite("\",");
+	}
+}
+
+
+
+
+
+
+// Get higher units out of number of bytes
+FileSize DivideBytes(double bytes) {
+	FileSize out;
+	out.bytes     = bytes;
+	out.kilobytes = 0;
+	out.megabytes = 0;
+
+	if (out.bytes >= 1048576) {
+		out.megabytes  = out.bytes / 1048576;
+		out.megabytes -= fmod(out.megabytes, 1);
+		out.bytes     -= out.megabytes * 1048576;
+	}
+
+	if (out.bytes >= 1024) {
+		out.kilobytes  = out.bytes / 1024;
+		out.kilobytes -= fmod(out.kilobytes, 1);
+		out.bytes     -= out.kilobytes * 1024;
+	}
+
+	return out;
+}
+
+
+
+
+
+
+// Default values for ParseState struct
+void SQM_Init(SQM_ParseState &input) {
+	input.i                 = 0;
+	input.word_start        = -1;
+	input.comment           = SQM_NONE;
+	input.expect            = SQM_PROPERTY;
+	input.class_level       = 0;
+	input.array_level       = 0;
+	input.parenthesis_level = 0;
+    input.word_started      = false;
+	input.first_char        = true;
+	input.is_array          = false;
+	input.in_quote          = false;
+	input.macro             = false;
+	input.is_inherit        = false;
+	input.purge_comment     = false;
+	input.separator         = ' ';
+	strcpy(input.empty_string, "");
+
+	// Output
+	input.property            = input.empty_string;
+	input.property_start      = 0;
+	input.property_end        = 0;
+	input.property_length     = 0;
+	input.value               = input.empty_string;
+	input.value_start         = 0;
+	input.value_end           = 0;
+	input.value_length        = 0;
+	input.class_name          = input.empty_string;
+	input.class_name_length   = 0;
+	input.class_start         = 0;
+	input.class_end           = 0;
+	input.class_length        = 0;
+	input.class_name_full_end = 0;
+	input.inherit             = input.empty_string;
+	input.inherit_length      = 0;
+	input.scope_end           = 0;
+}
+
+// Read OFP file with classes
+int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_type, char *to_find, size_t to_find_length) {
+	int initial_level = state.class_level;
+	
+	for (; state.i<text_length; state.i++) {
+		char c = text[state.i];
+
+		// Parse preprocessor comment
+		switch (state.comment) {
+			case SQM_NONE  : {
+				if (c == '/' && !state.in_quote) {
+					char c2 = text[state.i+1];
+					
+					if (c2 == '/')
+						state.comment = SQM_LINE;
+					else 
+						if (c2 == '*')
+							state.comment = SQM_BLOCK;
+				}
+				
+				if (state.comment == SQM_NONE)
+					break;
+				else {
+					if (state.word_started)
+						state.purge_comment = true;
+					
+					continue;
+				}
+			}
+			
+			case SQM_LINE  : {
+				if (c=='\r' || c=='\n')
+					state.comment = SQM_NONE;
+
+				continue;
+			}
+			
+			case SQM_BLOCK : {
+				if (state.i>0 && text[state.i-1]=='*' && c=='/')
+					state.comment = SQM_NONE;
+
+				continue;
+			}
+		}
+
+		// Parse preprocessor directives
+		if (!state.first_char && (c=='\r' || c=='\n')) {
+			state.first_char = true;
+			
+			if (state.macro && text[state.i-1] != '\\')
+				state.macro = false;
+		}
+		
+		if (!isspace(text[state.i])  &&  state.first_char) {
+			state.first_char = false;
+			
+			if (c == '#')
+				state.macro = true;
+		}
+		
+		if (state.macro)
+			continue;
+
+
+		// Parse classes
+		switch (state.expect) {
+			case SQM_SEMICOLON : {
+				if (c == ';') {
+					state.expect = SQM_PROPERTY;
+					continue;
+				} else 
+					if (!isspace(c))
+						state.expect = SQM_PROPERTY;
+			}
+			
+			case SQM_PROPERTY : {
+				if (c == '}') {
+					state.scope_end = state.i;
+					state.expect    = SQM_SEMICOLON;
+					state.class_level--;
+						
+					// If wanted to move to the end of the current scope
+					if ((action_type == SQM_ACTION_FIND_CLASS_END || action_type==SQM_ACTION_FIND_CLASS_END_CONVERT) && state.class_level+1==initial_level) {
+
+						// Include separator in the class length
+						for (size_t z=state.i; z<=text_length; z++) {
+							if (z == text_length || text[z]==';' || text[z]=='\n') {
+								state.i = z;
+								break;
+							}
+						}
+						
+						state.i++;
+						state.class_end    = state.i;
+						state.class_length = state.i - state.class_start;
+						return SQM_OUTPUT_END_OF_SCOPE;
+					}
+									
+					// End parsing when leaving starting scope
+					if (state.class_level < initial_level  ||  action_type == SQM_ACTION_GET_NEXT_ITEM) {
+						state.i++;
+						return SQM_OUTPUT_END_OF_SCOPE;
+						
+					}
+
+					continue;
+				}
+				
+				if (isalnum(c) || c=='_' || c=='[' || c==']') {
+					if (!state.word_started) {
+						state.word_start   = state.i;
+						state.word_started = true;
+					}
+				} else
+					if (state.word_started) {
+						if (strncmp(text+state.word_start,"class",5)==0) {
+							state.expect = SQM_CLASS_NAME;
+							
+							if (action_type != SQM_ACTION_FIND_CLASS_END && action_type != SQM_ACTION_FIND_CLASS_END_CONVERT)
+								state.class_start = state.word_start;
+						} else 
+							if (strncmp(text+state.word_start,"enum",4)==0) {
+								state.expect    = SQM_ENUM_BRACKET;
+								state.separator = '{';
+							} else 
+								if (strncmp(text+state.word_start,"__EXEC",6)==0) {
+									state.expect    = SQM_EXEC_BRACKET;
+									state.separator = '(';
+								} else {
+									state.expect          = SQM_EQUALITY;
+									state.separator       = '=';
+									state.property        = text + state.word_start;
+									state.property_start  = state.word_start;
+									state.property_end    = state.i;
+									state.property_length = state.property_end - state.property_start;
+									state.is_array        = text[state.i-2]=='[' && text[state.i-1]==']';
+								}
+
+						state.word_started = false;
+					}
+				
+				if (state.separator == ' ') {
+					break;
+				}
+			}
+			
+			case SQM_EQUALITY     : 
+			case SQM_ENUM_BRACKET : 
+			case SQM_EXEC_BRACKET : {
+				if (c == state.separator) {
+					state.expect++;
+					state.separator = ' ';
+				} else 
+					if (state.expect==SQM_EQUALITY && c=='(') {
+						state.expect            = SQM_MACRO_CONTENT;
+						state.separator         = ' ';
+						state.parenthesis_level = 1;
+					} else 
+						if (!isspace(c)) {	//ignore syntax error
+							state.i--;
+							state.separator = ' ';
+							state.expect    = SQM_SEMICOLON;
+						}
+				
+				break;
+			}
+			
+			case SQM_VALUE : {
+				if (c == '"')
+					state.in_quote = !state.in_quote;
+
+				if (!state.in_quote && (c=='{' || c=='[')) {
+					state.array_level++;
+					
+					if (SQM_ACTION_FIND_CLASS_END_CONVERT)
+						text[state.i] = '{';
+				}
+
+				if (!state.in_quote && (c=='}' || c==']')) {
+					state.array_level--;
+					
+					if (SQM_ACTION_FIND_CLASS_END_CONVERT)
+						text[state.i] = '}';
+
+					// Remove trailing commas
+					/*for (int z=state.i-1; z>0 && (isspace(text[z]) || text[z]==',' || text[z]=='}' || text[z]==']'); z--)
+						if (text[z]==',')
+							text[z] = ' ';*/
+				}
+
+				// Convert semi-colons to commas
+				/*if (!state.in_quote && c==';' && state.is_array && state.array_level>0)
+					text[state.i] = ',';*/
+
+				if (!state.word_started) {
+					if (!isspace(c)) {
+						state.word_start   = state.i;
+						state.word_started = true;
+					}
+				} else {
+					if (!state.in_quote && state.array_level==0 && (c==';' || c=='\r' || c=='\n')) {
+						state.value        = text + state.word_start;
+						state.value_start  = state.word_start;
+						state.value_end    = state.i;
+						
+						// Include separator in the length
+						for (size_t z=state.i; z<=text_length; z++) {
+							if (z == text_length) {
+								state.value_end = z;
+								break;
+							}
+							
+							if (text[z]==';' || text[z]=='\n') {
+								state.value_end = z + 1;
+								break;
+							}
+						}
+						
+						state.value_length = state.value_end - state.word_start;
+						state.word_started = false;
+						state.expect       = SQM_PROPERTY;
+						
+						if (action_type==SQM_ACTION_GET_NEXT_ITEM || (action_type==SQM_ACTION_FIND_PROPERTY && state.class_level==initial_level && strncmpi(state.property,to_find,to_find_length)==0)) {
+							state.i++;
+							return SQM_OUTPUT_PROPERTY;
+						}
+					}
+				}
+				
+				break;
+			}
+			
+			case SQM_CLASS_NAME    :
+			case SQM_CLASS_INHERIT : {
+				if (isalnum(c) || c=='_') {
+					if (!state.word_started) {
+						state.word_start   = state.i;
+						state.word_started = true;
+					}
+				} else
+					if (state.word_started) {
+						if (state.expect == SQM_CLASS_NAME) {
+							state.class_name        = text + state.word_start;
+							state.class_name_length = state.i - state.word_start;
+							state.class_name_start  = state.word_start;
+							state.inherit           = state.empty_string;
+							state.inherit_length    = 0;
+						} else {
+							state.inherit        = text + state.word_start;
+							state.inherit_length = state.i - state.word_start;
+						}
+						
+						state.is_inherit          = state.expect == SQM_CLASS_INHERIT;
+						state.word_started        = false;
+						state.expect              = state.expect==SQM_CLASS_NAME ? SQM_CLASS_COLON : SQM_CLASS_BRACKET;
+						state.class_name_full_end = state.i;
+					}
+				
+				if (state.expect!=SQM_CLASS_COLON && state.expect!=SQM_CLASS_BRACKET)
+					break;
+			}
+			
+			case SQM_CLASS_COLON   :
+			case SQM_CLASS_BRACKET : {
+				if (state.expect==SQM_CLASS_COLON && c==':')
+					state.expect = SQM_CLASS_INHERIT;
+				else 
+					if (c == '{') {
+						state.class_level++;
+						state.expect = SQM_PROPERTY;
+						
+						// Return starting position of this class
+						if (action_type==SQM_ACTION_GET_NEXT_ITEM || (action_type==SQM_ACTION_FIND_CLASS && state.class_level-1==initial_level && strncmpi(state.class_name,to_find,to_find_length) == 0)) {						
+							state.i++;
+							return SQM_OUTPUT_CLASS;
+						}
+					} else
+						if (!isspace(c)) {	//ignore syntax error
+							state.i--;
+							state.expect = SQM_SEMICOLON;
+						}
+				
+				break;
+			}
+			
+			case SQM_ENUM_CONTENT : 
+			case SQM_EXEC_CONTENT : {
+				if ((state.expect==SQM_EXEC_CONTENT && c==')') || (state.expect==SQM_ENUM_CONTENT && c=='}'))
+					state.expect = SQM_SEMICOLON;
+
+				break;
+			}
+			
+			case SQM_MACRO_CONTENT : {
+				if (c == '"')
+					state.in_quote = !state.in_quote;
+					
+				if (!state.in_quote) {
+					if (c == '(')
+						state.parenthesis_level++;
+						
+					if (c == ')')
+						state.parenthesis_level--;
+						
+					if (state.parenthesis_level == 0)
+						state.expect = SQM_SEMICOLON;
+				}
+					
+				break;
+			}
+		}
+	}
+	
+	state.scope_end = text_length;
+	return SQM_OUTPUT_END_OF_SCOPE;
+}
+
+
+
+
+
+// Copy classes and properties from "merge" to "source"
+int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, String &source, SQM_ParseState &source_state) {
+	int merge_parse_result             = 0;
+	SQM_ParseState source_state_backup = source_state;
+	bool buffer_modified               = false;
+	
+	while ((merge_parse_result = SQM_Parse(merge, merge_length, merge_state, SQM_ACTION_GET_NEXT_ITEM, NULL, 0))) {
+		switch (merge_parse_result) {
+			case SQM_OUTPUT_PROPERTY : {
+				// Convert array format from SQS to SQM
+				if (merge_state.property[merge_state.property_length-1]==']' && merge_state.property[merge_state.property_length-2]=='[') {
+					bool in_quote = false;
+
+					for (size_t i=0; i<merge_state.value_length; i++) {
+						if (!in_quote  &&  merge_state.value[i]=='[')
+							merge_state.value[i] = '{';
+
+						if (!in_quote  &&  merge_state.value[i]==']')
+							merge_state.value[i] = '}';
+
+						if (merge_state.value[i] == '"')
+							in_quote = !in_quote;
+					}
+				}
+
+				source_state      = source_state_backup;
+				int source_result = SQM_Parse(source.text, source.length, source_state, SQM_ACTION_FIND_PROPERTY, merge_state.property, merge_state.property_length);
+
+				// Replace property
+				switch (source_result) {
+					case SQM_OUTPUT_PROPERTY : {																		
+						size_t shift_amount  = merge_state.value_length > source_state.value_length ? merge_state.value_length-source_state.value_length : source_state.value_length-merge_state.value_length;
+						bool shift_direction = merge_state.value_length > source_state.value_length;
+
+						shift_buffer_chunk(source.text, source_state.value_end, source.length, shift_amount, shift_direction);						
+						memcpy(source_state.value, merge_state.value, merge_state.value_length);
+
+						source.length             += shift_amount * (shift_direction ? 1 : -1);
+						source.text[source.length] = '\0';
+						buffer_modified            = true;
+					} break;
+
+					case SQM_OUTPUT_END_OF_SCOPE : {
+						// Add a new property
+						
+						// Check last character in the source
+						bool add_semicolon = false;
+						for (size_t z=source_state.scope_end-1;  z>0 && !add_semicolon;  z--) {
+							if (source.text[z]=='\n' || source.text[z]==';')
+								break;
+							else
+								if (!isspace(source.text[z]))
+									add_semicolon = true;
+						}
+						
+						const size_t added_length = (merge_state.value_end - merge_state.property_start) + add_semicolon;
+
+						shift_buffer_chunk(source.text, source_state.scope_end, source.length, added_length, OPTION_RIGHT);
+						
+						if (add_semicolon)
+							memset(source.text+source_state.scope_end, ';', 1);
+													
+						memcpy(source.text+source_state.scope_end+add_semicolon, merge_state.property, merge_state.value_end-merge_state.property_start);
+
+						source.length             += added_length;
+						source.text[source.length] = '\0';
+						buffer_modified = true;
+					} break;
+				}
+			} break;
+			
+			case SQM_OUTPUT_CLASS : {
+				source_state      = source_state_backup;
+				int source_result = SQM_Parse(source.text, source.length, source_state, SQM_ACTION_FIND_CLASS, merge_state.class_name, merge_state.class_name_length);
+				
+				switch (source_result) {
+					case SQM_OUTPUT_CLASS : {
+						// If the clas exists in source then scan it recursively
+						if (SQM_Merge(merge, merge_length, merge_state, source, source_state))
+							buffer_modified = true;
+					} break;
+
+					case SQM_OUTPUT_END_OF_SCOPE : {
+						// If the class doesn't exist in source then copy the entire thing
+						SQM_Parse(merge, merge_length, merge_state, SQM_ACTION_FIND_CLASS_END_CONVERT, NULL, 0);
+						
+						shift_buffer_chunk(source.text, source_state.scope_end, source.length, merge_state.class_length, OPTION_RIGHT);
+						memcpy(source.text+source_state.scope_end, merge+merge_state.class_start, merge_state.class_length);
+
+						source.length             += merge_state.class_length;
+						source.text[source.length] = '\0';
+						buffer_modified = true;
+					} break;
+				}
+			} break;
+		}
+	}
+
+	return buffer_modified;
 }

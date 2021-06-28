@@ -14,6 +14,8 @@ Examples:
 	["flib_exec","inkeys.sqf"] call preProcessFile "..\fwatch\data\InitFLib.sqf"
 	
 Changelog:
+1.16
+- added FLIB_FORMAT
 1.15
 - removed FLIB_EXEC
 1.14
@@ -55,6 +57,7 @@ while "_i=_i+1;  _i<count _this  ||  count _this==0 && _i==0" do
 	CONDITION(FLIB_INKEYS,inKeys);
 	CONDITION(FLIB_MEASURETIME,MeasureTime);
 	CONDITION(FLIB_MODIFYDATE,ModifyDate);
+	CONDITION(FLIB_FORMAT,Format);
 };
 
 true

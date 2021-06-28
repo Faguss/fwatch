@@ -8,45 +8,37 @@
 case C_CLASS_LIST:
 {  // Return list of classes in a file
 
-	// Read arguments -------------------------------------------------
-	char *arg_filename  = "";
-	char *rawPath		= "";
-	int StartPos		= 0;
-	bool PassedStartPos	= false;
+	char *arg_filename      = empty_string;
+	char *raw_path          = empty_string;
+	int arg_filename_length = 0;
+	int start_pos           = 0;
+	bool start_pos_set      = false;
 
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_FILE :
+				arg_filename        = argument[i+1];
+				arg_filename_length = argument_length[i+1];
+				break;
 
-	// Parse arguments
-	for (int i=2; i<numP; i++)
-	{
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+			case NAMED_ARG_CLASSPATH :
+				raw_path = stripq(argument[i+1]);
+				break;
 
-		if (pch == NULL) 
-			continue;
-
-		int pos		= pch-arg;
-		arg[pos]	= '\0';
-		char *val	= Trim(arg+pos+1);
-
-		if (strcmpi(arg,"file") == 0)
-			arg_filename = val;
-
-		if (strcmpi(arg,"classpath") == 0) 
-			rawPath = stripq(val);
-
-		if (strcmpi(arg,"offset") == 0) 
-			PassedStartPos	= true, 
-			StartPos		= atoi(val);
-	};
+			case NAMED_ARG_OFFSET :
+				start_pos_set = true;
+				start_pos     = atoi(argument[i+1]);
+				break;
+		}
+	}
 	
 
 	// File not specified
-	if (strcmpi(arg_filename,"") == 0)
-	{
-		FWerror(107,0,CommandID,"arg_filename","",0,0,out);
-		QWrite("0,[],[],[]]", out);
+	if (arg_filename_length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+		QWrite("0,[],[],[]]");
 		break;
-	};
+	}
 
 
 	// Verify and update path to the file
@@ -54,8 +46,8 @@ case C_CLASS_LIST:
 	String_init(buf_filename);
 	char *ptr_filename = arg_filename;
 
-	if (!VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out)) {
-		QWrite("0,[],[],[]]", out);
+	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+		QWrite("0,[],[],[]]");
 		break;
 	}
 
@@ -64,7 +56,7 @@ case C_CLASS_LIST:
 	int J			= 0;	// J is current index
 	int K			= -1;	// K is max
 	char CLASSPATH;
-	char *pch2		= strtok(rawPath, "[,]");
+	char *pch2		= strtok(raw_path, "[,]");
 
 	while (pch2!=NULL  &&  K<10)	//from ofp array to char array
 	{
@@ -83,8 +75,8 @@ case C_CLASS_LIST:
 	FILE *f = fopen(ptr_filename, "r");
 	if (!f) 
 	{
-		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
-		QWrite("0,[],[],[]]", out);
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("0,[],[],[]]");
 		String_end(buf_filename);
 		break;
 	};
@@ -120,14 +112,14 @@ case C_CLASS_LIST:
 
 	if (line==NULL  ||  match==NULL  ||  classes==NULL  ||  inherits==NULL  ||  offset==NULL)
 	{
-		if (line == NULL)		{strcat(failedBuf,"line "); failedBufL+=matchLen;};
-		if (match == NULL)		{strcat(failedBuf,"match"); failedBufL+=offLen;};
-		if (classes == NULL)	{strcat(failedBuf,"classes "); failedBufL+=classesLen;};
-		if (inherits == NULL)	{strcat(failedBuf,"inherits "); failedBufL+=inheritsLen;};
-		if (offset == NULL)		{strcat(failedBuf,"offset "); failedBufL+=lineLen;};
+		if (!line)		{strcat(failedBuf,"line "); failedBufL+=matchLen;};
+		if (!match)		{strcat(failedBuf,"match"); failedBufL+=offLen;};
+		if (!classes)	{strcat(failedBuf,"classes "); failedBufL+=classesLen;};
+		if (!inherits)	{strcat(failedBuf,"inherits "); failedBufL+=inheritsLen;};
+		if (!offset)	{strcat(failedBuf,"offset "); failedBufL+=lineLen;};
 		
-		FWerror(10,0,CommandID,failedBuf,"",failedBufL,0,out);
-		QWrite("0,[],[],[]]", out);
+		QWrite_err(FWERROR_MALLOC, 2, failedBuf, failedBufL);
+		QWrite("0,[],[],[]]");
 		String_end(buf_filename);
 		free(line);
 		free(match);
@@ -140,13 +132,13 @@ case C_CLASS_LIST:
 	else
 		strcpy(line, ""),
 		strcpy(match,""),
-		strcpy(classes,"["),
-		strcpy(inherits,"["),
-		strcpy(offset,"[");
+		strcpy(classes,""),
+		strcpy(inherits,""),
+		strcpy(offset,"");
 		
 
 	// Variables:
-	char *ret			= "";		// return value when reading line from text
+	char *ret			= NULL;		// return value when reading line from text
 	int l				= 0;		// length of the current line
 	int level			= 0;		// inside how many brackets we currently are
 	int lastPos			= 0;		// remember position (in bytes) in the text file in case we need to revert
@@ -162,19 +154,21 @@ case C_CLASS_LIST:
     
 
 	// Start reading file from the given position
-	if (PassedStartPos && K>=0) 
-		fseek(f,StartPos,SEEK_SET), 
-		lastPos = StartPos, 
-		J		= K, 
+	if (start_pos_set && K>=0) {
+		fseek(f, start_pos, SEEK_SET);
+		lastPos = start_pos;
+		J		= K;
 		level	= J;
+	}
 
 
 	// For each line in a text file -----------------------------------
-	while(ret = fgets(line, lineLen ,f))
+	while((ret = fgets(line, lineLen ,f)))
 	{
-		if (ferror(f)) 
-			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out), 
+		if (ferror(f)) {
+			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 			error = true;
+		}
 
 		if (quit || error) 
 			break;
@@ -192,7 +186,7 @@ case C_CLASS_LIST:
 				line=lineNEW; 
 			else 
 			{	
-				FWerror(11,0,CommandID,"line","",lineLen,0,out);
+				QWrite_err(FWERROR_REALLOC, 2, "line", lineLen);
 				error = 1; 
 				break;
 			};
@@ -218,7 +212,7 @@ case C_CLASS_LIST:
 		int CurrentCOL	= 0;						// position in the line
 		int classPOS[MAX_CLASSESINASINGLELINE];		// hold list of classes
 
-		while (res = strstr(lineTMP, "class "))
+		while ((res = strstr(lineTMP, "class ")))
 		{
 			if (I >= MAX_CLASSESINASINGLELINE) // reached limit
 				break;
@@ -310,7 +304,7 @@ case C_CLASS_LIST:
 			if (J>K  &&  !reached  &&  level==K+1) // found the final wanted class
 				reached = true;
 
-			if (J>K  &&  reached  &&  level<K+1  ||  level<J)  // passed through the wanted class - stop
+			if ((J>K  &&  reached  &&  level<K+1)  ||  level<J)  // passed through the wanted class - stop
 			{
 				quit = true; 
 				break;
@@ -352,7 +346,7 @@ case C_CLASS_LIST:
 						classesLen += strlen(match) + 8;
 						classesNEW = (char*) realloc(classes, classesLen);
 
-						if (classesNEW != NULL)
+						if (classesNEW)
 						{
 							classes = classesNEW;
 							strcat(classes,"]+[\""); 
@@ -361,7 +355,7 @@ case C_CLASS_LIST:
 						}
 						else 
 						{
-							FWerror(11,0,CommandID,"classes","",classesLen,0,out);
+							QWrite_err(FWERROR_REALLOC, 2, "classes", classesLen);
 							error = true; 
 							break;
 						};
@@ -372,12 +366,12 @@ case C_CLASS_LIST:
 						offLen		= offLen + strlen(tmp);
 						offsetNEW	= (char*) realloc(offset, offLen);
 
-						if (offsetNEW != NULL) 
+						if (offsetNEW) 
 							offset = offsetNEW, 
 							strcat(offset, tmp);
 						else
 						{
-							FWerror(11,0,CommandID,"offset","",offLen,0,out);
+							QWrite_err(FWERROR_REALLOC, 2, "offset", offLen);
 							error = true; 
 							break;
 						};
@@ -403,7 +397,7 @@ case C_CLASS_LIST:
 						inheritsLen += strlen(match) + 8;
 						inheritsNEW = (char*) realloc(inherits, inheritsLen);
 
-						if (inheritsNEW != NULL)
+						if (inheritsNEW)
 						{
 							inherits = inheritsNEW;
 							strcat(inherits,"]+[\""); 
@@ -412,7 +406,7 @@ case C_CLASS_LIST:
 						}
 						else
 						{
-							FWerror(11,0,CommandID,"inherits","",inheritsLen,0,out);
+							QWrite_err(FWERROR_REALLOC, 2, "inherits", inheritsLen);
 							error = true; 
 							break;
 						};
@@ -439,11 +433,11 @@ case C_CLASS_LIST:
 						matchLen +=100;
 						matchNEW  = (char*) realloc (match, matchLen);
 
-						if (matchNEW != NULL) 
+						if (matchNEW) 
 							match = matchNEW; 
 						else 
 						{
-							FWerror(11,0,CommandID,"match","",matchLen,0,out);
+							QWrite_err(FWERROR_REALLOC, 2, "match", matchLen);
 							error = true; 
 							break;
 						}
@@ -458,43 +452,19 @@ case C_CLASS_LIST:
 	// ----------------------------------------------------------------
 	fclose(f);
 
-	if (!error)
-	{
+	if (!error) {
 		// If couldn't find classes that were in the class path
-		if (J <= K)
-		{
-			FWerror(250,0,CommandID,ptr_filename,classpath[J],J,++K,out);
-
-			char tmp[12] = ""; 
-			sprintf(tmp, "%d", J); 
-			QWrite(tmp, out);
-			QWrite(",[],[],[]]", out);
+		if (J <= K)	{
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[J], J, ++K, ptr_filename);
+			QWritef("%d,[],[],[]]", J);
+		} else {
+			// No issues - output data
+			QWrite_err(FWERROR_NONE, 0);
+			QWritef("%d,[%s],[%s],[%s]]", J, classes, inherits, offset);
 		}
-		// No issues - output data
-		else
-		{
-			FWerror(0,0,CommandID,"","",0,0,out);
-			
-			char tmp[12] = "";
-			sprintf(tmp,"%d,",J);
-			QWrite(tmp, out);
-			
-			strcat(classes, "],"); 
-			strcat(inherits, "],");
-			strcat(offset, "]]");
-			QWrite(classes, out);
-			QWrite(inherits, out);
-			QWrite(offset, out);
-		};
-	}
-	// If error - error info was already passed; now empty arrays
-	else
-	{
-		char tmp[12] = ""; 
-		sprintf(tmp, "%d", J); 
-		QWrite(tmp, out);
-		QWrite(",[],[],[]]", out);
-	};
+	} else
+		// If error - error info was already passed; now empty arrays
+		QWritef("%d,[],[],[]]", J);
 
 	String_end(buf_filename);
 	free(line); 
@@ -516,55 +486,52 @@ break;
 
 
 
-case C_CLASS_TOKENS:
+case C_CLASS_TOKEN:
 { // Return all properties from a class
 
 	// Read arguments -------------------------------------------------
-	char *arg_filename	= "";
-	char *rawPath		= "";
-	char *Target		= "";
-	char *Wrap			= "";
-	bool NoWrap			= false;
-	bool NoDoubleWrap	= false;
-	bool PassedStartPos = false;
-	int  StartPos		= 0;
+	char *arg_filename	    = empty_string;
+	char *raw_path          = empty_string;
+	char *Target		    = empty_string;
+	char *Wrap			    = empty_string;
+	bool NoWrap			    = false;
+	bool NoDoubleWrap	    = false;
+	bool start_pos_set      = false;
+	int  start_pos          = 0;
+	int arg_filename_length = 0;
 
 	// Parse arguments
-	for (int i=2; i<numP; i++)
-	{
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_FILE :
+				arg_filename        = argument[i+1];
+				arg_filename_length = argument_length[i+1];
+				break;
 
-		if (pch == NULL) 
-			continue;
+			case NAMED_ARG_CLASSPATH :
+				raw_path = stripq(argument[i+1]);
+				break;
 
-		int pos		= pch-arg;
-		arg[pos]	= '\0';
-		char *val	= Trim(arg+pos+1);
+			case NAMED_ARG_OFFSET :
+				start_pos_set = true;
+				start_pos     = atoi(argument[i+1]);
+				break;
 
-		if (strcmpi(arg,"file") == 0) 
-			arg_filename = val;
+			case NAMED_ARG_TOKEN :
+				Target = argument[i+1];
+				break;
 
-		if (strcmpi(arg,"classpath") == 0) 
-			rawPath = stripq(val);
-
-		if (strcmpi(arg,"offset") == 0) 
-			PassedStartPos	= true, 
-			StartPos		= atoi(val);
-
-		if (strcmpi(arg,"token") == 0) 
-			Target = val;
-
-		if (strcmpi(arg,"wrap") == 0)
-			Wrap = val;
-	};
+			case NAMED_ARG_WRAP :
+				Wrap = argument[i+1];
+				break;
+		}
+	}
 
 
 	// File not specified
-	if (strcmpi(arg_filename,"") == 0)
-	{
-		FWerror(107,0,CommandID,"arg_filename","",0,0,out);
-		QWrite("0,\"0\",[],[]]", out);
+	if (arg_filename_length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+		QWrite("0,\"0\",[],[]]");
 		break;
 	};
 
@@ -584,8 +551,8 @@ case C_CLASS_TOKENS:
 	String_init(buf_filename);
 	char *ptr_filename = arg_filename;
 
-	if (!VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out)) {
-		QWrite("0,\"0\",[],[]]", out);
+	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+		QWrite("0,\"0\",[],[]]");
 		break;
 	}
 
@@ -594,7 +561,7 @@ case C_CLASS_TOKENS:
 	int J			= 0;	// J is current index, 
 	int K			= -1;	// K is max
 	char CLASSPATH;
-	char *pch		= strtok(rawPath, "[,]");
+	char *pch		= strtok(raw_path, "[,]");
 
 	while (pch!=NULL  &&  K<10)	//from ofp array to char array
 	{
@@ -615,8 +582,8 @@ case C_CLASS_TOKENS:
 	FILE *f = fopen(ptr_filename, "r");
 	if (!f) 
 	{
-		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
-		QWrite("0,\"0\",[],[]]", out);
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("0,\"0\",[],[]]");
 		String_end(buf_filename); 
 		break;
 	};
@@ -648,13 +615,13 @@ case C_CLASS_TOKENS:
 
 	if (line==NULL  ||  match==NULL  ||  names==NULL  ||  values==NULL)
 	{
-		if (line == NULL)	{strcat(failedBuf,"line "); failedBufL+=lineLen;};
-		if (match == NULL)	{strcat(failedBuf,"match"); failedBufL+=matchLen;};		
-		if (names == NULL)	{strcat(failedBuf,"names "); failedBufL+=namesLen;};
-		if (values == NULL) {strcat(failedBuf,"values "); failedBufL+=valuesLen;};
+		if (!line)   {strcat(failedBuf,"line "); failedBufL+=lineLen;};
+		if (!match)  {strcat(failedBuf,"match"); failedBufL+=matchLen;};		
+		if (!names)  {strcat(failedBuf,"names "); failedBufL+=namesLen;};
+		if (!values) {strcat(failedBuf,"values "); failedBufL+=valuesLen;};
 
-		FWerror(10,0,CommandID,failedBuf,"",failedBufL,0,out);
-		QWrite("0,\"0\",[],[]]", out);
+		QWrite_err(FWERROR_MALLOC, 2, failedBuf, failedBufL);
+		QWrite("0,\"0\",[],[]]");
 		String_end(buf_filename); 
 		free(line);
 		free(match);
@@ -666,12 +633,12 @@ case C_CLASS_TOKENS:
 	else
 		strcpy(line, ""),
 		strcpy(match, ""),
-		strcpy(names, "["),
-		strcpy(values, "[");
+		strcpy(names, ""),
+		strcpy(values, "");
 				
 		
 	// Variables:
-	char *ret			= "";		// return value when reading line from text
+	char *ret			= NULL;		// return value when reading line from text
 	int l				= 0;		// length of the current line
 	int level			= 0;		// inside how many brackets we currently are
 	int arrayLev		= 0;		// inside how many brackets in a property value array we are
@@ -696,19 +663,21 @@ case C_CLASS_TOKENS:
 		reached = 1;
 
 	// Start reading file from the given position
-	if (PassedStartPos && K>=0) 
-		fseek(f,StartPos,SEEK_SET), 
-		lastPos = StartPos, 
-		J		= K, 
+	if (start_pos_set && K>=0) {
+		fseek(f, start_pos, SEEK_SET);
+		lastPos = start_pos;
+		J		= K;
 		level	= J;
+	}
 
 
 	// For each line in a text file -----------------------------------
-	while (ret = fgets(line, lineLen ,f))
+	while ((ret = fgets(line, lineLen ,f)))
 	{	
-		if (ferror(f)) 
-			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out), 
+		if (ferror(f)) {
+			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 			error = true;
+		}
 
 		if (quit || error) 
 			break;
@@ -722,11 +691,11 @@ case C_CLASS_TOKENS:
 			lineLen += 512;
 			lineNEW = (char*) realloc(line, lineLen);
 
-			if (lineNEW != NULL) 
+			if (lineNEW) 
 				line = lineNEW; 
 			else 
 			{	
-				FWerror(11,0,CommandID,"line","",lineLen,0,out);
+				QWrite_err(FWERROR_REALLOC, 2, "line", lineLen);
 				error = true;
 				break;
 			};
@@ -753,7 +722,7 @@ case C_CLASS_TOKENS:
 		int CurrentCOL	= 0;
 		int classPOS[MAX_CLASSESINASINGLELINE];
 
-		while (res = strstr(lineTMP, "class "))
+		while ((res = strstr(lineTMP, "class ")))
 		{
 			if (I >= MAX_CLASSESINASINGLELINE) // reached limit
 				break;
@@ -855,7 +824,7 @@ case C_CLASS_TOKENS:
 				if (J>K && !reached  &&  level==K+1) // found the final wanted class
 					reached = true;
 
-				if (J>K  &&  reached  &&  level<K+1  ||  level<J) // passed through the wanted class - stop
+				if ((J>K  &&  reached  &&  level<K+1)  ||  level<J) // passed through the wanted class - stop
 				{
 					quit = true; 
 					break;
@@ -937,7 +906,7 @@ case C_CLASS_TOKENS:
 					strcpy(match, "");
 
 				// if hit property separator or line end
-				if (!inQuote  &&  (line[i]==';' && arrayLev==0 || line[i]=='\n' && !anticipateArray && !inArray || line[i]=='}' && !inArray)  &&  value)
+				if (!inQuote  &&  ((line[i]==';' && arrayLev==0) || (line[i]=='\n' && !anticipateArray && !inArray) || (line[i]=='}' && !inArray))  &&  value)
 				{
 					if (valLen==0  &&  !thatWasArray) 
 						strcat(match,"\"");	// quote wasn't added on the start if it's empty value
@@ -945,7 +914,7 @@ case C_CLASS_TOKENS:
 					thatWasArray = false;
 
 					if (!inArray) 
-						if (!NoWrap  &&  !(NoDoubleWrap && startsWithQuote)  ||  valLen==0)
+						if ((!NoWrap  &&  !(NoDoubleWrap && startsWithQuote))  ||  valLen==0)
 							strcat(match,"\"");
 
 					value = false;
@@ -965,8 +934,8 @@ case C_CLASS_TOKENS:
 
 							for (int g=0;  g<max;  g++)
 							{
-								if (match[g]=='['  &&  match[g+1]=='\"'  &&  match[g+2]=='\"'  &&  match[g+3]=='\"'  || 
-									match[g]=='\"'  &&  match[g+1]=='\"'  &&  match[g+2]=='\"'  &&  match[g+3]==']')
+								if ((match[g]=='['  &&  match[g+1]=='\"'  &&  match[g+2]=='\"'  &&  match[g+3]=='\"')  || 
+									(match[g]=='\"'  &&  match[g+1]=='\"'  &&  match[g+2]=='\"'  &&  match[g+3]==']'))
 										match[g+1] = ' ',
 										match[g+2] = ' ';
 							};
@@ -976,7 +945,7 @@ case C_CLASS_TOKENS:
 						valuesLen = valuesLen + strlen(match) + 4;
 						valuesNEW = (char*) realloc(values, valuesLen);
 
-						if (valuesNEW != NULL)
+						if (valuesNEW)
 						{
 							values = valuesNEW;
 							strcat(values, "]+[");
@@ -984,7 +953,7 @@ case C_CLASS_TOKENS:
 						}
 						else 
 						{
-							FWerror(11,0,CommandID,"values","",valuesLen,0,out);
+							QWrite_err(FWERROR_REALLOC, 2, "values", valuesLen);
 							error = true; 
 							break;
 						};
@@ -1006,7 +975,7 @@ case C_CLASS_TOKENS:
 					if (match[strlen(match)-1]==']'  &&  match[strlen(match)-2]=='[') //if array bracket starts in the next line
 						anticipateArray = true;
 
-					if (strcmp(match,"")==0  ||  Search  &&  strcmpi(match,Target)!=0) 
+					if (strcmp(match,"")==0  ||  (Search  &&  strcmpi(match,Target)!=0)) 
 						dontcopy = true; 
 					else 
 					{
@@ -1016,7 +985,7 @@ case C_CLASS_TOKENS:
 						namesLen = namesLen + strlen(match) + 7;
 						namesNEW = (char*) realloc(names, namesLen);
 
-						if (namesNEW != NULL)
+						if (namesNEW)
 						{
 							names = namesNEW;
 							strcat(names, "]+[\""); 
@@ -1024,11 +993,11 @@ case C_CLASS_TOKENS:
 							// double the amount of quotation marks in the property name
 							if (strchr(match,'\"'))
 							{
-								char *rep = str_replace(match,"\"","\"\"",0,0);
+								char *rep = str_replace(match,"\"","\"\"",OPTION_NONE);
 
-								if (rep == NULL) 
+								if (!rep) 
 								{
-									FWerror(12,0,CommandID,"part (' with '')","",strlen(match),0,out);
+									QWrite_err(FWERROR_STR_REPLACE, 2, "part (' with '')", strlen(match));
 									error = true; 
 									break;
 								};
@@ -1043,7 +1012,7 @@ case C_CLASS_TOKENS:
 						}
 						else 
 						{
-							FWerror(11,0,CommandID,"names","",namesLen,0,out);
+							QWrite_err(FWERROR_REALLOC, 2, "names", namesLen);
 							error = true; 
 							break;
 						};
@@ -1133,11 +1102,11 @@ case C_CLASS_TOKENS:
 						matchLen += 100;
 						matchNEW = (char*) realloc (match, matchLen);
 
-						if (matchNEW != NULL) 
+						if (matchNEW) 
 							match = matchNEW; 
 						else 
 						{
-							FWerror(11,0,CommandID,"match","",matchLen,0,out);
+							QWrite_err(FWERROR_REALLOC, 2, "match", matchLen);
 							error = true; 
 							break;
 						}
@@ -1154,41 +1123,19 @@ case C_CLASS_TOKENS:
 	fclose(f);
 
 
-	if (!error)
-	{
+	if (!error) {
 		// If couldn't find classes that were in the class path
-		if (J <= K)
-		{
-			FWerror(250,0,CommandID,ptr_filename,classpath[J],J,++K,out);
-
-			char tmp[32] = ""; 
-			sprintf(tmp, "%d,\"%d\"", J,classOff);
-			QWrite(tmp, out);
-			QWrite(",[],[]]", out);
+		if (J <= K) {
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[J], J, ++K, ptr_filename);
+			QWritef("%d,\"%d\",[],[]]", J, classOff);
+		} else {
+			// No issues - output data
+			QWrite_err(FWERROR_NONE, 0);
+			QWritef("%d,\"%d\",[%s],[%s]]", J, classOff, names, values);
 		}
-		// No issues - output data
-		else
-		{
-			FWerror(0,0,CommandID,"","",0,0,out);
-
-			char tmp[32] = ""; 
-			sprintf(tmp, "%d,\"%d\",", J,classOff);
-			QWrite(tmp, out);
-
-			strcat(names, "],");
-			strcat(values, "]]");
-			QWrite(names, out);
-			QWrite(values, out);
-		};
-	}
-	// If error - error info was already passed; give empty arrays to the game
-	else
-	{
-		char tmp[32] = ""; 
-		sprintf(tmp, "%d,\"%d\"", J,classOff);
-		QWrite(tmp, out);
-		QWrite(",[],[]]", out);
-	};
+	} else
+		// If error - error info was already passed; give empty arrays to the game
+		QWritef("%d,\"%d\",[],[]]", J, classOff);
 
 	String_end(buf_filename);
 	free(names); 
@@ -1213,54 +1160,52 @@ case C_CLASS_MODIFY:
 { // Modify class name in a file
 
 	// Read arguments -------------------------------------------------
-	int action		= 0;
-	char *arg_filename = "";
-	char *rawPath	= "";
-	char *Target	= "";
-	char *RenameDst = "";
+	int action              = 0;
+	int arg_filename_length = 0;
+	char *arg_filename      = empty_string;
+	char *raw_path          = empty_string;
+	char *Target            = empty_string;
+	char *RenameDst         = empty_string;
 
 
 	// Parse arguments
-	for (int i=2; i<numP; i++)
-	{
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_FILE :
+				arg_filename        = argument[i+1];
+				arg_filename_length = argument_length[i+1];
+				break;
 
-		if (pch == NULL) 
-			continue;
+			case NAMED_ARG_CLASSPATH :
+				raw_path = stripq(argument[i+1]);
+				break;
 
-		int pos		= pch - arg;
-		arg[pos]	= '\0';
-		char *val	= Trim(arg+pos+1);
+			case NAMED_ARG_ADD :
+				action = 1;
+				Target = argument[i+1];
+				break;
 
-		if (strcmpi(arg,"file") == 0) 
-			arg_filename = val;
+			case NAMED_ARG_RENAME :
+				action = 2;
+				Target = argument[i+1];
+				break;
 
-		if (strcmpi(arg,"classpath") == 0) 
-			rawPath = stripq(val);
+			case NAMED_ARG_TO :
+				RenameDst = argument[i+1];
+				break;
 
-		if (strcmpi(arg,"add") == 0)	// add new class
-			action = 1, 
-			Target = val;		
-
-		if (strcmpi(arg,"rename") == 0)	// rename source class
-			action = 2, 
-			Target = val;
-
-		if (strcmpi(arg,"to") == 0) 	// rename destination class
-			RenameDst = val;
-
-		if (strcmpi(arg,"delete") == 0)	// remove class
-			action = 3, 
-			Target = val;
-	};
+			case NAMED_ARG_DELETE :
+				action = 3;
+				Target = argument[i+1];
+				break;
+		}
+	}
 
 
 	// File not specified
-	if (strcmpi(arg_filename,"") == 0)
-	{
-		FWerror(107,0,CommandID,"arg_filename","",0,0,out);
-		QWrite("0]", out);
+	if (arg_filename_length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+		QWrite("0]");
 		break;
 	};
 
@@ -1268,8 +1213,8 @@ case C_CLASS_MODIFY:
 	// If action was not determined
 	if (action == 0)
 	{
-		FWerror(106,0,CommandID,"","",0,0,out);
-		QWrite("0]", out);
+		QWrite_err(FWERROR_PARAM_ACTION, 0);
+		QWrite("0]");
 		break;
 	};
 
@@ -1289,8 +1234,8 @@ case C_CLASS_MODIFY:
 			strcat(tmp,"NewName");
 		};
 
-		FWerror(107,0,CommandID,tmp,"",0,0,out);
-		QWrite("0]", out);
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, tmp);
+		QWrite("0]");
 		break;
 	};
 
@@ -1300,8 +1245,8 @@ case C_CLASS_MODIFY:
 	String_init(buf_filename);
 	char *ptr_filename = arg_filename;
 	
-	if (!VerifyPath(&ptr_filename, buf_filename, RESTRICT_TO_MISSION_DIR, CommandID, out)) {
-		QWrite("0]", out);
+	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR)) {
+		QWrite("0]");
 		break;
 	}
 
@@ -1310,7 +1255,7 @@ case C_CLASS_MODIFY:
 	int J			= 0;	// J is current index
 	int K			= -1;	// K is max
 	char CLASSPATH; 
-	char *pch		= strtok(rawPath, "[,]");
+	char *pch		= strtok(raw_path, "[,]");
 
 	while (pch!=NULL  &&  K<10)	//from ofp array to char array
 	{
@@ -1323,9 +1268,9 @@ case C_CLASS_MODIFY:
 
 	// Split argument into classname and inherit
 	char *WantedClass	= Target; 
-	char *inherit		= "";
+	char *inherit		= NULL;
 
-	if (pch = strchr(WantedClass, ':'))
+	if ((pch = strchr(WantedClass, ':')))
 	{
 		int pos			 = pch - WantedClass;
 		inherit			 = WantedClass + pos + 1;
@@ -1341,8 +1286,8 @@ case C_CLASS_MODIFY:
 	FILE *f = fopen(ptr_filename, "r");
 	if (!f) 
 	{
-		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
-		QWrite("0]", out);
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("0]");
 		String_end(buf_filename); 
 		break;
 	};
@@ -1351,15 +1296,17 @@ case C_CLASS_MODIFY:
 	// Find file size, allocate buffer
 	fseek(f, 0, SEEK_END);
 
-	char* buf	= 0;
-	int bufsize = 0;
-	int fsize	= ftell(f);
-	buf			= new char[fsize + 70 + (strlen(com))];
+	char *buf	 = 0;
+	int bufsize  = 0;
+	int fsize	 = ftell(f);
+	size_t buf_size = fsize + 70;
+	for (size_t z=0;z<argument_num;z++)buf_size+=argument_length[z];
+	buf			 = new char[buf_size];
 
 	if (!buf)
 	{
-		FWerror(10,0,CommandID,"buf","",fsize+70+(strlen(com)),0,out);
-		QWrite("0]", out);
+		QWrite_err(FWERROR_MALLOC, 2, "buf", buf_size);
+		QWrite("0]");
 		String_end(buf_filename); 
 		fclose(f);
 		break;
@@ -1394,8 +1341,8 @@ case C_CLASS_MODIFY:
 		if (line2==NULL) {error=1; strcat(failedBuf,"line2 "); failedBufL+=lineLen;};
 		if (match==NULL) {error=1; strcat(failedBuf,"match"); failedBufL+=matchLen;};
 
-		FWerror(10,0,CommandID,failedBuf,"",failedBufL,0,out);
-		QWrite("0]", out);
+		QWrite_err(FWERROR_MALLOC, 2, failedBuf, failedBufL);
+		QWrite("0]");
 		String_end(buf_filename);
 		free(line);
 		free(line2);
@@ -1410,7 +1357,7 @@ case C_CLASS_MODIFY:
 		
 
 	// Variables:
-	char *ret			= "";		// return value when reading line from text
+	char *ret			= NULL;		// return value when reading line from text
 	int l				= 0;		// length of the current text line
 	int level			= 0;		// inside how many brackets we currently are
 	int remLevel		= 0;		// remember level of the class we want to remove
@@ -1427,11 +1374,12 @@ case C_CLASS_MODIFY:
 
 
 	// For each line in a text file -----------------------------------
-	while(ret = fgets(line, lineLen ,f))
+	while((ret = fgets(line, lineLen ,f)))
 	{
-		if (ferror(f)) 
-			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out), 
+		if (ferror(f)) {
+			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 			error = 1;
+		}
 
 		if (error) 
 			break;
@@ -1446,20 +1394,20 @@ case C_CLASS_MODIFY:
 			lineNEW  = (char*) realloc(line, lineLen);
 			line2NEW = (char*) realloc(line2, lineLen);
 
-			if (lineNEW != NULL) 
+			if (lineNEW) 
 				line = lineNEW; 
 			else 
 			{
-				FWerror(11,0,CommandID,"line","",lineLen,0,out);
+				QWrite_err(FWERROR_REALLOC, 2, "line", lineLen);
 				error = 1; 
 				break;
 			};
 
-			if (line2NEW != NULL) 
+			if (line2NEW) 
 				line2 = line2NEW; 
 			else
 			{
-				FWerror(11,0,CommandID,"line2","",lineLen,0,out); 
+				QWrite_err(FWERROR_REALLOC, 2, "line2", lineLen); 
 				error = 1; 
 				break;
 			};
@@ -1494,7 +1442,7 @@ case C_CLASS_MODIFY:
 		char CurrentCOL = 0;
 		int classPOS[MAX_CLASSESINASINGLELINE];
 
-		while (res = strstr(lineTMP, "class "))
+		while ((res = strstr(lineTMP, "class ")))
 		{
 			if (I >= MAX_CLASSESINASINGLELINE) // reached limit
 				break;
@@ -1825,11 +1773,11 @@ case C_CLASS_MODIFY:
 						matchLen += 100;
 						matchNEW = (char*) realloc (match, matchLen);
 
-						if (matchNEW != NULL) 
+						if (matchNEW) 
 							match = matchNEW; 
 						else 
 						{
-							FWerror(11,0,CommandID,"match","",lineLen,0,out);
+							QWrite_err(FWERROR_REALLOC, 2, "match", lineLen);
 							error = 1; 
 							break;
 						}
@@ -1855,11 +1803,11 @@ case C_CLASS_MODIFY:
 	{
 		// If couldn't find classes that were in the class path
 		if (J <= K)
-			FWerror(250,0,CommandID,ptr_filename,classpath[J],J,++K,out);
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[J], J, ++K, ptr_filename);
 		else 
 			// Couldn't remove/rename global class
 			if (action>1  &&  !jobDone) 
-				FWerror(252,0,CommandID,ptr_filename,WantedClass,0,0,out);
+				QWrite_err(FWERROR_CLASS_NOCLASS, 2, WantedClass, ptr_filename);
 		else
 		{
 			// Add new global class
@@ -1884,32 +1832,30 @@ case C_CLASS_MODIFY:
 				fwrite(buf, 1, strlen(buf), f);
 
 				if (ferror(f)) 
-					FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
+					QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 				else
-					FWerror(0,0,CommandID,"","",0,0,out);
+					QWrite_err(FWERROR_NONE, 0);
 
 				fclose(f);
 			}
 			else 
-				FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
+				QWrite_err(FWERROR_ERRNO, errno, ptr_filename);
 		};
 	};
 	
 
 	// Class already exists
 	if (error == 2) 
-		FWerror(251,0,CommandID,ptr_filename,WantedClass,0,0,out);
+		QWrite_err(FWERROR_CLASS_EXISTS, 2, WantedClass, ptr_filename);
 
 
 	// Couldn't find class
 	if (error == 3) 
-		FWerror(252,0,CommandID,ptr_filename,WantedClass,0,0,out);
+		QWrite_err(FWERROR_CLASS_NOCLASS, 2, WantedClass, ptr_filename);
 
 
 	// Output position in the class path
-	char tmp[14] = ""; 
-	sprintf(tmp, "%d]", J);
-	QWrite(tmp, out);
+	QWritef("%d]", J);
 
 
 	delete[] buf; 
@@ -1935,83 +1881,82 @@ case C_CLASS_MODTOK:
 { // Modify property within a class
 
 	// Read arguments -------------------------------------------------
-	int action			= 0; 
-	int ARRtargetID		= -1;
-	int ArrAppend		= 0;
-	int ArrDelete		= 0;
-	char *arg_filename	= "";
-	char *rawPath		= "";
-	char *WantedToken	= "";
-	char *WantedValue	= "";
-	char *RenameDst		= "";
+	int action              = 0; 
+	int ARRtargetID         = -1;
+	int ArrAppend           = 0;
+	int ArrDelete           = 0;
+	int arg_filename_length = 0;
+	char *arg_filename      = empty_string;
+	char *raw_path          = empty_string;
+	char *WantedToken       = empty_string;
+	char *WantedValue       = empty_string;
+	char *RenameDst         = empty_string;
 
 
 	// Parse arguments
-	for (int i=2; i<numP; i++)
-	{
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_FILE :
+				arg_filename        = argument[i+1];
+				arg_filename_length = argument_length[i+1];
+				break;
 
-		if (pch == NULL) 
-			continue;
+			case NAMED_ARG_CLASSPATH :
+				raw_path = stripq(argument[i+1]);
+				break;
 
-		int pos		= pch-arg;
-		arg[pos]	= '\0';
-		char *val	= Trim(arg+pos+1);
+			case NAMED_ARG_ADD : 		// add/overwrite
+				action      = 1; 
+				WantedToken = argument[i+1];
+				break;
 
-		if (strcmpi(arg,"file") == 0) 
-			arg_filename = val;
+			case NAMED_ARG_APPEND : 	// append
+				action      = 4; 
+				WantedToken = argument[i+1];
+				break;
 
-		if (strcmpi(arg,"classpath") == 0) 
-			rawPath = stripq(val);
+			case NAMED_ARG_RENAME :		// rename source
+				action      = 2; 
+				WantedToken = argument[i+1];
+				break;
 
-		if (strcmpi(arg,"add") == 0) 		// add/overwrite
-			action = 1, 
-			WantedToken = val;
+			case NAMED_ARG_TO :			// rename destination
+				RenameDst = argument[i+1];
+				break;
 
-		if (strcmpi(arg,"append") == 0) 	// append
-			action = 4, 
-			WantedToken = val;
+			case NAMED_ARG_DELETE : 	// remove property 
+				action      = 3;
+				WantedToken = argument[i+1];
+				break;
 
-		if (strcmpi(arg,"rename") == 0)		// rename source
-			action = 2, 
-			WantedToken = val;
+			case NAMED_ARG_INDEX :		// modify item inside array
+				if (action != 2) { 
+					if (action == 3) 
+						ArrDelete = 1;
 
-		if (strcmpi(arg,"to") == 0)			// rename destination
-			RenameDst = val;
+					if (action == 4) 
+						ArrAppend = 1;
 
-		if (strcmpi(arg,"delete") == 0) 	// remove property
-			action = 3, 
-			WantedToken = val;
-
-		if (strcmpi(arg,"index")==0  &&  action!=2) // modify item inside array
-		{
-			if (action == 3) 
-				ArrDelete = 1;
-
-			if (action == 4) 
-				ArrAppend = 1;
-
-			action		= 5; 
-			ARRtargetID = atoi(val);
-		};
-	};
+					action      = 5; 
+					ARRtargetID = atoi(argument[i+1]);
+				} break;
+		}
+	}
 
 
 	// File not specified
-	if (strcmpi(arg_filename,"") == 0)
-	{
-		FWerror(107,0,CommandID,"WantedFile","",0,0,out);
-		QWrite("0]", out);
+	if (arg_filename_length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "WantedFile");
+		QWrite("0]");
 		break;
 	};
 
 
 	// If action was not determined
-	if (action==0  ||  action==5  &&  strcmp(WantedToken,"")==0)
+	if (action==0  ||  (action==5  &&  strcmp(WantedToken,"")==0))
 	{
-		FWerror(106,0,CommandID,"","",0,0,out);
-		QWrite("0]", out);
+		QWrite_err(FWERROR_PARAM_ACTION, 0);
+		QWrite("0]");
 		break;
 	};
 
@@ -2032,8 +1977,8 @@ case C_CLASS_MODTOK:
 			strcat(tmp, "NewName");
 		};
 
-		FWerror(107,0,CommandID,tmp,"",0,0,out);
-		QWrite("0]", out);
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, tmp);
+		QWrite("0]");
 		break;
 	};
 
@@ -2041,8 +1986,8 @@ case C_CLASS_MODTOK:
 	// Incorrect array index
 	if (action==5  &&  ARRtargetID<0)
 	{
-		FWerror(101,0,CommandID,"ARRtargetID","",ARRtargetID,0,out);
-		QWrite("0]", out);
+		QWrite_err(FWERROR_PARAM_LTZERO, 2, "ArrtargetID", ARRtargetID);
+		QWrite("0]");
 		break;
 	};
 
@@ -2052,8 +1997,8 @@ case C_CLASS_MODTOK:
 	String_init(buf_filename);
 	char *ptr_filename = arg_filename;
 	
-	if (!VerifyPath(&ptr_filename, buf_filename, RESTRICT_TO_MISSION_DIR, CommandID, out)) {
-		QWrite("0]", out);
+	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR)) {
+		QWrite("0]");
 		break;
 	}
 		
@@ -2062,7 +2007,7 @@ case C_CLASS_MODTOK:
 	int J			= 0;	// J is current index
 	int K			= -1;	// K is max
 	char CLASSPATH;
-	char *pch		= strtok(rawPath, "[,]");
+	char *pch		= strtok(raw_path, "[,]");
 	
 	while (pch!=NULL  &&  K<10)	//from ofp array to char array
 	{
@@ -2074,14 +2019,14 @@ case C_CLASS_MODTOK:
 
 
 	// Separate property name and value
-	if (pch = strchr(WantedToken,'=')) 
+	if ((pch = strchr(WantedToken,'='))) 
 	{
 		int pos				= pch - WantedToken;
 		WantedToken[pos]	= '\0';
 		WantedValue			= WantedToken + pos + 1;
 
 		if (ArrDelete) 
-			WantedValue = "";
+			WantedValue = NULL;
 	};
 
 	WantedToken = Trim(WantedToken);
@@ -2102,8 +2047,8 @@ case C_CLASS_MODTOK:
 	FILE *f = fopen(ptr_filename, "r");
 	if (!f) 
 	{
-		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
-		QWrite("0]", out);
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("0]");
 		String_end(buf_filename); 
 		break;
 	};
@@ -2112,15 +2057,17 @@ case C_CLASS_MODTOK:
 	// Find file size, allocate buffer
 	fseek(f, 0, SEEK_END);
 
-	char* buf	= 0;
-	int bufsize = 0;
-	int fsize	= ftell(f);
-	buf			= new char[fsize + 70 + (strlen(com))];
+	char *buf	 = 0;
+	int bufsize  = 0;
+	int fsize	 = ftell(f);
+	size_t buf_size = fsize + 70;
+	for (size_t z=0;z<argument_num;z++)buf_size+=argument_length[z];
+	buf = new char[buf_size];
 
 	if (!buf)
 	{
-		FWerror(10,0,CommandID,"buf","",fsize+70+(strlen(com)),0,out);
-		QWrite("0]", out);
+		QWrite_err(FWERROR_MALLOC, 2, "buf", buf_size);
+		QWrite("0]");
 		String_end(buf_filename); 
 		fclose(f);
 		break;
@@ -2154,8 +2101,8 @@ case C_CLASS_MODTOK:
 		if (line2==NULL) {error=1; strcat(failedBuf,"line2 "); failedBufL+=lineLen;};
 		if (match==NULL) {error=1; strcat(failedBuf,"match"); failedBufL+=matchLen;};
 
-		FWerror(10,0,CommandID,failedBuf,"",failedBufL,0,out);	
-		QWrite("0]", out);
+		QWrite_err(FWERROR_MALLOC, 2, failedBuf, failedBufL);	
+		QWrite("0]");
 		String_end(buf_filename);
  		free(line);
 		free(line2);
@@ -2170,7 +2117,7 @@ case C_CLASS_MODTOK:
 		
 
 	// Variables:
-	char *ret			= "";		// return value when reading line from text
+	char *ret			= NULL;		// return value when reading line from text
 	int l				= 0;		// length of the current text line
 	int lastPos			= 0;		// remember position (in bytes) in the text file in case we need to revert
 	int level			= 0;		// inside how many brackets we currently are
@@ -2198,11 +2145,12 @@ case C_CLASS_MODTOK:
 
 
 	// For each line in a text file -----------------------------------
-	while (ret = fgets(line, lineLen ,f))
+	while ((ret = fgets(line, lineLen ,f)))
 	{   
-		if (ferror(f)) 
-			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out), 
+		if (ferror(f)) {
+			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 			error = 1;
+		}
 
 		if (error==1  ||  error>=3) 
 			break;
@@ -2217,20 +2165,20 @@ case C_CLASS_MODTOK:
 			lineNEW  = (char*) realloc(line, lineLen);
 			line2NEW = (char*) realloc(line2, lineLen);
 
-			if (lineNEW != NULL) 
+			if (lineNEW) 
 				line = lineNEW; 
 			else 
 			{
-				FWerror(11,0,CommandID,"line","",lineLen,0,out);
+				QWrite_err(FWERROR_REALLOC, 2, "line", lineLen);
 				error = 1; 
 				break;
 			};
 
-			if (line2NEW != NULL) 
+			if (line2NEW) 
 				line2 = line2NEW; 
 			else
 			{
-				FWerror(11,0,CommandID,"line2","",lineLen,0,out);  
+				QWrite_err(FWERROR_REALLOC, 2, "line2", lineLen);  
 				error = 1; 
 				break;
 			};
@@ -2265,7 +2213,7 @@ case C_CLASS_MODTOK:
 		int CurrentCOL	= 0;
 		int classPOS[MAX_CLASSESINASINGLELINE];
 		
-		while (res = strstr(lineTMP, "class "))
+		while ((res = strstr(lineTMP, "class ")))
 		{
 			if (I >= MAX_CLASSESINASINGLELINE)	// reached limit
 				break;
@@ -2383,7 +2331,7 @@ case C_CLASS_MODTOK:
 					jobDone = true;
 
 					// If not add/overwrite OR if found the value
-					if (action!=1  &&  action!=4  ||  foundTokenPos>=0) 
+					if ((action!=1  &&  action!=4)  ||  foundTokenPos>=0) 
 						break;  
 
 					// Copy anything that's before the closing bracket;
@@ -2572,7 +2520,7 @@ case C_CLASS_MODTOK:
 					strcpy(match, "");
 
 				// At end of value
-				if (!inQuote  &&  (line[i]==';' && arrayLev==0 || line[i]=='\n' && !anticipateArray && !inArray || line[i]=='}' && !inArray)  &&  value)
+				if (!inQuote  &&  ((line[i]==';' && arrayLev==0) || (line[i]=='\n' && !anticipateArray && !inArray) || (line[i]=='}' && !inArray))  &&  value)
 				{
 					inArray = false;
 					value	= false;
@@ -2784,13 +2732,13 @@ case C_CLASS_MODTOK:
 						matchLen += 100;
 						matchNEW = (char*) realloc (match, matchLen);
 
-						if (matchNEW != NULL) 
+						if (matchNEW) 
 							match = matchNEW; 
 						else 
 						{
 							char tmp[] = "match";
 							char *tmp2 = tmp;
-							FWerror(11,0,CommandID,"match","",lineLen,0,out);
+							QWrite_err(FWERROR_REALLOC, 2, "match", lineLen);
 							error = 1; 
 							break;
 						}
@@ -2834,7 +2782,7 @@ case C_CLASS_MODTOK:
 								if (!isspace(line[z])  &&  (!inQuote2 && line[z]!=',')  &&  (line[z]!='}' && tmpArrayLev==1))
 									lastIsQuote = -1;
 									
-							if (!inQuote2  &&  (line[z]==',' || line[z]=='}' || line[z]==';' && arrayLev>0)  &&  (appendingToSubArray && tmpArrayLev==arrayLev  ||  !appendingToSubArray)) 
+							if (!inQuote2  &&  (line[z]==',' || line[z]=='}' || (line[z]==';' && arrayLev>0))  &&  ((appendingToSubArray && tmpArrayLev==arrayLev)  ||  !appendingToSubArray)) 
 							{
 								if (lastIsQuote >= 0)
 									line2[lastIsQuote] = '\0';
@@ -2949,7 +2897,7 @@ case C_CLASS_MODTOK:
 	{
 		// If couldn't find classes that were in the class path
 		if (J <= K)
-			FWerror(250,0,CommandID,ptr_filename,classpath[J],J,++K,out);
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[J], J, ++K, ptr_filename);
 		else
 			// Add new global property
 			if (K==-1  &&  foundTokenPos<0  &&  (action==1 || action==4))
@@ -2974,14 +2922,14 @@ case C_CLASS_MODTOK:
 			{
 				// ...an item inside array
 				if (action==5  &&  ARRcurrent>0  &&  ARRcurrent<ARRtargetID)	
-					FWerror(254,0,CommandID,ptr_filename,WantedToken,ARRtargetID,0,out);
+					QWrite_err(FWERROR_CLASS_NOITEM, 3, ARRtargetID, WantedToken, ptr_filename);
 				else
 					 // not an array
 					if (action==5 && foundTokenPos>=0 && ARRcurrent<0)     
-						FWerror(255,0,CommandID,ptr_filename,WantedToken,0,0,out);
+						QWrite_err(FWERROR_CLASS_NOTARRAY, 2, WantedToken, ptr_filename);
 					else
 						// ...a property
-						FWerror(253,0,CommandID,ptr_filename,WantedToken,0,0,out);	
+						QWrite_err(FWERROR_CLASS_NOVAR, 2, WantedToken, ptr_filename);
 			};
 
 		// Rewrite the file
@@ -2993,21 +2941,18 @@ case C_CLASS_MODTOK:
 				fwrite(buf, 1, strlen(buf), f);
 
 				if (ferror(f)) 
-					FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
+					QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 				else
-					FWerror(0,0,CommandID,"","",0,0,out);
+					QWrite_err(FWERROR_NONE, 0);
 
 				fclose(f);
 			}
 			else
-				FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
+				QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		};
-	};
+	}
 
-
-	char tmp[14] = ""; 
-	sprintf(tmp, "%d]",J);
-	QWrite(tmp, out);
+	QWritef("%d]", J);
 
 
 	delete[] buf; 
@@ -3034,81 +2979,68 @@ case C_CLASS_READ:
 	const int predefined_capacity = 8;
 
 	// Read arguments------------------------------------------------------------
-	char *arg_filename     = "";
-	char *arg_classpath    = "";
-	char *arg_wrap         = "";
-	char *arg_findproperty = "";
-	int arg_offset         = 0;
-	int arg_classpath_pos  = -1;
-	int arg_level          = predefined_capacity;
+	char *arg_filename      = empty_string;
+	char *arg_classpath     = empty_string;
+	char *arg_wrap          = empty_string;
+	char *arg_findproperty  = empty_string;
+	int arg_offset          = 0;
+	int arg_classpath_pos   = -1;
+	int arg_level           = predefined_capacity;
+	int art_filename_length = 0;
 
-	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *col = strchr(arg, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_FILE : 
+				arg_filename        = argument[i+1];
+				art_filename_length = argument_length[i+1];
+				break;
 
-		if (col == NULL)
-			continue;
+			case NAMED_ARG_PATH :
+				arg_classpath = argument[i+1];
+				break;
+			
+			case NAMED_ARG_OFFSET : 
+				arg_offset = atoi(argument[i+1]);
+				break;
+			
+			case NAMED_ARG_FIND : {
+				arg_findproperty          = argument[i+1];
+				int arg_findproperty_last = argument_length[i+1] - 1;
 
-		int pos   = col - arg;
-		arg[pos]  = '\0';
-		char *val = arg+pos+1;
+				if (arg_findproperty[0]=='[' && arg_findproperty[arg_findproperty_last]==']') {
+					arg_findproperty++;
+					arg_findproperty[arg_findproperty_last] = '\0';
+				}
+			} break;
 
-		if (strcmpi(arg,"file") == 0) {
-			arg_filename = val;
-			continue;
-		}
-
-		if (strcmpi(arg,"path") == 0) {
-			arg_classpath = val;
-			continue;
-		}
-		
-		if (strcmpi(arg,"offset") == 0) {
-			arg_offset = atoi(val);
-			continue;
-		}
-		
-		if (strcmpi(arg,"find") == 0) {
-			arg_findproperty          = val;
-			int arg_findproperty_last = strlen(arg_findproperty)-1;
-
-			if (arg_findproperty[0]=='[' && arg_findproperty[arg_findproperty_last]==']') {
-				arg_findproperty++;
-				arg_findproperty[arg_findproperty_last] = '\0';
-			}
-
-			continue;
-		}
-		if (strcmpi(arg,"wrap") == 0) {
-			arg_wrap = val;
-			continue;
-		}
-		
-		if (strcmpi(arg,"pathpos") == 0) {
-			arg_classpath_pos = atoi(val);
-			continue;
-		}
-		
-		if (strcmpi(arg,"maxlevel") == 0) {
-			arg_level = atoi(val);
-			continue;
+			case NAMED_ARG_WRAP : 
+				arg_wrap = argument[i+1];
+				break;
+			
+			case NAMED_ARG_PATHPOS : 
+				arg_classpath_pos = atoi(argument[i+1]);
+				break;
+			
+			case NAMED_ARG_MAXLEVEL : 
+				arg_level = atoi(argument[i+1]);
+				break;
 		}
 	}
 	
 	// File not specified
-	if (strcmpi(arg_filename, "") == 0) {
-		FWerror(107,0,CommandID,"file name","",0,0,out);
-		QWrite("[],[],0]", out);
+	if (art_filename_length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+		QWrite("[],[],0]");
 		break;
-	};
+	}
 
 	// Verify and update path to the file
 	String buf_filename;
 	String_init(buf_filename);
 	char *ptr_filename = arg_filename;
 
-	if (!VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out)) {
-		QWrite("[],[],0]", out);
+	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+		QWrite("[],[],0]");
 		break;
 	}
 
@@ -3173,15 +3105,30 @@ case C_CLASS_READ:
 	// Open wanted file -----------------------------------------------------------------	
 	FILE *file = fopen(ptr_filename, "rb");
 	if (!file) {
-		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
-		QWrite("[],[],0]", out);
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("[],[],0]");
 		String_end(buf_filename);
 		break;
 	}
 
 	// Find file size
-	fseek(file, 0, SEEK_END);
-	int file_size = ftell(file) - arg_offset;
+	if (fseek(file, 0, SEEK_END) != 0) {
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("[],[],0]");
+		String_end(buf_filename);
+		fclose(file);
+		break;
+	};
+
+	size_t file_size = ftell(file);
+	if (file_size == 0xFFFFFFFF) {
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("[],[],0]");
+		String_end(buf_filename);
+		fclose(file);
+		break;
+	} else
+		file_size -= arg_offset;
 
 	// Allocate buffer
 	String file_contents;
@@ -3189,26 +3136,26 @@ case C_CLASS_READ:
 	
 	int result = String_allocate(file_contents, file_size+1);
 	if (result != 0) {
-		FWerror(10,0,CommandID,"file_contents","",file_size,0,out);
-		QWrite("[],[],0]", out);
+		QWrite_err(FWERROR_MALLOC, 2, "file_contents", file_size+1);
+		QWrite("[],[],0]");
 		String_end(buf_filename);
 		break;
 	}
 
 	// Copy text to buffer
 	fseek(file, arg_offset, SEEK_SET);
-	result = fread(file_contents.pointer, 1, file_size, file);
-	file_contents.pointer[file_size] = '\0';
+	size_t bytes_read = fread(file_contents.text, 1, file_size, file);
+	file_contents.text[file_size] = '\0';
 
-	if (result != file_size) {		
+	if (bytes_read != file_size) {		
 		if (ferror(file))
-			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out); 
+			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		else
-			FWerror(210,0,CommandID,ptr_filename,"",result,file_size,out);
+			QWrite_err(FWERROR_FILE_WRITE, 4, errno, bytes_read, file_size, ptr_filename);
 		
 		String_end(buf_filename);
 		String_end(file_contents);
-		QWrite("[],[],0]", out);
+		QWrite("[],[],0]");
 		fclose(file);
 		break;
 	}
@@ -3255,10 +3202,10 @@ case C_CLASS_READ:
 	};
 	const int all_output_strings_num = sizeof(all_output_strings) / sizeof(all_output_strings[0]);
 	
-	for (i=0; i<classpath_capacity; i++)
+	for (int z=0; z<classpath_capacity; z++)
 		for (int j=0; j<all_output_strings_num; j++) {
-			String_init(all_output_strings[j][i]);
-			String_append(all_output_strings[j][i],"[");
+			String_init(all_output_strings[j][z]);
+			String_append(all_output_strings[j][z], "[");
 		}
 		
 	String output_classpath_bytes;
@@ -3284,7 +3231,7 @@ case C_CLASS_READ:
 	bool property_found   = false;
 	bool purge_comment    = false;
 	char separator        = ' ';
-	char *text            = file_contents.pointer;
+	char *text            = file_contents.text;
 
 	for (i=0; i<file_size; i++) {
 		char c = text[i];
@@ -3372,7 +3319,7 @@ case C_CLASS_READ:
 
 						for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
 							for (int k=0; k<all_output_strings_num; k++)
-								String_append(all_output_strings[k][j],"]");
+								String_append(all_output_strings[k][j], "]");
 					}
 						
 					expect = SEMICOLON;
@@ -3486,19 +3433,17 @@ case C_CLASS_READ:
 
 								if (level < classpath_capacity) {
 									// Add property name
-									String_append(output_property[level], "]+[\"");
-									String_append(output_property[level], property);
-									String_append(output_property[level], "\"");
+									String_append_format(output_property[level], "]+[\"%s\"", property);
 
 									// Add property value
 									String_append(output_value[level], "]+[");
 
-									if (wrap==YES_WRAP || wrap==NODOUBLE_WRAP && value[0]!='\"')
+									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"'))
 										String_append(output_value[level], "\"");
 
 									// Convert arrays (square brackets) and strings (double quotes) so that "call" command in OFP can be used
-									if (is_array || wrap==YES_WRAP && value[0]=='\"') {
-										for (int j=word_start; j<i; j++) {
+									if (is_array || (wrap==YES_WRAP && value[0]=='\"')) {
+										for (size_t j=word_start; j<i; j++) {
 											if (text[j] == '"')
 												in_quote = !in_quote;
 
@@ -3510,16 +3455,13 @@ case C_CLASS_READ:
 												else 
 													if (text[j]=='"' && (wrap==YES_WRAP || wrap==NODOUBLE_WRAP))
 														String_append(output_value[level], "\"\"");
-													else {
-														char c[] = "a";
-														strncpy(c, text+j, 1);
-														String_append(output_value[level], c);
-													}
+													else 
+														String_append_len(output_value[level], text+j, 1);
 										}
 									} else
 										String_append(output_value[level], value);
 									
-									if (wrap==YES_WRAP || wrap==NODOUBLE_WRAP && value[0]!='\"')
+									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"'))
 										String_append(output_value[level], "\"");
 								}
 							}
@@ -3556,11 +3498,8 @@ case C_CLASS_READ:
 							String *output_array = expect==CLASS_NAME ? output_class : output_inherit;
 							int level            = class_level - classpath_current;
 
-							if (level < classpath_capacity && !classpath_done) {
-								String_append(output_array[level], "]+[\"");
-								String_append(output_array[level], text+word_start);
-								String_append(output_array[level], "\"");
-							}
+							if (level < classpath_capacity && !classpath_done)
+								String_append_format(output_array[level], "]+[\"%s\"", text+word_start);
 						}
 						
 						is_inherit = expect == CLASS_INHERIT;
@@ -3588,20 +3527,15 @@ case C_CLASS_READ:
 						}
 						
 						if (classpath_match) {
-							char temp[32] = "";
-							sprintf(temp, "]+[\"%d\"", i+1);
-							String_append(output_classpath_bytes, temp);
+							String_append_format(output_classpath_bytes, "]+[\"%d\"", i+1);
 							classpath_match = false;
 						}
 								
 						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
-							int level     = class_level - classpath_current;
+							int level = class_level - classpath_current;
 
-							if (level < classpath_capacity) {
-								char temp[32] = "";
-								sprintf(temp, "]+[\"%d\"", i+1);
-								String_append(output_bytes[level], temp);
-							}
+							if (level < classpath_capacity)
+								String_append_format(output_bytes[level], "]+[\"%d\"", i+1);
 						}
 						
 						class_level++;
@@ -3615,7 +3549,7 @@ case C_CLASS_READ:
 
 							for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
 								for (int k=0; k<all_output_strings_num; k++)
-									String_append(all_output_strings[k][j],"]+[[");
+									String_append(all_output_strings[k][j], "]+[[");
 						}
 					} else
 						if (!isspace(c)) {	//ignore syntax error
@@ -3628,7 +3562,7 @@ case C_CLASS_READ:
 			
 			case ENUM_CONTENT : 
 			case EXEC_CONTENT : {
-				if (expect==EXEC_CONTENT && c==')' || expect==ENUM_CONTENT && c=='}')
+				if ((expect==EXEC_CONTENT && c==')') || (expect==ENUM_CONTENT && c=='}'))
 					expect = SEMICOLON;
 
 				break;
@@ -3663,58 +3597,41 @@ case C_CLASS_READ:
 		"value"
 	};
 
-	for (i=0; i<classpath_capacity && i<=output_level; i++) {
+	for (z=0; z<classpath_capacity && z<=output_level; z++) {
 		for (int j=0; j<all_output_strings_num; j++) {
-			String_append(all_output_strings[j][i],"]");
-			
-			char temp[32] = "";
-			sprintf(temp, "_output_%s%d=", output_strings_name[j], i);
-			
-			QWrite(temp, out);
-			QWrite(all_output_strings[j][i].pointer, out);
-			QWrite(";", out);
-			
-			String_end(all_output_strings[j][i]);
+			QWritef("_output_%s%d=%s];", output_strings_name[j], z, all_output_strings[j][z].text);
+			String_end(all_output_strings[j][z]);
 		}
 	}
 	
 	if (classpath_current < classpath_size)
-		FWerror(250,0,CommandID,ptr_filename,classpath[classpath_current],classpath_current,++classpath_size,out);
+		QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, ++classpath_size, ptr_filename);
 	else
 		if (properties_to_find_size>0 && !property_found)
-			FWerror(253,0,CommandID,ptr_filename,arg_findproperty,0,0,out);
+			QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_findproperty, ptr_filename);
 		else
-			FWerror(0,0,CommandID,"","",0,0,out);
+			QWrite_err(FWERROR_NONE, 0);
 
-	QWrite("[", out);
+	QWrite("[");
 	
-	for (i=0; i<classpath_capacity && i<=output_level; i++) {
-		if (i == 0)
-			QWrite("[", out);
+	for (z=0; z<classpath_capacity && z<=output_level; z++) {
+		if (z == 0)
+			QWrite("[");
 		else
-			QWrite(",[", out);
+			QWrite(",[");
 
-		for (int j=0; j<all_output_strings_num; j++) {
-			char temp[32] = "";
-			sprintf(temp, "%c_output_%s%d", (j==0 ? ' ' : ','), output_strings_name[j], i);
-			QWrite(temp, out);
-		}
+		for (int j=0; j<all_output_strings_num; j++)
+			QWritef("%c_output_%s%d", (j==0 ? ' ' : ','), output_strings_name[j], z);
 
-		QWrite("]", out);
+		QWrite("]");
 	}
 
-	QWrite("],", out);
-	String_append(output_classpath_bytes, "]");
-	QWrite(output_classpath_bytes.pointer, out);
-
-	char temp[32] = "";
-	sprintf(temp,",%d]",classpath_current);
-	QWrite(temp, out);
+	QWritef("],%s],%d]", output_classpath_bytes.text, classpath_current);
 
 	String_end(output_classpath_bytes);
 	String_end(file_contents);
 	String_end(buf_filename);
-};
+}
 break;
 
 
@@ -3733,87 +3650,73 @@ case C_CLASS_READ2:
 	const int predefined_capacity = 8;
 
 	// Read arguments------------------------------------------------------------
-	char *arg_filename     = "";
-	char *arg_classpath    = "";
-	char *arg_wrap         = "";
-	char *arg_findproperty = "";
-	int arg_offset         = 0;
-	int arg_classpath_pos  = -1;
-	int arg_level          = predefined_capacity;
-	bool arg_verify        = false;
+	char *arg_filename      = empty_string;
+	char *arg_classpath     = empty_string;
+	char *arg_wrap          = empty_string;
+	char *arg_findproperty  = empty_string;
+	int arg_offset          = 0;
+	int arg_classpath_pos   = -1;
+	int arg_level           = predefined_capacity;
+	int arg_filename_length = 0;
+	bool arg_verify         = false;
 	
-	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *col = strchr(arg, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_FILE : 
+				arg_filename        = argument[i+1];
+				arg_filename_length = argument_length[i+1];
+				break;
 
-		if (col == NULL)
-			continue;
-
-		int pos   = col - arg;
-		arg[pos]  = '\0';
-		char *val = arg+pos+1;
-
-		if (strcmpi(arg,"file") == 0) {
-			arg_filename = val;
-			continue;
-		}
-
-		if (strcmpi(arg,"path") == 0) {
-			arg_classpath = val;
-			continue;
-		}
-		
-		if (strcmpi(arg,"offset") == 0) {
-			arg_offset = atoi(val);
-			continue;
-		}
-		
-		if (strcmpi(arg,"find") == 0) {
-			arg_findproperty          = val;
-			int arg_findproperty_last = strlen(arg_findproperty)-1;
+			case NAMED_ARG_PATH : 
+				arg_classpath = argument[i+1];
+				break;
 			
-			if (arg_findproperty[0]=='[' && arg_findproperty[arg_findproperty_last]==']') {
-				arg_findproperty++;
-				arg_findproperty[arg_findproperty_last] = '\0';
-			}
+			case NAMED_ARG_OFFSET : 
+				arg_offset = atoi(argument[i+1]);
+				break;
+			
+			case NAMED_ARG_FIND : {
+				arg_findproperty          = argument[i+1];
+				int arg_findproperty_last = argument_length[i+1] - 1;
+				
+				if (arg_findproperty[0]=='[' && arg_findproperty[arg_findproperty_last]==']') {
+					arg_findproperty++;
+					arg_findproperty[arg_findproperty_last] = '\0';
+				}
+			} break;
 
-			continue;
-		}
-		if (strcmpi(arg,"wrap") == 0) {
-			arg_wrap = val;
-			continue;
-		}
-		
-		if (strcmpi(arg,"pathpos") == 0) {
-			arg_classpath_pos = atoi(val);
-			continue;
-		}
-		
-		if (strcmpi(arg,"maxlevel") == 0) {
-			arg_level = atoi(val);
-			continue;
-		}
+			case NAMED_ARG_WRAP : 
+				arg_wrap = argument[i+1];
+				break;
+			
+			case NAMED_ARG_PATHPOS : 
+				arg_classpath_pos = atoi(argument[i+1]);
+				break;
+			
+			case NAMED_ARG_MAXLEVEL : 
+				arg_level = atoi(argument[i+1]);
+				break;
 
-		if (strcmpi(arg,"verify") == 0) {
-			arg_verify = String2Bool(val);
-			continue;
+			case NAMED_ARG_VERIFY : 
+				arg_verify = String2Bool(argument[i+1]);
+				break;
 		}
 	}
 
 	// File not specified
-	if (strcmpi(arg_filename, "") == 0) {
-		FWerror(107,0,CommandID,"file name","",0,0,out);
-		QWrite("[],[],0]", out);
+	if (arg_filename_length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+		QWrite("[],[],0]");
 		break;
-	};
+	}
 
 	// Verify and update path to the file
 	String buf_filename;
 	String_init(buf_filename);
 	char *ptr_filename = arg_filename;
 
-	if (!VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out)) {
-		QWrite("[],[],0]", out);
+	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+		QWrite("[],[],0]");
 		break;
 	}
 
@@ -3880,15 +3783,30 @@ case C_CLASS_READ2:
 	// Open wanted file -----------------------------------------------------------------	
 	FILE *file = fopen(ptr_filename, "rb");
 	if (!file) {
-		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
-		QWrite("[],[],0]", out);
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("[],[],0]");
 		String_end(buf_filename);
 		break;
 	}
 
 	// Find file size
-	fseek(file, 0, SEEK_END);
-	int file_size = ftell(file) - arg_offset;
+	if (fseek(file, 0, SEEK_END) != 0) {
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("[],[],0]");
+		String_end(buf_filename);
+		fclose(file);
+		break;
+	};
+
+	size_t file_size = ftell(file);
+	if (file_size == 0xFFFFFFFF) {
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("[],[],0]");
+		String_end(buf_filename);
+		fclose(file);
+		break;
+	} else
+		file_size -= arg_offset;
 
 	// Allocate buffer
 	String file_contents;
@@ -3896,26 +3814,26 @@ case C_CLASS_READ2:
 	
 	int result = String_allocate(file_contents, file_size+1);
 	if (result != 0) {
-		FWerror(10,0,CommandID,"file_contents","",file_size,0,out);
-		QWrite("[],[],0]", out);
+		QWrite_err(FWERROR_MALLOC, 2, "file_contents", file_size+1);
+		QWrite("[],[],0]");
 		String_end(buf_filename);
 		break;
 	}
 
 	// Copy text to buffer
 	fseek(file, arg_offset, SEEK_SET);
-	result = fread(file_contents.pointer, 1, file_size, file);
-	file_contents.pointer[file_size] = '\0';
+	size_t bytes_read = fread(file_contents.text, 1, file_size, file);
+	file_contents.text[file_size] = '\0';
 
-	if (result != file_size) {		
+	if (bytes_read != file_size) {		
 		if (ferror(file))
-			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out); 
+			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		else
-			FWerror(210,0,CommandID,ptr_filename,"",result,file_size,out);
+			QWrite_err(FWERROR_FILE_WRITE, 3, bytes_read, file_size, ptr_filename);
 		
 		String_end(buf_filename);
 		String_end(file_contents);
-		QWrite("[],[],0]", out);
+		QWrite("[],[],0]");
 		fclose(file);
 		break;
 	}
@@ -3971,11 +3889,10 @@ case C_CLASS_READ2:
 	};
 
 	char temp[512] = "";
-	for (i=0; i<classpath_capacity; i++)
+	for (int z=0; z<classpath_capacity; z++)
 		for (int j=0; j<all_output_strings_num; j++) {
-			String_init(all_output_strings[j][i]);
-			sprintf(temp, "_output_%s%d=[];", output_strings_name[j], i);
-			String_append(all_output_strings[j][i], temp);
+			String_init(all_output_strings[j][z]);
+			String_append_format(all_output_strings[j][z], "_output_%s%d=[];", output_strings_name[j], z);
 		}
 		
 	String output_classpath_bytes;
@@ -4006,7 +3923,7 @@ case C_CLASS_READ2:
 	bool purge_comment    = false;
 	bool syntax_error     = false;
 	char separator        = ' ';
-	char *text            = file_contents.pointer;
+	char *text            = file_contents.text;
 	
 	for (i=0; i<file_size; i++) {
 		char c = text[i];
@@ -4228,20 +4145,17 @@ case C_CLASS_READ2:
 
 								if (!arg_verify && level < classpath_capacity) {
 									// Add property name
-									String_append(output_property[level], Output_Nested_Array(temp, level, "property", level, subclass_count));
-									String_append(output_property[level], "\"");
-									String_append(output_property[level], property);
-									String_append(output_property[level], "\"];");
+									String_append_format(output_property[level], "%s\"%s\"];", Output_Nested_Array(temp, level, "property", level, subclass_count), property);
 
 									// Add property value
 									String_append(output_value[level], Output_Nested_Array(temp, level, "value", level, subclass_count));
 
-									if (wrap==YES_WRAP || wrap==NODOUBLE_WRAP && value[0]!='\"')
+									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"'))
 										String_append(output_value[level], "\"");
 
 									// Convert arrays (square brackets) and strings (double quotes) so that "call" command in OFP can be used
-									if (is_array || wrap==YES_WRAP && value[0]=='\"') {
-										for (int j=word_start; j<i; j++) {											
+									if (is_array || (wrap==YES_WRAP && value[0]=='\"')) {
+										for (size_t j=word_start; j<i; j++) {											
 											if (text[j] == '"')
 												in_quote = !in_quote;
 
@@ -4253,16 +4167,13 @@ case C_CLASS_READ2:
 												else 
 													if (text[j]=='"' && (wrap==YES_WRAP || wrap==NODOUBLE_WRAP))
 														String_append(output_value[level], "\"\"");
-													else {
-														char c[] = "a";
-														strncpy(c, text+j, 1);
-														String_append(output_value[level], c);
-													}
+													else 
+														String_append_len(output_value[level], text+j, 1);
 										}
 									} else
 										String_append(output_value[level], value);
 									
-									if (wrap==YES_WRAP || wrap==NODOUBLE_WRAP && value[0]!='\"')
+									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"'))
 										String_append(output_value[level], "\"");
 										
 									String_append(output_value[level], "];");
@@ -4306,10 +4217,7 @@ case C_CLASS_READ2:
 								if (expect != CLASS_NAME)
 									strcpy(tempname, "inherit");
 
-								String_append(output_array[level], Output_Nested_Array(temp, level, tempname, level, subclass_count));
-								String_append(output_array[level], "\"");
-								String_append(output_array[level], text+word_start);
-								String_append(output_array[level], "\"];");
+								String_append_format(output_array[level], "%s\"%s\"];", Output_Nested_Array(temp, level, tempname, level, subclass_count), text+word_start);
 							}
 						}
 						
@@ -4332,30 +4240,22 @@ case C_CLASS_READ2:
 							if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 								int level = class_level - classpath_current;
 								
-								if (!arg_verify && level < classpath_capacity && !classpath_done) {
-									String_append(output_inherit[level], Output_Nested_Array(temp, level, "inherit", level, subclass_count));
-									strcpy(temp,"\"\"];");
-									String_append(output_inherit[level], temp);
-								}
+								if (!arg_verify && level < classpath_capacity && !classpath_done)
+									String_append_format(output_inherit[level], "%s\"\"];", Output_Nested_Array(temp, level, "inherit", level, subclass_count));
 								
 							}
 						}
 
 						if (!arg_verify && classpath_match) {
-							char temp[32] = "";
-							sprintf(temp, "]+[\"%d\"", i+1);
-							String_append(output_classpath_bytes, temp);
+							String_append_format(output_classpath_bytes, "]+[\"%d\"", i+1);
 							classpath_match = false;
 						}
 
 						if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 							int level = class_level - classpath_current;
 
-							if (!arg_verify && level < classpath_capacity) {
-								String_append(output_bytes[level], Output_Nested_Array(temp, level, "bytes", level, subclass_count));
-								sprintf(temp,"\"%d\"];", i+1);
-								String_append(output_bytes[level], temp);
-							}
+							if (!arg_verify && level < classpath_capacity)
+								String_append_format(output_bytes[level], "%s\"%d\"];", Output_Nested_Array(temp, level, "bytes", level, subclass_count), i+1);
 						}
 
 						class_level++;
@@ -4369,11 +4269,8 @@ case C_CLASS_READ2:
 							
 							if (!arg_verify && level > 0)
 							for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
-								for (int k=0; k<all_output_strings_num; k++) {								
-									String_append(all_output_strings[k][j], Output_Nested_Array(temp, level-1, output_strings_name[k], j, subclass_count));
-									String_append(all_output_strings[k][j], "[]");
-									String_append(all_output_strings[k][j], "];");
-								}
+								for (int k=0; k<all_output_strings_num; k++)
+									String_append_format(all_output_strings[k][j], "%s[]];", Output_Nested_Array(temp, level-1, output_strings_name[k], j, subclass_count));
 						}
 					} else
 						if (!isspace(c)) {
@@ -4392,7 +4289,7 @@ case C_CLASS_READ2:
 			
 			case ENUM_CONTENT : 
 			case EXEC_CONTENT : {
-				if (expect==EXEC_CONTENT && c==')' || expect==ENUM_CONTENT && c=='}')
+				if ((expect==EXEC_CONTENT && c==')') || (expect==ENUM_CONTENT && c=='}'))
 					expect = SEMICOLON;
 
 				break;
@@ -4422,44 +4319,36 @@ case C_CLASS_READ2:
 	class_read2_end_parsing:
 
 	if (!arg_verify) {
-		for (i=0; i<classpath_capacity && i<=output_level; i++) {
+		for (z=0; z<classpath_capacity && z<=output_level; i++) {
 			for (int j=0; j<all_output_strings_num; j++) {
-				QWrite(all_output_strings[j][i].pointer, out);
-				String_end(all_output_strings[j][i]);
+				QWritel(all_output_strings[j][z].text, all_output_strings[j][z].length);
+				String_end(all_output_strings[j][z]);
 			}
 		}
 
 		if (classpath_current < classpath_size)
-			FWerror(250,0,CommandID,ptr_filename,classpath[classpath_current],classpath_current,++classpath_size,out);
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, ++classpath_size, ptr_filename);
 		else
 			if (properties_to_find_size>0 && !property_found)
-				FWerror(253,0,CommandID,ptr_filename,arg_findproperty,0,0,out);
+				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_findproperty, ptr_filename);
 			else
-				FWerror(0,0,CommandID,"","",0,0,out);
+				QWrite_err(FWERROR_NONE, 0);
 
-		QWrite("[", out);
+		QWrite("[");
 		
-		for (i=0; i<classpath_capacity && i<=output_level; i++) {
-			if (i == 0)
-				QWrite("[", out);
+		for (z=0; z<classpath_capacity && z<=output_level; z++) {
+			if (z == 0)
+				QWrite("[");
 			else
-				QWrite(",[", out);
+				QWrite(",[");
 
-			for (int j=0; j<all_output_strings_num; j++) {
-				char temp[32] = "";
-				sprintf(temp, "%c_output_%s%d", (j==0 ? ' ' : ','), output_strings_name[j], i);
-				QWrite(temp, out);
-			}
+			for (int j=0; j<all_output_strings_num; j++)
+				QWritef("%c_output_%s%d", (j==0 ? ' ' : ','), output_strings_name[j], z);
 
-			QWrite("]", out);
+			QWrite("]");
 		}
 
-		QWrite("],", out);
-		String_append(output_classpath_bytes, "]");
-		QWrite(output_classpath_bytes.pointer, out);
-
-		sprintf(temp,",%d]",classpath_current);
-		QWrite(temp, out);
+		QWritef("],%s],%d]", output_classpath_bytes.text, classpath_current);
 	} else {
 		if (!syntax_error && class_level>0) {
 			syntax_error = true;
@@ -4478,11 +4367,11 @@ case C_CLASS_READ2:
 				sprintf(insteadof, "%c", separator);
 
 			sprintf(error_msg, "%s instead of %s", encountered, insteadof);
-			FWerror(256,0,CommandID,ptr_filename,error_msg,line_num,column_num,out);
+			QWrite_err(FWERROR_CLASS_SYNTAX, 4, error_msg, line_num, column_num, ptr_filename);
 		} else
-			FWerror(0,0,CommandID,"","",0,0,out);
+			QWrite_err(FWERROR_NONE, 0);
 
-		QWrite("[]]", out);
+		QWrite("[]]");
 	}
 
 	String_end(output_classpath_bytes);
@@ -4503,39 +4392,34 @@ break;
 
 
 case C_CLASS_READSQM:
-{
-	// Read arguments------------------------------------------------------------
-	char *arg_filename     = "";
+{ // Convert SQM file to SQF format
+
+	global.option_error_output = OPTION_ERROR_ARRAY_CLOSE;
+
+	char *arg_filename      = empty_string;
+	int arg_filename_length = 0;
 	
-	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *col = strchr(arg, ':');
-
-		if (col == NULL)
-			continue;
-
-		int pos   = col - arg;
-		arg[pos]  = '\0';
-		char *val = arg+pos+1;
-
-		if (strcmpi(arg,"file") == 0) {
-			arg_filename = val;
-			continue;
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_FILE : 
+				arg_filename        = argument[i+1];
+				arg_filename_length = argument_length[i+1];
+				break;
 		}
 	}
 
 	// File not specified
-	if (strcmpi(arg_filename, "") == 0) {
-		FWerror(107,0,CommandID,"file name","",0,0,out);
+	if (arg_filename_length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
 		break;
-	};
+	}
 
 	// Verify and update path to the file
 	String buf_filename;
 	String_init(buf_filename);
 	char *ptr_filename = arg_filename;
 
-	if (!VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR, CommandID, out))
+	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR))
 		break;
 	//---------------------------------------------------------------------------
 	
@@ -4544,14 +4428,26 @@ case C_CLASS_READSQM:
 	// Open wanted file -----------------------------------------------------------------	
 	FILE *file = fopen(ptr_filename, "rb");
 	if (!file) {
-		FWerror(7,errno,CommandID,ptr_filename,"",0,0,out);
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		String_end(buf_filename);
 		break;
 	}
 
 	// Find file size
-	fseek(file, 0, SEEK_END);
-	int file_size = ftell(file);
+	if (fseek(file, 0, SEEK_END) != 0) {
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		String_end(buf_filename);
+		fclose(file);
+		break;
+	};
+
+	size_t file_size = ftell(file);
+	if (file_size == 0xFFFFFFFF) {
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		String_end(buf_filename);
+		fclose(file);
+		break;
+	}
 
 	// Allocate buffer
 	String file_content;
@@ -4559,21 +4455,20 @@ case C_CLASS_READSQM:
 	
 	int result = String_allocate(file_content, file_size+1);
 	if (result != 0) {
-		FWerror(10,0,CommandID,"file_content","",file_size,0,out);
+		QWrite_err(FWERROR_MALLOC, 2, "file_content", file_size);
 		String_end(buf_filename);
 		break;
 	}
 
 	// Copy text to buffer
 	fseek(file, 0, SEEK_SET);
-	result = fread(file_content.pointer, 1, file_size, file);
-	file_content.pointer[file_size] = '\0';
+	size_t bytes_read = fread(file_content.text, 1, file_size, file);
 
-	if (result != file_size) {		
+	if (bytes_read != file_size) {		
 		if (ferror(file))
-			FWerror(7,errno,CommandID,ptr_filename,"",0,0,out); 
+			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		else
-			FWerror(210,0,CommandID,ptr_filename,"",result,file_size,out);
+			QWrite_err(FWERROR_FILE_WRITE, 3, bytes_read, file_size, ptr_filename);
 		
 		String_end(buf_filename);
 		String_end(file_content);
@@ -4581,55 +4476,27 @@ case C_CLASS_READSQM:
 		break;
 	}
 
+	file_content.length = bytes_read;
 	fclose(file);
 
-	enum EXPECT {
-		PROPERTY,
-		EQUALITY,
-		VALUE,
-		SEMICOLON,
-		CLASS_NAME,
-		CLASS_INHERIT,
-		CLASS_COLON,
-		CLASS_BRACKET,
-		ENUM_BRACKET,
-		ENUM_CONTENT,
-		EXEC_BRACKET,
-		EXEC_CONTENT,
-		MACRO_CONTENT
-	};	
-
-	int expect            = PROPERTY;
-	int word_start        = -1;
-	int class_level       = 0;
-	int array_level       = 0;
-	int property_start    = 0;
-	int property_end      = 0;
-	int class_start       = 0;
-	int class_end         = 0;
 	int inside            = 0;
 	const int capacity    = 8;
-	bool is_array         = false;
-	bool in_quote         = false;
-	char separator        = ' ';
-	char *text            = file_content.pointer;
 	
-	int opened_classes[capacity];
-	memset(opened_classes, 0, sizeof opened_classes);
+	int opened_classes[capacity] = {0};
 
 	enum MISSION_SQM_CLASSES {
-		CLASS_MISSION   = 2,
-		CLASS_INTEL     = 4,
-		CLASS_GROUPS    = 8,
-		CLASS_ITEM      = 16,
-		CLASS_VEHICLES  = 32,
-		CLASS_WAYPOINTS = 64,
-		CLASS_EFFECTS   = 128,
-		CLASS_MARKERS   = 256,
-		CLASS_SENSORS   = 512
+		CLASS_MISSION   = 0x1,
+		CLASS_INTEL     = 0x2,
+		CLASS_GROUPS    = 0x4,
+		CLASS_ITEM      = 0x8,
+		CLASS_VEHICLES  = 0x10,
+		CLASS_WAYPOINTS = 0x20,
+		CLASS_EFFECTS   = 0x40,
+		CLASS_MARKERS   = 0x80,
+		CLASS_SENSORS   = 0x100
 	};
 	
-	char class_names[][16] = {
+	const char class_names[][16] = {
 		"Mission",
 		"Intel",
 		"Groups",
@@ -4641,7 +4508,7 @@ case C_CLASS_READSQM:
 		"Sensors"
 	};
 	
-	int class_ids[] = {
+	const int class_ids[] = {
 		CLASS_MISSION,
 		CLASS_INTEL,
 		CLASS_GROUPS,
@@ -4655,271 +4522,480 @@ case C_CLASS_READSQM:
 	
 	int class_max = sizeof(class_ids) / sizeof(class_ids[0]);
 	
-	for (i=0; i<file_size; i++) {
-		char c = text[i];
-		
-		switch (expect) {
-			case SEMICOLON : {
-				if (c == ';') {
-					expect = PROPERTY;
-					continue;
-				} else 
-					if (!isspace(c))
-						expect = PROPERTY;
-			}
-			
-			case PROPERTY : {
-				if (c == '}') {
-					int closed = opened_classes[class_level];
-					
-					// Close double array for units
-					if (closed==CLASS_ITEM && inside & CLASS_GROUPS && ~inside & CLASS_VEHICLES && ~inside & CLASS_WAYPOINTS)
-						memcpy(text+i, "]]+", 3);
-										
-					// Close array for vehicles, markers and sensors
-					if (closed==CLASS_ITEM && (inside & (CLASS_SENSORS | CLASS_MARKERS) || inside & CLASS_VEHICLES && ~inside & CLASS_GROUPS))
-						memcpy(text+i+1, "]+", 2);
-
-					// Connection between units and waypoints in a group						
-					if (closed==CLASS_VEHICLES && inside & CLASS_GROUPS)
-						memcpy(text+i, "],", 2);
-						
-					// Last item in an array, remove last plus sign
-					if (closed==CLASS_GROUPS || closed==CLASS_WAYPOINTS || closed==CLASS_SENSORS || closed==CLASS_MARKERS || closed==CLASS_VEHICLES || closed==CLASS_ITEM && inside & CLASS_GROUPS && ~inside & CLASS_VEHICLES && ~inside & CLASS_WAYPOINTS) {
-						for (int z=i-1; z>0; z--) {
-							if (text[z]=='+') {
-								text[z] = ' ';
-								break;
-							} else
-								if (!isspace(text[z]))
-									break;
-						}
-						
-						text[i] = ']';
-					}
-									
-					// For classes inside mission class - remove brackets
-					if (closed==CLASS_GROUPS || closed==CLASS_VEHICLES && ~inside & CLASS_GROUPS || closed==CLASS_MARKERS || closed==CLASS_SENSORS)
-						text[i] = ' ';
-						
-					// Add comma between soldiers and between waypoints
-					if (closed==CLASS_ITEM && inside & CLASS_GROUPS && inside & (CLASS_VEHICLES | CLASS_WAYPOINTS))
-						text[i+1] = ',';
-						
-					// Last item in the array, remove last comma
-					if ((closed==CLASS_ITEM && ~inside & CLASS_VEHICLES || closed==CLASS_VEHICLES || closed==CLASS_WAYPOINTS) && inside & CLASS_GROUPS) {
-						for (int z=i-1; z>0; z--) {
-							if (text[z]==',') {
-								text[z] = ' ';
-								break;
-							} else
-								if (!isspace(text[z]))
-									break;
-						}
-					}
-					
-					// Remove semi-colon when finished waypoints
-					if (closed == CLASS_WAYPOINTS)
-						text[i+1] = ' ';
-					    
-					inside                     ^= opened_classes[class_level];
-					opened_classes[class_level] = 0;
-					class_level--;
-						
-					// End parsing when left the target class
-					if (~inside & CLASS_MISSION) {
-						text[i] = '\0';
-						i       = file_size;
-						continue;
-					}
-									
-					expect = SEMICOLON;
-					continue;
-				}
-				
-				if (isalnum(c) || c=='_' || c=='[' || c==']') {
-					if (word_start == -1)
-						word_start = i;
-				} else
-					if (word_start >= 0) {
-						text[i] = '\0';
+	int units_in_this_group = 0;
+	SQM_ParseState state;
+	SQM_Init(state);
 	
-						if (strcmp(text+word_start,"class")==0) {
-							property_start = word_start;
-							expect         = CLASS_NAME;
-							property_end   = i;
-						} else {
-							expect         = EQUALITY;
-							separator      = '=';
-							property_start = word_start;
-							property_end   = i;
-							is_array       = text[i-2]=='[' && text[i-1]==']';
+	while (state.i < file_content.length) {
+		switch (SQM_Parse(file_content.text, file_content.length, state, SQM_ACTION_GET_NEXT_ITEM, NULL, 0)) {
+			case SQM_OUTPUT_PROPERTY : {								
+				if (inside & CLASS_MISSION) {
+					// Convert array format by replacing brackets
+					if (state.property[state.property_length-1]==']' && state.property[state.property_length-2]=='[') {
+						state.property[state.property_length-1] = ' ';
+						state.property[state.property_length-2] = ' ';
+						
+						bool in_quote = false;
+	
+						for (size_t i=0; i<state.value_length; i++) {
+							if (!in_quote  &&  state.value[i]=='{')
+								state.value[i] = '[';
+	
+							if (!in_quote  &&  state.value[i]=='}')
+								state.value[i] = ']';
+	
+							if (state.value[i] == '"')
+								in_quote = !in_quote;
 						}
-
-						text[i]    = c;
-						word_start = -1;
 					}
-				
-				if (separator == ' ')
-					break;
-			}
-			
-			case EQUALITY     : {
-				if (c == separator) {
-					expect++;
-					separator = ' ';
-				} else 
-					if (!isspace(c)) {	//ignore syntax error
-						i--;
-						separator = ' ';
-						expect    = SEMICOLON;
-					}
-				
-				break;
-			}
-			
-			case VALUE : {
-				if (c == '"')
-					in_quote = !in_quote;
-
-				if (!in_quote && (c=='{' || c=='['))
-					array_level++;
-
-				if (!in_quote && (c=='}' || c==']')) {
-					array_level--;
-
-					// Remove trailing commas
-					for (int z=i-1; z>0 && (isspace(text[z]) || text[z]==',' || text[z]=='}' || text[z]==']'); z--)
-						if (text[z]==',')
-							text[z] = ' ';
-				}
-
-				if (word_start == -1) {
-					if (!isspace(c))
-						word_start = i;
-				} else {
-					if (!in_quote && array_level==0 && (c==';' || c=='\r' || c=='\n')) {
-						int current = opened_classes[class_level];
-						
-						// Remove properties in these classes
-						if (current==CLASS_MISSION || current==CLASS_GROUPS || current==CLASS_VEHICLES || current==CLASS_SENSORS || current==CLASS_MARKERS || current==CLASS_WAYPOINTS) {
-							for (int z=property_start; z<(c==';' ? i+1 : i); z++)
-								text[z] = ' ';
-						} else 
-							// Remove property but keep value
-							if (inside & CLASS_GROUPS && current==CLASS_ITEM && ~inside & CLASS_VEHICLES && ~inside & CLASS_WAYPOINTS) {
-								for (int z=property_start; z<word_start; z++)
-									text[z] = ' ';
-									
-								if (c==';')
-									text[i] = ',';
-							} else {
-								// Convert to OFP variable
-								text[property_start-1] = '_';
-								
-								if (is_array) {
-									text[property_end-1] = ' ';
-									text[property_end-2] = ' ';
-									text[word_start]     = '[';
-									text[i-1]            = ']';
-								}
-							}
-						
-						word_start = -1;
-						expect     = PROPERTY;
-					}
-				}
-				
-				break;
-			}
-			
-			case CLASS_NAME    : {
-				if (isalnum(c) || c=='_') {
-					if (word_start == -1)
-						word_start = i;
-				} else
-					if (word_start >= 0) {
-						class_start = word_start;
-						class_end   = i;
-						word_start = -1;
-						expect     = CLASS_BRACKET;
-					}
-				
-				if (expect != CLASS_BRACKET)
-					break;
-			}
-			
-			case CLASS_BRACKET : {
-				if (c == '{') {
-					class_level++;
-					char backup     = text[class_end];
-					text[class_end] = '\0';
 					
-					for (int z=0; z<class_max; z++) {
-						if (strncmpi(text+class_start,class_names[z],strlen(class_names[z])) == 0) {
-							int opened                  = class_ids[z];
-							opened_classes[class_level] = opened;
-							inside                     |= opened;
-    						
-							// Remove everything before Mission class
-							if (opened == CLASS_MISSION)
-								for (int z=0; z<=i; z++)
-									text[z] = ' ';
+					// Remove "side=" from a group
+					if (inside & CLASS_GROUPS && inside & CLASS_ITEM && ~inside & CLASS_VEHICLES) {
+						if (strncmpi("side",state.property,state.property_length)==0) {
+							if (state.value[state.value_length-1] == ';')
+								state.value_length--;
 							
-							// Turn classes inside Mission class into variables
-							if (opened==CLASS_INTEL || opened==CLASS_GROUPS || opened==CLASS_VEHICLES && class_level==2 || opened==CLASS_SENSORS || opened==CLASS_MARKERS || opened==CLASS_EFFECTS) {
-								for (int z=property_start; z<property_end; z++)	
-									text[z] = ' ';
-									
-								memcpy(text+class_start-1, text+class_start, class_end-class_start);
-								text[class_start-2] = '_';
-								text[class_end-1] = '=';
-							}
-							
-							// Remove class name	
-							if (opened==CLASS_ITEM || opened==CLASS_VEHICLES && inside & CLASS_GROUPS || opened==CLASS_WAYPOINTS)
-								for (int z=property_start; z<class_end; z++)
-									text[z] = ' ';
-							
-							// If "item" class then turn it into array with string
-							if (opened==CLASS_ITEM && (inside & (CLASS_SENSORS | CLASS_MARKERS) || inside & CLASS_VEHICLES && ~inside & CLASS_GROUPS))
-								memcpy(text+i, "[{", 2);
-																
-							// If "vehicles" or "waypoints" in a group then turn it into array
-							if (opened==CLASS_VEHICLES && inside & CLASS_GROUPS || opened==CLASS_WAYPOINTS)
-								text[i] = '[';
-								
-							// If group item then turn it into array containing an array
-							if (opened==CLASS_ITEM && inside & CLASS_GROUPS && ~inside & CLASS_VEHICLES && ~inside & CLASS_WAYPOINTS)
-								memcpy(text+i, "[[", 2);
-								
-							// For classes inside mission class - remove brackets
-							if (opened==CLASS_GROUPS || opened==CLASS_VEHICLES && ~inside & CLASS_GROUPS || opened==CLASS_MARKERS || opened==CLASS_SENSORS)
-								text[i] = ' ';
-
-							
-							break;
+							QWritel(state.value, state.value_length);
+							QWrite(",");
 						}
 					}
-
-					text[class_end] = backup;
-					expect          = PROPERTY;
-				} else
-					if (!isspace(c)) {	//ignore syntax error
-						i--;
-						expect = SEMICOLON;
+					
+					// Convert properties to local vars by adding underscore
+					if (
+						(inside & CLASS_GROUPS && inside & CLASS_VEHICLES && inside & CLASS_ITEM && state.class_level==5) || 
+						(inside & CLASS_GROUPS && inside & CLASS_WAYPOINTS && inside & CLASS_ITEM && state.class_level==5) ||
+						(~inside & CLASS_GROUPS && (inside & CLASS_VEHICLES || inside & CLASS_MARKERS || inside & CLASS_SENSORS) && inside & CLASS_ITEM) ||
+						(inside & CLASS_EFFECTS) || 
+						inside & CLASS_INTEL
+					) {
+						QWrite("_");
+						QWritel(state.property, state.value_end - state.property_start);
 					}
+				}
+			} break;
+			
+			case SQM_OUTPUT_CLASS : {							
+				for (int z=0; z<class_max; z++) {
+					if (strncmpi(state.class_name,class_names[z],strlen(class_names[z])) == 0) {
+						int level             = state.class_level - 1;
+						int opened            = class_ids[z];
+						opened_classes[level] = opened;
+						inside               |= opened;
+										
+						if (inside & CLASS_MISSION)
+							switch (opened) {
+								case CLASS_INTEL  : QWrite("_Intel={"); break;
+								case CLASS_GROUPS : QWrite("_Groups=["); break;
+								
+								case CLASS_ITEM : {
+									// Soldier group
+									if (inside & CLASS_GROUPS && level==2)
+										QWrite("[");
+										
+									// Soldier
+									if ((inside & CLASS_GROUPS && (inside & CLASS_VEHICLES || inside & CLASS_WAYPOINTS))) {
+										if (units_in_this_group > 0)
+											QWrite(",{");
+										else
+											QWrite("{");
+
+										units_in_this_group++;
+									}
+									
+									// Vehicle
+									if (~inside & CLASS_GROUPS && (inside & (CLASS_VEHICLES|CLASS_MARKERS|CLASS_SENSORS)))
+										QWrite("{");
+								} break;
+								
+								case CLASS_WAYPOINTS : {
+									units_in_this_group=0; 
+									QWrite(",["); 
+								} break;
+								
+								case CLASS_VEHICLES : {														
+									if (~inside & CLASS_GROUPS)
+										QWrite("_Vehicles=[");
+									else
+										QWrite("[");
+								} break;
+								
+								case CLASS_MARKERS : QWrite("_Markers=["); break;
+								case CLASS_SENSORS : QWrite("_Sensors=["); break;
+								case CLASS_EFFECTS : QWrite("_Effects={"); break;
+							}
+						
+						break;
+					}
+				}
+			} break;
+			
+			case SQM_OUTPUT_END_OF_SCOPE : {
+				int level             = state.class_level;
+				int closed            = opened_classes[level];
+				opened_classes[level] = 0;
+				inside                = 0;
 				
-				break;
-			}
+				for (int z=0; z<level; z++)
+					inside |= opened_classes[z];
+				
+				if (closed == CLASS_MISSION) {
+					QWrite(""); 
+					goto class_readsqm_endparsing;
+				}
+				
+				if (inside & CLASS_MISSION)
+					switch (closed) {
+						case CLASS_INTEL    : QWrite("};"); break;
+						case CLASS_GROUPS   : QWrite("];"); break;
+						case CLASS_ITEM : {
+							// Soldier group
+							if (inside & CLASS_GROUPS && level==2) {
+								QWrite("]]+[");
+								units_in_this_group = 0;
+							}
+							
+							// Soldier/Waypoint
+							if (inside & CLASS_GROUPS && (inside & CLASS_VEHICLES || inside & CLASS_WAYPOINTS))
+								QWrite("}");
+							
+							// Vehicle
+							if (~inside & CLASS_GROUPS && inside & (CLASS_VEHICLES|CLASS_MARKERS|CLASS_SENSORS))
+								QWrite("}]+[");
+						} break;
+						
+						case CLASS_WAYPOINTS : QWrite("]"); break;
+						
+						case CLASS_VEHICLES : {
+							if (~inside & CLASS_GROUPS)
+								QWrite("];");
+							else
+								QWrite("]");
+						} break;
+						
+						case CLASS_MARKERS : QWrite("];"); break;
+						case CLASS_SENSORS : QWrite("];"); break;
+						case CLASS_EFFECTS : QWrite("};"); break;
+					}
+			} break;
 		}
 	}
+	
+	class_readsqm_endparsing:
 
 	//---------------------------------------------------------------------------
-	QWrite(file_content.pointer, out);
-	FWerror(0,0,CommandID,"","",0,0,out);
+	QWrite_err(FWERROR_NONE, 0);
 
 	String_end(file_content);
 	String_end(buf_filename);
-};
+}
 break;
+
+
+
+
+
+
+
+
+
+
+
+
+
+case C_CLASS_WRITE : 
+{ // Modify class and properties in a file
+
+	char *arg_filename               = empty_string;
+	char *arg_merge                  = empty_string;
+	char *arg_classpath              = empty_string;
+	char *arg_deleteclass            = empty_string;
+	char *arg_deleteproperty         = empty_string;
+	char *arg_renameclass            = empty_string;
+	char *arg_renameproperty         = empty_string;
+	char *arg_renameto               = empty_string;
+    char *arg_offset                 = empty_string;
+	size_t arg_filename_length       = 0;
+	size_t arg_merge_length          = 0;
+	size_t arg_deleteclass_length    = 0;
+	size_t arg_deleteproperty_length = 0;
+	size_t arg_renameclass_length    = 0;
+	size_t arg_renameproperty_length = 0;
+	size_t arg_renameto_length       = 0;
+	size_t arg_offset_length         = 0;
+	
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch(argument_hash[i]) {
+			case NAMED_ARG_FILE :
+				arg_filename        = argument[i+1];
+				arg_filename_length = argument_length[i+1];
+				break;
+				
+			case NAMED_ARG_MERGE : 
+				arg_merge        = argument[i+1];
+				arg_merge_length = argument_length[i+1];
+				break;
+				
+			case NAMED_ARG_PATH :
+				arg_classpath        = argument[i+1];
+				break;
+				
+			case NAMED_ARG_DELETECLASS : 
+				arg_deleteclass        = argument[i+1];
+				arg_deleteclass_length = argument_length[i+1];
+				break;
+				
+			case NAMED_ARG_DELETEPROPERTY : 
+				arg_deleteproperty        = argument[i+1];
+				arg_deleteproperty_length = argument_length[i+1];
+				break;
+				
+			case NAMED_ARG_RENAMECLASS : 
+				arg_renameclass        = argument[i+1];
+				arg_renameclass_length = argument_length[i+1];
+				break;
+				
+			case NAMED_ARG_RENAMEPROPERTY : 
+				arg_renameproperty        = argument[i+1];
+				arg_renameproperty_length = argument_length[i+1];
+				break;
+				
+			case NAMED_ARG_TO : 
+				arg_renameto        = argument[i+1];
+				arg_renameto_length = argument_length[i+1];
+				break;
+				
+			case NAMED_ARG_OFFSET :
+				arg_offset        = argument[i+1];
+				arg_offset_length = argument_length[i+1];
+				break;
+		}
+	}
+	
+	// File not specified
+	if (arg_filename_length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+		QWrite("0,\"0\",[],[]]");
+		break;
+	};
+	
+	// Verify and update path to the file
+	String buf_filename;
+	String_init(buf_filename);
+	char *ptr_filename = arg_filename;
+
+	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+		QWrite("[],[],0]");
+		break;
+	}
+		
+
+
+	// Open wanted file -----------------------------------------------------------------	
+	FILE *file = fopen(ptr_filename, "rb");
+	if (!file) {
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("[],[],0]");
+		String_end(buf_filename);
+		break;
+	}
+
+	// Find file size
+	if (fseek(file, 0, SEEK_END) != 0) {
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("[],[],0]");
+		String_end(buf_filename);
+		fclose(file);
+		break;
+	};
+
+	size_t file_size = ftell(file);
+	if (file_size == 0xFFFFFFFF) {
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite("[],[],0]");
+		String_end(buf_filename);
+		fclose(file);
+		break;
+	};
+
+	// Allocate buffer
+	String file_contents;
+	String_init(file_contents);
+	int buffer_max = file_size + 1 + arg_merge_length;
+	int result     = String_allocate(file_contents, buffer_max);
+	if (result != 0) {
+		QWrite_err(FWERROR_MALLOC, 2, "file_contents", buffer_max);
+		QWrite("[],[],0]");
+		String_end(buf_filename);
+		break;
+	}
+
+	// Copy text to buffer
+	fseek(file, 0, SEEK_SET);
+	size_t bytes_read    = fread(file_contents.text, 1, file_size, file);
+	file_contents.length = bytes_read;
+
+	if (bytes_read != file_size) {		
+		if (ferror(file))
+			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		else
+			QWrite_err(FWERROR_FILE_WRITE, 4, errno, bytes_read, file_size, ptr_filename);
+		
+		String_end(buf_filename);
+		String_end(file_contents);
+		QWrite("[],[],0]");
+		fclose(file);
+		break;
+	}
+
+	fclose(file);
+	
+	SQM_ParseState source_state;
+	SQM_Init(source_state);
+	
+	int classpath_current = 0;
+	int classpath_size    = 0;
+	char *classpath[SQM_CLASSPATH_CAPACITY];
+	char *classpath_item = strtok(arg_classpath, "[,]");  
+	
+	while (classpath_item!=NULL  &&  classpath_size<SQM_CLASSPATH_CAPACITY) {
+		classpath[classpath_size++] = classpath_item;
+		classpath_item = strtok(NULL, "[,]");
+	}
+	
+	if (arg_offset_length != 0) {
+		source_state.i    = strtoul(arg_offset, NULL, 0);
+		classpath_current = classpath_size;
+	} else {
+		for (int i=0; i<classpath_size; i++) {
+			if (SQM_Parse(file_contents.text, file_contents.length, source_state, SQM_ACTION_FIND_CLASS, classpath[i], strlen(classpath[i]))) {
+				classpath_current++;
+			} else
+				break;
+				
+		}
+	}
+	
+	// If classes given in the path were found
+	if (classpath_current == classpath_size) {
+		result            = 0;
+		bool save_changes = false;
+		
+		// Merge classes	
+		if (arg_merge_length > 0) {
+			SQM_ParseState merge_state;
+			SQM_Init(merge_state);
+
+			if (SQM_Merge(arg_merge, arg_merge_length, merge_state, file_contents, source_state))
+				save_changes = true;
+		}
+		
+		// Delete property
+		if (arg_deleteproperty_length > 0) {
+			SQM_ParseState source_state_copy = source_state;
+	
+			if ((result = SQM_Parse(file_contents.text, file_contents.length, source_state_copy, SQM_ACTION_FIND_PROPERTY, arg_deleteproperty, arg_deleteproperty_length))) {
+				size_t removed_length = source_state_copy.value_end - source_state_copy.property_start;
+				
+				shift_buffer_chunk(file_contents.text, source_state_copy.value_end, file_contents.length, removed_length, OPTION_LEFT);
+				
+				file_contents.length -= removed_length;
+				save_changes          = true;
+			} else {
+				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_renameproperty, ptr_filename);
+				goto class_write_end;
+			}
+		}
+		
+		// Delete class
+		if (arg_deleteclass_length > 0) {				
+			SQM_ParseState source_state_copy = source_state;
+	
+			if ((result = SQM_Parse(file_contents.text, file_contents.length, source_state_copy, SQM_ACTION_FIND_CLASS, arg_deleteclass, arg_deleteclass_length))) {
+				SQM_Parse(file_contents.text, file_contents.length, source_state_copy, SQM_ACTION_FIND_CLASS_END, NULL, 0);
+				
+				size_t removed_length = source_state_copy.i - source_state_copy.class_start;
+				
+				shift_buffer_chunk(file_contents.text, source_state_copy.i, file_contents.length, removed_length, OPTION_LEFT);
+				
+				file_contents.length -= removed_length;
+				save_changes          = true;
+			} else {
+				QWrite_err(FWERROR_CLASS_NOCLASS, 2, arg_renameclass, ptr_filename);
+				goto class_write_end;
+			}
+		}
+		
+		// Rename property
+		if (arg_renameproperty_length>0  &&  arg_renameto_length>0) {
+			SQM_ParseState source_state_copy = source_state;
+	
+			if ((result = SQM_Parse(file_contents.text, file_contents.length, source_state_copy, SQM_ACTION_FIND_PROPERTY, arg_renameproperty, arg_renameproperty_length))) {
+				size_t shift_amount  = arg_renameto_length > source_state_copy.property_length ? arg_renameto_length-source_state_copy.property_length : source_state_copy.property_length-arg_renameto_length;
+				bool shift_direction = arg_renameto_length > source_state_copy.property_length;
+				save_changes         = true;
+				
+				shift_buffer_chunk(file_contents.text, source_state_copy.property_end, file_contents.length, shift_amount, shift_direction);
+				memcpy(source_state_copy.property, arg_renameto, arg_renameto_length);
+				
+				if (shift_direction)
+					file_contents.length += shift_amount;
+				else
+					file_contents.length -= shift_amount;
+			} else {
+				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_renameproperty, ptr_filename);
+				goto class_write_end;
+			}
+		} else
+			// Rename class
+			if (arg_renameclass_length > 0  &&  arg_renameto_length > 0) {
+				SQM_ParseState source_state_copy = source_state;
+				
+				if ((result = SQM_Parse(file_contents.text, file_contents.length, source_state_copy, SQM_ACTION_FIND_CLASS, arg_renameclass, arg_renameclass_length))) {
+					size_t current_name_length = source_state_copy.class_name_full_end - source_state_copy.class_name_start;
+					size_t shift_amount        = arg_renameto_length > current_name_length ? arg_renameto_length-current_name_length : current_name_length-arg_renameto_length;
+					bool shift_direction       = arg_renameto_length > current_name_length;
+					save_changes               = true;
+					
+					shift_buffer_chunk(file_contents.text, source_state_copy.class_name_full_end, file_contents.length, shift_amount, shift_direction);
+					memcpy(source_state_copy.class_name, arg_renameto, arg_renameto_length);
+					
+					if (shift_direction)
+						file_contents.length += shift_amount;
+					else
+						file_contents.length -= shift_amount;
+				} else {
+					QWrite_err(FWERROR_CLASS_NOCLASS, 2, arg_renameclass, ptr_filename);
+					goto class_write_end;
+				}
+			}
+		
+		// Rewrite file
+		if (save_changes) {
+			if ((file = fopen(ptr_filename, "wb"))) {
+				fwrite(file_contents.text, 1, file_contents.length, file);
+	
+				if (ferror(file)) 
+					QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+				else
+					QWrite_err(FWERROR_NONE, 0);
+	
+				fclose(file);
+			} else 
+				QWrite_err(FWERROR_ERRNO, errno, ptr_filename);
+		} else 
+			if (!result && arg_merge_length==0)
+				QWrite_err(FWERROR_PARAM_ACTION, 0);
+			else
+				QWrite_err(FWERROR_NONE, 0);
+	} else
+		if (classpath_current < classpath_size)
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, classpath_size, ptr_filename);
+		else
+			QWrite_err(FWERROR_NONE, 0);
+
+	class_write_end:
+	QWritef("%d]", classpath_current);
+	
+	String_end(file_contents);
+	String_end(buf_filename);
+} break;

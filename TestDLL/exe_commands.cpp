@@ -2,32 +2,30 @@
 // EXTERNAL EXECUTABLES
 // -----------------------------------------------------------------
 
-case C_EXE_SPIG:
+case C_SPIG_EXE:
 { // Execute program from the SPIG directory
 
-	if (global.DedicatedServer) 
+	if (global.is_server) 
 		break;
 
-	if (numP < 3) {
-		QWrite("\"Not enough parameters\"", out); 
+	if (argument_num < 3) {
+		QWrite("\"Not enough parameters\""); 
 		break;
 	}
 
-	if (strstr(par[2],"..") != NULL  ||  strstr(par[3],"..") != NULL) {
-		QWrite("\"Illegal argument\"",out); 
+	if (strstr(argument[2],"..")  ||  strstr(argument[3],"..")) {
+		QWrite("\"Illegal argument\""); 
 		break;
 	}
 
 	// Path to the program
 	char program[256] = "Set-Pos-In-Game\\Exe\\";
-	strcat(program, stripq(par[2]));
+	strcat(program, stripq(argument[2]));
 
 	// Check if a program exists
 	FILE *f = fopen(program, "r");
 	if (!f) {
-		QWrite("\"Missing ",out);
-		QWrite(program, out);
-		QWrite("\"", out); 
+		QWritef("\"Missing %s\"", program);
 		break;
 	}
 	fclose(f);
@@ -36,12 +34,7 @@ case C_EXE_SPIG:
 	// Format argument which will be passed to the program
 	String buf_arguments;
 	String_init(buf_arguments);
-	String_append(buf_arguments, "\"");
-	String_append(buf_arguments, global.mission_path);
-	String_append(buf_arguments, "\" \"fwatch\\mdb\\");
-	String_append(buf_arguments, stripq(par[3]));
-	String_append(buf_arguments, "\" -silent");
-
+	String_append_format(buf_arguments, "\"%s\" \"fwatch\\mdb\\%s\" -silent", global.mission_path, stripq(argument[3]));
 
 	// Run program
 	STARTUPINFO si;
@@ -52,10 +45,8 @@ case C_EXE_SPIG:
 	si.wShowWindow = SW_HIDE;
 	ZeroMemory(&pi, sizeof(pi));
 
-	if (!CreateProcess(program, buf_arguments.pointer, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
-		QWrite("\"Failed to execute ",out);
-		QWrite(program, out);
-		QWrite("\"", out);
+	if (!CreateProcess(program, buf_arguments.text, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
+		QWritef("\"Failed to execute %s\"", program);
 		String_end(buf_arguments);
 		break;
 	}
@@ -76,9 +67,7 @@ case C_EXE_SPIG:
 
 
 	// Pass number returned by a program
-	char tmp[8] = "";
-	sprintf(tmp, "[%d]", st);
-	QWrite(tmp, out);
+	QWritef("[%d]", st);
 }
 break;
 
@@ -101,54 +90,49 @@ case C_EXE_WGET:
 case C_EXE_PREPROCESS:
 case C_RESTART_CLIENT:
 case C_RESTART_SERVER:
-{ // Execute program from fwatch\data\
+{ // Execute program from fwatch\data
 
 	// Not enough arguments
-	if (numP < 3  &&  CommandID!=C_RESTART_CLIENT) {
-		FWerror(100,0,CommandID,"","",numP,3,out);
-		QWrite("0,0]", out);
+	if (argument_num < 3  &&  argument_hash[0]!=C_RESTART_CLIENT) {
+		QWrite_err(FWERROR_PARAM_FEW, 2, argument_num, 3);
+		QWrite("0,0]");
 		break;
 	}
 
 	// Abort if command not allowed on the server or client
-	if ((global.DedicatedServer && (CommandID==C_RESTART_CLIENT || CommandID==C_EXE_ADDONTEST)) || (!global.DedicatedServer && CommandID==C_RESTART_SERVER))
+	if ((global.is_server && (argument_hash[0]==C_RESTART_CLIENT || argument_hash[0]==C_EXE_ADDONTEST)) || (!global.is_server && argument_hash[0]==C_RESTART_SERVER))
 		break;
 
 
 
 	// Set variables depending on the program
 	int db_id         = 0;
-	int com_offset    = 0;
 	char exe_name[64] = "";
-	char exe_path[64] = "fwatch\\data\\";
 
-	switch(CommandID) {
-		case C_EXE_ADDONINSTALL : strcpy(exe_name, "addonInstarrer.exe"); com_offset=17; break;
-		case C_EXE_ADDONTEST    : strcpy(exe_name, "addontest.exe"); strcpy(exe_path, "@addontest\\ModData\\"); com_offset=14; break;
-		case C_EXE_UNPBO        : strcpy(exe_name, "extractpbo.exe"); com_offset=10; break;
-		case C_EXE_MAKEPBO      : strcpy(exe_name, "makepbo.exe"); com_offset=12; break;
-		case C_EXE_WGET         : strcpy(exe_name, "wget.exe"); com_offset=9; break;
-		case C_EXE_PREPROCESS   : strcpy(exe_name, "preproc.exe"); com_offset=15; break;
-		case C_RESTART_CLIENT   : strcpy(exe_name, "gameRestart.exe"); com_offset=15; break;
+	switch(argument_hash[0]) {
+		case C_EXE_ADDONINSTALL : strcpy(exe_name, "addonInstarrer.exe"); break;
+		case C_EXE_ADDONTEST    : strcpy(exe_name, "addontest.exe"); break;
+		case C_EXE_UNPBO        : strcpy(exe_name, "extractpbo.exe"); break;
+		case C_EXE_MAKEPBO      : strcpy(exe_name, "makepbo.exe"); break;
+		case C_EXE_WGET         : strcpy(exe_name, "wget.exe"); break;
+		case C_EXE_PREPROCESS   : strcpy(exe_name, "preproc.exe"); break;
+		case C_RESTART_CLIENT   : strcpy(exe_name, "gameRestart.exe"); break;
 	}
-
-	strcat(exe_path, exe_name);
 
 
 	// Optional argument - check if the program is running or terminate it
-	char temp[32] = "";
-	bool check = numP>2 && strcmpi(par[2],"check") == 0;
-	bool close = numP>2 && strcmpi(par[2],"close") == 0;
+	bool check = argument_num>2 && strcmpi(argument[2],"check") == 0;
+	bool close = argument_num>2 && strcmpi(argument[2],"close") == 0;
 
 	if (check || close) {
 		DWORD pid	= 0;
 		bool  found	= false;
 
-		if (numP > 3) 
-			db_id = atoi(par[3]);
+		if (argument_num > 3) 
+			db_id = atoi(argument[3]);
 		else {
-			FWerror(100,0,CommandID,"","",numP,4,out);
-			QWrite("0,0]", out);
+			QWrite_err(FWERROR_PARAM_FEW, 2, argument_num, 4);
+			QWrite("0,0]");
 			break;
 		}
 
@@ -158,25 +142,22 @@ case C_RESTART_SERVER:
 
 		// If create process failed
 		if (info.launch_error != 0) {
-			FWerror(5,info.launch_error,CommandID,"","",0,0,out);
-			sprintf(temp, "%d,%d]", db_id, info.exit_code);
-			QWrite(temp, out);
+			QWrite_err(FWERROR_WINAPI, 1, info.launch_error);
+			QWritef("%d,%d]", db_id, info.exit_code);
 			break;
 		}
 
 		// If thread in fwatch.exe hasn't prepared data yet then quit
 		if (pid == 0  ||  info.exit_code == STILL_ACTIVE) {
-			FWerror(0,0,CommandID,"","",0,0,out);
-			sprintf(temp, "%d,%d]", db_id, info.exit_code);
-			QWrite(temp, out);
+			QWrite_err(FWERROR_NONE, 0);
+			QWritef("%d,%d]", db_id, info.exit_code);
 			break;
 		}
 
 		// If program is done then return exit code
 		if (pid != 0  &&  info.exit_code != STILL_ACTIVE) {
-			FWerror(2,0,CommandID,"","",0,0,out);
-			sprintf(temp, "%d,%d]", db_id, info.exit_code);
-			QWrite(temp, out);
+			QWrite_err(FWERROR_NO_PROCESS, 1, exe_name);
+			QWritef("%d,%d]", db_id, info.exit_code);
 			break;
 		}
 		
@@ -200,38 +181,28 @@ case C_RESTART_SERVER:
 
 			CloseHandle(processesSnapshot);
 		} else {
-			FWerror(5,GetLastError(),CommandID,"","",0,0,out),
-			sprintf(temp, "%d,%d]", db_id, info.exit_code);
-			QWrite(temp, out);
+			QWrite_err(FWERROR_WINAPI, 1, GetLastError());
+			QWritef("%d,%d]", db_id, info.exit_code);
 			break;
 		}
+	
+		if (close && found) {
+			HANDLE AThandle = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
 
-		// Terminate process
-		int primary_error   = 0;
-		int secondary_error = 0;
-		char *string_error  = "";
-		
-		if (close)
-			if (found) {
-				HANDLE AThandle = OpenProcess(PROCESS_ALL_ACCESS,0,pid);
+			if (!TerminateProcess(AThandle,0))
+				QWrite_err(FWERROR_WINAPI, 1, GetLastError());
 
-				if (!TerminateProcess(AThandle,0)) {
-					primary_error   = 5;
-					secondary_error = GetLastError();
-				}
-
-				CloseHandle(AThandle);
-			}
-
-		// Return search result
-		if (check && !found) {
-			primary_error = 2;
-			string_error  = exe_name;
+			CloseHandle(AThandle);
 		}
 
-		FWerror(primary_error,secondary_error,CommandID,string_error,"",0,0,out);
-		sprintf(temp, "%d,%d]", db_id, info.exit_code);
-		QWrite(temp, out);
+		// Return search result
+		if (check && !found)
+			QWrite_err(FWERROR_NO_PROCESS, 1, exe_name);
+
+		if (~global.option_error_output & OPTION_ERROR_ARRAY_STARTED)
+			QWrite_err(FWERROR_NONE, 0);
+
+		QWritef("%d,%d]", db_id, info.exit_code);
 		break;
 	}
 	// ---------
@@ -249,76 +220,63 @@ case C_RESTART_SERVER:
 	// Get current dir
 	TCHAR pwd[MAX_PATH];
 	GetCurrentDirectory(MAX_PATH, pwd);
-	String param;
-	String_init(param);
-	char tmp[32]        = "";
-	sprintf(tmp, "%d|%d|", CommandID, db_id);
-	String_append(param, tmp);
 
 	// Create string that will be passed to the program
 	// Starting with directory path (deal with spaces)
-	String_append(param, "\"");
-	String_append(param, pwd);
+	String param;
+	String_init(param);
+	String_append_format(param, "%d|%d|\"%s", argument_hash[0], db_id, pwd);
 
-	if (CommandID == C_EXE_WGET)
+	if (argument_hash[0] == C_EXE_WGET)
 		String_append(param, "\\fwatch\\data");
 
-	if (CommandID != C_EXE_PREPROCESS)
+	if (argument_hash[0] != C_EXE_PREPROCESS)
 		String_append(param, "\" ");
 
 	bool error = false;
 
 	// Additional options for the extractpbo.exe
-	switch(CommandID) {
+	switch(argument_hash[0]) {
 		case C_EXE_UNPBO : 
 		case C_EXE_MAKEPBO : {
-			bool extra_option = numP>=5 && (CommandID==C_EXE_UNPBO && strcmpi(par[2],"-F")==0 || CommandID==C_EXE_MAKEPBO && strcmpi(par[2],"-Z")==0);
+			bool extra_option = argument_num>=5 && ((argument_hash[0]==C_EXE_UNPBO && strcmpi(argument[2],"-F")==0) || (argument_hash[0]==C_EXE_MAKEPBO && strcmpi(argument[2],"-Z")==0));
 
 			String buf_filename;
 			String_init(buf_filename);
-			char *ptr_filename = stripq(par[extra_option ? 4 : 2]);
-			VerifyPath(&ptr_filename, buf_filename, ALLOW_GAME_ROOT_DIR | SUPPRESS_ERROR, CommandID, out);
+			char *ptr_filename = stripq(argument[extra_option ? 4 : 2]);
+			VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR | OPTION_SUPPRESS_ERROR);
 
-			String_append(param, CommandID==C_EXE_UNPBO ? " -YP " : " -NRK ");
+			String_append(param, argument_hash[0]==C_EXE_UNPBO ? " -YP " : " -NRK ");
 
-			if (extra_option) {
-				String_append(param, par[2]);
-				String_append(param, " ");
-				String_append(param, par[3]);
-				String_append(param, " \"");
-				String_append(param, ptr_filename);
-				String_append(param, "\"");
-			} else {
-				String_append(param, "\"");
-				String_append(param, ptr_filename);
-				String_append(param, "\"");
-			}
+			if (extra_option)
+				String_append_format(param, "%s %s \"%s\"", argument[2], argument[3], ptr_filename);
+			else
+				String_append_format(param, "\"%s\"", ptr_filename);
 
 			// Destination folder must start with drive
-			if (CommandID == C_EXE_UNPBO) {
-				String_append(param, " \"");
-				String_append(param, pwd);
+			if (argument_hash[0] == C_EXE_UNPBO) {
+				String_append_format(param, " \"%s", pwd);
 
-				if (extra_option && numP>=6 || !extra_option && numP>=4) {
-					buf_filename.current_length = 0;
-					ptr_filename                = stripq(par[extra_option ? 5 : 3]);
+				if ((extra_option && argument_num>=6) || (!extra_option && argument_num>=4)) {
+					buf_filename.length = 0;
+					ptr_filename        = stripq(argument[extra_option ? 5 : 3]);
 
-					if (VerifyPath(&ptr_filename, buf_filename, RESTRICT_TO_MISSION_DIR | SUPPRESS_ERROR | SUPPRESS_CONVERSION, CommandID, out)) {
-						String_append(param, "\\fwatch\\tmp\\");
-						String_append(param, ptr_filename);
-						String_append(param, "\" ");
-					} else
+					if (VerifyPath(&ptr_filename, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR | OPTION_SUPPRESS_ERROR | OPTION_SUPPRESS_CONVERSION))
+						String_append_format(param, "\\fwatch\\tmp\\%s\" ", ptr_filename);
+					else
 						String_append(param, "\\fwatch\\tmp\" ");
 				} else
 					String_append(param, "\\fwatch\\tmp\" ");
 			} else {
-				if (numP>=6 || !strstr2(ptr_filename,"fwatch\\tmp",0,0)) {
+				int ptr_filename_len = strlen(ptr_filename); 
+				char fwatch_tmp[]    = "fwatch\\tmp";
+				int fwatch_tmp_len   = strlen(fwatch_tmp);
+
+				if (argument_num>=6 || !strstr2(ptr_filename, ptr_filename_len, fwatch_tmp, fwatch_tmp_len, OPTION_NONE)) {
 					String_append(param, " \"fwatch\\tmp");
 
-					if (numP >= 6) {
-						String_append(param, "\\");
-						String_append(param, stripq(par[5]));
-					}
+					if (argument_num >= 6)
+						String_append_format(param, "\\%s", stripq(argument[5]));
 
 					String_append(param, "\"");
 				}
@@ -329,8 +287,12 @@ case C_RESTART_SERVER:
 		break;
 		
 		case C_EXE_WGET : {
-			String_append(param, "--directory-prefix=fwatch\\tmp --no-check-certificate ");
-			String_append(param, com+9);
+			String_append_format(param, "--directory-prefix=fwatch\\tmp --no-check-certificate ");
+
+			for (size_t i=2; i<argument_num; i++) {
+				String_append_len(param, " ", 1);
+				String_append_len(param, argument[i], argument_length[i]);
+			}
 		}
 		break;
 		
@@ -344,33 +306,33 @@ case C_RESTART_SERVER:
 			bool merge = false;
 
 			// Check which parameters are files
-			for (int i=2;  i<numP;  i++) {
-				if (strcmpi(par[i],"-merge") == 0) {
+			for (size_t i=2;  i<argument_num;  i++) {
+				if (strcmpi(argument[i],"-merge") == 0) {
 					merge = true;
 					continue;
 				}
 
-				if (strcmpi(par[i],"-silent") == 0) 
+				if (strcmpi(argument[i],"-silent") == 0) 
 					continue;
 
 				if (!ptr_filename1) {
-					ptr_filename1 = par[i];
+					ptr_filename1 = argument[i];
 					continue;
 				}
 
 				if (!ptr_filename2) {
-					ptr_filename2 = par[i];
+					ptr_filename2 = argument[i];
 					continue;
 				}
 			}
 
 			// Check path
 			if (ptr_filename1)
-				VerifyPath(&ptr_filename1, buf_filename1, ALLOW_GAME_ROOT_DIR | SUPPRESS_ERROR, CommandID, out);
+				VerifyPath(&ptr_filename1, buf_filename1, OPTION_ALLOW_GAME_ROOT_DIR | OPTION_SUPPRESS_ERROR);
 
 			if (ptr_filename2) {
-				if (!VerifyPath(&ptr_filename2, buf_filename2, RESTRICT_TO_MISSION_DIR, CommandID, out)) {
-					QWrite("0,0]", out); 
+				if (!VerifyPath(&ptr_filename2, buf_filename2, OPTION_RESTRICT_TO_MISSION_DIR)) {
+					QWrite("0,0]"); 
 					String_end(buf_filename1);
 					String_end(buf_filename2);
 					error = true;
@@ -378,12 +340,11 @@ case C_RESTART_SERVER:
 			}
 
 			// Add starting path
-			String_append(param, "\\");
-			String_append(param, ptr_filename1);
+			String_append_format(param, "\\%s", ptr_filename1);
 
-			char *lastSlash       = strrchr(ptr_filename1, '\\');
-			int length            = lastSlash - ptr_filename1 + 1;
-			param.current_length -= length;
+			char *lastSlash = strrchr(ptr_filename1, '\\');
+			int length      = lastSlash - ptr_filename1 + 1;
+			param.length   -= length;
 
 			String_append(param, "\" -silent ");
 
@@ -391,15 +352,10 @@ case C_RESTART_SERVER:
 				String_append(param, "-merge "); 
 
 			// Add file to parameter list
-			String_append(param, " \"");
-			String_append(param, ptr_filename1);
-			String_append(param, "\"");
+			String_append_format(param, " \"%s\"", ptr_filename1);
 
-			if (ptr_filename2) {
-				String_append(param, " \"");
-				String_append(param, ptr_filename2);
-				String_append(param, "\"");
-			}
+			if (ptr_filename2)
+				String_append_format(param, " \"%s\"", ptr_filename2);
 
 			String_end(buf_filename1);
 			String_end(buf_filename2);
@@ -408,25 +364,22 @@ case C_RESTART_SERVER:
 		
 		default : {
 			// Add text that was passed to this command
-			if (numP > 2)
-				String_append(param, com + (strlen(par[0]) + strlen(par[1]) + 1));
+			for (size_t i=2; i<argument_num; i++) {
+				String_append_len(param, " ", 1);
+				String_append_len(param, argument[i], argument_length[i]);
+			}
 
 			// Add information about this game instance
 			char game_exe_buffer[1024];
-			GetModuleFileName( GetModuleHandle( NULL ), game_exe_buffer, sizeof(game_exe_buffer) );
-			char *game_exe_ptr = strrchr(game_exe_buffer,'\\');
+			GetModuleFileName(GetModuleHandle(NULL), game_exe_buffer, sizeof(game_exe_buffer));
+			char *game_exe_ptr = strrchr(game_exe_buffer, '\\');
 
-			if (game_exe_ptr != NULL)
+			if (game_exe_ptr)
 				game_exe_ptr += 1;
 			else
 				game_exe_ptr = game_exe_buffer;
 
-			String_append(param, " -pid=");
-			char tmp[64] = "";
-			sprintf(tmp, "%d \"-run=", global.pid);
-			String_append(param, tmp);
-			String_append(param, game_exe_ptr);
-			String_append(param, "\"");
+			String_append_format(param, " -pid=%d \"-run=%s\"", global.pid, game_exe_ptr);
 		}
 		break;
 	}
@@ -437,20 +390,19 @@ case C_RESTART_SERVER:
 		
 		if (mailslot != INVALID_HANDLE_VALUE) {
 			DWORD bytes_written = 0;
-			
-			if (WriteFile(mailslot, param.pointer, param.current_length+1, &bytes_written, (LPOVERLAPPED)NULL)) {
-				FWerror(0,0,CommandID,"","",numP,3,out);
-				sprintf(tmp, "%d,259]", db_id);
-				QWrite(tmp, out);
+
+			if (WriteFile(mailslot, param.text, param.length+1, &bytes_written, (LPOVERLAPPED)NULL)) {
+				QWrite_err(FWERROR_NONE, 0);
+				QWritef("%d,%d]", db_id, STILL_ACTIVE);
 			} else {
-				FWerror(5,GetLastError(),CommandID,"","",0,0,out);
-				QWrite("0,0]", out);
+				QWrite_err(FWERROR_WINAPI, 1, GetLastError());
+				QWrite("0,0]");
 			}
 
 			CloseHandle(mailslot);
 		} else {
-			FWerror(5,GetLastError(),CommandID,"","",0,0,out);
-			QWrite("0,0]", out);
+			QWrite_err(FWERROR_WINAPI, 1, GetLastError());
+			QWrite("0,0]");
 		}
 	}
 
@@ -472,34 +424,32 @@ break;
 case C_EXE_WEBSITE:		
 { // open url in a browser
 
-	if (numP < 2 || global.DedicatedServer)
+	if (argument_num < 2 || global.is_server)
 		break;
 
 	// Is it main menu
-	int	inMenuOff = 0;
-	int inMenu    = 0;
+	int	is_main_menu_address = 0;
+	int is_main_menu         = 0;
 
-	switch(game_version) {
-		case VER_196 : inMenuOff=0x75E254; break;
-		case VER_199 : inMenuOff=0x74B58C; break;
+	switch(global_exe_version[global.exe_index]) {
+		case VER_196 : is_main_menu_address=0x75E254; break;
+		case VER_199 : is_main_menu_address=0x74B58C; break;
 	}
 
-	if (inMenuOff != 0) {
-		ReadProcessMemory(phandle, (LPVOID)inMenuOff, &inMenu, 4, &stBytes);
+	if (is_main_menu_address) {
+		ReadProcessMemory(phandle, (LPVOID)is_main_menu_address, &is_main_menu, 4, &stBytes);
 
-		if (!inMenu) 
+		if (!is_main_menu) 
 			break;
 	}
 
-	char *url = com + 12;
-
 	if (
-		strncmpi(url,"https://",8) != 0  &&
-		strncmpi(url,"http://",7)  != 0  &&
-		strncmpi(url,"ftp://",6)   != 0  &&
-		strncmpi(url,"www.",4)     != 0
+		strncmpi(argument[2],"https://",8) != 0  &&
+		strncmpi(argument[2],"http://",7)  != 0  &&
+		strncmpi(argument[2],"ftp://",6)   != 0  &&
+		strncmpi(argument[2],"www.",4)     != 0
 	) break;
 
-	ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+	ShellExecute(NULL, "open", argument[2], NULL, NULL, SW_SHOWNORMAL);
 }
 break;

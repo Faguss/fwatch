@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2021,3,29,1,20,22,30,607,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2021,6,27,0,19,7,46,20,120,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -21,16 +21,23 @@
 	_version = call loadFile ":info version"
 	? _version < 1.16 : titleText ["Requires Fwatch 1.16. Please update your version.","PLAIN DOWN",1]; exit
 
+	_fwatch_test_version = 0
+	call loadFile ":info version extended"
+	? _fwatch_test_version < 3 : titleText ["New test version of Fwatch 1.16 required.\n\nPlease update your version.\n\nofp-faguss.com/fwatch/116test","PLAIN",1.5]; exit
+	
 	; Create or close dialog
 	? MAINMENU_INPUT || ctrlVisible 6900 : exit
 	? ctrlVisible 6657                   : if (lbValue[6657,0]!=1) then {LOADMOD_MODSELECTOR=true} else {closeDialog 0}; exit
 
 	; Initialize functions
 	call preProcessFile "..\fwatch\data\MainMenu_fnc.sqf"
-	["FLIB_DATEDIFF","FLIB_DATEDIFFDAY","FLIB_FORMATDATE","FLIB_MODIFYDATE","FLIB_CURRENTLANG"] call preProcessFile "..\fwatch\data\InitFLib.sqf"
+	["FLIB_DATEDIFF","FLIB_DATEDIFFDAY","FLIB_FORMATDATE","FLIB_MODIFYDATE","FLIB_CURRENTLANG","FLIB_FORMAT"] call preProcessFile "..\fwatch\data\InitFLib.sqf"
 	call FUNCTION_STRINGTABLE
 	0.03 exec "..\fwatch\data\InputMulti.sqs"
 	@Format ["%1",count FWATCH_INPUT_MULTI] != "scalar"
+	
+	; Remove obsolete databases
+	{_ok=call loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1",_x]; if ((_ok select 1) == 280) then {loadFile Format ["\:IGSE NEW  file:..\fwatch\tmp\schedule\%1  mode:delete",_x]}} forEach ["mods.bin", "schedule.bin", "params.bin", "schedulelogo.bin"]
 	
 	_silent_mode = "silent" in _this
 	_ok          = if (!_silent_mode) then {createDialog "MAINMENU_MODSLIST"} else {true}
@@ -366,8 +373,8 @@
 		#DownloadMods_SkipURL
 		? _i < count _all_url-1 : _i=_i+1; _mirror=0; goto "DownloadMods_ForEachURL"
 		
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modswrite:_all_mods=" + (_all_mods call FUNCTION_FORMAT_ARRAY) + ";_all_modsID=" + (_all_modsID call FUNCTION_FORMAT_ARRAY) + ";_all_modsURL=" + (_all_modsURL call FUNCTION_FORMAT_ARRAY))
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:urlwrite:_all_url=" + (_all_url call FUNCTION_FORMAT_ARRAY) + ";_all_mirror=" + (_all_mirror call FUNCTION_FORMAT_ARRAY) + Format[";_update_available=%1;GS_FWATCH_LAST_UPDATE=%2",_update_available,GS_FWATCH_LAST_UPDATE])
+	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modswrite:_all_mods=" + (_all_mods call FLIB_FORMAT) + ";_all_modsID=" + (_all_modsID call FLIB_FORMAT) + ";_all_modsURL=" + (_all_modsURL call FLIB_FORMAT))
+	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:urlwrite:_all_url=" + (_all_url call FLIB_FORMAT) + ";_all_mirror=" + (_all_mirror call FLIB_FORMAT) + Format[";_update_available=%1;GS_FWATCH_LAST_UPDATE=%2",_update_available,GS_FWATCH_LAST_UPDATE])
 	GS_DOWNLOAD_MODSLIST = false
 	
 	? _update_available : if (_silent_mode) then {titleText [MAINMENU_STR select 86,"PLAIN DOWN",1]; exit} else {goto "DisplayUpdateInformation"}
@@ -524,7 +531,7 @@
 	? _index >= 0 : _servers set [_index, objNull]; _servers=_servers-[objNull]
 	_servers = [_Input] + _servers;
 	
-	loadFile Format ["\:IGSE WRITE  file:..\fwatch\idb\MasterServers.sqf  open:recreate  text:%1", _servers call FUNCTION_FORMAT_ARRAY]
+	loadFile Format ["\:IGSE WRITE  file:..\fwatch\idb\MasterServers.sqf  open:recreate  text:%1", _servers call FLIB_FORMAT]
 	goto "MasterServer"
 	;===================================================================================================================
 
@@ -707,11 +714,11 @@
 		; Save global list
 		? _downloaded == 0 : goto "SkipDownload"
 		"[Saving data]" call FUNCTION_MSG_LB
-		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverswrite:_all_servers=" + (_all_servers call FUNCTION_FORMAT_ARRAY))
-		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serversappend:;_all_serverNames=" + (_all_serverNames call FUNCTION_FORMAT_ARRAY) + ";_all_serverID=" + (_all_serverID call FUNCTION_FORMAT_ARRAY))
-		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serversappend:;_all_mods=" + (_all_mods call FUNCTION_FORMAT_ARRAY) + ";_all_modsID=" + (_all_modsID call FUNCTION_FORMAT_ARRAY) + ";_all_serverURL=" + (_all_serverURL call FUNCTION_FORMAT_ARRAY) + ";_all_modsURL=" + (_all_modsURL call FUNCTION_FORMAT_ARRAY))
-		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlwrite:_all_url=" + (_all_url call FUNCTION_FORMAT_ARRAY) + ";_all_mirror=" + (_all_mirror call FUNCTION_FORMAT_ARRAY) + ";_all_urldates=" + (_all_urldates call FUNCTION_FORMAT_ARRAY) + Format[";_update_available=%1;GS_FWATCH_LAST_UPDATE=%2",_update_available,GS_FWATCH_LAST_UPDATE])
-		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlappend:;GS_VOICE=" + (GS_VOICE call FUNCTION_FORMAT_ARRAY))
+		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverswrite:_all_servers=" + (_all_servers call FLIB_FORMAT))
+		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serversappend:;_all_serverNames=" + (_all_serverNames call FLIB_FORMAT) + ";_all_serverID=" + (_all_serverID call FLIB_FORMAT))
+		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serversappend:;_all_mods=" + (_all_mods call FLIB_FORMAT) + ";_all_modsID=" + (_all_modsID call FLIB_FORMAT) + ";_all_serverURL=" + (_all_serverURL call FLIB_FORMAT) + ";_all_modsURL=" + (_all_modsURL call FLIB_FORMAT))
+		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlwrite:_all_url=" + (_all_url call FLIB_FORMAT) + ";_all_mirror=" + (_all_mirror call FLIB_FORMAT) + ";_all_urldates=" + (_all_urldates call FLIB_FORMAT) + Format[";_update_available=%1;GS_FWATCH_LAST_UPDATE=%2",_update_available,GS_FWATCH_LAST_UPDATE])
+		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlappend:;GS_VOICE=" + (GS_VOICE call FLIB_FORMAT))
 		loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:hashwrite:_saved_modhash=""%1""", FWATCH_MODLISTHASH]
 		loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:versionwrite:_saved_version=%1", GS_MY_VERSION]
 
@@ -1051,7 +1058,7 @@
 	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  key:accesscodewrite:_access_code=""%1""", _Input]
 	_all_urldates = []
 	{_all_urldates set [count _all_urldates, ""]} forEach _all_url
-	loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlappend:;_all_urldates=" + (_all_urldates call FUNCTION_FORMAT_ARRAY))
+	loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlappend:;_all_urldates=" + (_all_urldates call FLIB_FORMAT))
 	@!(ctrlVisible 6901)
 	goto "Schedule"
 

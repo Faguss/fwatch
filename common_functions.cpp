@@ -1,8 +1,7 @@
 // Functions used by both TestLauncher and TestDLL
 
 // Find process by exename by traversing the list; returns PID number
-DWORD findProcess(const char* exe_name)
-{
+DWORD findProcess(const char* exe_name) {
 	PROCESSENTRY32 processInfo;
 	processInfo.dwSize = sizeof(processInfo);
 	DWORD output       = 0;
@@ -32,8 +31,7 @@ DWORD findProcess(const char* exe_name)
 
 // Compare characters of two strings case insensitive
 // http://my.fit.edu/~vkepuska/ece5527/sctk-2.3-rc1/src/rfilter1/include/strncmpi.c
-int strncmpi(const char *ps1, const char *ps2, int n)
-{
+int strncmpi(const char *ps1, const char *ps2, int n) {
 	char *px1     = (char *)ps1;
 	char *px2     = (char *)ps2;
 	int indicator = 9999;
@@ -69,8 +67,7 @@ int strncmpi(const char *ps1, const char *ps2, int n)
 
 
 // Remove whitespace from a string
-char* Trim(char *txt)
-{
+char* Trim(char *txt) {
 	while (isspace(txt[0])) 
 		txt++;
 
@@ -84,8 +81,7 @@ char* Trim(char *txt)
 
 
 // Find integer in an integer array
-bool IsNumberInArray(int number, const int* array, int array_size)
-{
+bool IsNumberInArray(int number, const int* array, int array_size) {
 	for (int i=0;  i<array_size;  i++)
 		if (number == array[i])
 			return true;
@@ -97,44 +93,40 @@ bool IsNumberInArray(int number, const int* array, int array_size)
 
 
 // Custom string initilization
-void String_init(String &str)
-{
-	memset(str.stack, 0, String_init_len);
-
-	str.pointer        = str.stack;
-	str.current_length = 0;
-	str.maximal_length = String_init_len;
-	str.heap           = false;
+void String_init(String &str) {
+	memset(str.stack, 0, String_init_capacity);
+	str.text     = str.stack;
+	str.length   = 0;
+	str.capacity = String_init_capacity;
 }
 
 
 
 
 // Custom string heap allocation
-int String_allocate(String &str, int new_maximal_length)
-{
-	if (str.maximal_length >= new_maximal_length)
+int String_allocate(String &str, size_t new_capacity) {
+	if (str.capacity >= new_capacity)
 		return 0;
 
 	char *new_pointer;
 
-	if (!str.heap) {
-		new_pointer = (char *) malloc(new_maximal_length);
+	if (str.text == str.stack) {
+		new_pointer = (char *) malloc(new_capacity);
+		if (!new_pointer)
+			return new_capacity;
 
-		if (new_pointer == NULL)
-			return new_maximal_length;
-
-		memset(new_pointer, 0, new_maximal_length);
-		memcpy(new_pointer, str.pointer, str.current_length);
-		str.heap = true;
+		memset(new_pointer, 0, new_capacity);
+		memcpy(new_pointer, str.text, str.length);
 	} else {
-		new_pointer = (char *) realloc(str.pointer, new_maximal_length);
-		if (new_pointer == NULL)
-			return new_maximal_length;
+		new_pointer = (char *) realloc(str.text, new_capacity);
+		if (!new_pointer)
+			return new_capacity;
+
+		memset(new_pointer+str.length, 0, new_capacity-str.length);
 	}
 
-	str.pointer        = new_pointer;
-	str.maximal_length = new_maximal_length;
+	str.text     = new_pointer;
+	str.capacity = new_capacity;
 	return 0;
 }
 
@@ -142,39 +134,39 @@ int String_allocate(String &str, int new_maximal_length)
 
 
 // Custom string concatenation
-int String_append_len(String &str, char *text, int text_length) {
-	if (text_length > 1) {
-		int new_length  = str.current_length + text_length;
+int String_append_len(String &str, const char *input, size_t input_length) {
+	if (input_length > 0) {
+		size_t new_length = str.length + input_length;
 
-		if (new_length >= str.maximal_length) {
-			int new_maximal_length = str.current_length + (text_length<String_init_len ? String_init_len : text_length);
-
-			if (String_allocate(str, new_maximal_length) != 0)
-				return new_maximal_length;
+		if (new_length+1 > str.capacity) {
+			size_t new_capacity = str.length + (input_length<String_init_capacity ? String_init_capacity : input_length) + 1;
+			
+			if (String_allocate(str, new_capacity) != 0)
+				return new_capacity;
 		}
 
-		memcpy(str.pointer+str.current_length, text, text_length);
-		str.current_length = new_length - 1;
+		memcpy(str.text+str.length, input, input_length);
+		memset(str.text+new_length, 0, 1);
+		str.length = new_length;
 	}
 
 	return 0;
 }
 
-int String_append(String &str, char *text) 
-{
-	return String_append_len(str, text, strlen(text)+1);
+int String_append(String &str, const char *text) {
+	return String_append_len(str, text, strlen(text));
 }
 
 
 
+
 // Custom string concatenation with quotes around
-int String_append_quotes(String &str, char *left, char *text, char *right)
-{
+int String_append_quotes(String &str, const char *left, char *text, const char *right) {
 	String_append(str, left);
 
 	char *quote = strchr(text, '\"');
 
-	if (quote == NULL) 
+	if (!quote) 
 		String_append(str, text); 
 	else {
 		int pos     = 0;
@@ -188,12 +180,12 @@ int String_append_quotes(String &str, char *left, char *text, char *right)
 			String_append(str, "\"\"");
 			text[pos] = '\"';
 			lastPos = pos + 1;
-		} while(quote = strchr(text+lastPos, '\"'));
+		} while ((quote = strchr(text+lastPos, '\"')));
 
 		if (lastPos < len)
 			String_append(str, text+lastPos);
 
-	};
+	}
 
 	String_append(str, right);
 	return 0;
@@ -203,14 +195,12 @@ int String_append_quotes(String &str, char *left, char *text, char *right)
 
 
 // Custom string deallocation
-void String_end(String &str)
-{
-	if (str.heap) {
-		free(str.pointer);
-		str.pointer        = str.stack;
-		str.current_length = 0;
-		str.maximal_length = String_init_len;
-		str.heap           = false;
+void String_end(String &str) {
+	if (str.text != str.stack) {
+		free(str.text);
+		str.text     = str.stack;
+		str.length   = 0;
+		str.capacity = String_init_capacity;
 	}
 }
 
@@ -218,12 +208,10 @@ void String_end(String &str)
 
 
 // Copy file contents to a custom string
-int String_readfile(String &str, char *path)
-{
+int String_readfile(String &str, char *path) {
 	String_init(str);
 
 	FILE *f = fopen(path, "rb");
-
 	if (!f)
 		return errno;
 
@@ -234,9 +222,9 @@ int String_readfile(String &str, char *path)
 	if (String_allocate(str, file_size+1) != 0) 
 		return -1;
 
-	int bytes_read          = fread(str.pointer, 1, file_size, f);
-	str.current_length      = bytes_read;
-	str.pointer[bytes_read] = '\0';
+	int bytes_read       = fread(str.text, 1, file_size, f);
+	str.length           = bytes_read;
+	str.text[bytes_read] = '\0';
 
 	if (bytes_read == file_size)
 		return 0;
@@ -249,9 +237,41 @@ int String_readfile(String &str, char *path)
 
 
 
+// Custom string concatenation according to a given format
+int String_append_format(String &str, const char *format, ...) {
+	int space_free     = 0;
+	int space_required = 0;
+	
+	va_list args;
+	va_start(args, format);
+	
+	do {
+		space_free     = str.capacity - str.length;
+		space_required = _vsnprintf(str.text+str.length, space_free, format, args);
+
+		// https://stackoverflow.com/questions/43178776/vsnprintf-returns-the-size-over-given-buffer-size
+		if (space_required == -1)
+			space_required = str.capacity * 2;
+
+		if (space_required+1 > space_free) {
+			int result = String_allocate(str, str.capacity+((space_required+1)-space_free));
+			if (result != 0) {
+				va_end(args);
+				return result;
+			}
+		} else
+			str.length += space_required;
+	} while (space_required+1 > space_free);
+
+	va_end(args);
+	return 0;
+}
+
+
+
+
 // Load from a file pid and exit code under given key
-WatchProgramInfo db_pid_load(int db_id_wanted) 
-{
+WatchProgramInfo db_pid_load(int db_id_wanted) {
 	WatchProgramInfo ret = {0,0,0,0};
 	FILE *file           = fopen("fwatch\\data\\pid.db","rb");
 
@@ -272,10 +292,10 @@ WatchProgramInfo db_pid_load(int db_id_wanted)
 		}
 
 		if (!found) {
-			ret.db_id = 0;
-			ret.exit_code = 0;
+			ret.db_id        = 0;
+			ret.exit_code    = 0;
 			ret.launch_error = 0;
-			ret.pid = 0;
+			ret.pid          = 0;
 		}
 
 		fclose(file);
@@ -287,8 +307,7 @@ WatchProgramInfo db_pid_load(int db_id_wanted)
 
 
 // Save pid and exit code under given key to a file
-void db_pid_save(WatchProgramInfo input)
-{
+void db_pid_save(WatchProgramInfo input) {
 	FILE *file = fopen("fwatch\\data\\pid.db","rb");
 
 	int record_num = 0;
@@ -299,9 +318,9 @@ void db_pid_save(WatchProgramInfo input)
 		fseek(file, 0, SEEK_SET);
 	}
 
-	WatchProgramInfo* record = (WatchProgramInfo *) malloc ((record_num+1) * sizeof(WatchProgramInfo));
+	WatchProgramInfo *record = (WatchProgramInfo *) malloc((record_num+1) * sizeof(WatchProgramInfo));
 
-	if (record == NULL) {
+	if (!record) {
 		fclose(file);
 		return;
 	}
@@ -322,8 +341,8 @@ void db_pid_save(WatchProgramInfo input)
 
 	record[index] = input;
 
-	if (file = fopen("fwatch\\data\\pid.db", "wb")) {
-		int saved = fwrite(record, sizeof(WatchProgramInfo), record_num, file);
+	if ((file = fopen("fwatch\\data\\pid.db", "wb"))) {
+		fwrite(record, sizeof(WatchProgramInfo), record_num, file);
 		fclose(file);
 	}
 

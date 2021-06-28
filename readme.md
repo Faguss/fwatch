@@ -1,9 +1,8 @@
 # Fwatch 1.16 early release
 
-Fwatch was created by [Kegetys](http://www.kegetys.fi/). New functionality added by [Faguss](https://ofp-faguss.com).
+Fwatch was originally created by [Kegetys](http://www.kegetys.fi/). Updated by [Faguss](https://ofp-faguss.com).
 
 Code to report listen server to the master server was taken from OFPReportListenServer by Pulverizer and was improved with the help of [Poweruser](https://github.com/Poweruser).
-
 Uses [natsort](https://github.com/sourcefrog/natsort) by Martin Pool.
 
 Binary download: https://ofp-faguss.com/fwatch/116test

@@ -5,10 +5,8 @@
 case C_INFO_VERSION:
 { // Return version
 
-	char output[64] = "";
-
-	if (numP <= 2  ||  strcmpi(par[2],"extended") != 0)
-		sprintf(output, "%.2f", SCRIPT_VERSION);
+	if (argument_num <= 2  ||  strcmpi(argument[2],"extended")!=0)
+		QWritef("%.2f", SCRIPT_VERSION);
 	else {
 		// Read version from the game executable
 		// http://stackoverflow.com/questions/940707/how-do-i-programatically-get-the-version-of-a-dll-or-exe-file
@@ -19,12 +17,12 @@ case C_INFO_VERSION:
 		LPBYTE lpBuffer  = NULL;
 		DWORD  verSize   = GetFileVersionInfoSize((char*)global_exe_name[global.exe_index], &verHandle);
 
-		if (verSize != NULL) {
+		if (verSize) {
 			String buffer;
 			String_init(buffer);
-			String_allocate(buffer, verSize);
+			String_allocate(buffer, (size_t)verSize);
 
-			LPSTR verData = buffer.pointer;
+			LPSTR verData = buffer.text;
 
 			if (GetFileVersionInfo((char*)global_exe_name[global.exe_index], verHandle, verSize, verData))
 				if (VerQueryValue(verData, "\\", (VOID FAR* FAR*)&lpBuffer, &size))
@@ -40,11 +38,15 @@ case C_INFO_VERSION:
 			String_end(buffer);
 		}
 
-		QWrite("_fwatch_test_version=2;", out);
-		sprintf(output, "[%.2f,%s,%s,false,%d.%s%d]", SCRIPT_VERSION, getBool(global.CWA), getBool(global.DedicatedServer), major, (build<10 ? "0" : ""), build);
+		QWritef("_fwatch_test_version=3;[%.2f,%s,%s,false,%d.%s%d]", 
+			SCRIPT_VERSION, 
+			getBool(global_exe_version[global.exe_index]!=VER_196 && global_exe_version[global.exe_index]!=VER_196_SERVER), 
+			getBool(global.is_server), 
+			major, 
+			(build<10 ? "0" : ""), 
+			build
+		);
 	}
-
-	QWrite(output, out);
 }
 break;
 
@@ -55,14 +57,14 @@ break;
 
 case C_INFO_DEBUGOUT:
 { // Output debug string
-	if(numP < 3) {
-		QWrite("ERROR: Not enough parameters", out);
+	if (argument_num < 3) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *str1 = stripq(par[2]);
+	char *str1 = stripq(argument[2]);
 	DebugMessage(str1);
-	QWrite("1", out);
+	QWrite("1");
 }
 break;
 
@@ -79,18 +81,16 @@ case C_INFO_DATE:
 	bool get_system_time = false;
 
 	// Optional arguments
-	if (numP > 2) {
-		if (strcmpi(par[2],"systime") == 0) 
+	if (argument_num > 2) {
+		if (strcmpi(argument[2],"systime") == 0) 
 			get_system_time = true;
 
 		// If an array was passed - tokenize it
-		int len = strlen(par[2]);
-
-		if (len>2  &&  par[2][0]=='['  &&  par[2][len-1]==']') {
+		if (argument_length[2]>2  &&  argument[2][0]=='['  &&  argument[2][argument_length[2]-1]==']') {
 			int index  = 0;
-			char *item = strtok(par[2], "[,]");
+			char *item = strtok(argument[2], "[,]");
 
-			while (item != NULL) {
+			while (item) {
 				// From ofp date array to systemtime structure
 				switch (index) {
 					case 0: st.wYear         = atoi(item); break;
@@ -104,7 +104,7 @@ case C_INFO_DATE:
 				}
 				
 				index++;
-				item = strtok (NULL, "[,]");
+				item = strtok(NULL, "[,]");
 			}
 
 			FILETIME ft;
@@ -122,9 +122,9 @@ case C_INFO_DATE:
 			GetSystemTime(&st);
 	}
 
-	char output[64] = "";
-	FormatTime(st, get_system_time, output);
-	QWrite(output, out);
+	char temp[64] = "";
+	SystemTimeToString(st, get_system_time, temp);
+	QWrite(temp);
 }
 break;
 
@@ -150,7 +150,7 @@ case C_INFO_RESOLUTION:
 	GetWindowRect(GetDesktopWindow(), &desktop);
 
 	// Find game window
-	if (hwnd = GetTopWindow(hwnd)) {
+	if ((hwnd = GetTopWindow(hwnd))) {
 		DWORD pid            = 0;
 		char window_name[32] = "";
 		
@@ -163,12 +163,10 @@ case C_INFO_RESOLUTION:
 				GetClientRect(hwnd, &game);
 				break;
 			}
-		} while (hwnd = GetNextWindow(hwnd, GW_HWNDNEXT));
+		} while ((hwnd = GetNextWindow(hwnd, GW_HWNDNEXT)));
 	}
 
-	char output[64] = "";
-
-	sprintf(output, "[%d,%d,[%d,%d,%d,%d],[%d,%d,%d,%d]]", 
+	QWritef("[%d,%d,[%d,%d,%d,%d],[%d,%d,%d,%d]]", 
 		desktop.right, 
 		desktop.bottom, 
 		window.left,  
@@ -180,8 +178,6 @@ case C_INFO_RESOLUTION:
 		game.right - game.left,  
 		game.bottom - game.top
 	);
-
-	QWrite(output, out);
 }
 break;
 
@@ -203,20 +199,18 @@ case C_INFO_STARTTIME:
 	FILETIME et;
 	FILETIME kt;
 	FILETIME ut;
-	int get_system_time = numP>2  &&  strcmpi(par[2],"systime")==0;
 
 	if (!GetProcessTimes(phandle, &ct, &et, &kt, &ut)) {
-		FWerror(5,GetLastError(),CommandID,"","",0,0,out);
-		QWrite("[]]", out);
+		QWrite_err(FWERROR_WINAPI, 1, GetLastError());
+		QWrite("[]]");
 		break;
 	}
 
-	FWerror(0,0,CommandID,"","",0,0,out);
+	QWrite_err(FWERROR_NONE, 0);
 
-	char output[64] = "";
-	FormatFileTime(ct, get_system_time, output);
-	QWrite(output, out);
-	QWrite("]",out);
+	char temp[64] = "";
+	FileTimeToString(ct, argument_num>2  &&  strcmpi(argument[2],"systime")==0, temp);
+	QWritef("%s]", temp);
 }
 break;
 
@@ -234,9 +228,7 @@ break;
 case C_INFO_TICK:
 { // Get tick count
 
-	char output[32] = "";
-	sprintf(output, "%d", GetTickCount() - global.mission_path_savetime);
-	QWrite(output, out);
+	QWritef("%u", GetTickCount() - global.mission_path_savetime);
 }
 break;
 
@@ -255,9 +247,9 @@ case C_INFO_ERRORLOG:
 { // Switch error message logging
 
 	// If argument passed then enable / disable
-	if (numP > 2) {
-		if (strcmp(par[2],"start") == 0) {
-			FILE *f = fopen(!global.DedicatedServer ? "fwatch\\idb\\_errorLog.txt" : "fwatch\\idb\\_errorLogDedi.txt", "a");
+	if (argument_num > 2) {
+		if (strcmp(argument[2],"start") == 0) {
+			FILE *f = fopen(!global.is_server ? "fwatch\\idb\\_errorLog.txt" : "fwatch\\idb\\_errorLogDedi.txt", "a");
 			HANDLE phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, GetCurrentProcessId());
 
 			if (f) {
@@ -268,11 +260,11 @@ case C_INFO_ERRORLOG:
 			if (phandle)
 				CloseHandle(phandle);
 		} else {
-			global.ErrorLog_Enabled = String2Bool(par[2]);
+			global.ErrorLog_Enabled = String2Bool(argument[2]);
 			NotifyFwatchAboutErrorLog();
 		}
 	}
 
-	QWrite(getBool(global.ErrorLog_Enabled), out);
+	QWrite(getBool(global.ErrorLog_Enabled));
 }
 break;

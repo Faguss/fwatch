@@ -4,23 +4,21 @@
 
 case C_STRING_FIRST:
 { // Return the index in str2 of the first occurrence of str1, or -1 if str1 is not found.
-	if(numP < 4) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 4) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *str1 = stripq(par[2]);
-	char *str2 = stripq(par[3]);
+	char *str1 = stripq(argument[2]);
+	char *str2 = stripq(argument[3]);
 	char *res = strstr(str2, str1);
 	
 	if(!res) {
 		// It wasn't found
-		QWrite("-1", out);
+		QWrite("-1");
 	} else {
 		// Found, return relative pointer
-		char ret[16];
-		sprintf(ret, "%d", res - str2);
-		QWrite(ret, out);
+		QWritef("%d", res - str2);
 	}
 }
 break;
@@ -32,14 +30,14 @@ break;
 
 case C_STRING_LAST:
 { // Return the index in str2 of the last occurrence of str1, or -1 if str1 is not found.
-	if(numP < 4) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 4) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *str1 = stripq(par[2]);
-	char *str2 = stripq(par[3]);
-	char *str2t = stripq(par[3]);
+	char *str1 = stripq(argument[2]);
+	char *str2 = stripq(argument[3]);
+	char *str2t = stripq(argument[3]);
 
 	char *res = 0, *res2 = 0;
 	do {
@@ -47,16 +45,14 @@ case C_STRING_LAST:
 		res = res2;
 		res2 = strstr(str2t, str1);
 		str2t = res2+1;
-	} while (res2 != NULL);
+	} while (res2);
 	
 	if(!res) {
 		// It wasn't found at all
-		QWrite("-1", out);
+		QWrite("-1");
 	} else {
 		// Found, return relative pointer
-		char ret[16];
-		sprintf(ret, "%d", res - str2);
-		QWrite(ret, out);
+		QWritef("%d", res - str2);
 	}
 }
 break;
@@ -68,17 +64,14 @@ break;
 
 case C_STRING_LENGTH:
 { // Return the number of characters in string.
-	if(numP < 3) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 3) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *str = stripq(par[2]);
+	char *str = stripq(argument[2]);
 	int res = strlen(str);
-	char ret[16];
-	sprintf(ret, "%d", res);
-	QWrite(ret, out);
-
+	QWritef("%d", res);
 }
 break;
 
@@ -89,28 +82,21 @@ break;
 
 case C_STRING_RANGE:
 { // Return the range of characters in str from i to j.
-	if(numP < 5) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 5) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *str = stripq(par[2]);
+	char *str = stripq(argument[2]);
 	unsigned int l = strlen(str);
-	unsigned int i = atoi(par[3]);
-	unsigned int j = atoi(par[4]);
+	unsigned int i = atoi(argument[3]);
+	unsigned int j = atoi(argument[4]);
 
 	if(i > l) i = l;
 	if(j > l) j = l;
 
 	str[j] = '\0';
-	char *ret = new char[l+4];
-	if(!ret)
-		break;
-
-	sprintf(ret, "\"%s\"", str+i);
-	QWrite(ret, out);
-	delete[] ret;
-
+	QWritef("\"%s\"", str+i);
 }
 break;
 
@@ -121,24 +107,18 @@ break;
 
 case C_STRING_TOLOWER:
 { // Return string in lower case.
-	if(numP < 3) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 3) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *str = stripq(par[2]);
+	char *str = stripq(argument[2]);
 	unsigned int l = strlen(str);
 
 	for(unsigned int x=0;x < l;x++)
 		str[x] = tolower(str[x]);
 
-	char *ret = new char[l+4];
-	if(!ret)
-		break;
-
-	sprintf(ret, "\"%s\"", str);
-	QWrite(ret, out);
-	delete[] ret;
+	QWritef("\"%s\"", str);
 }
 break;
 
@@ -149,24 +129,18 @@ break;
 
 case C_STRING_TOUPPER:
 { // Return string in upper case.
-	if(numP < 3) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 3) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *str = stripq(par[2]);
+	char *str = stripq(argument[2]);
 	unsigned int l = strlen(str);
 
 	for(unsigned int x=0;x < l;x++)
 		str[x] = toupper(str[x]);
 
-	char *ret = new char[l+4];
-	if(!ret)
-		break;
-
-	sprintf(ret, "\"%s\"", str);
-	QWrite(ret, out);
-	delete[] ret;
+	QWritef("\"%s\"", str);
 }
 break;
 
@@ -177,23 +151,27 @@ break;
 
 case C_STRING_TOARRAY:
 { // Return all characters in string as array elements
-	if(numP < 3) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 3) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *str = stripq(par[2]);
+	char *str = stripq(argument[2]);
 	unsigned int l = strlen(str);
 
-	QWrite("[", out);
-	for(unsigned int x=0;x < l;x++) {
-		char ret[5];
-		if (str[x]=='"') {sprintf(ret, "\"\"\"\"");} else {sprintf(ret, "\"%c\"", str[x]);};//v1.11 fixed bug with quotes
-		QWrite(ret, out);
-		if(x < l-1)
-		QWrite(",", out);
+	QWrite("[");
+
+	for (unsigned int x=0;x < l;x++) {
+		if (str[x]=='"') 
+			QWrite("\"\"\"\"");
+		else 
+			QWritef("\"%c\"", str[x]);//v1.11 fixed bug with quotes
+
+		if (x < l-1)
+			QWrite(",");
 	}
-	QWrite("];", out);
+
+	QWrite("];");
 }
 break;
 
@@ -204,24 +182,19 @@ break;
 
 case C_STRING_INDEX:
 { // Return the character at the specified index.
-	if(numP < 4) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 4) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	unsigned int idx = atoi(par[3]);
-	par[2] = stripq(par[2]);
+	unsigned int idx = atoi(argument[3]);
+	argument[2] = stripq(argument[2]);
 
-	if(idx > (strlen(par[2])-1) || idx < 0) 
-		QWrite("ERROR: Index out of bounds", out);
-	else {
+	if (idx > (strlen(argument[2])-1) || idx < 0) 
+		QWrite("ERROR: Index out of bounds");
+	else
 		// Write char to file
-		char c = par[2][idx];
-		char ret[6];
-
-		sprintf(ret, "\"%c\"", par[2][idx]);
-		QWrite(ret, out);
-	}
+		QWritef("\"%c\"", argument[2][idx]);
 }
 break;
 
@@ -234,12 +207,10 @@ break;
 
 
 
-case C_STRING_LENGTH2:
+case C_STRING_SIZE:
 { // Return the number of characters in a string
-
-	char output[16] = "";
-	sprintf(output, "%d", strlen(com)-12);
-	QWrite(output, out);
+	
+	QWritef("%d", argument_end - argument_length[0] - argument_length[1] - 2);
 }
 break;
 
@@ -255,55 +226,56 @@ break;
 case C_STRING_REPLACE:
 { // Replace text in a given string
 
-	char *source        = "";
-	char *to_find       = "";
-	char *replace_with  = "";
-	bool case_sensitive = false;
-	bool match_word     = false;
+	char *arg_source          = empty_string;
+	char *arg_to_find         = empty_string;
+	char *arg_replace_with    = empty_string;
+	size_t arg_source_length  = 0;
+	size_t arg_to_find_length = 0;
+	int arg_options           = OPTION_NONE;
 
-	for (int i=2; i<numP; i++) {
-		char *name  = stripq(par[i]);
-		char *colon = strchr(name, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_TEXT : 
+				arg_source        = argument[i+1];
+				arg_source_length = argument_length[i+1];
+				break;
 
-		if (colon == NULL) 
-			continue;
+			case NAMED_ARG_FIND : 
+				arg_to_find        = argument[i+1];
+				arg_to_find_length = argument_length[i+1];
+				break;
 
-		int pos     = colon - name;
-		name[pos]   = '\0';
-		char *value = name + pos + 1;
+			case NAMED_ARG_REPLACE : 
+				arg_replace_with = argument[i+1];
+				break;
 
-		if (strcmpi(name,"text") == 0) {
-			source = value;
-			continue;
-		}
+			case NAMED_ARG_CASESENSITIVE : 
+				String2Bool(argument[i+1]) 
+					? arg_options |= OPTION_CASESENSITIVE 
+					: arg_options &= ~OPTION_CASESENSITIVE;
+				break;
 
-		if (strcmpi(name,"find") == 0) {
-			to_find = value;
-			continue;
-		}
-
-		if (strcmpi(name,"replace") == 0) {
-			replace_with = value;
-			continue;
-		}
-
-		if (strcmpi(name, "caseSensitive") == 0) {
-			case_sensitive = String2Bool(value);
-			continue;
-		}
-
-		if (strcmpi(name, "matchWord") == 0) {
-			match_word = String2Bool(value);
-			continue;
+			case NAMED_ARG_MATCHWORD : 
+				String2Bool(argument[i+1]) 
+					? arg_options |= OPTION_MATCHWORD 
+					: arg_options &= ~OPTION_MATCHWORD;
+				break;
 		}
 	}
 
-	char *result = str_replace(source, to_find, replace_with, match_word, case_sensitive);
 
-	if (result != NULL) {
-		QWrite(result, out);
-		free(result);
+	char *found     = NULL;
+	char *found_end = arg_source;
+	
+	while ((found = strstr2(found_end, arg_source_length-(found_end-arg_source), arg_to_find, arg_to_find_length, arg_options))) {
+		QWritel(found_end, found-found_end);
+		QWrite(arg_replace_with);
+
+		found_end = found + arg_to_find_length;
 	}
+	
+	if (found_end < arg_source+arg_source_length)
+		QWritel(found_end, arg_source + arg_source_length - found_end);
 }
 break;
 
@@ -319,73 +291,54 @@ break;
 case C_STRING_COMPARE:
 { // Compare two strings with each other
 
-	char *text1         = "";
-	char *text2         = "";
-	bool case_sensitive = false;
-	bool natural_sort   = false;
-	bool reverse_case   = false;
+	char *arg_text1         = empty_string;
+	char *arg_text2         = empty_string;
+	bool arg_case_sensitive = false;
+	bool arg_natural_sort   = false;
+	bool arg_reverse_case   = false;
 
-	for (int i=2; i<numP; i++) {
-		char *name  = stripq(par[i]);
-		char *colon = strchr(name, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_TEXT1 : 
+				arg_text1 = argument[i+1]; 
+				break;
 
-		if (colon == NULL) 
-			continue;
+			case NAMED_ARG_TEXT2 : 
+				arg_text2 = argument[i+1]; 
+				break;
 
-		int pos     = colon - name;
-		name[pos]   = '\0';
-		char *value = name + pos + 1;
+			case NAMED_ARG_CASESENSITIVE : 
+				arg_case_sensitive = String2Bool(argument[i+1]); 
+				break;
 
-		if (strcmpi(name,"text1") == 0) {
-			text1 = value;
-			continue;
-		}
+			case NAMED_ARG_NATURAL : 
+				arg_natural_sort = String2Bool(argument[i+1]); 
+				break;
 
-		if (strcmpi(name,"text2") == 0) {
-			text2 = value;
-			continue;
-		}
-
-		if (strcmpi(name,"caseSensitive") == 0) {
-			case_sensitive = String2Bool(value);
-			continue;
-		}
-
-		if (strcmpi(name,"natural") == 0) {
-			natural_sort = String2Bool(value);
-			continue;
-		}
-
-		if (strcmpi(name,"reverseCase") == 0) {
-			reverse_case = String2Bool(value);
-			continue;
+			case NAMED_ARG_REVERSECASE : 
+				arg_reverse_case = String2Bool(argument[i+1]); 
+				break;
 		}
 	}
 
-	if (reverse_case) {
-		for (int i=0; text1[i]!='\0'; i++)
-			if (isupper(text1[i]))
-				text1[i] = tolower(text1[i]);
-			else
-				text1[i] = toupper(text1[i]);
 
-		for (i=0; text2[i]!='\0'; i++)
-			if (isupper(text2[i]))
-				text2[i] = tolower(text2[i]);
-			else
-				text2[i] = toupper(text2[i]);
+	if (arg_reverse_case) {
+		for (int i=0; arg_text1[i]!='\0'; i++)
+			arg_text1[i] = isupper(arg_text1[i]) ? tolower(arg_text1[i]) : toupper(arg_text1[i]);
+
+		for (i=0; arg_text2[i]!='\0'; i++)
+			arg_text2[i] = isupper(arg_text2[i]) ? tolower(arg_text2[i]) : toupper(arg_text2[i]);
 	}
 
-	int result = 0;
-
-	if (case_sensitive)
-		result = natural_sort ? strnatcmp(text1, text2)     : strcmp(text1, text2);
-	else
-		result = natural_sort ? strnatcasecmp(text1, text2) : strcmpi(text1, text2);
-
-	char output[4] = "";
-	sprintf(output, "%d", result);
-	QWrite(output, out);
+	QWritef("%d", 
+		arg_natural_sort 
+			? arg_case_sensitive 
+				? strnatcasecmp(arg_text1, arg_text2) 
+				: strnatcmp(arg_text1, arg_text2)
+			: arg_case_sensitive 
+				? strcmp(arg_text1, arg_text2) 
+				: strcmpi(arg_text1, arg_text2)
+	);
 }
 break;
 
@@ -398,60 +351,45 @@ break;
 
 
 
-case C_STRING_TYPE:
+case C_STRING_ISNUMBER:
 { // Check if string is a number
 
-	char *text        = "";
-	bool skip_math_op = false;
+	char *arg_text        = empty_string;
+	bool arg_skip_math_op = false;
 
-	for (int i=2; i<numP; i++) {
-		char *name  = stripq(par[i]);
-		char *colon = strchr(name, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_TEXT : 
+				arg_text = argument[i+1];
+				break;
 
-		if (colon == NULL) 
-			continue;
-
-		int pos     = colon - name;
-		name[pos]   = '\0';
-		char *value = name + pos + 1;
-
-		if (strcmpi(name,"skipmath") == 0) {
-			skip_math_op = String2Bool(value);
-			continue;
-		}
-
-		if (strcmpi(name,"text") == 0) {
-			text = value;
-			continue;
+			case NAMED_ARG_SKIPMATH : 
+				arg_skip_math_op = String2Bool(argument[i+1]);
+				break;
 		}
 	}
 
 
-	enum STRING_TYPE_RESULT {
-		STR_TYPE_STRING,
-		STR_TYPE_INTEGER,
-		STR_TYPE_FLOAT
-	};
-
-	int result               = STR_TYPE_STRING;
+	char result_name[][8]    = {"string","integer","float"};
+	int index                = 0;
 	int number_of_dots       = 0;
 	bool skip_character      = false;
 	bool found_number        = false;
 	bool found_non_white     = false;
 	bool found_space_between = false;
 
-	for (i=0; text[i]!='\0'; i++) {
+	for (i=0; arg_text[i]!='\0'; i++) {
 		// Ignore whitespace
-		if (isspace(text[i])) {
-			// remember if there was space between characters
-			if (found_non_white  &&  !skip_math_op) 
+		if (isspace(arg_text[i])) {
+			// Remember if there was space between characters
+			if (found_non_white  &&  !arg_skip_math_op) 
 				found_space_between = true;
 
 			continue;
 		}
 
 		// If encountered a math operator
-		switch (text[i]) {
+		switch (arg_text[i]) {
 			case '+' : 
 			case '-' : 
 			case '*' : 
@@ -463,7 +401,7 @@ case C_STRING_TYPE:
 
 		// Ignore operators if argument was passed
 		if (skip_character) {
-			if (skip_math_op) {
+			if (arg_skip_math_op) {
 				skip_character = false; 
 				continue;
 			}
@@ -472,20 +410,20 @@ case C_STRING_TYPE:
 		}
 
 		// If there is a dot -  it could be a float
-		if (text[i] == '.') {
+		if (arg_text[i] == '.') {
 			number_of_dots++;
 
-			if (number_of_dots>1  &&  !skip_math_op) {
-				result = STR_TYPE_STRING; 
+			if (number_of_dots>1  &&  !arg_skip_math_op) {
+				index = 0; 
 				break;
 			} else 
 				continue;
 		}
 
 		// If there is a minus - it could be a negative number
-		if (text[i] == '-') {
+		if (arg_text[i] == '-') {
 			if (found_number) {
-				result = STR_TYPE_STRING; 
+				index = 0; 
 				break;
 			}
 
@@ -494,33 +432,27 @@ case C_STRING_TYPE:
 
 
 		// If current character is a digit
-		if (isdigit(text[i])  &&  !found_space_between) {
+		if (isdigit(arg_text[i])  &&  !found_space_between) {
 			found_number = true;
 
 			// If previous character was dot - it could be a float
-			if (i>0  &&  text[i-1]=='.')
-				result = STR_TYPE_FLOAT;
+			if (i>0  &&  arg_text[i-1]=='.')
+				index = 2;
 
 			// If it wasn't already set to 'float' then assume it's integer
-			if (result != STR_TYPE_FLOAT) 
-				result = STR_TYPE_INTEGER;
-		// Otherwise it's a string
+			if (index != 2) 
+				index = 1;
 		} else {
-			result = STR_TYPE_STRING;
+			index = 0;
 			break;
 		}
 	}
 
-
 	// If dot occured without a number then it's a string
 	if (number_of_dots>0  &&  !found_number) 
-		result = STR_TYPE_STRING;
+		index = 0;
 
-	switch(result) {
-		case STR_TYPE_STRING  : QWrite("string", out); break;
-		case STR_TYPE_INTEGER : QWrite("integer", out); break;
-		case STR_TYPE_FLOAT   : QWrite("float", out); break;
-	}
+	QWrite(result_name[index]);
 }
 break;
 
@@ -533,34 +465,53 @@ break;
 
 
 
-case C_STRING_VARIABLE:
-{ // Check if string is a compliant variable
+case C_STRING_ISVARIABLE:
+{ // Check if string is a compliant OFP variable name
 
-	char *text = "";
-	char *mode = "";
+	enum STRING_ISVARIABLE_MODES {
+		DEFAULT,
+		ONLY_GLOBAL,
+		ONLY_LOCAL,
+		CLASS_NAME,
+		CLASS_NAME_INHERIT,
+		CLASS_TOKEN
+	};
 
-	for (int i=2; i<numP; i++) {
-		char *name  = stripq(par[i]);
-		char *colon = strchr(name, ':');
+	char *arg_text         = empty_string;
+	int arg_mode           = DEFAULT;
+	size_t arg_text_length = 0;
 
-		if (colon == NULL) 
-			continue;
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_TEXT : 
+				arg_text        = argument[i+1]; 
+				arg_text_length = argument_length[i+1]; 
+				break;
 
-		int pos     = colon - name;
-		name[pos]   = '\0';
-		char *value = Trim(name + pos + 1);
+			case NAMED_ARG_MODE : 
+				char modes[][32] = {
+					"default",
+					"onlyGlobal",
+					"onlyLocal",
+					"className",
+					"classNameInherit",
+					"classToken"
+				};
 
-		if (strcmpi(name,"mode") == 0) {
-			mode = value;
-			continue;
-		}
-
-		if (strcmpi(name,"text") == 0) {
-			text = value;
-			continue;
+				for (int j=0, max=sizeof(modes)/sizeof(modes[0]);  j<max;  j++)
+					if (strcmpi(argument[i+1],modes[j]) == 0) {
+						arg_mode = j;
+						break;
+					}
+				break;
 		}
 	}
-	
+
+	if (arg_text_length == 0) {
+		QWrite("false"); 
+		break;
+	}
+
 
 	int result         = true;  // return value
 	bool allow_global  = true;	// allow global variables
@@ -568,59 +519,50 @@ case C_STRING_VARIABLE:
 	bool allow_number  = false;	// allow the name to start with a number
 	bool allow_bracket = false;	// allow square brackets at the end
 	bool allow_inherit = false;	// allow second class name after colon
-	char *class1       = text;
-	char *class2       = NULL;
+	char *class1       = arg_text;
+	char *class2       = empty_string;
 
-	if (strcmpi(mode,"onlyLocal") == 0)
+	if (arg_mode == ONLY_LOCAL)
 		allow_global = false;
 
-	if (strcmpi(mode,"onlyGlobal") == 0)
+	if (arg_mode == ONLY_GLOBAL)
 		allow_local = false;
 
-	if (strcmpi(mode,"className")==0  ||  strcmpi(mode,"classToken")==0  ||  strcmpi(mode,"classNameInherit")==0) {
+	if (arg_mode==CLASS_NAME  ||  arg_mode==CLASS_TOKEN  ||  arg_mode==CLASS_NAME_INHERIT) {
 		allow_global  = true;
 		allow_local   = true;
 		allow_number  = true;
-		allow_bracket = strncmpi(mode,"className",9) != 0;
-		allow_inherit = strcmpi(mode,"classNameInherit") == 0;
+		allow_bracket = arg_mode == CLASS_NAME;
+		allow_inherit = arg_mode == CLASS_NAME_INHERIT;
 
 		// Keyword "class" is reserved
-		if (strncmpi(text,"class ",6)==0  ||  strncmpi(text,"class=",6)==0) {
-			QWrite("false", out); 
+		if (strncmpi(arg_text,"class ",6)==0  ||  strncmpi(arg_text,"class=",6)==0) {
+			QWrite("false"); 
 			break;
 		}
 
 		// If there are two class names then separate
 		if (allow_inherit)
-			if ((class2 = strchr(text, ':')) != NULL) {
-				int pos   = class2 - text;
-				text[pos] = '\0';
-				class1    = Trim(text);
-				class2    = Trim(class2 + 1);
+			if ((class2 = strchr(arg_text, ':'))) {
+				int pos       = class2 - arg_text;
+				arg_text[pos] = '\0';
+				class1        = Trim(arg_text);
+				class2        = Trim(class2 + 1);
 			}
 	}
 
-
-	int length = strlen(text);
-
-	if (length == 0) {
-		QWrite("false", out); 
-		break;
-	}
-
-
 	// Optional mode - remove square brackets at the end
-	if (allow_bracket  &&  length>2)
-		if (text[(length-2)]=='['  &&  text[(length-1)]==']')
-			text[(length-2)] = '\0';
+	if (allow_bracket  &&  arg_text_length>2)
+		if (arg_text[(arg_text_length-2)]=='['  &&  arg_text[(arg_text_length-1)]==']')
+			arg_text[(arg_text_length-2)] = '\0';
 
 
 	for (i=0;  result;  i++) {
 		// End loop on string end OR check second string if it exists
-		if (text[i] == '\0') {
-			if (class2!=NULL  &&  text!=class2) {
-				i	 = 0;
-				text = class2;
+		if (i == arg_text_length) {
+			if (class2!=NULL  &&  arg_text!=class2) {
+				i	     = 0;
+				arg_text = class2;
 			} else
 				break;
 		}
@@ -629,22 +571,22 @@ case C_STRING_VARIABLE:
 		if (i == 0)	{						
 			if (
 				// DEFAULT - first char is (not alpha assuming digits aren't allowed OR not alpha and not a digit assuming allowed digits) and not underscore
-				allow_global  &&   allow_local  &&  (!isalpha(text[0]) && !allow_number || !isalpha(text[0]) && !isdigit(text[0]) && allow_number)  &&  text[0]!='_'
+				(allow_global  &&   allow_local  &&  ((!isalpha(arg_text[0]) && !allow_number) || (!isalpha(arg_text[0]) && !isdigit(arg_text[0]) && allow_number))  &&  arg_text[0]!='_')
 				||	
 				// GLOBALS ONLY - first char is (not alpha with digits not allowed OR not alpha and not digit with allowed digits)
-				allow_global  &&  !allow_local  &&  (!isalpha(text[0]) && !allow_number || !isalpha(text[0]) && !isdigit(text[0]) && allow_number) 
+				(allow_global  &&  !allow_local  &&  ((!isalpha(arg_text[0]) && !allow_number) || (!isalpha(arg_text[0]) && !isdigit(arg_text[0]) && allow_number)))
 				||
 				// LOCALS ONLY - first char is not underscore
-				!allow_global &&  allow_local  &&  text[0]!='_'
+				(!allow_global &&  allow_local  &&  arg_text[0]!='_')
 			) 
 				result = false;
 		// If character isn't alphanumeric and isn't underscore then fail
 		} else
-			if (!isalnum(text[i])  &&  text[i]!='_')	
+			if (!isalnum(arg_text[i])  &&  arg_text[i]!='_')
 				result = false;
 	}
 
-	QWrite(getBool(result), out);
+	QWrite(getBool(result));
 }
 break;
 
@@ -657,10 +599,10 @@ break;
 
 
 
-case C_STRING_EMPTY:
+case C_STRING_ISEMPTY:
 { // Check if string consists solely of white-space
 
-	QWrite(getBool(IsWhiteSpace(com+15)), out);
+	QWrite(getBool(argument_num<=2));
 }
 break;
 
@@ -673,161 +615,125 @@ break;
 
 
 
-case C_STRING_RANGE2:
-{ // Alternative version of C_STRING_RANGE
+case C_STRING_CUT:
+{ // Return part of a string
 
-	// Read arguments
-	char *text          = "";
-	char *search_start  = "";
-	char *search_end    = "";
-	int range_start     = 0;
-	int range_end       = 0;
-	int range_length    = 0;
-	int offset_start    = 0;
-	int offset_end      = 0;
-	bool is_end_set     = false;
-	bool is_length_set  = false;
-	bool crop_mode      = false;
-	bool match_word     = false;
-	bool case_sensitive = false;
+	char *arg_text              = empty_string;
+	char *search_start          = empty_string;
+	char *search_end            = empty_string;
+	char *arg_start             = empty_string;
+	char *arg_end               = empty_string;
+	char *arg_len               = empty_string;
+	char *arg_search_start      = empty_string;
+	char *arg_search_end        = empty_string;
+	size_t arg_text_len         = 0;
+	size_t arg_search_start_len = 0;
+	size_t arg_search_end_len   = 0;
+	size_t arg_offset_start     = 0;
+	size_t arg_offset_end       = 0;
+	int arg_options             = OPTION_NONE;
+	bool arg_crop_mode          = false;
 
-	for (int i=2; i<numP; i++) {
-		char *name  = stripq(par[i]);
-		char *colon = strchr(name, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_TEXT : 
+				arg_text     = argument[i+1]; 
+				arg_text_len = argument_length[i+1]; 
+				break;
 
-		if (colon == NULL) 
-			continue;
+			case NAMED_ARG_START : 
+				arg_start = argument[i+1];
+				break;
 
-		int pos     = colon - name;
-		name[pos]   = '\0';
-		char *value = name + pos + 1;
+			case NAMED_ARG_END : 
+				arg_end = argument[i+1]; 
+				break;
 
-		if (strcmpi(name,"text") == 0) {
-			text = value;
-			continue;
-		}
+			case NAMED_ARG_LENGTH : 
+				arg_len = argument[i+1]; 
+				break;
 
-		if (strcmpi(name,"start") == 0) {
-			range_start = atoi(value);
-			continue;
-		}
+			case NAMED_ARG_EXCLUDE : 
+				arg_crop_mode = String2Bool(argument[i+1]); 
+				break;
 
-		if (strcmpi(name,"end") == 0) {
-			range_end     = atoi(value);
-			is_end_set	  = true;
-			is_length_set = false;
-			continue;
-		}
+			case NAMED_ARG_STARTFIND : 
+				arg_search_start     = argument[i+1]; 
+				arg_search_start_len = argument_length[i+1];
+				break;
 
-		if (strcmpi(name,"range_length") == 0) {
-			range_length  = atoi(value);
-			is_end_set    = false;
-			is_length_set = true;
-			continue;
-		}
+			case NAMED_ARG_ENDFIND : 
+				arg_search_end     = argument[i+1]; 
+				arg_search_end_len = argument_length[i+1];
+				break;
 
-		if (strcmpi(name,"exclude") == 0) {
-			crop_mode = String2Bool(value);
-			continue;
-		}
+			case NAMED_ARG_MATCHWORD : 
+				String2Bool(argument[i+1]) 
+					? arg_options |= OPTION_MATCHWORD 
+					: arg_options &= ~OPTION_MATCHWORD;
+				break;
 
+			case NAMED_ARG_CASESENSITIVE : 
+				String2Bool(argument[i+1]) 
+					? arg_options |= OPTION_CASESENSITIVE 
+					: arg_options &= ~OPTION_CASESENSITIVE;
+				break;
 
-		if (strcmpi(name,"startfind") == 0) {
-			search_start = value;
-			continue;
-		}
+			case NAMED_ARG_STARTOFFSET : 
+				arg_offset_start = strtoul(argument[i+1], NULL, 0);
+				break;
 
-		if (strcmpi(name,"endfind") == 0) {
-			search_end = value;
-			continue;
-		}
-
-		if (strcmpi(name,"matchWord") == 0) {
-			match_word = String2Bool(value);
-			continue;
-		}
-
-		if (strcmpi(name,"caseSensitive") == 0) {
-			case_sensitive = String2Bool(value);
-			continue;
-		}
-
-		if (strcmpi(name,"startoffset") == 0) {
-			offset_start = atoi(value);
-			continue;
-		}
-
-		if (strcmpi(name,"endoffset") == 0) {
-			offset_end = atoi(value);
-			continue;
+			case NAMED_ARG_ENDOFFSET : 
+				arg_offset_end = strtoul(argument[i+1], NULL, 0);
+				break;
 		}
 	}
 
-	int text_length = strlen(text);
-	if (text_length == 0)
+	if (arg_text_len == 0)
 		break;
 
+
 	// Search for the start and end position
-	if (strcmp(search_start,"") != 0) {
-		char *start_ptr = strstr2(text, search_start, match_word, case_sensitive);
-		if (start_ptr == NULL) {
-			QWrite("", out);
+	/*if (strcmp(search_start,"") != 0) {
+		char *start_ptr = strstr2(arg_text, arg_text_len, arg_search_start, arg_search_end_len, arg_options);
+		if (!start_ptr)
 			break;
-		}
 
-		range_start = start_ptr - text;
+		range_start = start_ptr - arg_text;
 
-		if (strcmp(search_end,"") != 0) {
-			char *end_ptr = strstr2(start_ptr, search_end, match_word, case_sensitive);
-			if (start_ptr != NULL) {
-				range_end     = end_ptr - text;
-				is_end_set    = true;
-				is_length_set = false;
+		if (search_end_len > 0) {
+			char *end_ptr = strstr2(start_ptr, arg_text_len-range_start, arg_search_end, arg_search_end_len, arg_options);
+			if (end_ptr) {
+				range_end = end_ptr - arg_text;
 			}
 		}
 	}
 
 	range_start += offset_start;
-	range_end   += offset_end;
+	range_end   += offset_end;*/
 
-	CorrectStringPos(&range_start, &range_end, range_length, is_end_set, is_length_set, text_length);
+	StringPos range = ConvertStringPos(arg_start, arg_end, arg_len, arg_text_len);
 
-	// Exclusion mode - remove range of characters
-	if (crop_mode) {
-		// Normal range
-		if (range_start <= range_end)
-			for (int i=0; i<text_length; i++) {
-				if (i<range_start  ||  i>=range_end) {
-					char output[2] = "";
-					sprintf(output, "%c", text[i]);
-					QWrite(output, out);
-				}
-			}
 
-		// Reverse range - iterate characters from the end
+	// Default mode - return range of characters
+	if (!arg_crop_mode) {
+		if (range.start <= range.end)
+			QWritel(arg_text+range.start, range.end - range.start);
 		else
-			for (int i=text_length-1; i>0; i--) {
-				if (i<range_end  ||  i>=range_start) {
-					char output[2] = "";
-					sprintf(output, "%c", text[i]);
-					QWrite(output, out);
-				}
-			}
-
-	// Inclusion mode - return range of characters
+			// Reverse range - iterate from the end
+			for (--range.start;  range.start>=range.end;  range.start--)
+				QWritef("%c", arg_text[range.start]);
 	} else {
-		// Normal range
-		if (range_start <= range_end) {
-			text[range_end] = '\0';
-			QWrite(text+range_start, out);
-		// Reverse range - iterate characters from the end
-		} else
-			for (--range_start; range_start>=range_end; range_start--)
-				if (range_start>=0  &&  range_start<text_length) {
-					char output[2] = "";
-					sprintf(output, "%c", text[range_start]);
-					QWrite(output, out);
-				}
+		// Crop mode - remove range of characters
+		if (range.start <= range.end) {
+			shift_buffer_chunk(arg_text, range.end, arg_text_len, range.end-range.start, OPTION_LEFT);
+			QWritel(arg_text, arg_text_len-(range.end-range.start));
+		} else {
+			// Reverse range - iterate characters from the end
+			for (size_t i=arg_text_len-1; i>0; i--)
+				if (i<range.end  ||  i>=range.start)
+					QWritef("%c", arg_text[i]);
+		}
 	}
 }
 break;
@@ -844,80 +750,69 @@ break;
 case C_STRING_TOKENIZE:
 { // Split string on given occurences
 
-	// Read arguments
-	char *text         = "";
-	char *delimiter    = "";
-	char *addEmpty     = "";
-	bool byString      = false;
-	bool skipQuotes    = false;
-	bool matchWord     = false;
-	bool caseSensitive = false;
+	char *arg_text              = empty_string;
+	char *arg_delimiter         = empty_string;
+	char *arg_add_empty         = empty_string;
+	bool arg_by_string          = false;
+	bool arg_skip_quotes        = false;
+	size_t arg_text_length      = 0;
+	size_t arg_delimiter_length = 0;
+	int arg_options             = 0;
 
-	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_TEXT : 
+				arg_text        = argument[i+1]; 
+				arg_text_length = argument_length[i+1]; 
+				break;
 
-		if (pch == NULL) 
-			continue;
+			case NAMED_ARG_DELIMITER : 
+				arg_delimiter        = argument[i+1]; 
+				arg_delimiter_length = argument_length[i+1]; 
+				break;
 
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = arg + pos + 1;
+			case NAMED_ARG_WORDDELIMITER : 
+				arg_by_string = String2Bool(argument[i+1]); 
+				break;
 
-		if (strcmpi(arg,"text") == 0) {
-			text = val;
-			continue;
+			case NAMED_ARG_QUOTESKIP : 
+				arg_skip_quotes = String2Bool(argument[i+1]); 
+				break;
+
+			case NAMED_ARG_MATCHWORD : 
+				String2Bool(argument[i+1]) 
+					? arg_options |= OPTION_MATCHWORD 
+					: arg_options &= ~OPTION_MATCHWORD;
+				break;
+
+			case NAMED_ARG_CASESENSITIVE : 
+				String2Bool(argument[i+1]) 
+					? arg_options |= OPTION_CASESENSITIVE 
+					: arg_options &= ~OPTION_CASESENSITIVE;
+				break;
+
+			case NAMED_ARG_ADDEMPTY : 
+				arg_add_empty = argument[i+1];
+				break;
 		}
-
-		if (strcmpi(arg,"delimiter") == 0) {
-			delimiter = val;
-			continue;
-		}
-
-		if (strcmpi(arg,"wordDelimiter") == 0) {
-			byString = String2Bool(val);
-			continue;
-		}
-
-		if (strcmpi(arg,"quoteSkip") == 0) {
-			skipQuotes = String2Bool(val);
-			continue;
-		}
-
-		if (strcmpi(arg,"matchWord") == 0) {
-			matchWord = String2Bool(val);
-			continue;
-		}
-
-		if (strcmpi(arg,"caseSensitive") == 0) {
-			caseSensitive = String2Bool(val);
-			continue;
-		}
-
-		if (strcmpi(arg,"addEmpty") == 0) {
-			addEmpty = val;
-			continue;
-		}
-	};
+	}
 
 
 	// Set variables for preparing text
-	char *pch   = "";
-	char *text2 = text;
-	int l1      = strlen(text);
-	int l2      = strlen(delimiter);
-	int skip    = 0;
-	int Qmax    = 0;
-	int Qindex  = -2;
-	int *Qarray;
+	char *pch      = NULL;
+	char *text2    = arg_text;
+	int skip       = 0;
+	size_t Qmax    = 0;
+	size_t Qindex  = -2;
+	size_t *Qarray;
 
 
 	// If we're skipping occurences in quotes
 	// then first we need to save position of quot marks
-	if (skipQuotes) {
+	if (arg_skip_quotes) {
 		// Count how many quotes there are
-		for (int i=0;  i<l1;  i++)
-			if (text[i] == '"')
+		for (size_t i=0;  i<arg_text_length;  i++)
+			if (arg_text[i] == '"')
 				Qmax++;
 
 		// Even number
@@ -926,25 +821,25 @@ case C_STRING_TOKENIZE:
 
 		// Allocate integer array
 		if (Qmax > 0) {
-			Qarray = (int*) calloc (Qmax, sizeof(int));
+			Qarray = (size_t*) calloc (Qmax, sizeof(int));
 
-			if (Qarray == NULL) {
-				QWrite("[]", out);
+			if (!Qarray) {
+				QWrite("[]");
 				break;
 			}
 		}
 
 		// Store quotes position in an array
-		bool inQuote = false;
+		bool in_quote = false;
 
-		for (i=0;  i<l1 && Qindex<Qmax;  i++)
-			if (text[i] == '"') {
-				inQuote = !inQuote;
+		for (i=0;  i<arg_text_length && Qindex<Qmax;  i++)
+			if (arg_text[i] == '"') {
+				in_quote = !in_quote;
 
-				if (inQuote) {
+				if (in_quote) {
 					Qindex          += 2;
 					Qarray[Qindex]   = i;
-					Qarray[Qindex+1] = l1;
+					Qarray[Qindex+1] = arg_text_length;
 				} else 
 					Qarray[Qindex+1] = i;
 			}
@@ -952,55 +847,56 @@ case C_STRING_TOKENIZE:
 
 
 	// Prepare text before tokenizing by words
-	if (byString) {		
+	if (arg_by_string) {
 		// Search for the word
-		while (pch = strstr2(text2, delimiter, matchWord, caseSensitive)) {
-			int pos		= pch - text2;
-			bool inQuot = false;
+		while ((pch = strstr2(text2, arg_text_length-skip, arg_delimiter, arg_delimiter_length, arg_options))) {
+			size_t pos    = pch - text2;
+			bool in_quote = false;
 
 			// Check if the word is inside quotation
-			if (skipQuotes  &&  Qmax>0) {
-				for (int i=0;  i<Qmax && !inQuot;  i+=2)
+			if (arg_skip_quotes  &&  Qmax>0) {
+				for (size_t i=0;  i<Qmax && !in_quote;  i+=2)
 					if (Qarray[i]<=(skip+pos)  &&  (skip+pos)<=Qarray[i+1]) 
-						inQuot = true;
+						in_quote = true;
 
 				// If so then skip it
-				if (inQuot) {
-					skip += pos + l2; 
-					text2 = text + skip;
+				if (in_quote) {
+					skip += pos + arg_delimiter_length; 
+					text2 = arg_text + skip;
 					continue;
 				}
 			}
 			
 			// Replace the word with unused characters
-			for (int i=pos; i<(pos+l2); i++) 
+			for (size_t i=pos; i<(pos+arg_delimiter_length); i++) 
 				text2[i] = '\a';
 		}
 
 	// Prepare text before tokenizing by single characters
 	} else {
 		// For each char in delim
-		for (int i=0; i<l2; i++) {
-			text2 = text;
+		for (size_t i=0; i<arg_delimiter_length; i++) {
+			text2 = arg_text;
 			skip  = 0;
 
-			char currentChar[2] = "";
-			sprintf(currentChar, "%c", delimiter[i]);
+			char current_char[2] = "";
+			sprintf(current_char, "%c", arg_delimiter[i]);
+			int current_char_len = 1;
 
-			while (pch = strstr2(text2, currentChar, matchWord, caseSensitive)) {
-				int pos     = pch - text2;
-				bool inQuot = false;
+			while ((pch = strstr2(text2, arg_text_length-skip, current_char, current_char_len, arg_options))) {
+				size_t pos    = pch - text2;
+				bool in_quote = false;
 
 				// Check if the character is inside quotation
-				if (skipQuotes) {
-					for (int i=0;  i<Qmax && !inQuot;  i+=2)
+				if (arg_skip_quotes) {
+					for (size_t i=0;  i<Qmax && !in_quote;  i+=2)
 						if (Qarray[i]<=(skip+pos)  &&  (skip+pos)<=Qarray[i+1]) 
-							inQuot = true;
+							in_quote = true;
 
 					// If so then skip it
-					if (inQuot) {
+					if (in_quote) {
 						skip += pos + 1; 
-						text2 = text + skip;  
+						text2 = arg_text + skip;
 						continue;
 					}
 				}
@@ -1016,62 +912,61 @@ case C_STRING_TOKENIZE:
 
 
 	// Set variables for adding empty
-	bool addEmptyStart = false;
-	bool addEmptyEnd   = false;
-	int pchLen		   = 0;
-	int pos			   = 0;
-	int count		   = 0;
+	bool add_empty_start = false;
+	bool add_empty_end   = false;
+	size_t pch_len       = 0;
+	size_t pos           = 0;
+	size_t count         = 0;
 
-	if (strncmpi(addEmpty,"both",4)==0) {
-		addEmptyStart = true;
-		addEmptyEnd	  = true;
+	if (strncmpi(arg_add_empty,"both",4)==0) {
+		add_empty_start = true;
+		add_empty_end   = true;
 	} else
-		if (strncmpi(addEmpty,"start",5)==0)
-			addEmptyStart = true;
-	else
-		if (strncmpi(addEmpty,"end",3)==0)
-			addEmptyEnd	= true;
+		if (strncmpi(arg_add_empty,"start",5)==0)
+			add_empty_start = true;
+		else
+			if (strncmpi(arg_add_empty,"end",3)==0)
+				add_empty_end = true;
 
 
 	// Start tokenization
-	QWrite("[", out);
-	pch = strtok (text, "\a");
+	QWrite("[");
+	pch = strtok(arg_text, "\a");
 
-	while (pch != NULL) {
-		// keep track of numbers
-		if (addEmptyStart  ||  addEmptyEnd) {
-			pos		= pch - text;
-			pchLen	= strlen(pch);
+	while (pch) {
+		// Keep track of numbers
+		if (add_empty_start  ||  add_empty_end) {
+			pos     = pch - arg_text;
+			pch_len = strlen(pch);
 		}
 
 		// if string begins with token 
-		if (addEmptyStart) {
-			addEmptyStart = false;
+		if (add_empty_start) {
+			add_empty_start = false;
 
 			// then add empty string to the output array
 			if (pos != 0)
-				QWrite("\"\"", out);
+				QWrite("\"\"");
 		}
 		
-		QWrite("]+[\"", out);
-		PrintDoubleQ(pch, out);
-		QWrite("\"", out);
+		QWrite("]+[\"");
+		QWriteDoubleQ(pch);
+		QWrite("\"");
 
 		count++;
-		pch = strtok (NULL, "\a");
+		pch = strtok(NULL, "\a");
 	}
 
 
 	// if there were no parts at all
-    if (addEmptyStart)
-        QWrite("\"\"", out);
+	if (add_empty_start)
+		QWrite("\"\"");
 
 	// if last part doesn't end the string
-	if (addEmptyEnd)
-		if (pos+pchLen < l1  ||  count==0)
-			QWrite("]+[\"\"", out);
+	if (add_empty_end  &&  (pos+pch_len<arg_text_length || count==0))
+		QWrite("]+[\"\"");
 
-	QWrite("]", out);
+	QWrite("]");
 }
 break;
 
@@ -1084,86 +979,81 @@ break;
 
 
 
-case C_STRING_TRIMWHITESPACE:
+case C_STRING_TRIM:
 { // Trim white-space from string
 
-	// Read arguments
-	char *text        = "";
-	bool left         = false;
-	bool middle       = false;
-	bool right        = false;
-	bool middleSingle = false;
+	char *arg_text         = empty_string;
+	size_t arg_text_length = 0;
+	bool arg_left          = false;
+	bool arg_middle        = false;
+	bool arg_right         = false;
+	bool arg_middle_single = false;
 
-	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_LEFT : 
+				arg_left = String2Bool(argument[i+1]); 
+				break;
 
-		if (pch == NULL) 
-			continue;
+			case NAMED_ARG_MIDDLE : 
+				arg_middle        = String2Bool(argument[i+1]); 
+				arg_middle_single = !arg_middle; 
+				break;
 
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = arg + pos + 1;
+			case NAMED_ARG_MIDDLESINGLE : 
+				arg_middle_single = String2Bool(argument[i+1]); 
+				arg_middle        = !arg_middle_single; 
+				break;
 
-		if (strcmpi(arg,"left") == 0) {
-			left = String2Bool(val);
-			continue;
-		}
+			case NAMED_ARG_RIGHT : 
+				arg_right = String2Bool(argument[i+1]); 
+				break;
 
-		if (strcmpi(arg,"middle") == 0) {
-			middle		 = String2Bool(val);
-			middleSingle = !middle;
-			continue;
-		}
-
-		if (strcmpi(arg,"middleSingle") == 0) {
-			middleSingle = String2Bool(val);
-			middle		 = !middleSingle;
-			continue;
-		}
-
-		if (strcmpi(arg,"right") == 0) {
-			right = String2Bool(val);
-			continue;
-		}
-
-		if (strcmpi(arg,"text") == 0) {
-			text = val;
-			continue;
+			case NAMED_ARG_TEXT : 
+				arg_text        = argument[i+1]; 
+				arg_text_length = argument_length[i+1];
+				break;
 		}
 	}
 
 
-	if (left) 
-		while (isspace(text[0])) 
-			text++;
+	// Remove leading and trailing whitespaces
+	while (arg_left && isspace(arg_text[0])) {
+		arg_text++;
+		arg_text_length++;
+	}
 
-	if (right) 
-		for (int i=strlen(text)-1; i>=0 && isspace(text[i]); i--) 
-			text[i] = '\0';
+	for (i=arg_text_length-1;  arg_right && i>=0 && isspace(arg_text[i]);  i--) {
+		arg_text[i] = '\0';
+		arg_text_length--;
+	}
 
-	if (middle || middleSingle) {
+
+	// Remove whitespace in the middle of the string
+	if (arg_middle || arg_middle_single) {
 		// get starting position (ignore leading space)
-		for (int i=0; isspace(text[i]);  i++);
+		for (size_t i=0; isspace(arg_text[i]);  i++);
 
-		// get ending position (ignore leading space)
-		for (int END=strlen(text)-1;  isspace(text[END]);  END--);
+		// get ending position (ignore trailling space)
+		for (size_t end=arg_text_length-1;  isspace(arg_text[end]);  end--);
 
-		int countSpace = 0;
+		int count_space = 0;
 
 		// shift chars to the left when encountered whitespace
-		for (; i<END-1; i++)
-			if (isspace(text[i])) {
-				countSpace++;
+		for (; i<end-1; i++)
+			if (isspace(arg_text[i])) {
+				count_space++;
 
-				if (!middleSingle || middleSingle && countSpace>1)
-					strcpy(text+i, text+i+1),
-					END--;
+				if (!arg_middle_single  ||  (arg_middle_single && count_space>1)) {
+					shift_buffer_chunk(arg_text, i, i+1, 1, OPTION_LEFT);
+					end--;
+					arg_text_length--;
+				}
 			} else
-				countSpace = 0;
+				count_space = 0;
 	}
 
-	QWrite(text, out);
+	QWritel(arg_text, arg_text_length);
 }
 break;
 
@@ -1176,111 +1066,84 @@ break;
 
 
 
-case C_STRING_OCCURRENCES:
+case C_STRING_FIND:
 { // Search string
 
-	// Read arguments
-	char *text         = "";
-	char *find         = "";
-	bool matchWord     = false;
-	bool caseSensitive = false;
-	bool EndSet        = false;
-	bool LengthSet     = false;
-	bool skipQuotes    = false;
-	int Start          = 0;
-	int End            = 0;
-	int Length         = 0;
-	int	Limit          = -1;
-	int Count          = 0;
+	char *arg_text         = empty_string;
+	char *arg_find         = empty_string;
+	char *arg_start        = empty_string;
+	char *arg_end          = empty_string;
+	char *arg_length       = empty_string;
+	size_t arg_text_length = 0;
+	size_t arg_find_length = 0;
+	size_t arg_limit       = -1;
+	int arg_options        = OPTION_NONE;
+	bool arg_skip_quotes   = false;
 
-	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_TEXT : 
+				arg_text        = argument[i+1]; 
+				arg_text_length = argument_length[i+1]; 
+				break;
 
-		if (pch == NULL) 
-			continue;
+			case NAMED_ARG_FIND : 
+				arg_find        = argument[i+1]; 
+				arg_find_length = argument_length[i+1]; 
+				break;
 
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = arg + pos + 1;
+			case NAMED_ARG_MATCHWORD : 
+				String2Bool(argument[i+1]) 
+					? arg_options |= OPTION_MATCHWORD 
+					: arg_options &= ~OPTION_MATCHWORD;
+				break;
 
-		if (strcmpi(arg,"text") == 0) {
-			text = val;
-			continue;
-		}
+			case NAMED_ARG_CASESENSITIVE : 
+				String2Bool(argument[i+1]) 
+					? arg_options |= OPTION_CASESENSITIVE 
+					: arg_options &= ~OPTION_CASESENSITIVE;
+				break;
 
-		if (strcmpi(arg,"find") == 0) {
-			find = val;
-			continue;
-		}
+			case NAMED_ARG_START : 
+				arg_start = argument[i+1]; 
+				break;
 
-		if (strcmpi(arg,"matchWord") == 0) {
-			matchWord = String2Bool(val);
-			continue;
-		}
+			case NAMED_ARG_END : 
+				arg_end = argument[i+1]; 
+				break;
 
-		if (strcmpi(arg,"caseSensitive") == 0) {
-			caseSensitive = String2Bool(val);
-			continue;
-		}
+			case NAMED_ARG_LENGTH : 
+				arg_length = argument[i+1]; 
+				break;
 
-		if (strcmpi(arg,"start") == 0) {
-			Start = atoi(val);
-			continue;
-		}
+			case NAMED_ARG_LIMIT : 
+				arg_limit = strtoul(argument[i+1], NULL, 0);
+				break;
 
-		if (strcmpi(arg,"end") == 0) {
-			End		  = atoi(val);
-			EndSet	  = true;
-			LengthSet = false;
-			continue;
-		}
-
-		if (strcmpi(arg,"length") == 0) {
-			Length	  = atoi(val);
-			EndSet	  = false;
-			LengthSet = true;
-			continue;
-		}
-
-		if (strcmpi(arg,"limit") == 0) {
-			Limit = atoi(val);
-			continue;
-		}
-
-		if (strcmpi(arg,"quoteSkip") == 0) {
-			skipQuotes = String2Bool(val);
-			continue;
+			case NAMED_ARG_QUOTESKIP : 
+				arg_skip_quotes = String2Bool(argument[i+1]); 
+				break;
 		}
 	}
 
 
-	// Set variables
-	int CurrentCOL = 0;
-	int pos        = 0;
-	int textSize   = strlen(text);
-	int findSize   = strlen(find);
-	char *text2    = text;
-	char *pch      = NULL;
-	char tmp[20]   = "";
+	char *text2       = arg_text;
+	char *pch         = NULL;
+	size_t CurrentCOL = 0;
+	size_t pos        = 0;
+	StringPos range   = ConvertStringPos(arg_start, arg_end, arg_length, arg_text_length);
 
-	// Correct values
-	if (textSize > 0)
-		CorrectStringPos(&Start, &End, Length, EndSet, LengthSet, textSize);
-	
 
-	// If we're skipping occurences in quotes
-	// then first we need to save position of quot marks
-	int skip     = 0;
-	int Qmax     = 0;
-	int Qindex   = -1;
-	int *Qarray;
-	bool inQuote = false;
+	// If we're skipping occurences in quotes then first we need to save position of quotation marks
+	size_t Qmax    = 0;
+	size_t Qindex  = -1;
+	size_t *Qarray = NULL;
+	bool in_quote  = false;
 
-	if (skipQuotes) {
+	if (arg_skip_quotes) {
 		// Count how many quotes there are
-		for (int i=0;  i<textSize;  i++)
-			if (text[i] == '"')
+		for (size_t i=0;  i<arg_text_length;  i++)
+			if (arg_text[i] == '"')
 				Qmax++;
 
 		// Even number
@@ -1289,25 +1152,25 @@ case C_STRING_OCCURRENCES:
 
 		// Allocate integer array
 		if (Qmax > 0) {
-			Qarray = (int*) calloc (Qmax, sizeof(int));
+			Qarray = (size_t*) calloc (Qmax, sizeof(size_t));
 
-			if (Qarray == NULL) {
-				QWrite("[]", out);
+			if (!Qarray) {
+				QWrite("[]");
 				break;
 			}
 		}
 
 		// Store quotes position in an array
-		inQuote = false;
+		in_quote = false;
 
-		for (i=0;  i<textSize && Qindex<Qmax;  i++)
-			if (text[i] == '"') {
-				inQuote = !inQuote;
+		for (i=0;  i<arg_text_length && Qindex<Qmax;  i++)
+			if (arg_text[i] == '"') {
+				in_quote = !in_quote;
 
-				if (inQuote) {
+				if (in_quote) {
 					Qindex          += 2;
 					Qarray[Qindex]   = i;
-					Qarray[Qindex+1] = textSize;
+					Qarray[Qindex+1] = in_quote;
 				} else 
 					Qarray[Qindex+1] = i;
 			}
@@ -1315,43 +1178,42 @@ case C_STRING_OCCURRENCES:
 
 
 	// Search
-	QWrite("[", out);
+	QWrite("[");
+	size_t count = 0;
 
-	while ((pch=strstr2(text2, find, matchWord, caseSensitive)) != NULL) {
-		pos     = pch - text2;
-		inQuote = false;
+	while ((pch=strstr2(text2, arg_text_length-CurrentCOL, arg_find, arg_find_length, arg_options))) {
+		pos      = pch - text2;
+		in_quote = false;
 
 		// If in range
-		if (pos+CurrentCOL >= Start) {
+		if (pos+CurrentCOL >= range.start) {
 			// If passed the range
-			if (pos+CurrentCOL > End)
+			if (pos+CurrentCOL > range.end)
 				break;
 
 			// If within result limit
-			if (Limit>=0  &&  ++Count>Limit)
+			if (arg_limit>=0  &&  ++count>arg_limit)
 				break;
 
 			// Check if the word is inside quotation
-			if (skipQuotes  &&  Qmax>0)
-				for (int i=0;  i<Qmax && !inQuote;  i+=2)
+			if (arg_skip_quotes  &&  Qmax>0)
+				for (size_t i=0;  i<Qmax && !in_quote;  i+=2)
 					if (Qarray[i]<=(CurrentCOL+pos)  &&  (CurrentCOL+pos)<=Qarray[i+1]) 
-						inQuote = true;
+						in_quote = true;
 
-			if (!inQuote) {
-				sprintf(tmp, "]+[%d", CurrentCOL + pos);
-				QWrite(tmp, out);
-			}
+			if (!in_quote)
+				QWritef("]+[%d", CurrentCOL + pos);
 		}
 
 		// Move past the current occurence
 		CurrentCOL += pos + 1;
-		text2       = text + CurrentCOL;
+		text2       = arg_text + CurrentCOL;
 	}
 
-	if (Qmax > 0)
+	if (Qarray)
 		free(Qarray);
 
-	QWrite("]", out);
+	QWrite("]");
 }
 break;
 
@@ -1364,110 +1226,79 @@ break;
 
 
 
-case C_STRING_TOARRAY2:
-{ // Alternative version of C_STRING_TOARRAY
+case C_STRING_SPLIT:
+{ // Return string as an array
 
-	// Read arguments
-	char *text		= "";
-	int SegmentSize	= 1;
-	int Limit		= -1;
-	int Parts		= 0;
-	int Start		= 0;
-	int End			= 0;
-	int Length		= 0;
-	bool EndSet		= false;
-	bool LengthSet	= false;
+	char *arg_text            = empty_string;
+	char *arg_start           = empty_string;
+	char *arg_end             = empty_string;
+	char *arg_length          = empty_string;
+	size_t arg_segment_length = 1;
+	size_t arg_limit          = -1;
+	size_t arg_text_length    = 0;
 
-	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_TEXT : 
+				arg_text        = argument[i+1]; 
+				arg_text_length = argument_length[i+1]; 
+				break;
 
-		if (pch == NULL) 
-			continue;
+			case NAMED_ARG_SIZE : 
+				arg_segment_length = strtoul(argument[i+1], NULL, 0);
+				break;
 
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = arg + pos + 1;
+			case NAMED_ARG_LIMIT : 
+				arg_limit = strtoul(argument[i+1], NULL, 0); 
+				break;
 
-		if (strcmpi(arg,"text") == 0) {
-			text = val;
-			continue;
-		}
+			case NAMED_ARG_START : 
+				arg_start = argument[i+1]; 
+				break;
 
-		if (strcmpi(arg,"size") == 0) {
-			SegmentSize = atoi(val);
-			continue;
-		}
+			case NAMED_ARG_END : 
+				arg_end = argument[i+1]; 
+				break;
 
-		if (strcmpi(arg,"limit") == 0) {
-			Limit = atoi(val);
-			continue;
-		}
-
-		if (strcmpi(arg,"start") == 0) {
-			Start = atoi(val);
-			continue;
-		}
-
-		if (strcmpi(arg,"end") == 0) {
-			End		  = atoi(val);
-			EndSet	  = true;
-			LengthSet = false;
-			continue;
-		}
-
-		if (strcmpi(arg,"length") == 0) {
-			Length		= atoi(val);
-			EndSet	    = false;
-			LengthSet   = true;
-			continue;
-		}
-	}
-
-	if (SegmentSize < 1)
-		SegmentSize = 1;
-
-	int	textSize = strlen(text);
-	int count    = 0;
-	char tmp[2]  = "";
-
-
-	// Correct values
-	if (textSize > 0)
-		CorrectStringPos(&Start, &End, Length, EndSet, LengthSet, textSize);
-
-
-	// Split
-	QWrite("[", out);
-
-	for (i=Start;  i<End && Limit!=0;  i++) {
-		// Start segment
-		if (count == 0)
-			QWrite("\"", out);
-
-		// Output character
-		if (text[i] == '"') 
-			QWrite("\"\"", out); 
-		else {
-			sprintf(tmp, "%c", text[i]);
-			QWrite(tmp, out);
-		}
-
-		// Limit segment length
-		if (++count >= SegmentSize  ||  i==End-1) {
-			QWrite("\"", out);
-
-			count = 0;
-			QWrite("]+[", out);
-
-			Parts++;
-
-			if (Limit>=0  &&  Parts>=Limit)
+			case NAMED_ARG_LENGTH : 
+				arg_length = argument[i+1];
 				break;
 		}
 	}
 
-	QWrite("]", out);
+
+	// Split
+	QWrite("[");
+	size_t count    = 0;
+	size_t parts    = 0;
+	StringPos range = ConvertStringPos(arg_start, arg_end, arg_length, arg_text_length);
+
+	for (i=range.start;  i<range.end && arg_limit!=0;  i++) {
+		// Start segment
+		if (count == 0)
+			QWrite("\"");
+
+		// Output character
+		if (arg_text[i] == '"') 
+			QWrite("\"\""); 
+		else
+			QWritef("%c", arg_text[i]);
+
+		// Limit segment length
+		if (++count >= arg_segment_length  ||  i==range.end-1) {
+			QWrite("\"");
+
+			count = 0;
+			QWrite("]+[");
+
+			parts++;
+
+			if (arg_limit>=0  &&  parts>=arg_limit)
+				break;
+		}
+	}
+
+	QWrite("]");
 }
 break;
 
@@ -1481,70 +1312,70 @@ break;
 
 
 case C_STRING_DOMAIN:
-{ // Tokenize domain
+{ // Tokenize URL
 	
-	int i = 0;
+	if (argument_num < 3)
+		break;
 
 	// Search for protocol and world wide web
-	int hpos   = -1;
-	int wpos   = -1;
-	char *txt  = com + 14;
-	char *http = strstr(txt, "://");
-	char *www  = strstr(txt, "www.");
+	size_t http_pos = 0;
+	size_t www_pos  = 0;
+	char *http      = strstr(argument[2], "://");
+	char *www       = strstr(argument[2], "www.");
 
-	if (http != NULL) 
-		hpos = http - txt;
+	if (http) 
+		http_pos = http - argument[2];
 
-	if (www != NULL) {
+	if (www) {
 		// Confirm www validity
-		wpos = www - txt;
+		www_pos = www - argument[2];
 
-		for (i=wpos-4;  i>0 && i>hpos;  i++)
-			if (isalnum(txt[i])) {
-				wpos = -1; 
+		for (size_t i=www_pos-4;  i>0 && i>http_pos;  i++)
+			if (isalnum(argument[2][i])) {
+				www = NULL;
 				break;
 			}
 
-		if (wpos >= 0) 
-			txt[wpos+3] = '/';
+		if (www_pos >= 0) 
+			argument[2][www_pos+3] = '/';
 	}
 
 
 	// Find domain start position
-	int dpos    = 0;
-	int	dposEnd = 0;
+	int domain_pos = 0;
 
-	if (wpos >= 0) 
-		dpos = wpos + 4; 
+	if (www) 
+		domain_pos = www_pos + 4; 
 	else 
-		if (hpos >= 0) 
-			dpos = hpos+3;
+		if (http_pos >= 0) 
+			domain_pos = http_pos + 3;
 
-	char *dom = txt + dpos;
+	char *domain = argument[2] + domain_pos;
 
 
 	// Find query string start position
-	int  qpos   = -1;
-	int	 dirs   = 0;
-	char *qmark = strchr(dom, '?');
+	size_t query_pos   = -1;
+	size_t directories = 0;
+	char *qmark        = strchr(domain, '?');
 
-	if (qmark != NULL) {
-		qpos = qmark - dom;
-		for (int i=0; i<qpos; i++) 
-			if (dom[i]=='/'  &&  dom[i+1]!='?') 
-				dirs++;
+	if (qmark) {
+		query_pos = qmark - domain;
+
+		for (size_t i=0; i<query_pos; i++) 
+			if (domain[i]=='/'  &&  domain[i+1]!='?') 
+				directories++;
 	}
 
 
 	// Tokenize whole address
 	int  cnt   = 0;
 	bool count = true;
-	char *pch  = strtok(txt, ":/?&");
+	char *pch  = strtok(argument[2], ":/?&");
 
-	QWrite("[[", out);
+	QWrite("[[");
 	
-	while (pch != NULL) {
-		if (strncmp(pch,dom,strlen(pch)) == 0) {
+	while (pch) {
+		if (strncmp(pch,domain,strlen(pch)) == 0) {
 			cnt++;
 			count = 0;
 		}
@@ -1552,49 +1383,39 @@ case C_STRING_DOMAIN:
 		if (count) 
 			cnt++;
 		
-		QWrite("]+[\"", out); 
-		QWrite(pch, out); 
-		QWrite("\"", out);
-
+		QWritef("]+[\"%s\"", pch); 
 		pch = strtok(NULL, ":/?&");
 	}
 
 
 	// Return index where query string vars start
-	char tmp[16] = "";
-
-	if (qmark != NULL) 
-		sprintf(tmp,"],%d,[", cnt+dirs);
+	if (qmark) 
+		QWritef("],%u,[", cnt + directories);
 	else
-		sprintf(tmp,"],%d,[", -1);
-
-	QWrite(tmp, out);
+		QWrite("],-1,[");
 	
 
 	// Tokenize domain
-	pch       = strtok(dom, ".");
+	pch       = strtok(domain, ".");
 	int parts = -1;
 
-	while (pch != NULL) {
+	while (pch) {
 		parts++;
-		QWrite("]+[\"", out); 
-		QWrite(pch, out); 
-		QWrite("\"", out);
+		QWritef("]+[\"%s\"", pch); 
 		pch = strtok(NULL, ".");
 	}
 
 
 	// Reassemble domain and then return it
-	QWrite("],\"", out);
+	QWrite("],\"");
 
 	for (i=0; parts>0; i++)
-		if (dom[i] == '\0') {
-			dom[i] = '.';
+		if (domain[i] == '\0') {
+			domain[i] = '.';
 			parts--;
 		}
 
-	QWrite(dom, out);
-	QWrite("\"]", out);
+	QWritef("%s\"]", domain);
 }
 break;
 
@@ -1607,118 +1428,86 @@ break;
 
 
 
-case C_STRING_UPPERLOWERCASE:
+case C_STRING_CASE:
 { // Convert to upper or lower case
 
-	// Read arguments
-	char *text     = "";
-	bool sentences = false;
-	bool words     = false;
-	bool upper     = false;
-	bool lower     = false;
-	bool StartSet  = false;
-	bool EndSet    = false;
-	bool LengthSet = false;
-	int Start      = 0;
-	int End        = 0;
-	int Length     = 0;
+	char *arg_text         = empty_string;
+	char *arg_start        = empty_string;
+	char *arg_end          = empty_string;
+	char *arg_length       = empty_string;
+	bool arg_sentences     = false;
+	bool arg_words         = false;
+	bool arg_upper         = false;
+	bool arg_lower         = false;
+	size_t arg_text_length = 0;
 
-	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_SENTENCES : 
+				arg_sentences = String2Bool(argument[i+1]); 
+				break;
 
-		if (pch == NULL) 
-			continue;
+			case NAMED_ARG_WORDS : 
+				arg_words = String2Bool(argument[i+1]); 
+				break;
 
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = arg + pos + 1;
+			case NAMED_ARG_UPPER : 
+				arg_upper = String2Bool(argument[i+1]); 
+				break;
 
-		if (strcmpi(arg,"sentences") == 0) {
-			sentences = String2Bool(val);
-			continue;
-		}
+			case NAMED_ARG_LOWER : 
+				arg_lower = String2Bool(argument[i+1]); 
+				break;
 
-		if (strcmpi(arg,"words") == 0) {
-			words = String2Bool(val);
-			continue;
-		}
+			case NAMED_ARG_TEXT : 
+				arg_text        = argument[i+1]; 
+				arg_text_length = argument_length[i+1]; 
+				break;
 
-		if (strcmpi(arg,"upper") == 0) {
-			upper = String2Bool(val);
-			continue;
-		}
+			case NAMED_ARG_START : 
+				arg_start = argument[i+1];
+				break;
 
-		if (strcmpi(arg,"lower") == 0) {
-			lower = String2Bool(val);
-			continue;
-		}
+			case NAMED_ARG_END : 
+				arg_end = argument[i+1];
+				break;
 
-		if (strcmpi(arg,"text") == 0) {
-			text = val;
-			continue;
-		}
-
-		if (strcmpi(arg,"start") == 0) {
-			Start	 = atoi(val);
-			StartSet = true;
-			continue;
-		}
-
-		if (strcmpi(arg,"end") == 0) {
-			End		  = atoi(val);
-			EndSet	  = true;
-			LengthSet = false;
-			continue;
-		}
-
-		if (strcmpi(arg,"length") == 0) {
-			Length	  = atoi(val);
-			EndSet	  = false;
-			LengthSet = true;
-			continue;
+			case NAMED_ARG_LENGTH : 
+				arg_length = argument[i+1];
+				break;
 		}
 	}
 
+	StringPos range = ConvertStringPos(arg_start, arg_end, arg_length, arg_text_length);
+	bool capitalize = true;
 
-	// Set vars
-	int textSize    = strlen(text);
-	bool Capitalize = true;
-
-	if (textSize == 0)
-		break;
-
-	CorrectStringPos(&Start, &End, Length, EndSet, LengthSet, textSize);
-
-
-	// For each character
-	for (i=Start; i<End; i++) {
+	for (i=range.start; i<range.end; i++) {
 		// Default mode - change all characters
-		if (!sentences && !words) {
-			if (upper && !lower) 
-				text[i] = toupper(text[i]);
+		if (!arg_sentences && !arg_words) {
+			if (arg_upper && !arg_lower) 
+				arg_text[i] = toupper(arg_text[i]);
 
-			if (!upper && lower) 
-				text[i] = tolower(text[i]);
+			if (!arg_upper && arg_lower) 
+				arg_text[i] = tolower(arg_text[i]);
 
-		// Special mode - change first character in sentences or words
+		// Special mode - change only the first character in sentences or words
 		} else {
-			if (Capitalize && (words || sentences && !isspace(text[i]))) {
-				Capitalize = false;
+			if (capitalize  &&  (arg_words || arg_sentences && !isspace(arg_text[i]))) {
+				capitalize = false;
 
-				if (upper) 
-					text[i] = toupper(text[i]);
+				if (arg_upper) 
+					arg_text[i] = toupper(arg_text[i]);
 			} else
-				if (lower) 
-					text[i] = tolower(text[i]);
+				if (arg_lower) 
+					arg_text[i] = tolower(arg_text[i]);
 
 			// separator between words/sentences
-			if (words  &&  isspace(text[i])  ||	 sentences  &&  (text[i]=='.' || text[i]=='?' || text[i]=='!')) 
-				Capitalize = true;
+			if ((arg_words  &&  isspace(arg_text[i]))  ||  (arg_sentences  &&  (arg_text[i]=='.' || arg_text[i]=='?' || arg_text[i]=='!'))) 
+				capitalize = true;
 		}
 	}
 
-	QWrite(text, out);
+	QWritel(arg_text, arg_text_length);
 }
 break;
 
@@ -1731,121 +1520,77 @@ break;
 
 
 
-case C_STRING_REPLACECHARS:
-{ // Replace single characters in a string
+case C_STRING_REPLACECHAR:
+{ // Replace single characters
 
-	// Read arguments
-	char *text         = "";
-	char *find         = "";
-	char *replace      = "";
-	bool correspond    = false;
-	bool caseSensitive = false;
-	bool matchWord     = false;
+	char *arg_text            = empty_string;
+	char *arg_find            = empty_string;
+	char *arg_replace         = empty_string;
+	size_t arg_text_length    = 0;
+	size_t arg_find_length    = 0;
+	size_t arg_replace_length = 0;
+	bool arg_correspond       = false;
+	int arg_options           = OPTION_NONE;
 
-	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_TEXT : 
+				arg_text        = argument[i+1]; 
+				arg_text_length = argument_length[i+1]; 
+				break;
 
-		if (pch == NULL) 
-			continue;
+			case NAMED_ARG_FIND : 
+				arg_find        = argument[i+1]; 
+				arg_find_length = argument_length[i+1]; 
+				break;
 
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = arg + pos + 1;
+			case NAMED_ARG_REPLACE : 
+				arg_replace        = argument[i+1]; 
+				arg_replace_length = argument_length[i+1]; 
+				break;
 
-		if (strcmpi(arg,"text") == 0) {
-			text = val;
-			continue;
-		}
+			case NAMED_ARG_CORRESPOND : 
+				arg_correspond = String2Bool(argument[i+1]); 
+				break;
 
-		if (strcmpi(arg,"find") == 0) {
-			find = val;
-			continue;
-		}
+			case NAMED_ARG_CASESENSITIVE : 
+				String2Bool(argument[i+1]) 
+					? arg_options |= OPTION_CASESENSITIVE 
+					: arg_options &= ~OPTION_CASESENSITIVE;
+				break;
 
-		if (strcmpi(arg,"replace") == 0) {
-			replace = val;
-			continue;
-		}
-
-		if (strcmpi(arg,"correspond") == 0) {
-			correspond = String2Bool(val);
-			continue;
-		}
-
-		if (strcmpi(arg,"caseSensitive") == 0) {
-			caseSensitive = String2Bool(val);
-			continue;
-		}
-
-		if (strcmpi(arg,"matchWord") == 0) {
-			matchWord = String2Bool(val);
-			continue;
+			case NAMED_ARG_MATCHWORD : 
+				String2Bool(argument[i+1]) 
+					? arg_options |= OPTION_MATCHWORD 
+					: arg_options &= ~OPTION_MATCHWORD;
+				break;
 		}
 	}
 
 
-	// Set vars
-	char output[2] = "";
-	int textLength = strlen(text);
-	int findLength = strlen(find);
-	int replLength = strlen(replace);
+	for (i=0; i<arg_text_length; i++) {	
+		char current = arg_text[i];
 
+		// Optional: occurrence musn't be surrounded by alphanumeric characters
+		if (arg_options & OPTION_MATCHWORD) {
+			bool left_cleared  = i==0  ||  (i>0  &&  !isalnum(arg_text[i-1])  &&  arg_text[i-1]!='_');
+			bool right_cleared = i>=arg_text_length  ||  (i<arg_text_length  &&  !isalnum(arg_text[i+1])  &&  arg_text[i+1]!='_');
 
-	// For each character in "searchIN"
-	for (i=0; i<textLength; i++) {	
-		sprintf(output, "%c", text[i]);
-
-		// If matching word - occurrence musn't be surrounded by alphanum chars
-		if (matchWord) {
-			bool LeftCleared  = false;
-			bool RightCleared = false;
-
-			// Left of character must be empty or not alfanum
-			if (i == 0) 
-				LeftCleared = true; 
-			else 
-				if (!isalnum(text[i-1])  &&  text[i-1]!='_') 
-					LeftCleared = true;
-
-			// Right of character must be empty or not alfanum
-			if (i >= textLength) 
-				RightCleared = true; 
-			else 
-				if (!isalnum(text[i+1])  &&  text[i+1]!='_') 
-					RightCleared = true;
-
-			if (!LeftCleared  ||  !RightCleared) {
-				QWrite(output, out);
+			if (!left_cleared  ||  !right_cleared) {
+				QWritef("%c", current);
 				continue;
 			}
 		}
 
+		// Search for replacement
+		for (size_t j=0; j<arg_find_length; j++)
+			if ((arg_options & OPTION_CASESENSITIVE  &&  arg_text[i]==arg_find[j])  ||  (~arg_options & OPTION_CASESENSITIVE  &&  tolower(arg_text[i])==tolower(arg_find[j])))
+				current = !arg_correspond
+					? (arg_replace_length > 0 ? arg_replace[0] : '\0')	// Default mode: replace if given third argument; otherwise remove
+					: (j < arg_replace_length ? arg_replace[j] : '\0');	// Parallel mode: find corresponding character from the third argument; otherwise remove
 
-		// Search for the current character in "find"
-		bool match = false;
-
-		for (int j=0; j<findLength; j++) {
-			if (caseSensitive  &&  text[i]==find[j]  ||  !caseSensitive  &&  tolower(text[i])==tolower(find[j])) {		
-				// Default mode
-				if (!correspond) {
-					// Replace if given third argument; otherwise remove
-					if (replLength > 0)
-						sprintf(output, "%c", replace[0]);
-					else
-						strcpy(output, "");
-
-				// Find corresponding character from the third argument; otherwise remove
-				} else {
-					if (j < replLength)
-						sprintf(output, "%c", replace[j]);
-					else
-						strcpy(output, "");
-				}
-			}
-		}
-
-		QWrite(output, out);
+		if (current != '\0')
+			QWritef("%c", current);
 	}
 }
 break;
@@ -1859,80 +1604,63 @@ break;
 
 
 
-case C_STRING_INSERT:
+case C_STRING_JOIN:
 { // Add characters in the midddle of the string
 
-	// Read arguments
-	char *text  = "";
-	char *merge = "";
-	int index   = 0;
+	char *text       = empty_string;
+	char *merge      = empty_string;
+	int text_length  = 0;
+	int merge_length = 0;
+	int position     = 0;
 
-	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_TEXT : 
+				text        = argument[i+1]; 
+				text_length = argument_length[i+1]; 
+				break;
 
-		if (pch == NULL) 
-			continue;
+			case NAMED_ARG_MERGE : 
+				merge        = argument[i+1]; 
+				merge_length = argument_length[i+1]; 
+				break;
 
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = arg + pos + 1;
-
-		if (strcmpi(arg,"text") == 0) {
-			text = val;
-			continue;
-		}
-
-		if (strcmpi(arg,"merge") == 0) {
-			merge = val;
-			continue;
-		}
-
-		if (strcmpi(arg,"position") == 0) {
-			index = atoi(val);
-			continue;
+			case NAMED_ARG_POSITION : 
+				position = atoi(argument[i+1]); 
+				break;
 		}
 	}
 
-	// Validate arguments
-	int textLength  = strlen(text);
-	int mergeLength = strlen(merge);
-
-	if (textLength == 0) {
-		QWrite(merge, out);
+	if (text_length == 0) {
+		QWrite(merge);
 		break;
 	}
 
-	if (mergeLength == 0) {
-		QWrite(text, out);
+	if (merge_length == 0) {
+		QWrite(text);
 		break;
 	}
 
+	// Check if the index is out of bounds
+	if (position < 0)
+		position += text_length;
 
-	// If index is out of bounds
-	if (index < 0)
-		index += textLength;
+	if (position < 0)
+		position = 0;
 
-	if (index < 0)
-		index = 0;
+	if (position > text_length)
+		position = text_length;
 
-	if (index > textLength)
-		index = textLength;
+	// Cut source text in half
+	char saved     = text[position];
+	text[position] = '\0';
 
+	// Output the first half and then the new text
+	QWritef("%s%s", text, merge);
 
-	// Cut text in half
-	char saved  = text[index];
-	text[index] = '\0';
-
-
-	// Output first half and new text
-	QWrite(text,  out);
-	QWrite(merge, out);
-
-
-	// Put it back together and output second half
-	text[index] = saved;
-	QWrite(text+index, out);
+	// Put it back together and then output second half of the source
+	text[position] = saved;
+	QWrite(text+position);
 }
 break;
 
@@ -1946,59 +1674,39 @@ break;
 
 
 case C_STRING_WORDPOS:
-{ // Add characters in the midddle of the string
+{ // Find where words start
 
-	// Read arguments
-	char *text = "";
+	char *arg_text         = empty_string;
+	size_t arg_text_length = 0;
 
-	for (int i=2; i<numP; i++) {
-		char *arg = stripq(par[i]);
-		char *pch = strchr(arg, ':');
-
-		if (pch == NULL) 
-			continue;
-
-		int pos   = pch - arg;
-		arg[pos]  = '\0';
-		char *val = arg + pos + 1;
-
-		if (strcmpi(arg,"text") == 0) 
-			text = val;
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_TEXT : 
+				arg_text        = argument[i+1]; 
+				arg_text_length = argument_length[i+1]; 
+				break;
+		}
 	}
 
-	// Validate arguments
-	int textSize = strlen(text);
-	if (textSize == 0) {
-		QWrite("[]", out);
-		break;
-	}
+	QWrite("[");
 
-
-	char output[128] = "";
-	int StartType = -1;
-
-	i = 0;
-	QWrite("[", out);
-
-	do {
+	for (i=0; i<arg_text_length; i++) {
 		// Current word
-		StartType = GetCharType(text[i]);
+		int initial_type = GetCharType(arg_text[i]);
 
 		// Output word position
-		if (StartType != 1) {
-			sprintf(output, "]+[%d", i);
-			QWrite(output, out);
-		}
+		if (initial_type != CHAR_TYPE_SPACE)
+			QWritef("]+[%u", i);
 
 		// Iterate until current word ends
-		while (i<textSize  &&  GetCharType(text[i])==StartType)
+		while (i<arg_text_length  &&  GetCharType(arg_text[i])==initial_type)
 			i++;
 
 		// Skip spaces
-		while (i<textSize  &&  GetCharType(text[i])==1)
+		while (i<arg_text_length  &&  GetCharType(arg_text[i])==CHAR_TYPE_SPACE)
 			i++;
-	} while (i < textSize);
+	}
 
-	QWrite("]", out);
+	QWrite("]");
 }
 break;

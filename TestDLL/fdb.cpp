@@ -17,8 +17,16 @@ You may use this source code for personal entertainment purposes only. Any comme
 const char dbprefix[] = "fwatch/mdb/";
 #define DBL 11
 #define LINE_MAX_LEN 2048
-void FWerror(int code, int secondaryCode, int CommandID, char* text1, char* text2, int num1, int num2, HANDLE out);	//v1.13 for error messages
-void QWrite(char* str, HANDLE file);							//v1.13
+void QWrite_err(int code_primary, int arg_num, ...);
+void QWrite(const char *str);							//v1.13
+enum FWATCH_ERRORS {
+	FWERROR_NONE,
+	FWERROR_ERRNO = 7,
+	FWERROR_MALLOC = 10,
+	FWERROR_PARAM_EMPTY = 107,
+	FWERROR_FILE_NOVAR = 203,
+	FWERROR_FILE_APPEND = 205
+};
 
 
 
@@ -99,12 +107,12 @@ bool fdbDelete(char* file) {
 
 
 // Get a variable from file *********************************************************************************
-char* fdbGet(char* file, char* svar, int CommandID, HANDLE out) {
+char* fdbGet(char* file, char* svar) {
 
 	//v1.13 is filename empty
 	if (strcmp(file,"")==0)
 	{
-		FWerror(107,0,CommandID,file,"",0,0,out);
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "file");
 		return "-1";
 	};
 
@@ -116,14 +124,18 @@ char* fdbGet(char* file, char* svar, int CommandID, HANDLE out) {
 		svar[x] = tolower(svar[x]);
 
 		// v1.11 Count how many '=' svar has got--------------------
-		int eqs=0;
-		for (x=0; x<strlen(svar); x++) if(svar[x]=='=') eqs++;
+		size_t eqs = 0;
+		size_t max = strlen(svar);
+		
+		for (x=0; x<max; x++) 
+			if (svar[x] == '=') 
+				eqs++;
 		//----------------------------------------------------------
 
 	f = fopen(filename, "rt");
 	if (!f)
 	{
-		FWerror(7,errno,CommandID,filename,"",0,0,out);		//v1.13 return error code
+		QWrite_err(FWERROR_ERRNO, 2, errno, filename);;		//v1.13 return error code
 		return "-1";
 	};
 
@@ -146,15 +158,19 @@ char* fdbGet(char* file, char* svar, int CommandID, HANDLE out) {
 			// v1.11 Skip additional '=' in the line-------------------------
 			// eq is the number of '=' in the variable name
 			// eq2 is the number of '=' in the current line
-			if (eqs > 0)
-			{
-				int eqs2 = 0;
-				for (x=0; x<strlen(line); x++) if(line[x]=='=') eqs2++;
+			if (eqs > 0) {
+				size_t eqs2 = 0;
+				size_t max  = strlen(line);
+
+				for (x=0; x<max; x++) 
+					if (line[x]=='=') 
+						eqs2++;
 
 				// if line contains enough '=' it could be this
 				if (eqs2 > eqs)
 					// skip all the '=' that are part of the varname
-					for (int y=0; y<eqs; y++) foo=strchr(foo+1,'=');
+					for (size_t y=0; y<eqs; y++) 
+						foo = strchr(foo+1,'=');
 			};
 			//---------------------------------------------------------------
 
@@ -173,14 +189,14 @@ char* fdbGet(char* file, char* svar, int CommandID, HANDLE out) {
 			// Is this the var we are looking for?
 			if(!strcmp(var, svar)) {
 				fclose(f);
-				FWerror(0,0,CommandID,"","",0,0,out);	//v1.13 return error code
+				QWrite_err(FWERROR_NONE, 0);	//v1.13 return error code
 				return val;
 			}
 		}
-	} while(ret != NULL);
+	} while(ret);
 	
 	fclose(f);
-	FWerror(203,0,CommandID,filename,svar,0,0,out);	//v1.13 return error code
+	QWrite_err(FWERROR_FILE_NOVAR, 2, svar, filename);
 	return "-1";
 }
 //***********************************************************************************************************
@@ -193,27 +209,31 @@ char* fdbGet(char* file, char* svar, int CommandID, HANDLE out) {
 
 
 // Put a variable to file ***********************************************************************************
-bool fdbPut(char* file, char* svar, char* val, bool append, int CommandID, HANDLE out) {
+bool fdbPut(char* file, char* svar, char* val, bool append) {
 
 	//v1.13 is filename empty
 	if (strcmp(file,"")==0)
 	{
-		FWerror(107,0,CommandID,file,"",0,0,out);
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "file");
 		return false;
 	};
 	
 	FILE *f;
 	char* buf = 0;
-	int bufsize = 0;
+	size_t bufsize = 0;
 	bool appended = false;			//v1.1
 	char *filename = getName(file);
+	size_t svar_len = strlen(svar);
 
-	for(unsigned int x=0;x < strlen(svar);x++)
+	for(unsigned int x=0; x<svar_len; x++)
 		svar[x] = tolower(svar[x]);
 
 		// v1.11 Count how many '=' svar has got--------------------
-		int eqs = 0;
-		for (x=0; x<strlen(svar); x++) if(svar[x]=='=') eqs++;
+		size_t eqs = 0;
+
+		for (x=0; x<svar_len; x++) 
+			if (svar[x] == '=') 
+				eqs++;
 		//----------------------------------------------------------
 
 	f = fopen(filename, "rb");
@@ -222,20 +242,20 @@ bool fdbPut(char* file, char* svar, char* val, bool append, int CommandID, HANDL
 
 		// Find file size, allocate buffer
 		fseek(f, 0, SEEK_END);
-		int fsize = ftell(f);
+		size_t fsize = ftell(f);
 		buf = new char[fsize+LINE_MAX_LEN+2];
 		if(!buf)
 		{
-			FWerror(10,0,CommandID,"buf","",fsize+LINE_MAX_LEN+2,0,out);		//v1.13 return error code
+			QWrite_err(FWERROR_MALLOC, 2, "buf", fsize+LINE_MAX_LEN+2);		//v1.13 return error code
 			return false;
 		};
 
-		int i = 0;
+		size_t i = 0;
 		fseek(f, 0, SEEK_SET);
 
 		char line[LINE_MAX_LEN];
 		char *ret;
-		while(ret = fgets(line, LINE_MAX_LEN ,f)) {
+		while((ret = fgets(line, LINE_MAX_LEN ,f))) {
 
 			// Get var=val from line
 			char var[LINE_MAX_LEN];
@@ -248,13 +268,17 @@ bool fdbPut(char* file, char* svar, char* val, bool append, int CommandID, HANDL
 			foo = strchr(line, '=');
 
 			// v1.11 Skip additional '=' in the line-------------------------
-			if (eqs > 0)
-			{
-				int eqs2 = 0;
-				for (x=0; x<strlen(line); x++) if(line[x]=='=') eqs2++;
+			if (eqs > 0) {
+				size_t eqs2 = 0;
+				size_t max  = strlen(line);
+
+				for (x=0; x<max; x++) 
+					if (line[x] == '=') 
+						eqs2++;
 
 				if (eqs2 > eqs)
-					for (int y=0; y<eqs; y++) foo=strchr(foo+1,'=');
+					for (size_t y=0; y<eqs; y++) 
+						foo = strchr(foo+1,'=');
 			};
 			//---------------------------------------------------------------
 
@@ -271,8 +295,8 @@ bool fdbPut(char* file, char* svar, char* val, bool append, int CommandID, HANDL
 					} else {
 						// Append to current value
 						appended = true;			//v1.1
-						int ll = strlen(line);
-						int vl = strlen(val);
+						size_t ll = strlen(line);
+						size_t vl = strlen(val);
 						if(ll+vl+1 < LINE_MAX_LEN) {
 							char *nval = val;
 							
@@ -298,13 +322,13 @@ bool fdbPut(char* file, char* svar, char* val, bool append, int CommandID, HANDL
 							// Too long line, cant append anymore
 							fclose(f);
 							delete[] buf;
-							FWerror(205,0,CommandID,filename,svar,ll+vl+1,0,out);		//v1.13 return error code
+							QWrite_err(FWERROR_FILE_APPEND, 3, svar, ll+vl+1, filename);		//v1.13 return error code
 							return false;
 						}
 					}
 				}
 			}
-			int l = strlen(line);
+			size_t l = strlen(line);
 			memcpy(buf+bufsize, line, l+1);
 			bufsize += l;
 		};
@@ -314,7 +338,7 @@ bool fdbPut(char* file, char* svar, char* val, bool append, int CommandID, HANDL
 	// Rewrite the file
 	f = fopen(filename, "wb");
 	if(!f) {
-		FWerror(7,errno,CommandID,filename,"",0,0,out);		//v1.13 return error code
+		QWrite_err(FWERROR_ERRNO, 2, errno, filename);		//v1.13 return error code
 		delete[] buf;
 		return false;
 	}
@@ -326,7 +350,7 @@ bool fdbPut(char* file, char* svar, char* val, bool append, int CommandID, HANDL
 
 		fwrite(buf, 1, strlen(buf), f);
 		if (ferror(f)) 
-			FWerror(7,errno,CommandID,filename,"",0,0,out);		//v1.13 return error code
+			QWrite_err(FWERROR_ERRNO, 2, errno, filename);		//v1.13 return error code
 	}
 
 	if(!append || append && !appended) {		//v1.1 if awrite and var doesn't exist then add it
@@ -334,14 +358,14 @@ bool fdbPut(char* file, char* svar, char* val, bool append, int CommandID, HANDL
 		char *foo = new char[strlen(svar) + strlen(val) + 3];
 		if(!foo)  {
 			delete[] buf;
-			FWerror(10,0,CommandID,"foo","",strlen(svar)+strlen(val)+3,0,out);		//v1.13 return error code
+			QWrite_err(FWERROR_MALLOC, 2, "foo", strlen(svar)+strlen(val)+3);		//v1.13 return error code
 			return false;
 		}
 
 		sprintf(foo, "%s=%s\n", svar, val);
 		fwrite(foo, 1, strlen(foo), f);
 		if (ferror(f)) 
-			FWerror(7,errno,CommandID,filename,"",0,0,out);		//v1.13 return error code
+			QWrite_err(FWERROR_ERRNO, 2, errno, filename);		//v1.13 return error code
 		delete[] foo;
 	}
 
@@ -349,7 +373,7 @@ bool fdbPut(char* file, char* svar, char* val, bool append, int CommandID, HANDL
 	if(buf)
 		delete[] buf;
 
-	FWerror(0,0,CommandID,"","",0,0,out);
+	QWrite_err(FWERROR_NONE, 0);
 	return true;
 }
 //***********************************************************************************************************
@@ -681,11 +705,11 @@ bool fdbRemove(char* file, char* svar) {
 
 
 //v1.1 Read variable from any file **************************************************************************
-void fdbGet2(char* file, char* svar, int CommandID, HANDLE out)
+void fdbGet2(char* file, char* svar)
 {
 	if (strcmp(file,"")==0)
 	{
-		FWerror(107,0,CommandID,file,"",0,0,out);
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "file");
 		return;
 	};
 	
@@ -698,8 +722,8 @@ void fdbGet2(char* file, char* svar, int CommandID, HANDLE out)
 	f = fopen(file, "rt");
 	if (!f)
 	{
-		FWerror(7,errno,CommandID,file,"",0,0,out);
-		QWrite("-1", out);
+		QWrite_err(FWERROR_ERRNO, 2, errno, file);
+		QWrite("-1");
 		return;
 	};
 
@@ -741,16 +765,16 @@ void fdbGet2(char* file, char* svar, int CommandID, HANDLE out)
 			// Is this the var we are looking for?
 			if(!strcmp(var, svar)) {
 				fclose(f);
-				FWerror(0,0,CommandID,"","",0,0,out);
-				QWrite(val, out);
+				QWrite_err(FWERROR_NONE, 0);
+				QWrite(val);
 				return;
 			}
 		}
-	} while(ret != NULL);
+	} while(ret);
 	
 	fclose(f);
-	FWerror(203,0,CommandID,file,svar,0,0,out);
-	QWrite("-1", out);
+	QWrite_err(FWERROR_FILE_NOVAR, 2, svar, file);
+	QWrite("-1");
 	return;
 }
 //***********************************************************************************************************

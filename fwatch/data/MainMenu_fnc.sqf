@@ -488,34 +488,6 @@ FUNCTION_GET_EXECUTE_PARAMS = {
 
 
 
-FUNCTION_FORMAT_ARRAY = {
-	private ["_i", "_string", "_item"];
-
-	_i      = -1;
-	_string = "[";
-
-	while "_i=_i+1; _i < (count _this)" do {
-		_item   = _this select _i;
-		_string = _string + "]+[";	
-
-		// Check if scalar
-		if (_item in [_item]) then {
-			// Check if string
-			if (_item in [Format["%1",_item]]) then {
-				_string = _string + "{" + _item + "}";
-			} else {
-				_string = _string + Format ["%1",_item];
-			}
-		} else {
-			_string = _string + (_item call FUNCTION_FORMAT_ARRAY);
-		}
-	};
-
-	_string + "]"
-};
-
-
-
 FUNCTION_WRITE_INSTALL = {
 	private ["_ids", "_names"];
 	_ids   = "-installid=";

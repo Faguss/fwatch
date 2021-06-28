@@ -4,26 +4,29 @@
 #include "testdll.h"
 #include "..\apihijack.h"
 #include <stdio.h>
+#include <tlhelp32.h>	// Traversing process modules
 
 GLOBAL_VARIABLES_TESTDLL global = {
 	0,   // exe_index
 	0,   // exe_address
+	0,	 // exe_address_scroll
+	0,   // exe_address_ifc22
 	0,   // is_server
 
 	{0}, // RESTORE_MEM
 	{0}, // RESTORE_BYT
 	0,   // nomap
-	0,   // CWA
-	0,   // DedicatedServer
 	0,   // ErrorLog_Enabled
 	0,   // ErrorLog_Started
 
-	"",  // com_ptr
-	"",  // mission_path
-	"",  // mission_path_previous
+	0,   // option_error_output
+
+	NULL,// mission_path
+	NULL,// mission_path_previous
 	0,   // mission_path_savetime
 	0,   // pid
 	0,	 // external_program_id
+	0,   // lastWget
 	
 	0,   // extCamOffset
 	{0}, // RESTORE_INT
@@ -65,7 +68,7 @@ SDLLHook D3DHook =
 };
 
 // Output debug string
-void DebugMessage(char *first, ...)
+void DebugMessage(const char *first, ...)
 {
 	va_list     argptr;
 	char        Message[512];
@@ -90,7 +93,7 @@ HANDLE WINAPI NewCreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD  dw
 		if (!strncmpi(".html", lpFileName+len-5, 5)) {
 			char *pch = strstr(lpFileName,"briefing.");
 
-			if (pch != NULL)
+			if (pch)
 				createPathSqf(lpFileName, len, pch - lpFileName);
 		}
 
@@ -109,12 +112,12 @@ HANDLE WINAPI NewCreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD  dw
 		if(dwFlagsAndAttributes == 128) {
 			// Script is being opened for execution
 
-			char *command = (char*)lpFileName + (!strncmp(":", lpFileName, 1) ? 1 : 9);
+			char *com = (char*)lpFileName + (!strncmp(":", lpFileName, 1) ? 1 : 9);
 
 			//DebugMessage("fwatch: command: %s", command);
 
 			// Call HandleCommand, and return returned file handle to OFP
-			return HandleCommand(command, global.nomap);
+			return HandleCommand(com, global.nomap);
 		} else {
 			// Just a check if the file is there, return something for OFP to read
 			HANDLE rp, wp;
@@ -167,11 +170,47 @@ BOOL APIENTRY DllMain( HINSTANCE hModule, DWORD fdwReason, LPVOID lpReserved )
 		// Check if it's a valid executable
 		for (int i=0; i<global_exe_num; i++) {
 			if (stricmp(exe_name, global_exe_name[i]) == 0) {
-				global.CWA             = global_exe_version[i]==VER_199 || global_exe_version[i]==VER_201;
-				global.exe_index       = i;
-				global.is_server       = strstr(global_exe_name[i],"_server.exe") != NULL;
-				global.DedicatedServer = global.is_server;
-				global.pid             = GetCurrentProcessId();
+				global.exe_index = i;
+				global.is_server = strstr(global_exe_name[i],"_server.exe") != NULL;
+				global.pid       = GetCurrentProcessId();
+				global.outf      = NULL;
+
+				// Find addresses of modules
+				HANDLE phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, global.pid);
+
+				if (phandle) {
+					HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, global.pid);
+
+					if (hSnap != INVALID_HANDLE_VALUE) {
+						MODULEENTRY32 xModule;
+						memset(&xModule, 0, sizeof(xModule));
+						xModule.dwSize = sizeof(xModule);
+
+						if (Module32First(hSnap, &xModule)) {
+							global.exe_address = (DWORD)xModule.modBaseAddr;
+							xModule.dwSize     = sizeof(MODULEENTRY32);
+
+							do {
+								if (lstrcmpi(xModule.szModule, (LPCTSTR)"ifc22.dll") == 0)
+									global.exe_address_ifc22 = (DWORD)xModule.modBaseAddr;
+
+								if (lstrcmpi(xModule.szModule, (LPCTSTR)"dinput8.dll") == 0) {
+									global.exe_address_scroll = (DWORD)xModule.modBaseAddr;
+									
+									// Distance to scroll depends on module size
+									if (xModule.modBaseSize == 233472)
+										global.exe_address_scroll += 0x2D848;	// old computers
+									else
+										global.exe_address_scroll += 0x2C1C8;	// new computers
+								}
+							} while (Module32Next(hSnap, &xModule));
+						}
+						
+						CloseHandle(hSnap);
+					}
+
+					CloseHandle(phandle);
+				}
 
 				HookAPICalls(&D3DHook);
 

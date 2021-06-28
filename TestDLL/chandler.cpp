@@ -12,6 +12,8 @@ You may use this source code for personal entertainment purposes only. Any comme
 #include <stdio.h>
 #include "testdll.h"
 
+extern GLOBAL_VARIABLES_TESTDLL global;
+
 void __cdecl watchFile(void *p);
 
 // This function is called when OFP tries to access a filename starting with "scripts\:"
@@ -38,6 +40,8 @@ HANDLE HandleCommand(char *command, bool nomap) {
 
 			// Close write pipe, return read pipe handle
 			CloseHandle(wp);
+			if (global.outf) fclose(global.outf);
+			global.outf = NULL;
 			return rp;
 		}
 	} else {

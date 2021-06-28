@@ -8,7 +8,7 @@
 #include <process.h>
 #include <stdio.h>
 
-static enum RESTORE_MEM_COMMANDS
+enum RESTORE_MEM_COMMANDS
 {
 	RESTORE_BRIGHTNESS,		//0
 	RESTORE_OBJECT_SHADOWS,	//1
@@ -34,12 +34,12 @@ static enum RESTORE_MEM_COMMANDS
 	RESTORE_UIBOTTOMRIGHTY,	//52
 	RESTORE_HUD				//53
 };
-static enum RESTORE_MEM_INTEGERS
+enum RESTORE_MEM_INTEGERS
 {
 	INT_MAX_OBJECTS,	//0
 	INT_MAX_LIGHTS		//1
 };
-static enum RESTORE_MEM_FLOATS
+enum RESTORE_MEM_FLOATS
 {
 	FLOAT_BRIGHTNESS,		//0
 	FLOAT_BULLETS,			//1
@@ -59,7 +59,7 @@ static enum RESTORE_MEM_FLOATS
 	FLOAT_UIBOTTOMRIGHTX,	//24
 	FLOAT_UIBOTTOMRIGHTY	//25
 };
-static enum RESTORE_MEM_BYTES
+enum RESTORE_MEM_BYTES
 {
 	BYTE_OBJECT_SHADOWS,	//0
 	BYTE_VEHICLE_SHADOWS,	//1
@@ -67,18 +67,21 @@ static enum RESTORE_MEM_BYTES
 	BYTE_CADET,				//3
 	BYTE_VETERAN = 15		//15
 };
-static enum GAME_VERSION 
+enum GAME_VERSION 
 {
 	VER_UNKNOWN,
 	VER_196,
 	VER_199,
-	VER_201
+	VER_201,
+	VER_196_SERVER,
+	VER_199_SERVER,
+	VER_201_SERVER
 };
 
 // Variables for UI position
 //ofp: [[0x79F8D0] + 0x8] + 
 //cwa: [[0x78E9C8] + 0x8] + 
-static enum UI_ELEMENTS
+enum UI_ELEMENTS
 {
 	ACTION_X,		// 0x368
 	ACTION_Y,		// 0x36C
@@ -284,29 +287,35 @@ static const int hud_offset_num = sizeof(hud_offset) / sizeof(hud_offset[0]);
 // Global variables used in TestDLL
 struct GLOBAL_VARIABLES_TESTDLL {
 	int exe_index;
-	int exe_address;
+	DWORD exe_address;
+	DWORD exe_address_scroll;
+	DWORD exe_address_ifc22;
 	bool is_server;
 
 	bool restore_memory[105];
 	bool restore_byte[27];
 	bool nomap;
-	bool CWA;
-	bool DedicatedServer;
 	bool ErrorLog_Enabled;
 	bool ErrorLog_Started;
 
-	char *com_ptr;
+	int option_error_output;
+
 	char mission_path[256];
 	char mission_path_previous[256];
-	int mission_path_savetime;
+	DWORD mission_path_savetime;
 	DWORD pid;
 	int external_program_id;
+	DWORD lastWget;
 
 	int extCamOffset;
 	int restore_int[2];
 	float restore_float[26];
 	int restore_hud_int[ARRAY_SIZE];
 	float restore_hud_float[ARRAY_SIZE];
+
+	HANDLE out;
+	FILE *outf;
+	unsigned int command_hash;
 };
 
 static const char global_exe_name[][32] = {
@@ -352,22 +361,21 @@ static const int global_exe_version[] = {
 	VER_196,
 	VER_196,
 	VER_196,
-	VER_201,
-	VER_199,
-	VER_196
+	VER_201_SERVER,
+	VER_199_SERVER,
+	VER_196_SERVER
 };
 
 static const int global_exe_num    = sizeof(global_exe_version) / sizeof(global_exe_version[0]);
 static const int global_window_num = sizeof(global_window_name) / sizeof(global_window_name[0]);
 
-static const int String_init_len = 512;
+static const int String_init_capacity = 1024;
 
 struct String {
-	char *pointer;
-	char stack[String_init_len];
-	int current_length;
-	int maximal_length;
-	bool heap;
+	char *text;
+	size_t length;
+	size_t capacity;
+	char stack[String_init_capacity];
 };
 
 struct WatchProgramInfo {
@@ -376,6 +384,215 @@ struct WatchProgramInfo {
 	DWORD exit_code;
 	DWORD launch_error;
 };
+
+struct BinarySearchResult {
+	size_t index;
+	bool found;
+};
+
+struct FileSize {
+	double bytes;
+	double kilobytes;
+	double megabytes;
+};
+
+struct StringPos {
+	size_t start;
+	size_t end;
+};
+
+const unsigned int SQM_CLASSPATH_CAPACITY = 8;
+
+struct SQM_ParseState {
+	// For parsing
+	size_t i;               // position in the buffer
+	size_t word_start;      // starting position of the current word
+	int comment;            // if we're currently in a comment
+	int expect;             // what kind of string we're expecting next
+	int class_level;        // inside how many classes
+	int array_level;        // inside how many brackets
+	int parenthesis_level;  // inside how many parentheses
+	bool word_started;      // indicates if word_start has been used
+	bool first_char;        // have we passed first character in the line
+	bool is_array;          // is current property an array
+	bool in_quote;          // are we passing through a string value
+	bool macro;             // is current word a  preprocessor directive
+	bool is_inherit;        // is word an inhheritance class name
+	bool purge_comment;     // should the current comment be removed from the text
+	char separator;         // character to expect that will end the current word
+	char empty_string[1];   // default value for string pointers
+
+	// Output
+	char *property;     // Last property
+	size_t property_start;
+	size_t property_end;
+	size_t property_length;
+	char *value;       // Last value
+	size_t value_start;
+	size_t value_end;
+	size_t value_length;
+	char *class_name;  // Last class
+	size_t class_name_length;
+	size_t class_start;
+	size_t class_end;
+	size_t class_length;
+	size_t class_name_start; //including the word class itself
+	size_t class_name_full_end; // including the inherit
+	char *inherit;  // Last class inherit name
+	size_t inherit_length;
+	size_t scope_end;  // End of current class
+};
+
+enum SQM_EXPECT {
+	SQM_PROPERTY,
+	SQM_EQUALITY,
+	SQM_VALUE,
+	SQM_SEMICOLON,
+	SQM_CLASS_NAME,
+	SQM_CLASS_INHERIT,
+	SQM_CLASS_COLON,
+	SQM_CLASS_BRACKET,
+	SQM_ENUM_BRACKET,
+	SQM_ENUM_CONTENT,
+	SQM_EXEC_BRACKET,
+	SQM_EXEC_CONTENT,
+	SQM_MACRO_CONTENT
+};
+
+enum SQM_COMMENT {
+	SQM_NONE,
+	SQM_LINE,
+	SQM_BLOCK
+};
+
+enum SQM_OUTPUT {
+	SQM_OUTPUT_END_OF_SCOPE,
+	SQM_OUTPUT_PROPERTY,
+	SQM_OUTPUT_CLASS
+};
+
+enum SQM_ACTION {
+	SQM_ACTION_GET_NEXT_ITEM,
+	SQM_ACTION_FIND_PROPERTY,
+	SQM_ACTION_FIND_CLASS,
+	SQM_ACTION_FIND_CLASS_END,
+	SQM_ACTION_FIND_CLASS_END_CONVERT
+};
+
+#define FNV_PRIME 16777619
+#define FNV_BASIS 2166136261
+
+enum OPTIONS_VERIFYPATH {
+	OPTION_RESTRICT_TO_MISSION_DIR = 0x1,
+	OPTION_ALLOW_GAME_ROOT_DIR     = 0x2,
+	OPTION_SUPPRESS_ERROR          = 0x4,
+	OPTION_SUPPRESS_CONVERSION     = 0x8,
+
+	PATH_ILLEGAL      = 0,
+	PATH_LEGAL        = 0x1,
+	PATH_DOWNLOAD_DIR = 0x2
+};
+
+enum OPTIONS_STRSTR2 {
+	OPTION_NONE          = 0,
+	OPTION_CASESENSITIVE = 0x1,
+	OPTION_MATCHWORD     = 0x2
+};
+
+enum OPTIONS_GETCHARTYPE {
+	CHAR_TYPE_NEW_LINE,
+	CHAR_TYPE_SPACE,
+	CHAR_TYPE_LETTER,
+	CHAR_TYPE_MISC
+};
+
+enum OPTIONS_ESCSEQUENCES {
+	OPTION_TAB,
+	OPTION_LF,
+	OPTION_CRLF
+};
+
+enum OPTIONS_FNVHASH {
+	OPTION_LOWERCASE = 1
+};
+
+enum OPTIONS_SHIFT_BUFFER_CHUNK {
+	OPTION_LEFT,
+	OPTION_RIGHT
+};
+
+enum OPTIONS_QWRITE_ERR {
+	OPTION_ERROR_ARRAY_STARTED  = 0x1,
+	OPTION_ERROR_ARRAY_LOCAL    = 0x2,
+	OPTION_ERROR_ARRAY_CLOSE    = 0x4,
+	OPTION_ERROR_ARRAY_SUPPRESS = 0x8
+};
+
+enum FWATCH_ERRORS {
+	FWERROR_NONE,
+	FWERROR_UNKNOWN_COMMAND,
+	FWERROR_NO_PROCESS,
+	FWERROR_GAME_WINDOW_NOT_IN_FRONT,
+	FWERROR_COMMAND_ILLEGAL_ON_SERVER,
+	FWERROR_WINAPI,
+	FWERROR_SHFILEOP,
+	FWERROR_ERRNO,
+
+	FWERROR_MALLOC = 10,
+	FWERROR_REALLOC,
+	FWERROR_STR_REPLACE,
+
+	FWERROR_CLIP_OPEN = 20,
+	FWERROR_CLIP_FORMAT,
+	FWERROR_CLIP_CLEAR,
+	FWERROR_CLIP_COPY,
+	FWERROR_CLIP_EMPTY,
+	FWERROR_CLIP_EFFECT,
+	FWERROR_CLIP_LOCK,
+
+	FWERROR_PARAM_FEW = 100,
+	FWERROR_PARAM_LTZERO,
+	FWERROR_PARAM_ZERO,
+	FWERROR_PARAM_ONE,
+	FWERROR_PARAM_RANGE,
+	FWERROR_PARAM_PATH_LEAVING,
+	FWERROR_PARAM_ACTION,
+	FWERROR_PARAM_EMPTY,
+	FWERROR_PARAM_PATH_RESTRICTED,
+
+	FWERROR_FILE_EMPTY = 200,
+	FWERROR_FILE_NOTDIR,
+	FWERROR_FILE_MOVETOTMP,
+	FWERROR_FILE_NOVAR,
+	FWERROR_FILE_NOLINE,
+	FWERROR_FILE_APPEND,
+	FWERROR_FILE_LINEREPLACE,
+	FWERROR_FILE_EXISTS,
+	FWERROR_FILE_DIREXISTS,
+	FWERROR_FILE_READ,
+	FWERROR_FILE_WRITE,
+
+	FWERROR_CLASS_PARENT = 250,
+	FWERROR_CLASS_EXISTS,
+	FWERROR_CLASS_NOCLASS,
+	FWERROR_CLASS_NOVAR,
+	FWERROR_CLASS_NOITEM,
+	FWERROR_CLASS_NOTARRAY,
+	FWERROR_CLASS_SYNTAX,
+
+	FWERROR_DB_SIGNATURE = 280,
+	FWERROR_DB_VERSION,
+	FWERROR_DB_SMALL,
+	FWERROR_DB_COLLISION,
+	FWERROR_DB_HASHORDER,
+	FWERROR_DB_PTRORDER,
+	FWERROR_DB_PTRSMALL,
+	FWERROR_DB_PTRBIG,
+	FWERROR_DB_PTRFIRST,
+	FWERROR_DB_CONSISTENCY
+};
+
+
 
 
 
@@ -390,7 +607,7 @@ TESTDLL_API void InstallHook();
 TESTDLL_API void RemoveHook();
 
 // for dllmain.cpp
-void DebugMessage(char *first, ...); 
+void DebugMessage(const char *first, ...); 
 //extern bool nomap;
 
 #define WH_KEYBOARD_LL 13
@@ -408,9 +625,9 @@ typedef struct {
 	char	filename[512];
 } FULLHANDLE;
 
-void ParseScript(char* com, FULLHANDLE file);
-char *formatKey(int c);
-inline char* getBool(short b);
+void ParseScript(char *com, FULLHANDLE file);
+void QWrite_formatKey(int c);
+const char* getBool(short b);
 bool checkActiveWindow(void);
 
 
@@ -418,56 +635,52 @@ bool checkActiveWindow(void);
 
 
 // for fdb.cpp
-char* fdbGet(char* file, char* var, int CommandID, HANDLE out);							//v1.13 additional arguments
-bool  fdbPut(char* file, char* svar, char* val, bool append, int CommandID, HANDLE out);//v1.13 additional arguments
+char* fdbGet(char* file, char* var);							//v1.13 additional arguments
+bool  fdbPut(char* file, char* svar, char* val, bool append);//v1.13 additional arguments
 bool  fdbPutQ(char* file, char* svar, char* val);
 bool  fdbExists(char* file);
 char* fdbVars(char* file);
 char* fdbReadvars(char* file);
 bool  fdbRemove(char* file, char* var);
 bool  fdbDelete(char* file);
-void  fdbGet2(char* file, char* var, int CommandID, HANDLE out);							//v1.1
+void  fdbGet2(char* file, char* var);							//v1.1
 
 
 
+void QWrite(const char *str);
+char* stripq(char *str);
 
 // New functions
 //1.11
-DWORD findProcess(const char* exe_name);
+DWORD findProcess(const char *exe_name);
 
 //1.12
-char* str_replace(const char *strbuf, const char *strold, const char *strnew, int matchWord, int caseSens);
+char* str_replace(const char *strbuf, const char *strold, const char *strnew, int options);
 
 //1.13
-char *strstr2(const char *arg1, const char *arg2, int matchWord, int caseSens);
+char* strstr2(const char *arg1, size_t arg1_len, const char *arg2, size_t arg2_len, int options);
 int strncmpi(const char *ps1, const char *ps2, int n);
-void getAttributes(WIN32_FIND_DATA &fd, char *data, int systime);
-bool trashFile(char* path, int CommandID, HANDLE out, int ErrorBehaviour);
+bool trashFile(char *path, int len, int error_behaviour);
 double rad2deg(double num);
 double deg2rad(double num);
-void FormatTime(SYSTEMTIME &st, int systime, char *data);
-void FormatFileTime(FILETIME &ft, int systime, char *data);
-bool CopyToClip(char *txt, bool append, int CommandID, HANDLE out);
+void SystemTimeToString(SYSTEMTIME &st, bool systime, char *str);
+void FileTimeToString(FILETIME &ft, bool systime, char *str);
+bool CopyToClip(char *input, int input_length, bool append);
 char* Trim(char *txt);
-void FWerror(int code, int secondaryCode, int CommandID, char* text1, char* text2, int num1, int num2, HANDLE out);
+void FWerror(int code, int secondaryCode, char *text1, char *text2, int num1, int num2);
 char* EscSequences(char *txt, int mode, int quantity);
 
 //1.14
-void PrintFileVersion( TCHAR *pszFilePath );
-void PrintDoubleQ(char *txt, HANDLE out);
-void SplitStringIntoParts(char *txt, int cut, bool addComma, HANDLE out);
-void ReadJoystick(char *data, int customJoyID);
+void QWriteDoubleQ(char *txt);
+void QWrite_Joystick(int customJoyID);
 void createPathSqf(LPCSTR lpFileName, int len, int offset);
 
 //1.15
-bool IsWhiteSpace(char *txt);
 bool String2Bool(char *txt);
-char* strtok3(char* str, int CommandID);
-void GetFirstTwoWords(char* text, char* buffer, int maxSize);
 
 // Find integer in an integer array
-bool IsNumberInArray(int number, const int* array, int array_size);
-void CorrectStringPos(int *start, int *end, int length, bool endSet, bool lengthSet, int textSize);
+bool IsNumberInArray(int number, const int *array, int array_size);
+StringPos ConvertStringPos(char *range_start, char *range_end, char *range_length, size_t text_length);
 int GetCharType(char c);
 void RestoreMemValues(bool isMissionEditor);
 
@@ -482,14 +695,14 @@ int strnatcmp(nat_char const *a, nat_char const *b);
 int strnatcasecmp(nat_char const *a, nat_char const *b);
 
 void String_init(String &str);
-int String_allocate(String &str, int new_maximal_length);
-int String_append_len(String &str, char *text, int text_length);
-int String_append(String &str, char *text);
-int String_append_quotes(String &str, char *left, char *text, char *right);
+int String_allocate(String &str, size_t new_maximal_length);
+int String_append_len(String &str, const char *text, size_t text_length);
+int String_append(String &str, const char *text);
+int String_append_quotes(String &str, const char *left, char *text, const char *right);
 void String_end(String &str);
 int String_readfile(String &str, char *path);
-int VerifyPath(char **ptr_filename, String &str, int mode, int CommandID, HANDLE out);
-unsigned int fnv_hash (unsigned int hash, char* text, int text_length);
+int VerifyPath(char **ptr_filename, String &str, int mode);
+unsigned int fnv1a_hash (unsigned int hash, char *text, int text_length, bool lowercase);
 void PurgeComments(char *text, int string_start, int string_end);
 char* Output_Nested_Array(char *temp, int level, char *output_strings_name, int j, int *subclass_count);
 int DeleteWrapper(char *refcstrRootDirectory);
@@ -497,5 +710,14 @@ WatchProgramInfo db_pid_load(int db_id_wanted);
 void db_pid_save(WatchProgramInfo input);
 void NotifyFwatchAboutErrorLog();
 void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle, bool notify);
-void shift_text_in_buffer(char *buffer, int buffer_size, int shift_origin, int shift_size);
-void printbuf(FILE **fd, char *buffer, int size);
+void shift_buffer_chunk(char *buffer, size_t chunk_start, size_t chunk_end, size_t shift_distance, bool rightwards);
+void QWritef(const char *format, ...);
+void QWritel(const char *str, unsigned int length);
+int binary_search(unsigned item_to_find, unsigned int *array, int low, int high);
+BinarySearchResult binary_search_str(char *buffer, size_t array_size, unsigned int value_to_find, size_t low, size_t high);
+void QWrite_err(int code_primary, int arg_num, ...);
+FileSize DivideBytes(double bytes);
+int String_append_format_debug(String &str, const char *format, ...);
+void SQM_Init(SQM_ParseState &input);
+int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_type, char *to_find, size_t to_find_length);
+int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, String &source, SQM_ParseState &source_state);

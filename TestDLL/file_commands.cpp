@@ -4,16 +4,16 @@
 
 case C_FILE_EXISTS:
 { // Return 1 if name exists, else 0.
-	if(numP < 3) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 3) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *file = stripq(par[2]);
+	char *file = stripq(argument[2]);
 	if(fdbExists(file))
-		QWrite("1", out);
+		QWrite("1");
 	else
-		QWrite("-1", out);
+		QWrite("-1");
 }
 break;
 
@@ -24,14 +24,15 @@ break;
 
 case C_FILE_READ:
 { // Read val from file fwatcher/mdb/name
-	if(numP < 4) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 4) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *file = stripq(par[2]);
-	char *var = stripq(par[3]);
-	QWrite(fdbGet(file, var, CommandID, out), out);
+	global.option_error_output |= OPTION_ERROR_ARRAY_LOCAL;
+	char *file = stripq(argument[2]);
+	char *var = stripq(argument[3]);
+	QWrite(fdbGet(file, var));
 }
 break;
 
@@ -42,18 +43,19 @@ break;
 
 case C_FILE_WRITE:
 { // Write var=val to file fwatcher/mdb/name
-	if(numP < 5) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 5) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *file = stripq(par[2]);
-	char *var = stripq(par[3]);
-	char *val = par[4];
-	if(fdbPut(file, var, val, false, CommandID, out))			//v1.13 additional arguments
-		QWrite("1", out);
+	global.option_error_output |= OPTION_ERROR_ARRAY_LOCAL;
+	char *file = stripq(argument[2]);
+	char *var = stripq(argument[3]);
+	char *val = argument[4];
+	if(fdbPut(file, var, val, false))			//v1.13 additional arguments
+		QWrite("1");
 	else
-		QWrite("-1", out);
+		QWrite("-1");
 }
 break;
 
@@ -64,18 +66,18 @@ break;
 
 case C_FILE_QWRITE:
 { // Write var=val to file fwatcher/mdb/name without checking if it already exists
-	if(numP < 5) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 5) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *file = stripq(par[2]);
-	char *var = stripq(par[3]);
-	char *val = par[4];
+	char *file = stripq(argument[2]);
+	char *var = stripq(argument[3]);
+	char *val = argument[4];
 	if(fdbPutQ(file, var, val))
-		QWrite("1", out);
+		QWrite("1");
 	else
-		QWrite("-1", out);
+		QWrite("-1");
 }
 break;
 
@@ -86,18 +88,19 @@ break;
 
 case C_FILE_AWRITE:
 { // Append val to var in file fwatcher/mdb/name
-	if(numP < 5) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 5) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *file = stripq(par[2]);
-	char *var = stripq(par[3]);
-	char *val = par[4];
-	if(fdbPut(file, var, val, true, CommandID, out))			//v1.13 additional arguments
-		QWrite("1", out);
+	global.option_error_output |= OPTION_ERROR_ARRAY_LOCAL;
+	char *file = stripq(argument[2]);
+	char *var = stripq(argument[3]);
+	char *val = argument[4];
+	if(fdbPut(file, var, val, true))			//v1.13 additional arguments
+		QWrite("1");
 	else
-		QWrite("-1", out);
+		QWrite("-1");
 }
 break;
 
@@ -108,14 +111,14 @@ break;
 
 case C_FILE_VARS:
 { // Return array of vars in file fwatcher/mdb/name
-	if(numP < 3) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 3) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *file = stripq(par[2]);
+	char *file = stripq(argument[2]);
 	char *res = fdbVars(file);
-	QWrite(res, out);
+	QWrite(res);
 	delete[] res;
 }
 break;
@@ -127,14 +130,14 @@ break;
 
 case C_FILE_READVARS:
 { // Return all vars from file fwatcher/mdb/name
-	if(numP < 3) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 3) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *file = stripq(par[2]);
+	char *file = stripq(argument[2]);
 	char *res = fdbReadvars(file);
-	QWrite(res, out);
+	QWrite(res);
 	delete[] res;
 }
 break;
@@ -146,17 +149,17 @@ break;
 
 case C_FILE_REMOVE:
 { // Remove a val from file fwatcher/mdb/name
-	if(numP < 4) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 4) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *file = stripq(par[2]);
-	char *var = stripq(par[3]);
+	char *file = stripq(argument[2]);
+	char *var = stripq(argument[3]);
 	if(fdbRemove(file, var))
-		QWrite("1", out);
+		QWrite("1");
 	else
-		QWrite("-1", out);
+		QWrite("-1");
 }
 break;
 
@@ -167,16 +170,16 @@ break;
 
 case C_FILE_DELETE:
 { // Remove file fwatcher/mdb/name
-	if(numP < 3) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 3) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	char *file = stripq(par[2]);
+	char *file = stripq(argument[2]);
 	if(fdbDelete(file))
-		QWrite("1", out);
+		QWrite("1");
 	else
-		QWrite("-1", out);
+		QWrite("-1");
 }
 break;
 
@@ -189,14 +192,14 @@ case C_FILE_WGET:
 { // Get a http/ftp file with wget
   // Execute wget, outputing to a named pipe
   // Not very clean but it works...
-	if(numP < 3) {
-		QWrite("ERROR: Not enough parameters", out);
+	if(argument_num < 3) {
+		QWrite("ERROR: Not enough parameters");
 		break;
 	}
 
-	if((GetTickCount() - lastWget) < WGET_MINWAIT) {
+	if((GetTickCount() - global.lastWget) < WGET_MINWAIT) {
 		// Return -1 if user is calling wget too often
-		QWrite("-1", out);
+		QWrite("-1");
 		break;
 	}
 
@@ -209,8 +212,8 @@ case C_FILE_WGET:
 		pipe = CreateNamedPipe(file.filename, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
 								PIPE_UNLIMITED_INSTANCES, PIPEBUFSIZE, PIPEBUFSIZE, NMPWAIT_USE_DEFAULT_WAIT, NULL);
 
-	char *cline = new char[256+strlen(file.filename)+strlen(par[2])];
-	sprintf(cline, "-q --tries=1 --output-document=\"%s\" --timeout=3 --user-agent=fwatch/%.2f %s", file.filename, SCRIPT_VERSION, par[2]);
+	char *cline = new char[256+strlen(file.filename)+argument_length[2]];
+	sprintf(cline, "-q --tries=1 --output-document=\"%s\" --timeout=3 --user-agent=fwatch/%.2f %s", file.filename, SCRIPT_VERSION, argument[2]);
 
 	// Win23 API bloat
 	STARTUPINFO si;
@@ -224,7 +227,7 @@ case C_FILE_WGET:
 	// Execute wget
 	CreateProcess("fwatch/data/wget.exe", cline, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi);
 	delete[] cline;
-	lastWget = GetTickCount();
+	global.lastWget = GetTickCount();
 				
 	if(global.nomap) {
 		// Wait for wget to do its thing
@@ -242,12 +245,12 @@ case C_FILE_WGET:
 			ReadFile(pipe, buf, PIPEBUFSIZE, &foo, NULL);
 			//buf[foo] = 0x00;
 			if(foo)
-				WriteFile(out, buf, foo, &foo2, NULL);
+				WriteFile(global.out, buf, foo, &foo2, NULL);
 
 			// Wait until the process has exited and no more data in pipe
 		} while(st == STILL_ACTIVE || foo);
 
-		WriteFile(out, "\0", 1, &foo2, NULL);
+		WriteFile(global.out, "\0", 1, &foo2, NULL);
 		CloseHandle(pipe); 
 		delete[] buf;
 	} else {
@@ -271,11 +274,11 @@ case C_FILE_DXDLL:
 
 	FILE *f = fopen("d3d8.dll", "r");
 
-	if (f) 
-		fclose(f),
-		QWrite("true", out);
-	else 
-		QWrite("false", out);
+	if (f) {
+		fclose(f);
+		QWrite("true");
+	} else 
+		QWrite("false");
 }
 break;
 
@@ -287,50 +290,13 @@ break;
 case C_FILE_READ2:
 { // Read variable from selected file (any path)
 
-	if (numP < 4) 
-	{
-		QWrite(":file read2 ERROR - not enough parameters", out);
+	if (argument_num < 4) {
+		QWrite(":file read2 ERROR - not enough parameters");
 		break;
 	}
 
-	char *file	= stripq(par[2]);
-	char *var	= stripq(par[3]);
-
-	fdbGet2(file, var, CommandID, out);
-}
-break;
-
-
-
-
-
-
-case C_FILE_RENAMEMISSIONS:		
-{ // Replace mpmissions
-
-	if (numP < 4)
-	{
-		FWerror(100,0,CommandID,"","",numP,4,out);
-		break;
-	};
-
-	par[2] = stripq(par[2]);
-	par[3] = stripq(par[3]);
-
-
-	// Rename current MPMissions to a given name
-	if (rename("MPMissions",par[2]))
-	{
-		// If succeeded then rename given folder to MPMissions
-		if (rename(par[3],"MPMissions"))
-			FWerror(0,0,CommandID,"","",0,0,out);
-		else
-			// Bring back last change
-			FWerror(7,errno,CommandID,par[3],"",0,0,out),
-			rename(par[2],"MPMissions");
-	}
-	else 
-		FWerror(7,errno,CommandID,"MPMissions","",0,0,out);
+	global.option_error_output |= OPTION_ERROR_ARRAY_LOCAL;
+	fdbGet2(stripq(argument[2]), stripq(argument[3]));
 }
 break;
 
@@ -346,20 +312,17 @@ case C_FILE_MODLIST:
 	int pointer       = 0;
 	char username[30] = "";
 
-	if (!global.DedicatedServer) {
-		switch(game_version) {
-			case VER_196 : base=0x7DD184; break;
-			case VER_199 : base=0x7CC144; break;
-			case VER_201 : base=global.exe_address+0x714C10; break;
-		}
-
-		if (base != 0) {
-			ReadProcessMemory(phandle, (LPVOID)base,		  &pointer,  4, &stBytes);
-			ReadProcessMemory(phandle, (LPVOID)(pointer+0x8), &username, 30, &stBytes);
-		}
+	switch(global_exe_version[global.exe_index]) {
+		case VER_196 : base=0x7DD184; break;
+		case VER_199 : base=0x7CC144; break;
+		case VER_201 : base=global.exe_address+0x714C10; break;
 	}
 
-	//listDirFiles(username, out, MODFOLDERS, false, CommandID);
+	if (base) {
+		ReadProcessMemory(phandle, (LPVOID)base,		  &pointer,  4, &stBytes);
+		ReadProcessMemory(phandle, (LPVOID)(pointer+0x8), &username, 30, &stBytes);
+	}
+
 
 	WIN32_FIND_DATA fd;
 	HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -372,8 +335,18 @@ case C_FILE_MODLIST:
 		String_init(Versions);
 		String_init(Dates);
 
-		char sub_folder[][16] = {"addons","bin","campaigns", "dta", "worlds", "Missions", "MPMissions", "Templates", "SPTemplates"};
-		int sub_folder_num    = sizeof(sub_folder) / sizeof(sub_folder[0]);
+		char sub_folder[][16] = {
+			"addons", 
+			"bin", 
+			"campaigns", 
+			"dta", 
+			"worlds", 
+			"Missions", 
+			"MPMissions", 
+			"Templates", 
+			"SPTemplates"
+		};
+		int sub_folder_num = sizeof(sub_folder) / sizeof(sub_folder[0]);
 
 		do {
 			if (strcmp(fd.cFileName,".")==0  ||  strcmp(fd.cFileName,"..")==0)
@@ -403,11 +376,11 @@ case C_FILE_MODLIST:
 						char *pch = strtok(data, ";");
 						int i     = 0;
 
-						while (pch != NULL) {
+						while (pch) {
 							switch (i) {
-								case 0: String_append_quotes(Attributes, "]+[\"", pch, "\""); break;
-								case 1: String_append(Versions, "]+["); String_append(Versions, pch); break;
-								case 2: String_append(Dates, "]+["); String_append(Dates, pch); break;
+								case 0 : String_append_quotes(Attributes, "]+[\"", pch, "\""); break;
+								case 1 : String_append_format(Versions, "]+[%s", pch); break;
+								case 2 : String_append_format(Dates, "]+[%s", pch); break;
 							}
 
 							i++;
@@ -445,7 +418,7 @@ case C_FILE_MODLIST:
 			settings[result] = '\0';
 
 			// Check custom face file size
-			if (strstr(settings, "face=\"Custom\"") != NULL) {
+			if (strstr(settings, "face=\"Custom\"")) {
 				sprintf(path_to_user, "Users\\%s\\face.paa", username);
 
 				hFind = FindFirstFile(path_to_user, &fd);
@@ -498,50 +471,24 @@ case C_FILE_MODLIST:
 
 		
 		// Output result
-		FWerror(0,0,CommandID,"","",0,0,out);
+		QWrite_err(FWERROR_NONE, 0);
+		QWritef("[%s],[%s],[%s],[%s],\"%s", Names.text, Attributes.text, Versions.text, Dates.text, customfilename);
 
-		QWrite("[", out);
-		QWrite(Names.pointer, out);
-		QWrite("],[", out);
-		QWrite(Attributes.pointer, out);
-		QWrite("],[", out);
-		QWrite(Versions.pointer, out);
-		QWrite("],[", out);
-		QWrite(Dates.pointer, out);
+		FileSize size = DivideBytes(bytes);
 
-		QWrite("],\"", out);
-		QWrite(customfilename, out);
+		unsigned int hash = FNV_BASIS;
+		hash              = fnv1a_hash(hash, Attributes.text, Attributes.length, OPTION_NONE);
+		hash              = fnv1a_hash(hash, Versions.text, Versions.length, OPTION_NONE);
 
-		double kilobytes = 0;
-		double megabytes = 0;
-
-		if (bytes >= 1048576) 
-			megabytes  = bytes / 1048576,
-			megabytes -= fmod(megabytes, 1),
-			bytes     -= megabytes * 1048576;
-
-		if (bytes >= 1024)
-			kilobytes  = bytes / 1024,
-			kilobytes -= fmod(kilobytes, 1),
-			bytes     -= kilobytes * 1024;
-
-		unsigned int hash = 2166136261;
-		hash              = fnv_hash(hash, Attributes.pointer, Attributes.current_length);
-		hash              = fnv_hash(hash, Versions.pointer,   Versions.current_length  );
-
-		char number[256] = "";
-		sprintf(number, "\",[%f,%f,%f],\"%u\",\"%s\"]", bytes, kilobytes, megabytes, hash, username);
-		QWrite(number, out);
-
+		QWritef("\",[%f,%f,%f],\"%u\",\"%s\"]", size.bytes, size.kilobytes, size.megabytes, hash, username);
 		String_end(Names);
 		String_end(Attributes);
 		String_end(Versions);
 		String_end(Dates);
 	} else {
-		FWerror(5,GetLastError(),CommandID,username,"",0,0,out);
-		QWrite("[],[]]",out); 
+		QWrite_err(FWERROR_WINAPI, 2, GetLastError(), username);
+		QWrite("[],[]]"); 
 		return;
 	}
-
 }
 break;
