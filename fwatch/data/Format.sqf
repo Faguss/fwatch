@@ -10,26 +10,16 @@ Example:
 	["1","2","3"] call FLIB_FORMAT
 */
 
-private ["_i", "_string", "_item"];
+private ["_string"];
 
-_i      = -1;
-_string = "[";
-
-while "_i=_i+1; _i < (count _this)" do {
-	_item   = _this select _i;
-	_string = _string + "]+[";	
-
-	// Check if scalar
-	if (_item in [_item]) then {
-		// Check if string
-		if (_item in [Format["%1",_item]]) then {
-			_string = _string + "{" + _item + "}";
-		} else {
-			_string = _string + Format ["%1",_item];
-		}
+if (_this in [_this]) then {	// if scalar
+	if (_this in [Format["%1",_this]]) then {	// if string
+		"{" + _this + "}"
 	} else {
-		_string = _string + (_item call FLIB_FORMAT);
+		Format ["%1",_this]	// if other
 	}
-};
-
-_string + "]"
+} else {	// if array
+	_string = "[";
+	{_string = _string + "]+[" + (_x call FLIB_FORMAT)} forEach _this;
+	_string + "]"
+}

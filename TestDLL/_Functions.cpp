@@ -1014,9 +1014,17 @@ StringPos ConvertStringPos(char *range_start, char *range_end, char *range_lengt
 	StringPos range = {0, text_length};
 
 	if (range_start[0]) {
+		size_t i      = 0;
+		bool negative = false;
+
+		while (range_start[i] == '-') {
+			i++;
+			negative = !negative;
+		}
+
 		// Negative number means counting from the end of the string
-		if (range_start[0] == '-') {
-			range.start = text_length - strtoul(range_start+1, NULL, 0);
+		if (negative) {
+			range.start = text_length - strtoul(range_start+i, NULL, 0);
 
 			// If too much negative then it's beginning of the string
 			if (range.start > text_length)
@@ -1026,8 +1034,16 @@ StringPos ConvertStringPos(char *range_start, char *range_end, char *range_lengt
 	}
 
 	if (range_end[0]) {
-		if (range_end[0] == '-') {
-			range.end = text_length - strtoul(range_end+1, NULL, 0);
+		size_t i      = 0;
+		bool negative = false;
+
+		while (range_start[i] == '-') {
+			i++;
+			negative = !negative;
+		}
+
+		if (negative) {
+			range.end = text_length - strtoul(range_end+i, NULL, 0);
 
 			if (range.end > text_length)
 				range.end = 0;
@@ -1811,38 +1827,6 @@ void PurgeComments(char *text, int string_start, int string_end) {
 			}
 		}
 	}
-}
-
-
-
-
-
-
-
-char* Output_Nested_Array(char *temp, int level, char *output_strings_name, int j, int *subclass_count) {
-	strcpy(temp,"");
-
-	for (int z=0; z<level; z++)
-		strcat(temp, "(");
-
-	sprintf(temp, "%s_output_%s%d", temp, output_strings_name, j);
-
-	for (z=0; z<level; z++)
-		sprintf(temp, "%s select %d)", temp, subclass_count[z]);
-
-	strcat(temp, " set[count ");
-
-	for (z=0; z<level; z++)
-		strcat(temp, "(");
-
-	sprintf(temp, "%s_output_%s%d", temp, output_strings_name, j);
-
-	for (z=0; z<level; z++)
-		sprintf(temp, "%s select %d)", temp, subclass_count[z]);
-
-	strcat(temp,",");
-
-	return temp;
 }
 
 
@@ -2790,8 +2774,8 @@ int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, Str
 				// Replace property
 				switch (source_result) {
 					case SQM_OUTPUT_PROPERTY : {																		
-						size_t shift_amount  = merge_state.value_length > source_state.value_length ? merge_state.value_length-source_state.value_length : source_state.value_length-merge_state.value_length;
-						bool shift_direction = merge_state.value_length > source_state.value_length;
+						size_t shift_amount  = merge_state.value_length >= source_state.value_length ? merge_state.value_length-source_state.value_length : source_state.value_length-merge_state.value_length;
+						bool shift_direction = merge_state.value_length >= source_state.value_length;
 
 						shift_buffer_chunk(source.text, source_state.value_end, source.length, shift_amount, shift_direction);						
 						memcpy(source_state.value, merge_state.value, merge_state.value_length);
@@ -2804,14 +2788,19 @@ int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, Str
 					case SQM_OUTPUT_END_OF_SCOPE : {
 						// Add a new property
 						
-						// Check last character in the source
+						// Check what's the last character in the source
 						bool add_semicolon = false;
-						for (size_t z=source_state.scope_end-1;  z>0 && !add_semicolon;  z--) {
+						for (size_t z=source_state.scope_end-1;  source_state.scope_end>0 && source.length>0;  z--) {
 							if (source.text[z]=='\n' || source.text[z]==';')
 								break;
 							else
-								if (!isspace(source.text[z]))
+								if (!isspace(source.text[z])) {
 									add_semicolon = true;
+									break;
+								}
+
+							if (z == 0)
+								break;
 						}
 						
 						const size_t added_length = (merge_state.value_end - merge_state.property_start) + add_semicolon;

@@ -2987,6 +2987,7 @@ case C_CLASS_READ:
 	int arg_classpath_pos   = -1;
 	int arg_level           = predefined_capacity;
 	int art_filename_length = 0;
+	bool arg_verify         = false;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
@@ -3023,6 +3024,10 @@ case C_CLASS_READ:
 			
 			case NAMED_ARG_MAXLEVEL : 
 				arg_level = atoi(argument[i+1]);
+				break;
+
+			case NAMED_ARG_VERIFY : 
+				arg_verify = String2Bool(argument[i+1]);
 				break;
 		}
 	}
@@ -3148,11 +3153,7 @@ case C_CLASS_READ:
 	file_contents.text[file_size] = '\0';
 
 	if (bytes_read != file_size) {		
-		if (ferror(file))
-			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		else
-			QWrite_err(FWERROR_FILE_WRITE, 4, errno, bytes_read, file_size, ptr_filename);
-		
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);		
 		String_end(buf_filename);
 		String_end(file_contents);
 		QWrite("[],[],0]");
@@ -3221,695 +3222,6 @@ case C_CLASS_READ:
 	int parenthesis_level = 0;
 	int property_start    = 0;
 	int property_end      = 0;
-	bool first_char       = true;
-	bool is_array         = false;
-	bool in_quote         = false;
-	bool macro            = false;
-	bool is_inherit       = false;
-	bool classpath_done   = false;
-	bool classpath_match  = false;
-	bool property_found   = false;
-	bool purge_comment    = false;
-	char separator        = ' ';
-	char *text            = file_contents.text;
-
-	for (i=0; i<file_size; i++) {
-		char c = text[i];
-
-		// Parse preprocessor comment
-		switch (comment) {
-			case NONE  : {
-				if (c == '/' && !in_quote) {
-					char c2 = text[i+1];
-					
-					if (c2 == '/')
-						comment = LINE;
-					else 
-						if (c2 == '*')
-							comment = BLOCK;
-				}
-				
-				if (comment == NONE)
-					break;
-				else {
-					if (word_start>=0)
-						purge_comment = true;
-					
-					continue;
-				}
-			}
-			
-			case LINE  : {
-				if (c=='\r' || c=='\n')
-					comment = NONE;
-
-				continue;
-			}
-			
-			case BLOCK : {
-				if (i>0 && text[i-1]=='*' && c=='/')
-					comment = NONE;
-
-				continue;
-			}
-		}
-
-		// Parse preprocessor directives
-		if (!first_char && (c=='\r' || c=='\n')) {
-			first_char = true;
-			
-			if (macro && text[i-1] != '\\')
-				macro = false;
-		}
-		
-		if (!isspace(text[i])  &&  first_char) {
-			first_char = false;
-			
-			if (c == '#')
-				macro = true;
-		}
-		
-		if (macro)
-			continue;
-
-
-		// Parse classes
-		switch (expect) {
-			case SEMICOLON : {
-				if (c == ';') {
-					expect = PROPERTY;
-					continue;
-				} else 
-					if (!isspace(c))
-						expect = PROPERTY;
-			}
-			
-			case PROPERTY : {
-				if (c == '}') {
-					// End parsing when left the target class
-					if (classpath_current==classpath_size && class_level==classpath_current && !classpath_done) {
-						classpath_done = true;
-						i = file_size;
-						continue;
-					}
-					
-					// When left subclass within target class
-					if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
-						int level = class_level - classpath_current;
-
-						for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
-							for (int k=0; k<all_output_strings_num; k++)
-								String_append(all_output_strings[k][j], "]");
-					}
-						
-					expect = SEMICOLON;
-					class_level--;
-
-					// End parsing when couldn't find wanted classes
-					if (class_level < classpath_current)
-						i = file_size;
-
-					continue;
-				}
-				
-				if (isalnum(c) || c=='_' || c=='[' || c==']') {
-					if (word_start == -1)
-						word_start = i;
-				} else
-					if (word_start >= 0) {
-						text[i] = '\0';
-	
-						if (strcmp(text+word_start,"class")==0) {
-							expect = CLASS_NAME;
-						} else 
-							if (strcmp(text+word_start,"enum")==0) {
-								expect    = ENUM_BRACKET;
-								separator = '{';
-							} else 
-								if (strcmp(text+word_start,"__EXEC")==0) {
-									expect    = EXEC_BRACKET;
-									separator = '(';
-								} else {
-									expect         = EQUALITY;
-									separator      = '=';
-									property_start = word_start;
-									property_end   = i;							
-									is_array       = text[i-2]=='[' && text[i-1]==']';
-								}
-
-						word_start = -1;
-					}
-				
-				if (separator == ' ')
-					break;
-			}
-			
-			case EQUALITY     : 
-			case ENUM_BRACKET : 
-			case EXEC_BRACKET : {
-				if (c == separator) {
-					expect++;
-					separator = ' ';
-				} else 
-					if (expect==EQUALITY && c=='(') {
-						expect            = MACRO_CONTENT;
-						separator         = ' ';
-						parenthesis_level = 1;
-					} else 
-						if (!isspace(c)) {	//ignore syntax error
-							i--;
-							separator = ' ';
-							expect    = SEMICOLON;
-						}
-				
-				break;
-			}
-			
-			case VALUE : {
-				if (c == '"')
-					in_quote = !in_quote;
-
-				if (!in_quote && (c=='{' || c=='['))
-					array_level++;
-
-				if (!in_quote && (c=='}' || c==']')) {
-					array_level--;
-
-					// Remove trailing commas
-					for (int z=i-1; z>0 && (isspace(text[z]) || text[z]==',' || text[z]=='}' || text[z]==']'); z--)
-						if (text[z]==',')
-							text[z] = ' ';
-				}
-
-				if (!in_quote && c==';' && array_level>0)
-					text[i] = ',';
-
-				if (word_start == -1) {
-					if (!isspace(c))
-						word_start = i;
-				} else {
-					if (!in_quote && array_level==0 && (c==';' || c=='\r' || c=='\n')) {
-						text[i] = '\0';
-
-						char *property = text + property_start;
-						char *value    = text + word_start;
-
-						if (purge_comment) {
-							purge_comment = false;
-							PurgeComments(text, property_start, property_end);
-							PurgeComments(text, word_start    , i);
-						}
-
-						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
-							bool found = properties_to_find_size == 0;
-
-							for (int j=0; j<properties_to_find_size && !found; j++)
-								if (strcmpi(property,properties_to_find[j]) == 0)
-									found = true;
-
-							if (found) {
-								property_found = true;
-								int level      = class_level - classpath_current;
-
-								if (level < classpath_capacity) {
-									// Add property name
-									String_append_format(output_property[level], "]+[\"%s\"", property);
-
-									// Add property value
-									String_append(output_value[level], "]+[");
-
-									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"'))
-										String_append(output_value[level], "\"");
-
-									// Convert arrays (square brackets) and strings (double quotes) so that "call" command in OFP can be used
-									if (is_array || (wrap==YES_WRAP && value[0]=='\"')) {
-										for (size_t j=word_start; j<i; j++) {
-											if (text[j] == '"')
-												in_quote = !in_quote;
-
-											if (text[j]=='{' && !in_quote && wrap==NO_WRAP)
-												String_append(output_value[level], "[");
-											else 
-												if (text[j]=='}' && !in_quote && wrap==NO_WRAP)
-													String_append(output_value[level], "]");
-												else 
-													if (text[j]=='"' && (wrap==YES_WRAP || wrap==NODOUBLE_WRAP))
-														String_append(output_value[level], "\"\"");
-													else 
-														String_append_len(output_value[level], text+j, 1);
-										}
-									} else
-										String_append(output_value[level], value);
-									
-									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"'))
-										String_append(output_value[level], "\"");
-								}
-							}
-						}
-						
-						word_start = -1;
-						expect     = PROPERTY;
-					}
-				}
-				
-				break;
-			}
-			
-			case CLASS_NAME    :
-			case CLASS_INHERIT : {
-				if (isalnum(c) || c=='_') {
-					if (word_start == -1)
-						word_start = i;
-				} else
-					if (word_start >= 0) {
-						text[i] = '\0';
-						
-						if (purge_comment) {
-							purge_comment = false;
-							PurgeComments(text, word_start, i);
-						}
-						
-						if (expect==CLASS_NAME && classpath_size>0 && classpath_current<classpath_size && class_level==classpath_current && strcmpi(text+word_start,classpath[classpath_current])==0) {
-							classpath_current++;
-							classpath_match = true;
-						}
-
-						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
-							String *output_array = expect==CLASS_NAME ? output_class : output_inherit;
-							int level            = class_level - classpath_current;
-
-							if (level < classpath_capacity && !classpath_done)
-								String_append_format(output_array[level], "]+[\"%s\"", text+word_start);
-						}
-						
-						is_inherit = expect == CLASS_INHERIT;
-						word_start = -1;
-						expect     = expect==CLASS_NAME ? CLASS_COLON : CLASS_BRACKET;
-					}
-				
-				if (expect!=CLASS_COLON && expect!=CLASS_BRACKET)
-					break;
-			}
-			
-			case CLASS_COLON   :
-			case CLASS_BRACKET : {
-				if (expect==CLASS_COLON && c==':')
-					expect = CLASS_INHERIT;
-				else 
-					if (c == '{') {
-						if (!is_inherit) {
-							if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
-								int level = class_level - classpath_current;
-								
-								if (level < classpath_capacity && !classpath_done)
-									String_append(output_inherit[level], "]+[\"\"");
-							}
-						}
-						
-						if (classpath_match) {
-							String_append_format(output_classpath_bytes, "]+[\"%d\"", i+1);
-							classpath_match = false;
-						}
-								
-						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
-							int level = class_level - classpath_current;
-
-							if (level < classpath_capacity)
-								String_append_format(output_bytes[level], "]+[\"%d\"", i+1);
-						}
-						
-						class_level++;
-						expect = PROPERTY;
-							
-						if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
-							int level = class_level - classpath_current;
-							
-							if (level > output_level)
-								output_level = level;
-
-							for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
-								for (int k=0; k<all_output_strings_num; k++)
-									String_append(all_output_strings[k][j], "]+[[");
-						}
-					} else
-						if (!isspace(c)) {	//ignore syntax error
-							i--;
-							expect = SEMICOLON;
-						}
-				
-				break;
-			}
-			
-			case ENUM_CONTENT : 
-			case EXEC_CONTENT : {
-				if ((expect==EXEC_CONTENT && c==')') || (expect==ENUM_CONTENT && c=='}'))
-					expect = SEMICOLON;
-
-				break;
-			}
-			
-			case MACRO_CONTENT : {
-				if (c == '"')
-					in_quote = !in_quote;
-					
-				if (!in_quote) {
-					if (c == '(')
-						parenthesis_level++;
-						
-					if (c == ')')
-						parenthesis_level--;
-						
-					if (parenthesis_level == 0)
-						expect = SEMICOLON;
-				}
-					
-				break;
-			}
-		}
-	}
-
-	//---------------------------------------------------------------------------
-	char output_strings_name[all_output_strings_num][16] = {
-		"class",
-		"inherit",
-		"bytes",
-		"property",
-		"value"
-	};
-
-	for (z=0; z<classpath_capacity && z<=output_level; z++) {
-		for (int j=0; j<all_output_strings_num; j++) {
-			QWritef("_output_%s%d=%s];", output_strings_name[j], z, all_output_strings[j][z].text);
-			String_end(all_output_strings[j][z]);
-		}
-	}
-	
-	if (classpath_current < classpath_size)
-		QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, ++classpath_size, ptr_filename);
-	else
-		if (properties_to_find_size>0 && !property_found)
-			QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_findproperty, ptr_filename);
-		else
-			QWrite_err(FWERROR_NONE, 0);
-
-	QWrite("[");
-	
-	for (z=0; z<classpath_capacity && z<=output_level; z++) {
-		if (z == 0)
-			QWrite("[");
-		else
-			QWrite(",[");
-
-		for (int j=0; j<all_output_strings_num; j++)
-			QWritef("%c_output_%s%d", (j==0 ? ' ' : ','), output_strings_name[j], z);
-
-		QWrite("]");
-	}
-
-	QWritef("],%s],%d]", output_classpath_bytes.text, classpath_current);
-
-	String_end(output_classpath_bytes);
-	String_end(file_contents);
-	String_end(buf_filename);
-}
-break;
-
-
-
-
-
-
-
-
-
-
-
-
-case C_CLASS_READ2:
-{
-	const int predefined_capacity = 8;
-
-	// Read arguments------------------------------------------------------------
-	char *arg_filename      = empty_string;
-	char *arg_classpath     = empty_string;
-	char *arg_wrap          = empty_string;
-	char *arg_findproperty  = empty_string;
-	int arg_offset          = 0;
-	int arg_classpath_pos   = -1;
-	int arg_level           = predefined_capacity;
-	int arg_filename_length = 0;
-	bool arg_verify         = false;
-	
-	for (size_t i=2; i<argument_num; i+=2) {
-		switch (argument_hash[i]) {
-			case NAMED_ARG_FILE : 
-				arg_filename        = argument[i+1];
-				arg_filename_length = argument_length[i+1];
-				break;
-
-			case NAMED_ARG_PATH : 
-				arg_classpath = argument[i+1];
-				break;
-			
-			case NAMED_ARG_OFFSET : 
-				arg_offset = atoi(argument[i+1]);
-				break;
-			
-			case NAMED_ARG_FIND : {
-				arg_findproperty          = argument[i+1];
-				int arg_findproperty_last = argument_length[i+1] - 1;
-				
-				if (arg_findproperty[0]=='[' && arg_findproperty[arg_findproperty_last]==']') {
-					arg_findproperty++;
-					arg_findproperty[arg_findproperty_last] = '\0';
-				}
-			} break;
-
-			case NAMED_ARG_WRAP : 
-				arg_wrap = argument[i+1];
-				break;
-			
-			case NAMED_ARG_PATHPOS : 
-				arg_classpath_pos = atoi(argument[i+1]);
-				break;
-			
-			case NAMED_ARG_MAXLEVEL : 
-				arg_level = atoi(argument[i+1]);
-				break;
-
-			case NAMED_ARG_VERIFY : 
-				arg_verify = String2Bool(argument[i+1]);
-				break;
-		}
-	}
-
-	// File not specified
-	if (arg_filename_length == 0) {
-		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
-		QWrite("[],[],0]");
-		break;
-	}
-
-	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
-	char *ptr_filename = arg_filename;
-
-	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
-		QWrite("[],[],0]");
-		break;
-	}
-
-
-	// Class path
-	int classpath_capacity = arg_level!=predefined_capacity ? arg_level : predefined_capacity;
-	int classpath_current  = 0;
-	int classpath_size     = 0;
-	char *classpath[predefined_capacity];
-	char *class_name = strtok(arg_classpath, "[,]");
-
-	//from ofp array to char array
-	if (!arg_verify) {
-		while (class_name!=NULL  &&  classpath_size<classpath_capacity) {
-			classpath[classpath_size++] = stripq(class_name);
-			class_name                  = strtok(NULL, "[,]");
-		}
-
-		if (arg_offset > 0) {
-			classpath_current = classpath_size;
-			
-			if (arg_classpath_pos >= 0)
-				classpath_current = arg_classpath_pos+1;
-		} else
-			arg_offset = 0;
-	}
-
-
-	// Wrapping
-	enum WRAP {
-		NO_WRAP,
-		YES_WRAP,
-		NODOUBLE_WRAP
-	};
-	
-	int wrap = NODOUBLE_WRAP;
-	
-	if (strcmpi(arg_wrap,"no") == 0)
-		wrap = NO_WRAP;
- 
-	if (strcmpi(arg_wrap,"yes") == 0)
-		wrap = YES_WRAP;
-		
-		
-	// Finding properties
-	const int properties_to_find_capacity = 64;
-	char *properties_to_find[properties_to_find_capacity];
-	int properties_to_find_size = 0;
-	
-	if (arg_findproperty[0] == '-') {
-		arg_findproperty[0]     = '\0';
-		properties_to_find_size = -1;
-	} else {
-		char *property = strtok(arg_findproperty, ",");
-		while (property!=NULL  &&  properties_to_find_size<properties_to_find_capacity) {
-			properties_to_find[properties_to_find_size++] = stripq(property);
-			property                                      = strtok(NULL, ",");
-		}
-	}
-	//---------------------------------------------------------------------------
-	
-
-
-	// Open wanted file -----------------------------------------------------------------	
-	FILE *file = fopen(ptr_filename, "rb");
-	if (!file) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		QWrite("[],[],0]");
-		String_end(buf_filename);
-		break;
-	}
-
-	// Find file size
-	if (fseek(file, 0, SEEK_END) != 0) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		QWrite("[],[],0]");
-		String_end(buf_filename);
-		fclose(file);
-		break;
-	};
-
-	size_t file_size = ftell(file);
-	if (file_size == 0xFFFFFFFF) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		QWrite("[],[],0]");
-		String_end(buf_filename);
-		fclose(file);
-		break;
-	} else
-		file_size -= arg_offset;
-
-	// Allocate buffer
-	String file_contents;
-	String_init(file_contents);
-	
-	int result = String_allocate(file_contents, file_size+1);
-	if (result != 0) {
-		QWrite_err(FWERROR_MALLOC, 2, "file_contents", file_size+1);
-		QWrite("[],[],0]");
-		String_end(buf_filename);
-		break;
-	}
-
-	// Copy text to buffer
-	fseek(file, arg_offset, SEEK_SET);
-	size_t bytes_read = fread(file_contents.text, 1, file_size, file);
-	file_contents.text[file_size] = '\0';
-
-	if (bytes_read != file_size) {		
-		if (ferror(file))
-			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		else
-			QWrite_err(FWERROR_FILE_WRITE, 3, bytes_read, file_size, ptr_filename);
-		
-		String_end(buf_filename);
-		String_end(file_contents);
-		QWrite("[],[],0]");
-		fclose(file);
-		break;
-	}
-
-	fclose(file);
-	
-
-
-
-	enum EXPECT {
-		PROPERTY,
-		EQUALITY,
-		VALUE,
-		SEMICOLON,
-		CLASS_NAME,
-		CLASS_INHERIT,
-		CLASS_COLON,
-		CLASS_BRACKET,
-		ENUM_BRACKET,
-		ENUM_CONTENT,
-		EXEC_BRACKET,
-		EXEC_CONTENT,
-		MACRO_CONTENT
-	};
-	
-	enum COMMENT {
-		NONE,
-		LINE,
-		BLOCK
-	};
-	
-	String output_class[predefined_capacity];
-	String output_inherit[predefined_capacity];
-	String output_bytes[predefined_capacity];
-	String output_property[predefined_capacity];
-	String output_value[predefined_capacity];
-	
-	String *all_output_strings[] = {
-		output_class,
-		output_inherit,
-		output_bytes,
-		output_property,
-		output_value
-	};
-	const int all_output_strings_num = sizeof(all_output_strings) / sizeof(all_output_strings[0]);
-
-	char output_strings_name[all_output_strings_num][16] = {
-		"class",
-		"inherit",
-		"bytes",
-		"property",
-		"value"
-	};
-
-	char temp[512] = "";
-	for (int z=0; z<classpath_capacity; z++)
-		for (int j=0; j<all_output_strings_num; j++) {
-			String_init(all_output_strings[j][z]);
-			String_append_format(all_output_strings[j][z], "_output_%s%d=[];", output_strings_name[j], z);
-		}
-		
-	String output_classpath_bytes;
-	String_init(output_classpath_bytes);
-	String_append(output_classpath_bytes, "[");
-	
-	int subclass_count[predefined_capacity] = {0,0,0,0,0,0,0,0};
-	
-	int comment           = NONE;
-	int expect            = PROPERTY;
-	int word_start        = -1;
-	int class_level       = classpath_current;
-	int array_level       = 0;
-	int output_level      = 0;
-	int parenthesis_level = 0;
-	int property_start    = 0;
-	int property_end      = 0;
 	int line_num          = 1;
 	int column_num        = 0;
 	bool first_char       = true;
@@ -3924,10 +3236,10 @@ case C_CLASS_READ2:
 	bool syntax_error     = false;
 	char separator        = ' ';
 	char *text            = file_contents.text;
-	
+
 	for (i=0; i<file_size; i++) {
 		char c = text[i];
-		
+
 		if (c == '\n') {
 			if (i<file_size-1)
 				line_num++;
@@ -4009,7 +3321,7 @@ case C_CLASS_READ2:
 					// End parsing when left the target class
 					if (!arg_verify && classpath_current==classpath_size && class_level==classpath_current && !classpath_done) {
 						classpath_done = true;
-						i              = file_size;
+						i = file_size;
 						continue;
 					}
 					
@@ -4017,26 +3329,24 @@ case C_CLASS_READ2:
 					if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 						int level = class_level - classpath_current;
 
-						for (int z=level; z<predefined_capacity; z++)
-							subclass_count[z]=0;
-							
-						if (level > 0)
-							subclass_count[level-1]++;
+						for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
+							for (int k=0; k<all_output_strings_num; k++)
+								String_append(all_output_strings[k][j], "]");
 					}
-					
+						
 					expect = SEMICOLON;
 					class_level--;
-					
+
 					// End parsing when couldn't find wanted classes
 					if (!arg_verify && class_level < classpath_current)
 						i = file_size;
 
-					// Excess closing brackets
+					// Syntax error: excess closing brackets
 					if (arg_verify  &&  class_level < 0) {
 						column_num--;
-						separator = ' ';
+						separator    = ' ';
 						syntax_error = true;
-						goto class_read2_end_parsing;
+						goto class_read_end_parsing;
 					}
 
 					continue;
@@ -4086,14 +3396,14 @@ case C_CLASS_READ2:
 						separator         = ' ';
 						parenthesis_level = 1;
 					} else 
-						if (!isspace(c)) {
-							if (!arg_verify) {	//syntax error
+						if (!isspace(c)) {	//syntax error
+							if (arg_verify) {
+								syntax_error = true;
+								goto class_read_end_parsing;
+							} else {
 								i--;
 								separator = ' ';
 								expect    = SEMICOLON;
-							} else {
-								syntax_error = true;
-								goto class_read2_end_parsing;
 							}
 						}
 				
@@ -4115,6 +3425,9 @@ case C_CLASS_READ2:
 						if (text[z]==',')
 							text[z] = ' ';
 				}
+
+				if (!in_quote && c==';' && array_level>0)
+					text[i] = ',';
 
 				if (word_start == -1) {
 					if (!isspace(c))
@@ -4143,19 +3456,19 @@ case C_CLASS_READ2:
 								property_found = true;
 								int level      = class_level - classpath_current;
 
-								if (!arg_verify && level < classpath_capacity) {
+								if (level < classpath_capacity) {
 									// Add property name
-									String_append_format(output_property[level], "%s\"%s\"];", Output_Nested_Array(temp, level, "property", level, subclass_count), property);
+									String_append_format(output_property[level], "]+[\"%s\"", property);
 
 									// Add property value
-									String_append(output_value[level], Output_Nested_Array(temp, level, "value", level, subclass_count));
+									String_append(output_value[level], "]+[");
 
 									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"'))
 										String_append(output_value[level], "\"");
 
 									// Convert arrays (square brackets) and strings (double quotes) so that "call" command in OFP can be used
 									if (is_array || (wrap==YES_WRAP && value[0]=='\"')) {
-										for (size_t j=word_start; j<i; j++) {											
+										for (size_t j=word_start; j<i; j++) {
 											if (text[j] == '"')
 												in_quote = !in_quote;
 
@@ -4175,8 +3488,6 @@ case C_CLASS_READ2:
 									
 									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"'))
 										String_append(output_value[level], "\"");
-										
-									String_append(output_value[level], "];");
 								}
 							}
 						}
@@ -4212,13 +3523,8 @@ case C_CLASS_READ2:
 							String *output_array = expect==CLASS_NAME ? output_class : output_inherit;
 							int level            = class_level - classpath_current;
 
-							if (!arg_verify && level < classpath_capacity && !classpath_done) {
-								char tempname[8] = "class";
-								if (expect != CLASS_NAME)
-									strcpy(tempname, "inherit");
-
-								String_append_format(output_array[level], "%s\"%s\"];", Output_Nested_Array(temp, level, tempname, level, subclass_count), text+word_start);
-							}
+							if (level < classpath_capacity && !classpath_done)
+								String_append_format(output_array[level], "]+[\"%s\"", text+word_start);
 						}
 						
 						is_inherit = expect == CLASS_INHERIT;
@@ -4240,47 +3546,45 @@ case C_CLASS_READ2:
 							if (classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 								int level = class_level - classpath_current;
 								
-								if (!arg_verify && level < classpath_capacity && !classpath_done)
-									String_append_format(output_inherit[level], "%s\"\"];", Output_Nested_Array(temp, level, "inherit", level, subclass_count));
-								
+								if (level < classpath_capacity && !classpath_done)
+									String_append(output_inherit[level], "]+[\"\"");
 							}
 						}
-
-						if (!arg_verify && classpath_match) {
+						
+						if (classpath_match) {
 							String_append_format(output_classpath_bytes, "]+[\"%d\"", i+1);
 							classpath_match = false;
 						}
-
+								
 						if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 							int level = class_level - classpath_current;
 
-							if (!arg_verify && level < classpath_capacity)
-								String_append_format(output_bytes[level], "%s\"%d\"];", Output_Nested_Array(temp, level, "bytes", level, subclass_count), i+1);
+							if (level < classpath_capacity)
+								String_append_format(output_bytes[level], "]+[\"%d\"", i+1);
 						}
-
+						
 						class_level++;
 						expect = PROPERTY;
-						
+							
 						if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 							int level = class_level - classpath_current;
 							
 							if (level > output_level)
 								output_level = level;
-							
-							if (!arg_verify && level > 0)
+
 							for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
 								for (int k=0; k<all_output_strings_num; k++)
-									String_append_format(all_output_strings[k][j], "%s[]];", Output_Nested_Array(temp, level-1, output_strings_name[k], j, subclass_count));
+									String_append(all_output_strings[k][j], "]+[[");
 						}
 					} else
-						if (!isspace(c)) {
-							if (!arg_verify) {	//syntax error
-								i--;
-								expect = SEMICOLON;
-							} else {
+						if (!isspace(c)) {	//syntax error
+							if (arg_verify) {
 								separator = '{';
 								syntax_error = true;
-								goto class_read2_end_parsing;
+								goto class_read_end_parsing;
+							} else {
+								i--;
+								expect = SEMICOLON;
 							}
 						}
 				
@@ -4316,40 +3620,24 @@ case C_CLASS_READ2:
 	}
 
 	//---------------------------------------------------------------------------
-	class_read2_end_parsing:
+	class_read_end_parsing:
 
-	if (!arg_verify) {
-		for (z=0; z<classpath_capacity && z<=output_level; i++) {
-			for (int j=0; j<all_output_strings_num; j++) {
-				QWritel(all_output_strings[j][z].text, all_output_strings[j][z].length);
-				String_end(all_output_strings[j][z]);
-			}
+	char output_strings_name[all_output_strings_num][16] = {
+		"class",
+		"inherit",
+		"bytes",
+		"property",
+		"value"
+	};
+
+	for (z=0; z<classpath_capacity && z<=output_level; z++) {
+		for (int j=0; j<all_output_strings_num; j++) {
+			QWritef("_output_%s%d=%s];", output_strings_name[j], z, all_output_strings[j][z].text);
+			String_end(all_output_strings[j][z]);
 		}
-
-		if (classpath_current < classpath_size)
-			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, ++classpath_size, ptr_filename);
-		else
-			if (properties_to_find_size>0 && !property_found)
-				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_findproperty, ptr_filename);
-			else
-				QWrite_err(FWERROR_NONE, 0);
-
-		QWrite("[");
-		
-		for (z=0; z<classpath_capacity && z<=output_level; z++) {
-			if (z == 0)
-				QWrite("[");
-			else
-				QWrite(",[");
-
-			for (int j=0; j<all_output_strings_num; j++)
-				QWritef("%c_output_%s%d", (j==0 ? ' ' : ','), output_strings_name[j], z);
-
-			QWrite("]");
-		}
-
-		QWritef("],%s],%d]", output_classpath_bytes.text, classpath_current);
-	} else {
+	}
+	
+	if (arg_verify) {
 		if (!syntax_error && class_level>0) {
 			syntax_error = true;
 			separator    = '}';
@@ -4370,9 +3658,31 @@ case C_CLASS_READ2:
 			QWrite_err(FWERROR_CLASS_SYNTAX, 4, error_msg, line_num, column_num, ptr_filename);
 		} else
 			QWrite_err(FWERROR_NONE, 0);
-
-		QWrite("[]]");
+	} else {
+		if (classpath_current < classpath_size)
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, ++classpath_size, ptr_filename);
+		else
+			if (properties_to_find_size>0 && !property_found)
+				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_findproperty, ptr_filename);
+			else
+				QWrite_err(FWERROR_NONE, 0);
 	}
+
+	QWrite("[");
+	
+	for (z=0; z<classpath_capacity && z<=output_level; z++) {
+		if (z == 0)
+			QWrite("[");
+		else
+			QWrite(",[");
+
+		for (int j=0; j<all_output_strings_num; j++)
+			QWritef("%c_output_%s%d", (j==0 ? ' ' : ','), output_strings_name[j], z);
+
+		QWrite("]");
+	}
+
+	QWritef("],%s],%d]", output_classpath_bytes.text, classpath_current);
 
 	String_end(output_classpath_bytes);
 	String_end(file_contents);
@@ -4465,11 +3775,7 @@ case C_CLASS_READSQM:
 	size_t bytes_read = fread(file_content.text, 1, file_size, file);
 
 	if (bytes_read != file_size) {		
-		if (ferror(file))
-			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		else
-			QWrite_err(FWERROR_FILE_WRITE, 3, bytes_read, file_size, ptr_filename);
-		
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);		
 		String_end(buf_filename);
 		String_end(file_content);
 		fclose(file);
@@ -4774,7 +4080,7 @@ case C_CLASS_WRITE :
 	// File not specified
 	if (arg_filename_length == 0) {
 		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
-		QWrite("0,\"0\",[],[]]");
+		QWrite("0]");
 		break;
 	};
 	
@@ -4784,7 +4090,7 @@ case C_CLASS_WRITE :
 	char *ptr_filename = arg_filename;
 
 	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
-		QWrite("[],[],0]");
+		QWrite("0]");
 		break;
 	}
 		
@@ -4794,7 +4100,7 @@ case C_CLASS_WRITE :
 	FILE *file = fopen(ptr_filename, "rb");
 	if (!file) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		QWrite("[],[],0]");
+		QWrite("0]");
 		String_end(buf_filename);
 		break;
 	}
@@ -4802,7 +4108,7 @@ case C_CLASS_WRITE :
 	// Find file size
 	if (fseek(file, 0, SEEK_END) != 0) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		QWrite("[],[],0]");
+		QWrite("0]");
 		String_end(buf_filename);
 		fclose(file);
 		break;
@@ -4811,7 +4117,7 @@ case C_CLASS_WRITE :
 	size_t file_size = ftell(file);
 	if (file_size == 0xFFFFFFFF) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		QWrite("[],[],0]");
+		QWrite("0]");
 		String_end(buf_filename);
 		fclose(file);
 		break;
@@ -4824,7 +4130,7 @@ case C_CLASS_WRITE :
 	int result     = String_allocate(file_contents, buffer_max);
 	if (result != 0) {
 		QWrite_err(FWERROR_MALLOC, 2, "file_contents", buffer_max);
-		QWrite("[],[],0]");
+		QWrite("0]");
 		String_end(buf_filename);
 		break;
 	}
@@ -4835,14 +4141,10 @@ case C_CLASS_WRITE :
 	file_contents.length = bytes_read;
 
 	if (bytes_read != file_size) {		
-		if (ferror(file))
-			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		else
-			QWrite_err(FWERROR_FILE_WRITE, 4, errno, bytes_read, file_size, ptr_filename);
-		
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);		
 		String_end(buf_filename);
 		String_end(file_contents);
-		QWrite("[],[],0]");
+		QWrite("0]");
 		fclose(file);
 		break;
 	}
@@ -4930,17 +4232,14 @@ case C_CLASS_WRITE :
 			SQM_ParseState source_state_copy = source_state;
 	
 			if ((result = SQM_Parse(file_contents.text, file_contents.length, source_state_copy, SQM_ACTION_FIND_PROPERTY, arg_renameproperty, arg_renameproperty_length))) {
-				size_t shift_amount  = arg_renameto_length > source_state_copy.property_length ? arg_renameto_length-source_state_copy.property_length : source_state_copy.property_length-arg_renameto_length;
-				bool shift_direction = arg_renameto_length > source_state_copy.property_length;
+				size_t shift_amount  = arg_renameto_length >= source_state_copy.property_length ? arg_renameto_length-source_state_copy.property_length : source_state_copy.property_length-arg_renameto_length;
+				bool shift_direction = arg_renameto_length >= source_state_copy.property_length;
 				save_changes         = true;
 				
 				shift_buffer_chunk(file_contents.text, source_state_copy.property_end, file_contents.length, shift_amount, shift_direction);
 				memcpy(source_state_copy.property, arg_renameto, arg_renameto_length);
 				
-				if (shift_direction)
-					file_contents.length += shift_amount;
-				else
-					file_contents.length -= shift_amount;
+				file_contents.length += shift_amount * (shift_direction ? 1 : -1);
 			} else {
 				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_renameproperty, ptr_filename);
 				goto class_write_end;
@@ -4952,17 +4251,14 @@ case C_CLASS_WRITE :
 				
 				if ((result = SQM_Parse(file_contents.text, file_contents.length, source_state_copy, SQM_ACTION_FIND_CLASS, arg_renameclass, arg_renameclass_length))) {
 					size_t current_name_length = source_state_copy.class_name_full_end - source_state_copy.class_name_start;
-					size_t shift_amount        = arg_renameto_length > current_name_length ? arg_renameto_length-current_name_length : current_name_length-arg_renameto_length;
-					bool shift_direction       = arg_renameto_length > current_name_length;
+					size_t shift_amount        = arg_renameto_length >= current_name_length ? arg_renameto_length-current_name_length : current_name_length-arg_renameto_length;
+					bool shift_direction       = arg_renameto_length >= current_name_length;
 					save_changes               = true;
 					
 					shift_buffer_chunk(file_contents.text, source_state_copy.class_name_full_end, file_contents.length, shift_amount, shift_direction);
 					memcpy(source_state_copy.class_name, arg_renameto, arg_renameto_length);
 					
-					if (shift_direction)
-						file_contents.length += shift_amount;
-					else
-						file_contents.length -= shift_amount;
+					file_contents.length += shift_amount * (shift_direction ? 1 : -1);
 				} else {
 					QWrite_err(FWERROR_CLASS_NOCLASS, 2, arg_renameclass, ptr_filename);
 					goto class_write_end;

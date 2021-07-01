@@ -1607,60 +1607,45 @@ break;
 case C_STRING_JOIN:
 { // Add characters in the midddle of the string
 
-	char *text       = empty_string;
-	char *merge      = empty_string;
-	int text_length  = 0;
-	int merge_length = 0;
-	int position     = 0;
+	char *arg_text          = empty_string;
+	char *arg_merge         = empty_string;
+	char *arg_position      = empty_string;
+	size_t arg_text_length  = 0;
+	size_t arg_merge_length = 0;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_TEXT : 
-				text        = argument[i+1]; 
-				text_length = argument_length[i+1]; 
+				arg_text        = argument[i+1]; 
+				arg_text_length = argument_length[i+1]; 
 				break;
 
 			case NAMED_ARG_MERGE : 
-				merge        = argument[i+1]; 
-				merge_length = argument_length[i+1]; 
+				arg_merge        = argument[i+1]; 
+				arg_merge_length = argument_length[i+1]; 
 				break;
 
 			case NAMED_ARG_POSITION : 
-				position = atoi(argument[i+1]); 
+				arg_position = argument[i+1];
 				break;
 		}
 	}
 
-	if (text_length == 0) {
-		QWrite(merge);
+	if (arg_text_length == 0) {
+		QWritel(arg_merge, arg_merge_length);
 		break;
 	}
 
-	if (merge_length == 0) {
-		QWrite(text);
+	if (arg_merge_length == 0) {
+		QWritel(arg_text, arg_text_length);
 		break;
 	}
 
-	// Check if the index is out of bounds
-	if (position < 0)
-		position += text_length;
+	StringPos range = ConvertStringPos(arg_position, empty_string, empty_string, arg_text_length);
 
-	if (position < 0)
-		position = 0;
-
-	if (position > text_length)
-		position = text_length;
-
-	// Cut source text in half
-	char saved     = text[position];
-	text[position] = '\0';
-
-	// Output the first half and then the new text
-	QWritef("%s%s", text, merge);
-
-	// Put it back together and then output second half of the source
-	text[position] = saved;
-	QWrite(text+position);
+	QWritel(arg_text, range.start);
+	QWritel(arg_merge, arg_merge_length);
+	QWritel(arg_text+range.start, arg_text_length-range.start);
 }
 break;
 

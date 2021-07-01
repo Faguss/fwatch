@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2021,6,27,0,19,7,46,20,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2021,6,30,3,23,18,27,69,120,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -36,8 +36,8 @@
 	0.03 exec "..\fwatch\data\InputMulti.sqs"
 	@Format ["%1",count FWATCH_INPUT_MULTI] != "scalar"
 	
-	; Remove obsolete databases
-	{_ok=call loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1",_x]; if ((_ok select 1) == 280) then {loadFile Format ["\:IGSE NEW  file:..\fwatch\tmp\schedule\%1  mode:delete",_x]}} forEach ["mods.bin", "schedule.bin", "params.bin", "schedulelogo.bin"]
+	; Remove invalid databases
+	{_ok=call loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1",_x]; if ((_ok select 1) in [280,282,283,284,285,286,287,288,289]) then {loadFile Format ["\:IGSE NEW  file:..\fwatch\tmp\schedule\%1  mode:delete",_x]}} forEach ["mods.bin", "schedule.bin", "params.bin", "schedulelogo.bin"]
 	
 	_silent_mode = "silent" in _this
 	_ok          = if (!_silent_mode) then {createDialog "MAINMENU_MODSLIST"} else {true}

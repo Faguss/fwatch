@@ -603,6 +603,10 @@ void ParseScript(char *com, FULLHANDLE file)
 						case C_STRING_FIND : 
 							enable_unit_separator = argument_hash[argument_num-1]==NAMED_ARG_TEXT || argument_hash[argument_num-1]==NAMED_ARG_FIND;
 							break;
+
+						case C_STRING_JOIN : 
+							enable_unit_separator = argument_hash[argument_num-1]==NAMED_ARG_TEXT || argument_hash[argument_num-1]==NAMED_ARG_MERGE;
+							break;
 					}
 				}
 				

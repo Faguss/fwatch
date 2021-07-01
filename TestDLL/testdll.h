@@ -704,7 +704,6 @@ int String_readfile(String &str, char *path);
 int VerifyPath(char **ptr_filename, String &str, int mode);
 unsigned int fnv1a_hash (unsigned int hash, char *text, int text_length, bool lowercase);
 void PurgeComments(char *text, int string_start, int string_end);
-char* Output_Nested_Array(char *temp, int level, char *output_strings_name, int j, int *subclass_count);
 int DeleteWrapper(char *refcstrRootDirectory);
 WatchProgramInfo db_pid_load(int db_id_wanted);
 void db_pid_save(WatchProgramInfo input);

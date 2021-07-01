@@ -230,7 +230,7 @@ case C_IGSE_WRITE:
 		String_end(buf_filename);
 		fclose(file);
 		break;
-	};
+	}
 
 	size_t file_size = ftell(file);
 	if (file_size == 0xFFFFFFFF) {
@@ -265,7 +265,7 @@ case C_IGSE_WRITE:
 	String file_contents;
 	String_init(file_contents);
 	size_t new_line_len  = arg_txt_length;
-	size_t new_file_size = file_size * (arg_edit_mode==IGSE_WRITE_COPY ? 2 : 1) + new_line_len + 2;
+	size_t new_file_size = file_size * (arg_edit_mode==IGSE_WRITE_COPY ? 2 : 1) + new_line_len + 2 + 1;
 	int result           = String_allocate(file_contents, new_file_size);
 
 	if (result != 0) {
@@ -278,17 +278,11 @@ case C_IGSE_WRITE:
 	// Copy text to buffer
 	fseek(file, 0, SEEK_SET);
 	size_t bytes_read = fread(file_contents.text, 1, file_size, file);
-	file_contents.text[file_size] = '\0';
 
 	if (bytes_read != file_size) {
 		String_end(buf_filename);
 		String_end(file_contents);
-		
-		if (ferror(file))
-			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		else
-			QWrite_err(FWERROR_FILE_READ, 3, bytes_read, file_size, ptr_filename);
-
+		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		fclose(file);
 		break;
 	}
@@ -358,11 +352,11 @@ case C_IGSE_WRITE:
 
 				line_len                    = carriage_return ? *separator-line_start_pos-1 : *separator-line_start_pos;
 				size_t buffer_shift_amount  = 0;
-				bool buffer_shift_direction = 0;
+				bool buffer_shift_direction = OPTION_RIGHT;
 
 				if (arg_edit_mode == IGSE_WRITE_REPLACE) {
-					buffer_shift_amount    = new_line_len>line_len ? new_line_len-line_len : line_len-new_line_len;
-					buffer_shift_direction = new_line_len>line_len;
+					buffer_shift_amount    = new_line_len >= line_len ? new_line_len-line_len : line_len-new_line_len;
+					buffer_shift_direction = new_line_len >= line_len;
 				}
 					
 				char *line_end   = line_start + line_len;
@@ -385,7 +379,7 @@ case C_IGSE_WRITE:
 					buffer_shift_amount    = line_len + (carriage_return ? 2 : 1);
 					buffer_shift_direction = OPTION_RIGHT;
 
-					shift_buffer_chunk(buffer, line_end_pos, file_size+1, buffer_shift_amount, buffer_shift_direction);
+					shift_buffer_chunk(buffer, line_end_pos, file_size, buffer_shift_amount, buffer_shift_direction);
 					memcpy(line_start+line_len, "\r\n", 2);
 				}
 				
@@ -407,11 +401,11 @@ case C_IGSE_WRITE:
 						}
 					}
 					
-					shift_buffer_chunk(buffer, line_end_pos, file_size+1, buffer_shift_amount, buffer_shift_direction);
+					shift_buffer_chunk(buffer, line_end_pos, file_size, buffer_shift_amount, buffer_shift_direction);
 				}
 				
 				if (arg_edit_mode == IGSE_WRITE_REPLACE  ||  arg_edit_mode == IGSE_WRITE_APPEND  ||  arg_edit_mode == IGSE_WRITE_NEW  ||  arg_edit_mode == IGSE_WRITE_INSERT) {
-					shift_buffer_chunk(buffer, line_end_pos, file_size+1, buffer_shift_amount, buffer_shift_direction);
+					shift_buffer_chunk(buffer, line_end_pos, file_size, buffer_shift_amount, buffer_shift_direction);
 
 					if (arg_edit_mode == IGSE_WRITE_NEW) {
 						memcpy(line_start, "\r\n", 2);
@@ -474,14 +468,8 @@ case C_IGSE_WRITE:
 					String_end(previous_line_backup);
 				}
 
-				if (buffer_shift_direction == OPTION_RIGHT) {
-					*separator += buffer_shift_amount;
-					file_size  += buffer_shift_amount;
-				} else {
-					*separator -= buffer_shift_amount;
-					file_size  -= buffer_shift_amount;
-				}
-				
+				*separator       += buffer_shift_amount * (buffer_shift_direction ? 1 : -1);
+				file_size        += buffer_shift_amount * (buffer_shift_direction ? 1 : -1);
 				buffer[file_size] = '\0';
 			}
 
@@ -509,12 +497,9 @@ case C_IGSE_WRITE:
 		if ((file = fopen(ptr_filename, "wb"))) {
 			size_t bytes_written = fwrite(buffer, 1, file_size, file);
 
-			if (bytes_written != file_size) {
-				if (ferror(file))
-					QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-				else
-					QWrite_err(FWERROR_FILE_WRITE, 3, bytes_written, file_size, ptr_filename);
-			} else
+			if (bytes_written != file_size)
+				QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);				
+			else
 				QWrite_err(FWERROR_NONE, 0);
 
 			fclose(file);
@@ -1851,6 +1836,7 @@ case C_IGSE_DB:
 
 	char *arg_filename         = empty_string;
 	bool arg_writing_mode      = false;
+	bool arg_list              = false;
 	size_t arg_new_keys        = 0;
 	size_t arg_arguments_size  = 0;
 	size_t arg_filename_length = 0;
@@ -1884,7 +1870,11 @@ case C_IGSE_DB:
 				break;
 
 			case NAMED_ARG_REMOVE :
-				arg_writing_mode  = true;
+				arg_writing_mode = true;
+				break;
+
+			case NAMED_ARG_LIST :
+				arg_list = true;
 				break;
 		}
 	}		
@@ -2031,7 +2021,7 @@ case C_IGSE_DB:
 	// Verify database
 	bool db_error = false;
 	
-	if (arg_writing_mode) {
+	if (arg_writing_mode || arg_list) {
 		unsigned int hash_previous   = 0;
 		size_t pointer_previous      = 0;
 		size_t minimal_pointer_value = sizeof(igsedb_header) + header->number_of_keys * sizeof(size_t) * 3;
@@ -2131,16 +2121,22 @@ case C_IGSE_DB:
 										
 					if (key_selected.index == header->number_of_keys-1)
 						value_pointer.end = buffer_size;
-					
+						
+					// If appending then don't count terminating zero
+					if (argument_hash[i] == NAMED_ARG_APPEND) {
+						arg_value_length--;
+						value_pointer.end--;
+					}
+
 					size_t value_old_length     = (argument_hash[i] == NAMED_ARG_WRITE ? (value_pointer.end - value_pointer.start) : 0);
-					size_t buffer_shift_amount  = arg_value_length>value_old_length ?  arg_value_length-value_old_length : value_old_length-arg_value_length;
-					bool buffer_shift_direction = arg_value_length > value_old_length;
+					size_t buffer_shift_amount  = arg_value_length >= value_old_length ?  arg_value_length-value_old_length : value_old_length-arg_value_length;
+					bool buffer_shift_direction = arg_value_length >= value_old_length;
 					
 					// Replace value
 					if (key_selected.index < header->number_of_keys-1)
 						shift_buffer_chunk(buffer, value_pointer.end, buffer_size, buffer_shift_amount, buffer_shift_direction);
 
-					memcpy(buffer+(argument_hash[i]==NAMED_ARG_WRITE ? value_pointer.start : value_pointer.end), arg_value, arg_value_length);
+					memcpy(buffer+(argument_hash[i]==NAMED_ARG_WRITE ? value_pointer.start : value_pointer.end), arg_value, arg_value_length + (argument_hash[i]==NAMED_ARG_APPEND ? 1 : 0));
 					
 					// Adjust pointers to values
 					for (size_t j=key_selected.index+1; j<header->number_of_keys; j++) {
@@ -2259,8 +2255,8 @@ case C_IGSE_DB:
 					memcpy(&key_pointer, buffer+key_pointer_pos, sizeof(igsedb_pointer));
 					
 					size_t value_old_length     = key_pointer.end - key_pointer.start;
-					size_t buffer_shift_amount  = arg_value_length>value_old_length ? arg_value_length-value_old_length : value_old_length-arg_value_length;
-					bool buffer_shift_direction = arg_value_length>value_old_length;
+					size_t buffer_shift_amount  = arg_value_length >= value_old_length ? arg_value_length-value_old_length : value_old_length-arg_value_length;
+					bool buffer_shift_direction = arg_value_length >= value_old_length;
 					
 					// Replace key
 					shift_buffer_chunk(buffer, key_pointer.end, buffer_size, buffer_shift_amount, buffer_shift_direction);
@@ -2338,7 +2334,7 @@ case C_IGSE_DB:
 						if (j < key_to_remove.index)
 							*pointer -= sizeof(key_hash) + sizeof(key_pointer_pos) + sizeof(value_pointer_pos);
 						
-						if (j >= key_to_remove.index  &&  i<header->number_of_keys+key_to_remove.index)
+						if (j >= key_to_remove.index  &&  j<header->number_of_keys+key_to_remove.index)
 							*pointer -= sizeof(key_hash) + sizeof(key_pointer_pos) + sizeof(value_pointer_pos) + arg_value_length;
 							
 						if (j >= header->number_of_keys+key_to_remove.index)
