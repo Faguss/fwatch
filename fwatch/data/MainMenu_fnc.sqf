@@ -2,24 +2,18 @@
 // Required to make MainMenu.sqs work
 
 FUNCTION_FIND = {
-	private ["_i", "_break"];
-	_i     = 0;
-	_break = false; 
-
-	while "!_break" do {
-		if (_i >= count (_this select 1)) then {
-			_i     = -1; 
-			_break = true
-		} else {
-			if ((_this select 0) == (_this select 1) select _i) then {
-				_break = true
-			} else {
-				_i = _i + 1
-			}
-		}
-	};
-
-	_i
+	if (IS_CWA) then {(_this select 1) find (_this select 0)} else {
+		private ["_i","_index"];
+		_i=0;
+		_index=-1;
+		
+		{
+			if ((_this select 0) == _x) then {_index=_i};
+			_i=_i+1
+		} forEach (_this select 1);
+		
+		_index
+	}
 };
 
 

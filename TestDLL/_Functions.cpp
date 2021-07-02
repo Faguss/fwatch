@@ -2291,6 +2291,7 @@ void QWrite_err(int code_primary, int arg_num, ...) {
 		case FWERROR_DB_PTRBIG      : strcpy(format,"Database pointer %u/%u value %u is too big (maximal is %u) in file %s"); break;
 		case FWERROR_DB_PTRFIRST    : strcpy(format,"Database first pointer value %u is incorrect (should be %u) in file %s"); break;
 		case FWERROR_DB_CONSISTENCY : strcpy(format,"Database consistency error (item %u/%u at %u) in file %s"); break;
+		case FWERROR_DB_KEYEXISTS   : strcpy(format,"Key %s already exists in file %s"); break;
 		
 		default : sprintf(format, "Unknown error %d", code_primary);
 	}

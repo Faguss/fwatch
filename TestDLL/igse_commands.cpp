@@ -1836,7 +1836,8 @@ case C_IGSE_DB:
 
 	char *arg_filename         = empty_string;
 	bool arg_writing_mode      = false;
-	bool arg_list              = false;
+	bool arg_verify            = false;
+	bool arg_unique            = false;
 	size_t arg_new_keys        = 0;
 	size_t arg_arguments_size  = 0;
 	size_t arg_filename_length = 0;
@@ -1874,7 +1875,15 @@ case C_IGSE_DB:
 				break;
 
 			case NAMED_ARG_LIST :
-				arg_list = true;
+				arg_verify = true;
+				break;
+
+			case NAMED_ARG_VERIFY :
+				arg_verify = String2Bool(argument[i+1]);
+				break;
+
+			case NAMED_ARG_UNIQUE : 
+				arg_unique = String2Bool(argument[i+1]);
 				break;
 		}
 	}		
@@ -2021,7 +2030,7 @@ case C_IGSE_DB:
 	// Verify database
 	bool db_error = false;
 	
-	if (arg_writing_mode || arg_list) {
+	if (arg_writing_mode || arg_verify) {
 		unsigned int hash_previous   = 0;
 		size_t pointer_previous      = 0;
 		size_t minimal_pointer_value = sizeof(igsedb_header) + header->number_of_keys * sizeof(size_t) * 3;
@@ -2099,16 +2108,24 @@ case C_IGSE_DB:
 				key_selected = binary_search_str(buffer+sizeof(igsedb_header), header->number_of_keys, key_hash, 0, header->number_of_keys-1);
 				
 				// Check for hash collision
-				size_t key_pointer_pos = sizeof(igsedb_header) + (header->number_of_keys + key_selected.index) * sizeof(size_t);
-				memcpy(&key_pointer, buffer+key_pointer_pos, sizeof(igsedb_pointer));
-				
-				if (key_selected.found  &&  strncmpi(buffer+key_pointer.start,key_name,key_length) != 0) {
-					size_t hash_pos    = sizeof(igsedb_header) + key_selected.index * sizeof(unsigned int);
-					unsigned int *hash = (unsigned int*)buffer + hash_pos;
-					
-					QWrite_err(FWERROR_DB_COLLISION, 5, arg_value, key_hash, buffer+key_pointer_pos, *hash, ptr_filename);
-					db_error = true;
-					break;
+				if (key_selected.found) {
+					if (arg_unique) {
+						QWrite_err(FWERROR_DB_KEYEXISTS, 2, arg_value, ptr_filename);
+						db_error = true;
+						break;
+					} else {
+						size_t key_pointer_pos = sizeof(igsedb_header) + (header->number_of_keys + key_selected.index) * sizeof(size_t);
+						memcpy(&key_pointer, buffer+key_pointer_pos, sizeof(igsedb_pointer));
+
+						if (strncmpi(buffer+key_pointer.start,key_name,key_length) != 0) {
+							size_t hash_pos    = sizeof(igsedb_header) + key_selected.index * sizeof(unsigned int);
+							unsigned int *hash = (unsigned int*)buffer + hash_pos;
+							
+							QWrite_err(FWERROR_DB_COLLISION, 5, arg_value, key_hash, buffer+key_pointer_pos, *hash, ptr_filename);
+							db_error = true;
+							break;
+						}
+					}
 				}
 			} break;
 			
