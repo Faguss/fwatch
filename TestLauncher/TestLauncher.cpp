@@ -270,8 +270,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	// Read master server address from the file if an argument wasn't passed
 	if (!client_arg.is_custom_master1) {
-		String ip_list;
-		int result = String_readfile(ip_list, "fwatch\\idb\\MasterServers.sqf");
+		StringDynamic ip_list;
+		int result = StringDynamic_readfile(ip_list, "fwatch\\idb\\MasterServers.sqf");
 
 		if (result == 0) {
 			int open[]  = {'\"', '{'};
@@ -302,7 +302,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 				}
 			}
 
-		String_end(ip_list);
+		StringDynamic_end(ip_list);
 	}
 
 
@@ -353,9 +353,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		DWORD dwExitCode = STILL_ACTIVE;
 		bool launched    = false;
 
-		String command_line;
-		String_init(command_line);
-		String_append_format(command_line, " %s%s", (add_nomap ? "-nomap " : ""), lpCmdLine);
+		StringDynamic command_line;
+		StringDynamic_init(command_line);
+		StringDynamic_append_format(command_line, " %s%s", (add_nomap ? "-nomap " : ""), lpCmdLine);
 
 		for (int i=0; i<global_exe_num; i++) {
 			if (custom_exe!=-1 && custom_exe!=i || strstr(global_exe_name[i],"_server.exe"))
@@ -367,7 +367,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			}
 		}
 		
-		String_end(command_line);
+		StringDynamic_end(command_line);
 
 		if (launched) {
 			_beginthread((void(*)(void*))FwatchPresence, 0, &client_arg);
@@ -394,11 +394,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 			if (RegOpenKey(HKEY_CURRENT_USER,"Software\\Valve\\Steam",&hKey) == ERROR_SUCCESS) {
 				if (RegQueryValueEx(hKey, "SteamExe" , 0, &dwType, (BYTE*)SteamExe , &SteamExeSize) == ERROR_SUCCESS) {
-					String command_line;
-					String_init(command_line);
-					String_append_format(command_line, "\"start \"\" \"%s\" -applaunch 65790 %s%s\"", SteamExe, (add_nomap ? "-nomap " : ""), lpCmdLine);
+					StringDynamic command_line;
+					StringDynamic_init(command_line);
+					StringDynamic_append_format(command_line, "\"start \"\" \"%s\" -applaunch 65790 %s%s\"", SteamExe, (add_nomap ? "-nomap " : ""), lpCmdLine);
 					system(command_line.text);
-					String_end(command_line);
+					StringDynamic_end(command_line);
 				}
 
 				RegCloseKey(hKey);
@@ -502,8 +502,8 @@ char* Tokenize(char *string, char *delimiter, size_t &i, size_t string_length, b
 // Parse Fwatch modfolder configuration and fill arrays with new values
 void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT)
 {
-	String config;
-	if (String_readfile(config, filename) != 0)
+	StringDynamic config;
+	if (StringDynamic_readfile(config, filename) != 0)
 		return;
 
 	memset(no_ar    , 0, sizeof(no_ar));
@@ -571,7 +571,7 @@ void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, i
 		}
 	}
 
-	String_end(config);
+	StringDynamic_end(config);
 }
 
 
@@ -727,8 +727,8 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 	char filename[64] = "fwatch\\data\\sortMissions";
 	strcat(filename, is_dedicated_server ? "_server.txt" : ".txt");
 
-	String mission_list;
-	if (String_readfile(mission_list, filename) != 0)
+	StringDynamic mission_list;
+	if (StringDynamic_readfile(mission_list, filename) != 0)
 		return;
 
 	size_t i                    = 0;
@@ -808,7 +808,7 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 		fclose(f);
 	}
 
-	String_end(mission_list);
+	StringDynamic_end(mission_list);
 }
 // ******************************************************************************************************
 
@@ -918,8 +918,8 @@ void FwatchPresence(ThreadArguments *arg)
 				CloseHandle(pi.hThread); 
 
 
-				String config;
-				if (String_readfile(config, "Aspect_Ratio.sqf") == 0) {
+				StringDynamic config;
+				if (StringDynamic_readfile(config, "Aspect_Ratio.sqf") == 0) {
 					char *token = strtok(config.text, ";\n\t ");
 
 					while (token != NULL) {
@@ -945,7 +945,7 @@ void FwatchPresence(ThreadArguments *arg)
 					}
 				}
 
-				String_end(config);
+				StringDynamic_end(config);
 			}
 		}
 	}
@@ -1433,13 +1433,11 @@ void FwatchPresence(ThreadArguments *arg)
 			if (*arg->mailslot != INVALID_HANDLE_VALUE) {
 				DWORD message_size   = 0;
 				DWORD message_number = 0;
-//FILE *fd=fopen("fwatch_debug2.txt","a");
+
 				if (GetMailslotInfo(*arg->mailslot, (LPDWORD)NULL, &message_size, &message_number, (LPDWORD)NULL)) {
-					//fprintf(fd,"message_size:%d\n",message_size);
 					if (message_size != MAILSLOT_NO_MESSAGE)
 						_beginthread((void(*)(void*))WatchProgram, 0, arg);
 				}
-				//fclose(fd);
 			}
 		}
 
@@ -1952,12 +1950,12 @@ void WatchProgram(ThreadArguments *arg)
 
 									if (hash==C_EXE_MAKEPBO  &&  info.exit_code==0) {
 										//Extract path from arguments
-										String path_dir;
-										String path_pbo;
-										String path_dir_file;
-										String_init(path_dir);
-										String_init(path_pbo);
-										String_init(path_dir_file);
+										StringDynamic path_dir;
+										StringDynamic path_pbo;
+										StringDynamic path_dir_file;
+										StringDynamic_init(path_dir);
+										StringDynamic_init(path_pbo);
+										StringDynamic_init(path_dir_file);
 
 										for (int i=strlen(params),quot=0; i>=0; i--) {
 											if (params[i] == '"') {
@@ -1967,15 +1965,15 @@ void WatchProgram(ThreadArguments *arg)
 													params[i] = '\0';
 
 												if (quot == 2)
-													String_append(path_dir, params+i+1);
+													StringDynamic_append(path_dir, params+i+1);
 											}
 										}
 										
-										String_append_format(path_pbo, "%s.pbo", path_dir.text);
-										String_append_format(path_dir_file, "%s\\", path_dir.text);
+										StringDynamic_append_format(path_pbo, "%s.pbo", path_dir.text);
+										StringDynamic_append_format(path_dir_file, "%s\\", path_dir.text);
 										
-										String buffer_pbo;
-										int result = String_readfile(buffer_pbo, path_pbo.text);
+										StringDynamic buffer_pbo;
+										int result = StringDynamic_readfile(buffer_pbo, path_pbo.text);
 
 										if (result == 0) {
 											const int name_max  = 512;
@@ -2025,7 +2023,7 @@ void WatchProgram(ThreadArguments *arg)
 														break;
 												} else {
 													path_dir_file.length = path_dir.length+ 1;
-													String_append(path_dir_file, name);
+													StringDynamic_append(path_dir_file, name);
 													
 													WIN32_FILE_ATTRIBUTE_DATA fd;
 													GetFileAttributesEx(path_dir_file.text, GetFileExInfoStandard, &fd);
@@ -2055,10 +2053,10 @@ void WatchProgram(ThreadArguments *arg)
 											}
 										}
 
-										String_end(path_dir);
-										String_end(path_pbo);
-										String_end(path_dir_file);
-										String_end(buffer_pbo);
+										StringDynamic_end(path_dir);
+										StringDynamic_end(path_pbo);
+										StringDynamic_end(path_dir_file);
+										StringDynamic_end(buffer_pbo);
 									}
 
 									db_pid_save(info);

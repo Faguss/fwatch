@@ -2,7 +2,7 @@
 // EXTERNAL EXECUTABLES
 // -----------------------------------------------------------------
 
-case C_SPIG_EXE:
+case C_SPIG_EXE:	//TODO: remove this command on release because it's obsolete
 { // Execute program from the SPIG directory
 
 	if (global.is_server) 
@@ -32,9 +32,9 @@ case C_SPIG_EXE:
 
 
 	// Format argument which will be passed to the program
-	String buf_arguments;
-	String_init(buf_arguments);
-	String_append_format(buf_arguments, "\"%s\" \"fwatch\\mdb\\%s\" -silent", global.mission_path, stripq(argument[3]));
+	StringDynamic buf_arguments;
+	StringDynamic_init(buf_arguments);
+	StringDynamic_append_format(buf_arguments, "\"%s\" \"fwatch\\mdb\\%s\" -silent", global.mission_path, stripq(argument[3]));
 
 	// Run program
 	STARTUPINFO si;
@@ -47,11 +47,11 @@ case C_SPIG_EXE:
 
 	if (!CreateProcess(program, buf_arguments.text, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
 		QWritef("\"Failed to execute %s\"", program);
-		String_end(buf_arguments);
+		StringDynamic_end(buf_arguments);
 		break;
 	}
 
-	String_end(buf_arguments);
+	StringDynamic_end(buf_arguments);
 
 
 	// Wait for the program to end
@@ -223,15 +223,15 @@ case C_RESTART_SERVER:
 
 	// Create string that will be passed to the program
 	// Starting with directory path (deal with spaces)
-	String param;
-	String_init(param);
-	String_append_format(param, "%d|%d|\"%s", argument_hash[0], db_id, pwd);
+	StringDynamic param;
+	StringDynamic_init(param);
+	StringDynamic_append_format(param, "%d|%d|\"%s", argument_hash[0], db_id, pwd);
 
 	if (argument_hash[0] == C_EXE_WGET)
-		String_append(param, "\\fwatch\\data");
+		StringDynamic_append(param, "\\fwatch\\data");
 
 	if (argument_hash[0] != C_EXE_PREPROCESS)
-		String_append(param, "\" ");
+		StringDynamic_append(param, "\" ");
 
 	bool error = false;
 
@@ -241,66 +241,67 @@ case C_RESTART_SERVER:
 		case C_EXE_MAKEPBO : {
 			bool extra_option = argument_num>=5 && ((argument_hash[0]==C_EXE_UNPBO && strcmpi(argument[2],"-F")==0) || (argument_hash[0]==C_EXE_MAKEPBO && strcmpi(argument[2],"-Z")==0));
 
-			String buf_filename;
-			String_init(buf_filename);
+			StringDynamic buf_filename;
+			StringDynamic_init(buf_filename);
 			char *ptr_filename = stripq(argument[extra_option ? 4 : 2]);
 			VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR | OPTION_SUPPRESS_ERROR);
 
-			String_append(param, argument_hash[0]==C_EXE_UNPBO ? " -YP " : " -NRK ");
+			StringDynamic_append(param, argument_hash[0]==C_EXE_UNPBO ? " -YP " : " -NRK ");
 
 			if (extra_option)
-				String_append_format(param, "%s %s \"%s\"", argument[2], argument[3], ptr_filename);
+				StringDynamic_append_format(param, "%s %s \"%s\"", argument[2], argument[3], ptr_filename);
 			else
-				String_append_format(param, "\"%s\"", ptr_filename);
+				StringDynamic_append_format(param, "\"%s\"", ptr_filename);
 
 			// Destination folder must start with drive
 			if (argument_hash[0] == C_EXE_UNPBO) {
-				String_append_format(param, " \"%s", pwd);
+				StringDynamic_append_format(param, " \"%s", pwd);
 
 				if ((extra_option && argument_num>=6) || (!extra_option && argument_num>=4)) {
 					buf_filename.length = 0;
 					ptr_filename        = stripq(argument[extra_option ? 5 : 3]);
 
 					if (VerifyPath(&ptr_filename, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR | OPTION_SUPPRESS_ERROR | OPTION_SUPPRESS_CONVERSION))
-						String_append_format(param, "\\fwatch\\tmp\\%s\" ", ptr_filename);
+						StringDynamic_append_format(param, "\\fwatch\\tmp\\%s\" ", ptr_filename);
 					else
-						String_append(param, "\\fwatch\\tmp\" ");
+						StringDynamic_append(param, "\\fwatch\\tmp\" ");
 				} else
-					String_append(param, "\\fwatch\\tmp\" ");
+					StringDynamic_append(param, "\\fwatch\\tmp\" ");
 			} else {
-				int ptr_filename_len = strlen(ptr_filename); 
 				char fwatch_tmp[]    = "fwatch\\tmp";
-				int fwatch_tmp_len   = strlen(fwatch_tmp);
+				String search_source = {ptr_filename, strlen(ptr_filename)};
+				String to_find = {fwatch_tmp, strlen(fwatch_tmp)};
 
-				if (argument_num>=6 || !strstr2(ptr_filename, ptr_filename_len, fwatch_tmp, fwatch_tmp_len, OPTION_NONE)) {
-					String_append(param, " \"fwatch\\tmp");
+				if (argument_num>=6 || !strstr2(search_source, to_find, OPTION_NONE)) {
+					StringDynamic_append(param, " \"fwatch\\tmp");
 
 					if (argument_num >= 6)
-						String_append_format(param, "\\%s", stripq(argument[5]));
+						StringDynamic_append_format(param, "\\%s", stripq(argument[5]));
 
-					String_append(param, "\"");
+					StringDynamic_append(param, "\"");
 				}
 			}
 
-			String_end(buf_filename);
+			StringDynamic_end(buf_filename);
 		}
 		break;
 		
 		case C_EXE_WGET : {
-			String_append_format(param, "--directory-prefix=fwatch\\tmp --no-check-certificate ");
+			StringDynamic_append_format(param, "--directory-prefix=fwatch\\tmp --no-check-certificate ");
 
 			for (size_t i=2; i<argument_num; i++) {
-				String_append_len(param, " ", 1);
-				String_append_len(param, argument[i], argument_length[i]);
+				StringDynamic_append_len(param, " ", 1);
+				StringDynamic_append_len(param, argument[i], argument_length[i]);
 			}
 		}
 		break;
 		
 		case C_EXE_PREPROCESS : {
-			String buf_filename1;
-			String buf_filename2;
-			String_init(buf_filename1);
-			String_init(buf_filename2);
+			StringDynamic buf_filename1;
+			StringDynamic buf_filename2;
+			StringDynamic_init(buf_filename1);
+			StringDynamic_init(buf_filename2);
+
 			char *ptr_filename1 = 0;
 			char *ptr_filename2 = 0;
 			bool merge = false;
@@ -333,40 +334,40 @@ case C_RESTART_SERVER:
 			if (ptr_filename2) {
 				if (!VerifyPath(&ptr_filename2, buf_filename2, OPTION_RESTRICT_TO_MISSION_DIR)) {
 					QWrite("0,0]"); 
-					String_end(buf_filename1);
-					String_end(buf_filename2);
+					StringDynamic_end(buf_filename1);
+					StringDynamic_end(buf_filename2);
 					error = true;
 				}
 			}
 
 			// Add starting path
-			String_append_format(param, "\\%s", ptr_filename1);
+			StringDynamic_append_format(param, "\\%s", ptr_filename1);
 
 			char *lastSlash = strrchr(ptr_filename1, '\\');
 			int length      = lastSlash - ptr_filename1 + 1;
 			param.length   -= length;
 
-			String_append(param, "\" -silent ");
+			StringDynamic_append(param, "\" -silent ");
 
 			if (merge)
-				String_append(param, "-merge "); 
+				StringDynamic_append(param, "-merge "); 
 
 			// Add file to parameter list
-			String_append_format(param, " \"%s\"", ptr_filename1);
+			StringDynamic_append_format(param, " \"%s\"", ptr_filename1);
 
 			if (ptr_filename2)
-				String_append_format(param, " \"%s\"", ptr_filename2);
+				StringDynamic_append_format(param, " \"%s\"", ptr_filename2);
 
-			String_end(buf_filename1);
-			String_end(buf_filename2);
+			StringDynamic_end(buf_filename1);
+			StringDynamic_end(buf_filename2);
 		}
 		break;
 		
 		default : {
 			// Add text that was passed to this command
 			for (size_t i=2; i<argument_num; i++) {
-				String_append_len(param, " ", 1);
-				String_append_len(param, argument[i], argument_length[i]);
+				StringDynamic_append_len(param, " ", 1);
+				StringDynamic_append_len(param, argument[i], argument_length[i]);
 			}
 
 			// Add information about this game instance
@@ -379,7 +380,7 @@ case C_RESTART_SERVER:
 			else
 				game_exe_ptr = game_exe_buffer;
 
-			String_append_format(param, " -pid=%d \"-run=%s\"", global.pid, game_exe_ptr);
+			StringDynamic_append_format(param, " -pid=%d \"-run=%s\"", global.pid, game_exe_ptr);
 		}
 		break;
 	}
@@ -406,7 +407,7 @@ case C_RESTART_SERVER:
 		}
 	}
 
-	String_end(param);
+	StringDynamic_end(param);
 } 
 break;
 

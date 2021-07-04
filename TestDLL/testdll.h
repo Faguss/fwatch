@@ -369,13 +369,18 @@ static const int global_exe_version[] = {
 static const int global_exe_num    = sizeof(global_exe_version) / sizeof(global_exe_version[0]);
 static const int global_window_num = sizeof(global_window_name) / sizeof(global_window_name[0]);
 
-static const int String_init_capacity = 1024;
+static const int StringDynamic_init_capacity = 1024;
+
+struct StringDynamic {
+	char *text;
+	size_t length;
+	size_t capacity;
+	char stack[StringDynamic_init_capacity];
+};
 
 struct String {
 	char *text;
 	size_t length;
-	size_t capacity;
-	char stack[String_init_capacity];
 };
 
 struct WatchProgramInfo {
@@ -659,7 +664,8 @@ DWORD findProcess(const char *exe_name);
 char* str_replace(const char *strbuf, const char *strold, const char *strnew, int options);
 
 //1.13
-char* strstr2(const char *arg1, size_t arg1_len, const char *arg2, size_t arg2_len, int options);
+char* strstr2(String &source, String &to_find, int options);
+char* strstr2_old(const char *arg1, size_t arg1_len, const char *arg2, size_t arg2_len, int options);
 int strncmpi(const char *ps1, const char *ps2, int n);
 bool trashFile(char *path, int len, int error_behaviour);
 double rad2deg(double num);
@@ -695,14 +701,14 @@ static int strnatcmp0(nat_char const *a, nat_char const *b, int fold_case);
 int strnatcmp(nat_char const *a, nat_char const *b);
 int strnatcasecmp(nat_char const *a, nat_char const *b);
 
-void String_init(String &str);
-int String_allocate(String &str, size_t new_maximal_length);
-int String_append_len(String &str, const char *text, size_t text_length);
-int String_append(String &str, const char *text);
-int String_append_quotes(String &str, const char *left, char *text, const char *right);
-void String_end(String &str);
-int String_readfile(String &str, char *path);
-int VerifyPath(char **ptr_filename, String &str, int mode);
+void StringDynamic_init(StringDynamic &str);
+int StringDynamic_allocate(StringDynamic &str, size_t new_maximal_length);
+int StringDynamic_append_len(StringDynamic &str, const char *text, size_t text_length);
+int StringDynamic_append(StringDynamic &str, const char *text);
+int StringDynamic_append_quotes(StringDynamic &str, const char *left, char *text, const char *right);
+void StringDynamic_end(StringDynamic &str);
+int StringDynamic_readfile(StringDynamic &str, char *path);
+int VerifyPath(char **ptr_filename, StringDynamic &str, int mode);
 unsigned int fnv1a_hash (unsigned int hash, char *text, int text_length, bool lowercase);
 void PurgeComments(char *text, int string_start, int string_end);
 int DeleteWrapper(char *refcstrRootDirectory);
@@ -717,7 +723,7 @@ int binary_search(unsigned item_to_find, unsigned int *array, int low, int high)
 BinarySearchResult binary_search_str(char *buffer, size_t array_size, unsigned int value_to_find, size_t low, size_t high);
 void QWrite_err(int code_primary, int arg_num, ...);
 FileSize DivideBytes(double bytes);
-int String_append_format_debug(String &str, const char *format, ...);
+int StringDynamic_append_format_debug(StringDynamic &str, const char *format, ...);
 void SQM_Init(SQM_ParseState &input);
 int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_type, char *to_find, size_t to_find_length);
-int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, String &source, SQM_ParseState &source_state);
+int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, StringDynamic &source, SQM_ParseState &source_state);

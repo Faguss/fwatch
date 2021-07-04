@@ -316,7 +316,7 @@ bool checkActiveWindow(void) {
 
 //v1.12 Replace all occurrences in a string
 // http://someboringsite.com/2009/09/ansi-c-string-replacement-function.html
-char* str_replace(const char *strbuf, const char *strold, const char *strnew, int options) {
+char* str_replace(const char *strbuf, const char *strold, const char *strnew, int options) {	//TODO: remove this function on release because it's obsolete
 	char *strret;
 	char *posnews;
 	char *posold;
@@ -331,13 +331,13 @@ char* str_replace(const char *strbuf, const char *strold, const char *strnew, in
 	if (!strold  ||  !strnew) 
 		return strdup(strbuf);
 
-	p = strstr2(strbuf, strlen(strbuf), strold, strlen(strold), options);
+	p = strstr2_old(strbuf, strlen(strbuf), strold, strlen(strold), options);
 
 	if (!p) 
 		return strdup(strbuf);
 
 	while (n > 0) {
-		if (!(p = strstr2(p+1, strlen(strbuf), strold, strlen(strold), options))) 
+		if (!(p = strstr2_old(p+1, strlen(strbuf), strold, strlen(strold), options))) 
 			break;
 
 		n++;
@@ -348,7 +348,7 @@ char* str_replace(const char *strbuf, const char *strold, const char *strnew, in
 	if (!strret) 
 		return NULL;
 
-	p = strstr2(strbuf, strlen(strbuf), strold, strlen(strold), options);
+	p = strstr2_old(strbuf, strlen(strbuf), strold, strlen(strold), options);
 
 	strncpy(strret, strbuf, (p-strbuf));
 
@@ -360,7 +360,7 @@ char* str_replace(const char *strbuf, const char *strold, const char *strnew, in
 	posnews += sznew;
 
 	while (n > 0) {
-		if (!(p = strstr2(p+1, strlen(p+1), strold, strlen(strold), options))) 
+		if (!(p = strstr2_old(p+1, strlen(p+1), strold, strlen(strold), options))) 
 			break;
 
 		strncpy(posnews, posold, p-posold);
@@ -386,36 +386,36 @@ char* str_replace(const char *strbuf, const char *strold, const char *strnew, in
 
 //v1.13 Search for string insensitive
 //http://www.codeguru.com/cpp/cpp/string/article.php/c5641/Case-Insensitive-strstr.htm
-char* strstr2(const char *arg1, size_t arg1_len, const char *arg2, size_t arg2_len, int options) {
-	if (arg1_len==0 || arg2_len==0)
+char* strstr2(String &source, String &to_find, int options) {
+	if (source.length==0 || to_find.length==0)
 		return NULL;
 	
-	for (size_t pos=0;  pos<arg1_len;  pos++) {
+	for (size_t pos=0;  pos<source.length;  pos++) {
 		size_t pos_arg1 = pos;
 		size_t pos_arg2 = 0;
 
 		// Compare arg1+pos with arg2
 		while (
 			options & OPTION_CASESENSITIVE 
-				? arg1[pos_arg1++] == arg2[pos_arg2++] 
-				: (arg1[pos_arg1++] | 32) == (arg2[pos_arg2++] | 32)
+				? source.text[pos_arg1++] == to_find.text[pos_arg2++] 
+				: (source.text[pos_arg1++] | 32) == (to_find.text[pos_arg2++] | 32)
 		) {
-			if (pos_arg2 == arg2_len) {
+			if (pos_arg2 == to_find.length) {
 				if (~options & OPTION_MATCHWORD  
 					||  
 					// If matching the whole word then occurrence musn't be surrounded by graphic characters
 					(options & OPTION_MATCHWORD && 
 						// If left side of the match is empty
-						(pos==0  ||  (pos>0  &&  !isalnum(arg1[pos-1])  &&  arg1[pos-1]!='_')) 
+						(pos==0  ||  (pos>0  &&  !isalnum(source.text[pos-1])  &&  source.text[pos-1]!='_')) 
 						&& 
 						// If right side of the match is empty
-						(pos+arg2_len>=arg1_len  ||  (pos+arg2_len<arg1_len  &&  !isalnum(arg1[pos+arg2_len])  &&  arg1[pos+arg2_len]!='_'))
+						(pos+to_find.length>=source.length  ||  (pos+to_find.length<source.length  &&  !isalnum(source.text[pos+to_find.length])  &&  source.text[pos+to_find.length]!='_'))
 					)
 				) 
-					return (char*)(arg1+pos);
+					return (char*)(source.text+pos);
 				
 				// If failed to match the whole word then move forward
-				pos += arg2_len;
+				pos += to_find.length;
 				break;
 			}
 		}
@@ -1037,7 +1037,7 @@ StringPos ConvertStringPos(char *range_start, char *range_end, char *range_lengt
 		size_t i      = 0;
 		bool negative = false;
 
-		while (range_start[i] == '-') {
+		while (range_end[i] == '-') {
 			i++;
 			negative = !negative;
 		}
@@ -1659,7 +1659,7 @@ strnatcasecmp(nat_char const *a, nat_char const *b) {
 
 
 
-int VerifyPath(char **ptr_filename, String &str, int options) {
+int VerifyPath(char **ptr_filename, StringDynamic &str, int options) {
 	int i             = 0;
 	int item_start    = 0;
 	int item_index    = 0;
@@ -1760,7 +1760,7 @@ int VerifyPath(char **ptr_filename, String &str, int options) {
 					if (root_dir)
 						*ptr_filename += 3;
 					else {
-						String_append_format(str, "%s%s", global.mission_path, *ptr_filename);
+						StringDynamic_append_format(str, "%s%s", global.mission_path, *ptr_filename);
 						*ptr_filename = str.text;
 					}
 				}
@@ -1848,14 +1848,14 @@ int DeleteWrapper(char *refcstrRootDirectory) {
 	bool            bDeleteSubdirectories = true;
 	bool            bSubdirectory = false;       // Flag, indicating whether subdirectories have been found
 	HANDLE          hFile;                       // Handle to directory
-	String     	    strFilePath;                 // Filepath
-	String          strPattern;                  // Pattern
+	StringDynamic   strFilePath;                 // Filepath
+	StringDynamic   strPattern;                  // Pattern
 	WIN32_FIND_DATA FileInformation;             // File information
 
-	String_init(strFilePath);
-	String_init(strPattern);
-	String_append_format(strFilePath, "%s\\", refcstrRootDirectory);
-	String_append_format(strPattern, "%s\\*.*", refcstrRootDirectory);
+	StringDynamic_init(strFilePath);
+	StringDynamic_init(strPattern);
+	StringDynamic_append_format(strFilePath, "%s\\", refcstrRootDirectory);
+	StringDynamic_append_format(strPattern, "%s\\*.*", refcstrRootDirectory);
 	
 	int saved_length = strFilePath.length;
 	hFile            = FindFirstFile(strPattern.text, &FileInformation);
@@ -1864,7 +1864,7 @@ int DeleteWrapper(char *refcstrRootDirectory) {
 		do {
 			if (FileInformation.cFileName[0] != '.') {
 				strFilePath.length = saved_length;
-				String_append(strFilePath, FileInformation.cFileName);
+				StringDynamic_append(strFilePath, FileInformation.cFileName);
 
 				if (FileInformation.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 					if (bDeleteSubdirectories) {
@@ -1919,8 +1919,8 @@ int DeleteWrapper(char *refcstrRootDirectory) {
 	}
 
 	DeleteDirectory_return:
-	String_end(strFilePath);
-	String_end(strPattern);
+	StringDynamic_end(strFilePath);
+	StringDynamic_end(strPattern);
 	return return_value;
 }
 
@@ -2645,7 +2645,15 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 						state.word_started = false;
 						state.expect       = SQM_PROPERTY;
 						
-						if (action_type==SQM_ACTION_GET_NEXT_ITEM || (action_type==SQM_ACTION_FIND_PROPERTY && state.class_level==initial_level && strncmpi(state.property,to_find,to_find_length)==0)) {
+						if (
+							action_type==SQM_ACTION_GET_NEXT_ITEM || 
+							(
+								action_type == SQM_ACTION_FIND_PROPERTY && 
+								state.class_level == initial_level && 
+								state.property_length == to_find_length &&
+								strncmpi(state.property,to_find,to_find_length)==0
+							)
+						) {
 							state.i++;
 							return SQM_OUTPUT_PROPERTY;
 						}
@@ -2695,7 +2703,15 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 						state.expect = SQM_PROPERTY;
 						
 						// Return starting position of this class
-						if (action_type==SQM_ACTION_GET_NEXT_ITEM || (action_type==SQM_ACTION_FIND_CLASS && state.class_level-1==initial_level && strncmpi(state.class_name,to_find,to_find_length) == 0)) {						
+						if (
+							action_type==SQM_ACTION_GET_NEXT_ITEM || 
+							(
+								action_type == SQM_ACTION_FIND_CLASS && 
+								state.class_level-1 == initial_level && 
+								state.class_name_length == to_find_length && 
+								strncmpi(state.class_name,to_find,to_find_length) == 0
+							)
+						) {
 							state.i++;
 							return SQM_OUTPUT_CLASS;
 						}
@@ -2745,7 +2761,7 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 
 
 // Copy classes and properties from "merge" to "source"
-int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, String &source, SQM_ParseState &source_state) {
+int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, StringDynamic &source, SQM_ParseState &source_state) {
 	int merge_parse_result             = 0;
 	SQM_ParseState source_state_backup = source_state;
 	bool buffer_modified               = false;
@@ -2848,4 +2864,42 @@ int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, Str
 	}
 
 	return buffer_modified;
+}
+
+char* strstr2_old(const char *arg1, size_t arg1_len, const char *arg2, size_t arg2_len, int options) {	//TODO: remove this on release
+	if (arg1_len==0 || arg2_len==0)
+		return NULL;
+	
+	for (size_t pos=0;  pos<arg1_len;  pos++) {
+		size_t pos_arg1 = pos;
+		size_t pos_arg2 = 0;
+
+		// Compare arg1+pos with arg2
+		while (
+			options & OPTION_CASESENSITIVE 
+				? arg1[pos_arg1++] == arg2[pos_arg2++] 
+				: (arg1[pos_arg1++] | 32) == (arg2[pos_arg2++] | 32)
+		) {
+			if (pos_arg2 == arg2_len) {
+				if (~options & OPTION_MATCHWORD  
+					||  
+					// If matching the whole word then occurrence musn't be surrounded by graphic characters
+					(options & OPTION_MATCHWORD && 
+						// If left side of the match is empty
+						(pos==0  ||  (pos>0  &&  !isalnum(arg1[pos-1])  &&  arg1[pos-1]!='_')) 
+						&& 
+						// If right side of the match is empty
+						(pos+arg2_len>=arg1_len  ||  (pos+arg2_len<arg1_len  &&  !isalnum(arg1[pos+arg2_len])  &&  arg1[pos+arg2_len]!='_'))
+					)
+				) 
+					return (char*)(arg1+pos);
+				
+				// If failed to match the whole word then move forward
+				pos += arg2_len;
+				break;
+			}
+		}
+	}
+
+	return NULL;
 }

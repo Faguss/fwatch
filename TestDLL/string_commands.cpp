@@ -226,27 +226,26 @@ break;
 case C_STRING_REPLACE:
 { // Replace text in a given string
 
-	char *arg_source          = empty_string;
-	char *arg_to_find         = empty_string;
-	char *arg_replace_with    = empty_string;
-	size_t arg_source_length  = 0;
-	size_t arg_to_find_length = 0;
-	int arg_options           = OPTION_NONE;
+	String arg_source       = {empty_string, 0};
+	String arg_to_find      = {empty_string, 0};
+	String arg_replace_with = {empty_string, 0};
+	int arg_options         = OPTION_NONE;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_TEXT : 
-				arg_source        = argument[i+1];
-				arg_source_length = argument_length[i+1];
+				arg_source.text   = argument[i+1];
+				arg_source.length = argument_length[i+1];
 				break;
 
 			case NAMED_ARG_FIND : 
-				arg_to_find        = argument[i+1];
-				arg_to_find_length = argument_length[i+1];
+				arg_to_find.text   = argument[i+1];
+				arg_to_find.length = argument_length[i+1];
 				break;
 
 			case NAMED_ARG_REPLACE : 
-				arg_replace_with = argument[i+1];
+				arg_replace_with.text   = argument[i+1];
+				arg_replace_with.length = argument_length[i+1];
 				break;
 
 			case NAMED_ARG_CASESENSITIVE : 
@@ -265,17 +264,21 @@ case C_STRING_REPLACE:
 
 
 	char *found     = NULL;
-	char *found_end = arg_source;
+	char *found_end = arg_source.text;
+	String temp     = arg_source;
 	
-	while ((found = strstr2(found_end, arg_source_length-(found_end-arg_source), arg_to_find, arg_to_find_length, arg_options))) {
+	while ((found = strstr2(temp, arg_to_find, arg_options))) {
 		QWritel(found_end, found-found_end);
-		QWrite(arg_replace_with);
+		QWrite(arg_replace_with.text);
 
-		found_end = found + arg_to_find_length;
+		found_end = found + arg_to_find.length;
+
+		temp.text   = found_end;
+		temp.length = arg_source.length-(found_end-arg_source.text);
 	}
 	
-	if (found_end < arg_source+arg_source_length)
-		QWritel(found_end, arg_source + arg_source_length - found_end);
+	if (found_end < arg_source.text+arg_source.length)
+		QWritel(found_end, arg_source.text + arg_source.length - found_end);
 }
 break;
 
@@ -618,27 +621,26 @@ break;
 case C_STRING_CUT:
 { // Return part of a string
 
-	char *arg_text              = empty_string;
+	String arg_text             = {empty_string, 0};
+	String arg_search_start     = {empty_string, 0};
+	String arg_search_end       = {empty_string, 0};
 	char *search_start          = empty_string;
 	char *search_end            = empty_string;
 	char *arg_start             = empty_string;
 	char *arg_end               = empty_string;
 	char *arg_len               = empty_string;
-	char *arg_search_start      = empty_string;
-	char *arg_search_end        = empty_string;
-	size_t arg_text_len         = 0;
-	size_t arg_search_start_len = 0;
-	size_t arg_search_end_len   = 0;
 	size_t arg_offset_start     = 0;
 	size_t arg_offset_end       = 0;
+	bool arg_offset_start_right = 1;
+	bool arg_offset_end_right   = 1;
 	int arg_options             = OPTION_NONE;
 	bool arg_crop_mode          = false;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_TEXT : 
-				arg_text     = argument[i+1]; 
-				arg_text_len = argument_length[i+1]; 
+				arg_text.text   = argument[i+1]; 
+				arg_text.length = argument_length[i+1]; 
 				break;
 
 			case NAMED_ARG_START : 
@@ -658,13 +660,13 @@ case C_STRING_CUT:
 				break;
 
 			case NAMED_ARG_STARTFIND : 
-				arg_search_start     = argument[i+1]; 
-				arg_search_start_len = argument_length[i+1];
+				arg_search_start.text   = argument[i+1]; 
+				arg_search_start.length = argument_length[i+1];
 				break;
 
 			case NAMED_ARG_ENDFIND : 
-				arg_search_end     = argument[i+1]; 
-				arg_search_end_len = argument_length[i+1];
+				arg_search_end.text   = argument[i+1]; 
+				arg_search_end.length = argument_length[i+1];
 				break;
 
 			case NAMED_ARG_MATCHWORD : 
@@ -680,59 +682,64 @@ case C_STRING_CUT:
 				break;
 
 			case NAMED_ARG_STARTOFFSET : 
+				if (argument[i+1][0] == '-')
+					arg_offset_start_right = 0;
 				arg_offset_start = strtoul(argument[i+1], NULL, 0);
 				break;
 
 			case NAMED_ARG_ENDOFFSET : 
+				if (argument[i+1][0] == '-')
+					arg_offset_start_right = 0;
 				arg_offset_end = strtoul(argument[i+1], NULL, 0);
 				break;
 		}
 	}
 
-	if (arg_text_len == 0)
+	if (arg_text.length == 0)
 		break;
+
+	StringPos range = ConvertStringPos(arg_start, arg_end, arg_len, arg_text.length);
 
 
 	// Search for the start and end position
-	/*if (strcmp(search_start,"") != 0) {
-		char *start_ptr = strstr2(arg_text, arg_text_len, arg_search_start, arg_search_end_len, arg_options);
+	if (arg_search_start.length > 0) {
+		char *start_ptr = strstr2(arg_text, arg_search_start, arg_options);
 		if (!start_ptr)
 			break;
 
-		range_start = start_ptr - arg_text;
+		range.start = start_ptr - arg_text.text;
 
-		if (search_end_len > 0) {
-			char *end_ptr = strstr2(start_ptr, arg_text_len-range_start, arg_search_end, arg_search_end_len, arg_options);
+		if (arg_search_end.length > 0) {
+			String search_start = {start_ptr, arg_text.length-range.start};
+			char *end_ptr = strstr2(search_start, arg_search_end, arg_options);
 			if (end_ptr) {
-				range_end = end_ptr - arg_text;
+				range.end = end_ptr - arg_text.text;
 			}
 		}
 	}
 
-	range_start += offset_start;
-	range_end   += offset_end;*/
-
-	StringPos range = ConvertStringPos(arg_start, arg_end, arg_len, arg_text_len);
+	range.start += arg_offset_start * (arg_offset_start_right ? 1 : -1);
+	range.end   += arg_offset_end * (arg_offset_end_right ? 1 : -1);
 
 
 	// Default mode - return range of characters
 	if (!arg_crop_mode) {
 		if (range.start <= range.end)
-			QWritel(arg_text+range.start, range.end - range.start);
+			QWritel(arg_text.text+range.start, range.end-range.start);
 		else
 			// Reverse range - iterate from the end
 			for (--range.start;  range.start>=range.end;  range.start--)
-				QWritef("%c", arg_text[range.start]);
+				QWritef("%c", arg_text.text[range.start]);
 	} else {
 		// Crop mode - remove range of characters
 		if (range.start <= range.end) {
-			shift_buffer_chunk(arg_text, range.end, arg_text_len, range.end-range.start, OPTION_LEFT);
-			QWritel(arg_text, arg_text_len-(range.end-range.start));
+			shift_buffer_chunk(arg_text.text, range.end, arg_text.length, range.end-range.start, OPTION_LEFT);
+			QWritel(arg_text.text, arg_text.length-(range.end-range.start));
 		} else {
 			// Reverse range - iterate characters from the end
-			for (size_t i=arg_text_len-1; i>0; i--)
+			for (size_t i=arg_text.length-1; i>0; i--)
 				if (i<range.end  ||  i>=range.start)
-					QWritef("%c", arg_text[i]);
+					QWritef("%c", arg_text.text[i]);
 		}
 	}
 }
@@ -750,25 +757,23 @@ break;
 case C_STRING_TOKENIZE:
 { // Split string on given occurences
 
-	char *arg_text              = empty_string;
-	char *arg_delimiter         = empty_string;
-	char *arg_add_empty         = empty_string;
-	bool arg_by_string          = false;
-	bool arg_skip_quotes        = false;
-	size_t arg_text_length      = 0;
-	size_t arg_delimiter_length = 0;
-	int arg_options             = 0;
+	String arg_text      = {empty_string, 0};
+	String arg_delimiter = {empty_string, 0};
+	String arg_add_empty = {empty_string, 0};
+	bool arg_by_string   = false;
+	bool arg_skip_quotes = false;
+	int arg_options      = 0;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_TEXT : 
-				arg_text        = argument[i+1]; 
-				arg_text_length = argument_length[i+1]; 
+				arg_text.text   = argument[i+1]; 
+				arg_text.length = argument_length[i+1]; 
 				break;
 
 			case NAMED_ARG_DELIMITER : 
-				arg_delimiter        = argument[i+1]; 
-				arg_delimiter_length = argument_length[i+1]; 
+				arg_delimiter.text   = argument[i+1]; 
+				arg_delimiter.length = argument_length[i+1]; 
 				break;
 
 			case NAMED_ARG_WORDDELIMITER : 
@@ -792,27 +797,22 @@ case C_STRING_TOKENIZE:
 				break;
 
 			case NAMED_ARG_ADDEMPTY : 
-				arg_add_empty = argument[i+1];
+				arg_add_empty.text   = argument[i+1];
+				arg_add_empty.length = argument_length[i+1];
 				break;
 		}
 	}
 
 
-	// Set variables for preparing text
-	char *pch      = NULL;
-	char *text2    = arg_text;
-	int skip       = 0;
+	// If we're skipping occurences in quotes then first we need to save position of quot marks
 	size_t Qmax    = 0;
 	size_t Qindex  = -2;
 	size_t *Qarray;
 
-
-	// If we're skipping occurences in quotes
-	// then first we need to save position of quot marks
 	if (arg_skip_quotes) {
 		// Count how many quotes there are
-		for (size_t i=0;  i<arg_text_length;  i++)
-			if (arg_text[i] == '"')
+		for (size_t i=0;  i<arg_text.length;  i++)
+			if (arg_text.text[i] == '"')
 				Qmax++;
 
 		// Even number
@@ -832,14 +832,14 @@ case C_STRING_TOKENIZE:
 		// Store quotes position in an array
 		bool in_quote = false;
 
-		for (i=0;  i<arg_text_length && Qindex<Qmax;  i++)
-			if (arg_text[i] == '"') {
+		for (i=0;  i<arg_text.length && Qindex<Qmax;  i++)
+			if (arg_text.text[i] == '"') {
 				in_quote = !in_quote;
 
 				if (in_quote) {
 					Qindex          += 2;
 					Qarray[Qindex]   = i;
-					Qarray[Qindex+1] = arg_text_length;
+					Qarray[Qindex+1] = arg_text.length;
 				} else 
 					Qarray[Qindex+1] = i;
 			}
@@ -847,10 +847,14 @@ case C_STRING_TOKENIZE:
 
 
 	// Prepare text before tokenizing by words
+	String search_source = arg_text;
+	size_t skip          = 0;
+	char *occurence;
+
 	if (arg_by_string) {
 		// Search for the word
-		while ((pch = strstr2(text2, arg_text_length-skip, arg_delimiter, arg_delimiter_length, arg_options))) {
-			size_t pos    = pch - text2;
+		while ((occurence = strstr2(search_source, arg_delimiter, arg_options))) {
+			size_t pos    = occurence - search_source.text;
 			bool in_quote = false;
 
 			// Check if the word is inside quotation
@@ -861,30 +865,28 @@ case C_STRING_TOKENIZE:
 
 				// If so then skip it
 				if (in_quote) {
-					skip += pos + arg_delimiter_length; 
-					text2 = arg_text + skip;
+					skip                += pos + arg_delimiter.length; 
+					search_source.text   = arg_text.text + skip;
+					search_source.length = arg_text.length - skip;
 					continue;
 				}
 			}
 			
 			// Replace the word with unused characters
-			for (size_t i=pos; i<(pos+arg_delimiter_length); i++) 
-				text2[i] = '\a';
+			for (size_t i=pos; i<(pos+arg_delimiter.length); i++) 
+				search_source.text[i] = '\a';
 		}
 
 	// Prepare text before tokenizing by single characters
 	} else {
 		// For each char in delim
-		for (size_t i=0; i<arg_delimiter_length; i++) {
-			text2 = arg_text;
-			skip  = 0;
+		for (size_t i=0; i<arg_delimiter.length; i++) {
+			search_source  = arg_text;
+			skip           = 0;
+			String to_find = {arg_delimiter.text + i, 1};
 
-			char current_char[2] = "";
-			sprintf(current_char, "%c", arg_delimiter[i]);
-			int current_char_len = 1;
-
-			while ((pch = strstr2(text2, arg_text_length-skip, current_char, current_char_len, arg_options))) {
-				size_t pos    = pch - text2;
+			while ((occurence = strstr2(search_source, to_find, arg_options))) {
+				size_t pos    = occurence - search_source.text;
 				bool in_quote = false;
 
 				// Check if the character is inside quotation
@@ -895,14 +897,15 @@ case C_STRING_TOKENIZE:
 
 					// If so then skip it
 					if (in_quote) {
-						skip += pos + 1; 
-						text2 = arg_text + skip;
+						skip                += pos + 1; 
+						search_source.text   = arg_text.text + skip;
+						search_source.length = arg_text.length - skip;
 						continue;
 					}
 				}
 
 				// Replace char with an unused char
-				text2[pos] = '\a';
+				search_source.text[pos] = '\a';
 			}
 		}
 	}
@@ -918,26 +921,27 @@ case C_STRING_TOKENIZE:
 	size_t pos           = 0;
 	size_t count         = 0;
 
-	if (strncmpi(arg_add_empty,"both",4)==0) {
+	if (strncmpi(arg_add_empty.text,"both",4)==0) {
 		add_empty_start = true;
 		add_empty_end   = true;
 	} else
-		if (strncmpi(arg_add_empty,"start",5)==0)
+		if (strncmpi(arg_add_empty.text,"start",5)==0)
 			add_empty_start = true;
 		else
-			if (strncmpi(arg_add_empty,"end",3)==0)
+			if (strncmpi(arg_add_empty.text,"end",3)==0)
 				add_empty_end = true;
 
 
 	// Start tokenization
 	QWrite("[");
-	pch = strtok(arg_text, "\a");
+	occurence            = strtok(arg_text.text, "\a");
+	size_t occurence_len = 0;
 
-	while (pch) {
+	while (occurence) {
 		// Keep track of numbers
 		if (add_empty_start  ||  add_empty_end) {
-			pos     = pch - arg_text;
-			pch_len = strlen(pch);
+			pos           = occurence - arg_text.text;
+			occurence_len = strlen(occurence);
 		}
 
 		// if string begins with token 
@@ -950,11 +954,11 @@ case C_STRING_TOKENIZE:
 		}
 		
 		QWrite("]+[\"");
-		QWriteDoubleQ(pch);
+		QWriteDoubleQ(occurence);
 		QWrite("\"");
 
 		count++;
-		pch = strtok(NULL, "\a");
+		occurence = strtok(NULL, "\a");
 	}
 
 
@@ -963,7 +967,7 @@ case C_STRING_TOKENIZE:
 		QWrite("\"\"");
 
 	// if last part doesn't end the string
-	if (add_empty_end  &&  (pos+pch_len<arg_text_length || count==0))
+	if (add_empty_end  &&  (pos+occurence_len<arg_text.length || count==0))
 		QWrite("]+[\"\"");
 
 	QWrite("]");
@@ -1069,27 +1073,25 @@ break;
 case C_STRING_FIND:
 { // Search string
 
-	char *arg_text         = empty_string;
-	char *arg_find         = empty_string;
-	char *arg_start        = empty_string;
-	char *arg_end          = empty_string;
-	char *arg_length       = empty_string;
-	size_t arg_text_length = 0;
-	size_t arg_find_length = 0;
-	size_t arg_limit       = -1;
-	int arg_options        = OPTION_NONE;
-	bool arg_skip_quotes   = false;
+	String arg_text      = {empty_string, 0};
+	String arg_find      = {empty_string, 0};
+	char *arg_start      = empty_string;
+	char *arg_end        = empty_string;
+	char *arg_length     = empty_string;
+	size_t arg_limit     = -1;
+	int arg_options      = OPTION_NONE;
+	bool arg_skip_quotes = false;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_TEXT : 
-				arg_text        = argument[i+1]; 
-				arg_text_length = argument_length[i+1]; 
+				arg_text.text   = argument[i+1]; 
+				arg_text.length = argument_length[i+1]; 
 				break;
 
 			case NAMED_ARG_FIND : 
-				arg_find        = argument[i+1]; 
-				arg_find_length = argument_length[i+1]; 
+				arg_find.text   = argument[i+1]; 
+				arg_find.length = argument_length[i+1]; 
 				break;
 
 			case NAMED_ARG_MATCHWORD : 
@@ -1127,12 +1129,6 @@ case C_STRING_FIND:
 	}
 
 
-	char *text2       = arg_text;
-	char *pch         = NULL;
-	size_t CurrentCOL = 0;
-	size_t pos        = 0;
-	StringPos range   = ConvertStringPos(arg_start, arg_end, arg_length, arg_text_length);
-
 
 	// If we're skipping occurences in quotes then first we need to save position of quotation marks
 	size_t Qmax    = 0;
@@ -1142,8 +1138,8 @@ case C_STRING_FIND:
 
 	if (arg_skip_quotes) {
 		// Count how many quotes there are
-		for (size_t i=0;  i<arg_text_length;  i++)
-			if (arg_text[i] == '"')
+		for (size_t i=0;  i<arg_text.length;  i++)
+			if (arg_text.text[i] == '"')
 				Qmax++;
 
 		// Even number
@@ -1163,8 +1159,8 @@ case C_STRING_FIND:
 		// Store quotes position in an array
 		in_quote = false;
 
-		for (i=0;  i<arg_text_length && Qindex<Qmax;  i++)
-			if (arg_text[i] == '"') {
+		for (i=0;  i<arg_text.length && Qindex<Qmax;  i++)
+			if (arg_text.text[i] == '"') {
 				in_quote = !in_quote;
 
 				if (in_quote) {
@@ -1179,16 +1175,21 @@ case C_STRING_FIND:
 
 	// Search
 	QWrite("[");
-	size_t count = 0;
+	char *occurence;
+	size_t count         = 0;
+	size_t pos_absolute  = 0;
+	size_t pos_relative  = 0;
+	String search_source = arg_text;
+	StringPos range      = ConvertStringPos(arg_start, arg_end, arg_length, arg_text.length);
 
-	while ((pch=strstr2(text2, arg_text_length-CurrentCOL, arg_find, arg_find_length, arg_options))) {
-		pos      = pch - text2;
-		in_quote = false;
+	while ((occurence=strstr2(search_source, arg_find, arg_options))) {
+		pos_relative = occurence - search_source.text;
+		in_quote     = false;
 
 		// If in range
-		if (pos+CurrentCOL >= range.start) {
+		if (pos_absolute+pos_relative >= range.start) {
 			// If passed the range
-			if (pos+CurrentCOL > range.end)
+			if (pos_absolute+pos_relative > range.end)
 				break;
 
 			// If within result limit
@@ -1198,16 +1199,17 @@ case C_STRING_FIND:
 			// Check if the word is inside quotation
 			if (arg_skip_quotes  &&  Qmax>0)
 				for (size_t i=0;  i<Qmax && !in_quote;  i+=2)
-					if (Qarray[i]<=(CurrentCOL+pos)  &&  (CurrentCOL+pos)<=Qarray[i+1]) 
+					if (Qarray[i]<=(pos_absolute+pos_relative)  &&  (pos_absolute+pos_relative)<=Qarray[i+1]) 
 						in_quote = true;
 
 			if (!in_quote)
-				QWritef("]+[%d", CurrentCOL + pos);
+				QWritef("]+[%d", pos_absolute + pos_relative);
 		}
 
 		// Move past the current occurence
-		CurrentCOL += pos + 1;
-		text2       = arg_text + CurrentCOL;
+		pos_absolute        += pos_relative + 1;
+		search_source.text   = arg_text.text + pos_absolute;
+		search_source.length = arg_text.length - pos_absolute;
 	}
 
 	if (Qarray)

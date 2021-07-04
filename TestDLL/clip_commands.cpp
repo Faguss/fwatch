@@ -456,8 +456,8 @@ case C_CLIP_TOFILE:
 	}
 
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = arg_filename;
 	int path_type      = VerifyPath(&ptr_filename, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR);
 
@@ -479,7 +479,7 @@ case C_CLIP_TOFILE:
 	if (exists  &&  strcmpi(arg_mode,"nooverwrite")==0) {
 		QWrite_err(FWERROR_FILE_EXISTS, 1, ptr_filename);
 		CloseClipboard();
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
@@ -489,13 +489,13 @@ case C_CLIP_TOFILE:
 			if (remove(ptr_filename) != 0) {
 				QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 				CloseClipboard();
-				String_end(buf_filename);
+				StringDynamic_end(buf_filename);
 				break;
 			}
 		} else {
 			if (!trashFile(ptr_filename,strlen(ptr_filename),0)) {	// Trash for all other places
 				CloseClipboard();
-				String_end(buf_filename);
+				StringDynamic_end(buf_filename);
 				break;
 			}
 		}
@@ -527,7 +527,7 @@ case C_CLIP_TOFILE:
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 
 	CloseClipboard();
-	String_end(buf_filename);
+	StringDynamic_end(buf_filename);
 }
 break;
 
@@ -550,8 +550,8 @@ case C_CLIP_FROMFILE:
 	}
 	
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = stripq(argument[2]);
 
 	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR))
@@ -561,7 +561,7 @@ case C_CLIP_FROMFILE:
 	FILE *f = fopen(ptr_filename, "rb");
 	if (!f) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
@@ -574,7 +574,7 @@ case C_CLIP_FROMFILE:
 	char *filetext = new char[fsize+1];
 	if (!filetext) {
 		QWrite_err(FWERROR_MALLOC, 2, "filetext", fsize+1);
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(f); 
 		break;
 	}
@@ -593,7 +593,7 @@ case C_CLIP_FROMFILE:
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 
 	delete[] filetext;
-	String_end(buf_filename);
+	StringDynamic_end(buf_filename);
 	fclose(f);
 }
 break;
@@ -625,8 +625,8 @@ case C_CLIP_CUTFILE:
 	int copied_files     = 0;
 	int check_mode       = OPTION_SUPPRESS_ERROR | (argument_hash[0]==C_CLIP_COPYFILE ? OPTION_ALLOW_GAME_ROOT_DIR : OPTION_RESTRICT_TO_MISSION_DIR);
 
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 
 
 	// Create list of files separated by \0 with paths starting from drive
@@ -655,7 +655,7 @@ case C_CLIP_CUTFILE:
 		}
 	}
 
-	String_end(buf_filename);
+	StringDynamic_end(buf_filename);
 
 	// If nothing was copied
 	if (copied_files == 0) {
@@ -717,8 +717,8 @@ case C_CLIP_PASTEFILE:
 
 
 	// Verify and update path to the file
-	String buf_destination;
-	String_init(buf_destination);
+	StringDynamic buf_destination;
+	StringDynamic_init(buf_destination);
 	char *ptr_destination = argument_num>2 && !list_files ? stripq(argument[2]) : NULL;
 	int destination_type  = 0;
 	int destination_len   = 0;
@@ -728,15 +728,15 @@ case C_CLIP_PASTEFILE:
 
 		if (destination_type != PATH_ILLEGAL) {
 			if (buf_destination.length == 0)
-				String_append(buf_destination, ptr_destination);
+				StringDynamic_append(buf_destination, ptr_destination);
 
 			if (buf_destination.text[buf_destination.length-1] != '\\')
-				String_append(buf_destination, "\\");
+				StringDynamic_append(buf_destination, "\\");
 
 			destination_len = buf_destination.length;
 		} else {
 			QWrite("\"\",[]]");
-			String_end(buf_destination);
+			StringDynamic_end(buf_destination);
 			break;
 		}
 	}
@@ -746,7 +746,7 @@ case C_CLIP_PASTEFILE:
 	if (!OpenClipboard(NULL)) {
 		QWrite_err(FWERROR_CLIP_OPEN, 1, GetLastError());
 		QWrite("\"\",[]]");
-		String_end(buf_destination);
+		StringDynamic_end(buf_destination);
 		break;
 	}
 
@@ -756,7 +756,7 @@ case C_CLIP_PASTEFILE:
 		QWrite_err(FWERROR_CLIP_FORMAT, 0);
 		QWrite("\"\",[]]");
 		CloseClipboard();
-		String_end(buf_destination);
+		StringDynamic_end(buf_destination);
 		break;
 	}
 
@@ -803,7 +803,7 @@ case C_CLIP_PASTEFILE:
 		QWrite_err(FWERROR_CLIP_EFFECT, 0);
 		QWritef("\"%s\",[]]", effect_name[effect_id]);
 		CloseClipboard();
-		String_end(buf_destination);
+		StringDynamic_end(buf_destination);
 		break;
 	}
 
@@ -815,7 +815,7 @@ case C_CLIP_PASTEFILE:
 		QWrite_err(FWERROR_CLIP_EMPTY, 0);
 		QWrite("\"\",[]]");
 		CloseClipboard();
-		String_end(buf_destination);
+		StringDynamic_end(buf_destination);
 		break;
 	}
 
@@ -826,7 +826,7 @@ case C_CLIP_PASTEFILE:
 		QWrite("\"\",[]]");
 		GlobalUnlock(Data);
 		CloseClipboard();
-		String_end(buf_destination);
+		StringDynamic_end(buf_destination);
 		break;
 	}
 
@@ -844,8 +844,8 @@ case C_CLIP_PASTEFILE:
 
 
 	// Parse filenames
-	String buf_source;
-	String_init(buf_source);
+	StringDynamic buf_source;
+	StringDynamic_init(buf_source);
 	int pwd_len      = strlen(pwd);
 	int mission_len  = strlen(global.mission_path);
 	int name_start   = 0;
@@ -859,13 +859,13 @@ case C_CLIP_PASTEFILE:
 			wchar_t *wide_path      = pFilenames + name_start;
 			size_t wide_path_length = wcslen(wide_path) + 1;
 			
-			if (String_allocate(buf_source, wide_path_length) == 0) 
+			if (StringDynamic_allocate(buf_source, wide_path_length) == 0) 
 				wcstombs(buf_source.text, wide_path, wide_path_length);
 			else {
 				QWrite("]]]");
 				global.option_error_output = OPTION_ERROR_ARRAY_CLOSE;
 				QWrite_err(FWERROR_MALLOC, 2, "buf_source", wide_path_length);
-				String_end(buf_source);
+				StringDynamic_end(buf_source);
 				break;
 			}
 
@@ -907,7 +907,7 @@ case C_CLIP_PASTEFILE:
 
 			// Copy filename from the source path to the destination path
 			char *last_slash = strrchr(relative_path, '\\');
-			String_append(buf_destination, last_slash!=NULL ? last_slash+1 : relative_path);
+			StringDynamic_append(buf_destination, last_slash!=NULL ? last_slash+1 : relative_path);
 
 
 			// Perform file operation
@@ -943,8 +943,8 @@ case C_CLIP_PASTEFILE:
 	//global.error_within_error = false;
 	QWrite("]]");
 
-	String_end(buf_source);
-	String_end(buf_destination);
+	StringDynamic_end(buf_source);
+	StringDynamic_end(buf_destination);
 
 	GlobalUnlock(Data);
 	CloseClipboard();

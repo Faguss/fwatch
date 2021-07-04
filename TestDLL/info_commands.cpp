@@ -18,9 +18,9 @@ case C_INFO_VERSION:
 		DWORD  verSize   = GetFileVersionInfoSize((char*)global_exe_name[global.exe_index], &verHandle);
 
 		if (verSize) {
-			String buffer;
-			String_init(buffer);
-			String_allocate(buffer, (size_t)verSize);
+			StringDynamic buffer;
+			StringDynamic_init(buffer);
+			StringDynamic_allocate(buffer, (size_t)verSize);
 
 			LPSTR verData = buffer.text;
 
@@ -35,7 +35,7 @@ case C_INFO_VERSION:
 						}
 					}
 
-			String_end(buffer);
+			StringDynamic_end(buffer);
 		}
 
 		QWritef("_fwatch_test_version=3;[%.2f,%s,%s,false,%d.%s%d]", 

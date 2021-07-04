@@ -123,8 +123,8 @@ case C_IGSE_WRITE:
 	}
 
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = arg_filename;
 	
 	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR))
@@ -141,13 +141,13 @@ case C_IGSE_WRITE:
 				arg_txt        = (char*)GlobalLock(hClipboardData);
 			} else {
 				QWrite_err(FWERROR_CLIP_FORMAT, 0);
-				String_end(buf_filename);
+				StringDynamic_end(buf_filename);
 				CloseClipboard(); 
 				break;
 			}
 		} else {
 			QWrite_err(FWERROR_CLIP_OPEN, 1, GetLastError());
-			String_end(buf_filename);
+			StringDynamic_end(buf_filename);
 			break;
 		}
 	}
@@ -212,13 +212,13 @@ case C_IGSE_WRITE:
 	FILE *file = fopen(ptr_filename, open_mode);
 	if (!file) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
 	if (arg_open_mode == IGSE_WRITE_OPEN_UNIQUE) {
 		QWrite_err(FWERROR_FILE_EXISTS, 1, ptr_filename);
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
 	}
@@ -227,7 +227,7 @@ case C_IGSE_WRITE:
 	// Find file size
 	if (fseek(file, 0, SEEK_END) != 0) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
 	}
@@ -235,7 +235,7 @@ case C_IGSE_WRITE:
 	size_t file_size = ftell(file);
 	if (file_size == 0xFFFFFFFF) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
 	}
@@ -255,22 +255,22 @@ case C_IGSE_WRITE:
 		else
 			QWrite_err(FWERROR_NONE, 0);
 
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
 	}
 
 
 	// Allocate buffer
-	String file_contents;
-	String_init(file_contents);
+	StringDynamic file_contents;
+	StringDynamic_init(file_contents);
 	size_t new_line_len  = arg_txt_length;
 	size_t new_file_size = file_size * (arg_edit_mode==IGSE_WRITE_COPY ? 2 : 1) + new_line_len + 2 + 1;
-	int result           = String_allocate(file_contents, new_file_size);
+	int result           = StringDynamic_allocate(file_contents, new_file_size);
 
 	if (result != 0) {
 		QWrite_err(FWERROR_MALLOC, 2, "file_contents", new_file_size);
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
@@ -280,8 +280,8 @@ case C_IGSE_WRITE:
 	size_t bytes_read = fread(file_contents.text, 1, file_size, file);
 
 	if (bytes_read != file_size) {
-		String_end(buf_filename);
-		String_end(file_contents);
+		StringDynamic_end(buf_filename);
+		StringDynamic_end(file_contents);
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		fclose(file);
 		break;
@@ -440,10 +440,10 @@ case C_IGSE_WRITE:
 					if (carriage_return) buffer[*separator-1] = '\r';
 
 					// Copy previous line to an extra buffer
-					String previous_line_backup;
-					String_init(previous_line_backup);
+					StringDynamic previous_line_backup;
+					StringDynamic_init(previous_line_backup);
 					int previous_line_len = line_shift_source_pos - line_shift_dest_pos;
-					String_append_len(previous_line_backup, line_shift_dest, previous_line_len);
+					StringDynamic_append_len(previous_line_backup, line_shift_dest, previous_line_len);
 
 					// Move current line to the previous line
 					for (int k=line_shift_source_pos; k<line_end_pos; k++)
@@ -465,7 +465,7 @@ case C_IGSE_WRITE:
 
 					// Paste line from an extra buffer
 					memcpy(buffer+line_shift_dest_pos+line_len, previous_line_backup.text, previous_line_len);
-					String_end(previous_line_backup);
+					StringDynamic_end(previous_line_backup);
 				}
 
 				*separator       += buffer_shift_amount * (buffer_shift_direction ? 1 : -1);
@@ -508,8 +508,8 @@ case C_IGSE_WRITE:
 	} else 		
 		QWrite_err(FWERROR_FILE_NOLINE, 2, abs(line_num) < abs(arg_line_start) ? arg_line_start : line_range_end, ptr_filename);
 
-	String_end(file_contents);
-	String_end(buf_filename);
+	StringDynamic_end(file_contents);
+	StringDynamic_end(buf_filename);
 }
 break;
 
@@ -550,8 +550,8 @@ case C_IGSE_LIST:
 
 
 	// Verify and update path to the file
-	String buf_path;
-	String_init(buf_path);
+	StringDynamic buf_path;
+	StringDynamic_init(buf_path);
 	char *ptr_path = arg_path;
 	
 	if (!VerifyPath(&ptr_path, buf_path, OPTION_ALLOW_GAME_ROOT_DIR)) {
@@ -566,19 +566,19 @@ case C_IGSE_LIST:
 	hFind		 = FindFirstFile(ptr_path, &file_data);
 
 	if (hFind != INVALID_HANDLE_VALUE) {
-		String Names;
-		String Attributes;
-		String_init(Names);
-		String_init(Attributes);
+		StringDynamic Names;
+		StringDynamic Attributes;
+		StringDynamic_init(Names);
+		StringDynamic_init(Attributes);
 
 		do {
 			if (strcmp(file_data.cFileName,".")==0  ||  strcmp(file_data.cFileName,"..")==0)
 				continue;
 
-			String_append_quotes(Names, "]+[\"", file_data.cFileName, "\"");
+			StringDynamic_append_quotes(Names, "]+[\"", file_data.cFileName, "\"");
 
 			if (!arg_only_name) {
-				String_append_format(Attributes, "]+[");
+				StringDynamic_append_format(Attributes, "]+[");
 				
 				// Name without extension and then extension alone
 				char *dot = strrchr(file_data.cFileName, '.');
@@ -590,7 +590,7 @@ case C_IGSE_LIST:
 					ext                      = file_data.cFileName + pos + 1;
 				}
 
-				String_append_format(Attributes, "[\"%s\",\"%s\",[", file_data.cFileName, ext);
+				StringDynamic_append_format(Attributes, "[\"%s\",\"%s\",[", file_data.cFileName, ext);
 
 
 				// List of attributes
@@ -620,16 +620,16 @@ case C_IGSE_LIST:
 					for (int bitmask=1,index=0;  bitmask<0x20000;  bitmask*=2,index++) {
 						if (bitmask!=8  &&  bitmask!=FILE_ATTRIBUTE_NORMAL  &&  (file_data.dwFileAttributes & bitmask)!=0) {
 							if (add_comma) 
-								String_append_format(Attributes, ","); 
+								StringDynamic_append_format(Attributes, ","); 
 							else 
 								add_comma = true;
 
-							String_append_format(Attributes, "\"%s\"", attribute[index]);
+							StringDynamic_append_format(Attributes, "\"%s\"", attribute[index]);
 						}
 					}
 				}
 
-				String_append_format(Attributes, "],");
+				StringDynamic_append_format(Attributes, "],");
 
 				// Creation, last access and last write time
 				FILETIME *date_list[] = {&file_data.ftCreationTime, &file_data.ftLastAccessTime, &file_data.ftLastWriteTime};
@@ -637,27 +637,27 @@ case C_IGSE_LIST:
 				for (int i=0, max=sizeof(date_list)/sizeof(date_list[0]); i<max; i++) {
 					char temp[64] = "";
 					FileTimeToString(*date_list[i], arg_system_time, temp);
-					String_append_format(Attributes, "%s%s", (i>0 ? "," : ""), temp);
+					StringDynamic_append_format(Attributes, "%s%s", (i>0 ? "," : ""), temp);
 				}
 
 				// Size
 				FileSize size = DivideBytes(file_data.nFileSizeLow);
-				String_append_format(Attributes, ",[%f,%f,%f]]", size.bytes, size.kilobytes, size.megabytes);
+				StringDynamic_append_format(Attributes, ",[%f,%f,%f]]", size.bytes, size.kilobytes, size.megabytes);
 			}
 		} while (FindNextFile(hFind, &file_data));
 		FindClose(hFind);
 
 		QWrite_err(FWERROR_NONE, 0);
 		QWritef("[%s],[%s]]", Names.text, Attributes.text);
-		String_end(Names);
-		String_end(Attributes);
+		StringDynamic_end(Names);
+		StringDynamic_end(Attributes);
 	} else {
 		QWrite_err(FWERROR_WINAPI, 2, GetLastError(), ptr_path);
 		QWrite("[],[]]"); 
 		break;
 	}
 
-	String_end(buf_path);
+	StringDynamic_end(buf_path);
 }
 break;
 
@@ -768,8 +768,8 @@ case C_IGSE_LOAD:
 
 
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = arg_filename;
 	int path_type      = VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR);
 
@@ -801,7 +801,7 @@ case C_IGSE_LOAD:
 			QWrite("[],0,false,false,\"\",[],[]]");
 		}
 
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
@@ -844,17 +844,17 @@ case C_IGSE_LOAD:
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		if (arg_output != OUTPUT_EXECUTE)
 			QWrite("[],0,false,false,\"\",[],[]]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
-	};
+	}
 
 	size_t file_size = ftell(file);
 	if (file_size == 0xFFFFFFFF) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		if (arg_output != OUTPUT_EXECUTE)
 			QWrite("[],0,false,false,\"\",[],[]]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
 	}
@@ -904,14 +904,14 @@ case C_IGSE_LOAD:
 	fseek(file, arg_offset_start, SEEK_SET);
 
 
-	String sqs_lines;
-	String sqs_offsets;
-	String sqs_lengths;
-	String buf_for_clip;
-	String_init(sqs_lines);
-	String_init(sqs_offsets);
-	String_init(sqs_lengths);
-	String_init(buf_for_clip);
+	StringDynamic sqs_lines;
+	StringDynamic sqs_offsets;
+	StringDynamic sqs_lengths;
+	StringDynamic buf_for_clip;
+	StringDynamic_init(sqs_lines);
+	StringDynamic_init(sqs_offsets);
+	StringDynamic_init(sqs_lengths);
+	StringDynamic_init(buf_for_clip);
 	
 	int line_start  = -1;
 	int line_end    = 0;
@@ -952,15 +952,15 @@ case C_IGSE_LOAD:
 					switch (arg_output) {
 						case OUTPUT_SQS_SEPARATE : {
 							if (arg_split_lines)
-								String_append_len(sqs_lines, "]+[[\"", 5);
+								StringDynamic_append_len(sqs_lines, "]+[[\"", 5);
 							else
-								String_append_len(sqs_lines, "]+[\"", 4);
+								StringDynamic_append_len(sqs_lines, "]+[\"", 4);
 								
-							String_append_format(sqs_offsets, "\"%d\"]+[", arg_offset_start + (c==EOF ? pos : pos-1));
+							StringDynamic_append_format(sqs_offsets, "\"%d\"]+[", arg_offset_start + (c==EOF ? pos : pos-1));
 						} break;
 						
 						case OUTPUT_SQS : {
-							String_append(sqs_lines, "]+[[\"");
+							StringDynamic_append(sqs_lines, "]+[[\"");
 						} break;
 					};
 				}
@@ -975,16 +975,16 @@ case C_IGSE_LOAD:
 			if (line_num >= arg_line_start) {
 				switch (arg_output) {
 					case OUTPUT_EXECUTE      : if (c!=EOF) QWritel(&cc, 1); break;
-					case OUTPUT_CLIP         : if (c!=EOF) String_append_len(buf_for_clip, &cc, 1); break;
+					case OUTPUT_CLIP         : if (c!=EOF) StringDynamic_append_len(buf_for_clip, &cc, 1); break;
 					case OUTPUT_SQS_SEPARATE : {
-						String_append(sqs_lines, "\"");
-						String_append_format(sqs_lengths, "%d]+[", line_length);
+						StringDynamic_append(sqs_lines, "\"");
+						StringDynamic_append_format(sqs_lengths, "%d]+[", line_length);
 						
 						if (arg_split_lines)
-							String_append(sqs_lines, "]");
+							StringDynamic_append(sqs_lines, "]");
 					} break;
 					case OUTPUT_SQS : {
-						String_append_format(sqs_lines, "\",\"%d\"]", arg_offset_start + line_start);
+						StringDynamic_append_format(sqs_lines, "\",\"%d\"]", arg_offset_start + line_start);
 					} break;
 				}
 			}
@@ -1010,15 +1010,15 @@ case C_IGSE_LOAD:
 						switch(arg_output) {
 							case OUTPUT_SQS_SEPARATE : {
 								if (arg_split_lines) {
-									String_append(sqs_lines, "]+[[\"");
+									StringDynamic_append(sqs_lines, "]+[[\"");
 								} else
-									String_append(sqs_lines, "]+[\"");
+									StringDynamic_append(sqs_lines, "]+[\"");
 		
-								String_append_format(sqs_offsets, "\"%d\"]+[", arg_offset_start + pos);
+								StringDynamic_append_format(sqs_offsets, "\"%d\"]+[", arg_offset_start + pos);
 							} break;
 							
 							case OUTPUT_SQS : {
-								String_append(sqs_lines, "]+[[\"");
+								StringDynamic_append(sqs_lines, "]+[[\"");
 							} break;
 						}
 					}
@@ -1028,27 +1028,27 @@ case C_IGSE_LOAD:
 				if (line_num>=arg_line_start  &&  (arg_limit_line_length==-1 || (arg_limit_line_length!=-1 && pos-line_start<arg_limit_line_length) || arg_split_lines)) {
 					switch (arg_output) {
 						case OUTPUT_EXECUTE      : QWritel(&cc, 1); break;
-						case OUTPUT_CLIP         : String_append_len(buf_for_clip, &cc, 1); break;
+						case OUTPUT_CLIP         : StringDynamic_append_len(buf_for_clip, &cc, 1); break;
 						case OUTPUT_SQS_SEPARATE : {
 							if (c == '"')
-								String_append_len(sqs_lines, "\"\"", 2);
+								StringDynamic_append_len(sqs_lines, "\"\"", 2);
 							else
-								String_append_len(sqs_lines, &cc, 1);
+								StringDynamic_append_len(sqs_lines, &cc, 1);
 								
 							line_split++;
 							
 							if (arg_split_lines) {
 								if (line_split == arg_limit_line_length) {
-									String_append_len(sqs_lines, "\"]+[\"", 5);
+									StringDynamic_append_len(sqs_lines, "\"]+[\"", 5);
 									line_split = 0;
 								}
 							}
 						} break;
 						case OUTPUT_SQS : {
 							if (c == '"')
-								String_append_len(sqs_lines, "\"\"", 2);
+								StringDynamic_append_len(sqs_lines, "\"\"", 2);
 							else
-								String_append_len(sqs_lines, &cc, 1);							
+								StringDynamic_append_len(sqs_lines, &cc, 1);							
 						} break;
 					}						
 				}
@@ -1082,11 +1082,11 @@ case C_IGSE_LOAD:
 	}
 	
 	fclose(file);
-	String_end(sqs_lines);
-	String_end(sqs_offsets);
-	String_end(sqs_lengths);
-	String_end(buf_for_clip);
-	String_end(buf_filename);
+	StringDynamic_end(sqs_lines);
+	StringDynamic_end(sqs_offsets);
+	StringDynamic_end(sqs_lengths);
+	StringDynamic_end(buf_for_clip);
+	StringDynamic_end(buf_filename);
 	
 
 	// If user wants to delete the arg_filename after reading it
@@ -1172,8 +1172,8 @@ case C_IGSE_NEW:
 
 
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = arg_filename;
 	int check_mode     = arg_edit_mode==IGSE_NEWFILE_CHECK ? OPTION_ALLOW_GAME_ROOT_DIR : OPTION_RESTRICT_TO_MISSION_DIR;
 	int path_type      = VerifyPath(&ptr_filename, buf_filename, check_mode);
@@ -1292,7 +1292,7 @@ case C_IGSE_NEW:
 						QWrite_err(FWERROR_WINAPI, 1, GetLastError());
 	}
 
-	String_end(buf_filename);
+	StringDynamic_end(buf_filename);
 }
 break;
 
@@ -1348,9 +1348,9 @@ case C_IGSE_COPY:
 
 
 	// Verify and update path to the files
-	String source, dest;
-	String_init(source);
-	String_init(dest);
+	StringDynamic source, dest;
+	StringDynamic_init(source);
+	StringDynamic_init(dest);
 	char *ptr_source     = arg_source;
 	char *ptr_dest       = arg_dest;
 	int check_mode       = argument_hash[0]==C_IGSE_RENAME ? OPTION_RESTRICT_TO_MISSION_DIR : OPTION_ALLOW_GAME_ROOT_DIR;
@@ -1381,8 +1381,8 @@ case C_IGSE_COPY:
 			QWrite_err(FWERROR_WINAPI, 3, GetLastError(), ptr_source, ptr_dest);
 	}
 
-	String_end(source);
-	String_end(dest);
+	StringDynamic_end(source);
+	StringDynamic_end(dest);
 }
 break;
 
@@ -1394,7 +1394,7 @@ break;
 
 
 
-case C_IGSE_FIND:
+case C_IGSE_FIND:	//TODO: rewrite this command
 { // IGSE Find
 
 	int Start			 = 0;
@@ -1495,8 +1495,8 @@ case C_IGSE_FIND:
 
 
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = SearchIn;
 
 	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
@@ -1512,7 +1512,7 @@ case C_IGSE_FIND:
 	if (!f) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		QWrite("0,[],[],\"0\",0]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
@@ -1565,7 +1565,7 @@ case C_IGSE_FIND:
 
 		QWrite_err(FWERROR_MALLOC, 2, "failedBuf", failedBufL);
 		QWrite("0,[],[],\"0\",0]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
@@ -1590,7 +1590,7 @@ case C_IGSE_FIND:
 			free(single_line); 
 			free(rows); 
 			free(cols); 
-			String_end(buf_filename);
+			StringDynamic_end(buf_filename);
 			break;
 		}
 
@@ -1654,7 +1654,10 @@ case C_IGSE_FIND:
 				leadSpace++;
 
 			// Find all positions of the occurences in the current single_line
-			while ((p = strstr2(backup_line, strlen(backup_line), SearchFor, strlen(SearchFor), options))) {
+			String search_source = {backup_line, strlen(backup_line)};
+			String to_find       = {SearchFor, strlen(SearchFor)};
+
+			while ((p = strstr2(search_source, to_find, options))) {
 				maxIterations++;
 
 				if (maxIterations > 10)
@@ -1695,6 +1698,9 @@ case C_IGSE_FIND:
 					lastOffset = lastOccOff;
 					break;
 				}
+
+				search_source.text   = backup_line;
+				search_source.length = strlen(backup_line);
 			}
 
 
@@ -1816,7 +1822,7 @@ case C_IGSE_FIND:
 
 	free(cols); 
 	free(rows); 
-	String_end(buf_filename);
+	StringDynamic_end(buf_filename);
 	
 	if (Replace)
 		free(FileBuf);
@@ -1897,8 +1903,8 @@ case C_IGSE_DB:
 	}
 
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = arg_filename;
 	
 	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR)) {
@@ -1931,7 +1937,7 @@ case C_IGSE_DB:
 		if (!header_read) {
 			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 			QWrite("[],[]]");
-			String_end(buf_filename);
+			StringDynamic_end(buf_filename);
 			fclose(file);
 			break;
 		}
@@ -1939,7 +1945,7 @@ case C_IGSE_DB:
 		if (header_existing.signature != igsedb_signature) {
 			QWrite_err(FWERROR_DB_SIGNATURE, 3, header_existing.signature, igsedb_signature, ptr_filename);
 			QWrite("[],[]]");
-			String_end(buf_filename);
+			StringDynamic_end(buf_filename);
 			fclose(file);
 			break;
 		}
@@ -1947,7 +1953,7 @@ case C_IGSE_DB:
 		if (header_existing.version > igsedb_version) {
 			QWrite_err(FWERROR_DB_VERSION, 3, header_existing.version, igsedb_version, ptr_filename);
 			QWrite("[],[]]");
-			String_end(buf_filename);
+			StringDynamic_end(buf_filename);
 			fclose(file);
 			break;
 		}
@@ -1956,7 +1962,7 @@ case C_IGSE_DB:
 		if (fseek(file, 0, SEEK_END) != 0) {
 			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 			QWrite("[],[]]");
-			String_end(buf_filename);
+			StringDynamic_end(buf_filename);
 			fclose(file);
 			break;
 		};
@@ -1965,7 +1971,7 @@ case C_IGSE_DB:
 		if (buffer_size == 0xFFFFFFFF) {
 			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 			QWrite("[],[]]");
-			String_end(buf_filename);
+			StringDynamic_end(buf_filename);
 			fclose(file);
 			break;
 		};
@@ -1977,7 +1983,7 @@ case C_IGSE_DB:
 		if (buffer_size < minimal_file_size) {
 			QWrite_err(FWERROR_DB_SMALL, 3, buffer_size, minimal_file_size, ptr_filename);
 			QWrite("[],[]]");
-			String_end(buf_filename);
+			StringDynamic_end(buf_filename);
 			fclose(file);
 			break;
 		}
@@ -1985,7 +1991,7 @@ case C_IGSE_DB:
 		if (!arg_writing_mode  ||  (arg_writing_mode && errno!=2)) {
 			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 			QWrite("[],[]]");
-			String_end(buf_filename);
+			StringDynamic_end(buf_filename);
 			break;
 		}
 
@@ -1994,14 +2000,14 @@ case C_IGSE_DB:
 
 
 	// Allocate memory for the data
-	String file_contents;
-	String_init(file_contents);
+	StringDynamic file_contents;
+	StringDynamic_init(file_contents);
 	size_t buffer_size_max = buffer_size + arg_arguments_size + 1;
 
-	if (String_allocate(file_contents, buffer_size_max) != 0) {
+	if (StringDynamic_allocate(file_contents, buffer_size_max) != 0) {
 		QWrite_err(FWERROR_MALLOC, 2, "file_contents", buffer_size_max);
 		QWrite("[],[]]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
@@ -2016,7 +2022,7 @@ case C_IGSE_DB:
 		if (bytes_read != buffer_size) {
 			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 			QWrite("[],[]]");
-			String_end(buf_filename);
+			StringDynamic_end(buf_filename);
 			break;
 		}
 	} else {
@@ -2092,9 +2098,9 @@ case C_IGSE_DB:
 	char *key_name        = empty_string;
 	size_t key_length     = 0;
 	BinarySearchResult key_selected;
-	String MissingKeys, List;
-	String_init(MissingKeys);
-	String_init(List);
+	StringDynamic MissingKeys, List;
+	StringDynamic_init(MissingKeys);
+	StringDynamic_init(List);
 
 	for (i=2;  i<argument_num && !db_error;  i+=2) {
 		char *arg_value         = argument[i+1];
@@ -2295,7 +2301,7 @@ case C_IGSE_DB:
 					
 					buffer_size += buffer_shift_amount * (buffer_shift_direction ? 1 : -1);
 				} else
-					String_append_quotes(MissingKeys, "]+[\"", key_name, "\"");
+					StringDynamic_append_quotes(MissingKeys, "]+[\"", key_name, "\"");
 			} break;
 			
 			case NAMED_ARG_REMOVE : {
@@ -2358,7 +2364,7 @@ case C_IGSE_DB:
 							*pointer -= sizeof(key_hash) + sizeof(key_pointer_pos) + sizeof(value_pointer_pos) + arg_value_length + value_length;
 					}
 				} else
-					String_append_quotes(MissingKeys, "]+[\"", argument[i+1], "\"");
+					StringDynamic_append_quotes(MissingKeys, "]+[\"", argument[i+1], "\"");
 			} break;
 			
 			case NAMED_ARG_READ : {
@@ -2396,7 +2402,7 @@ case C_IGSE_DB:
 					QWritel(buffer+value_pointer.start, value_pointer.end-1-value_pointer.start);
 					QWrite(";");
 				} else
-					String_append_quotes(MissingKeys, "]+[\"", argument[i+1], "\"");
+					StringDynamic_append_quotes(MissingKeys, "]+[\"", argument[i+1], "\"");
 			} break;
 			
 			case NAMED_ARG_LIST : {
@@ -2417,39 +2423,39 @@ case C_IGSE_DB:
 							int key_pointer_pos = sizeof(igsedb_header) + (header->number_of_keys + j) * sizeof(size_t);
 							memcpy(&key_pointer, buffer+key_pointer_pos, sizeof(igsedb_pointer));
 	
-							String_append(List, "]+[\"");
+							StringDynamic_append(List, "]+[\"");
 							for (; key_pointer.start<key_pointer.end-1; key_pointer.start++) {
 								char *c = buffer+key_pointer.start;
 								char cc[2] = "";
 								strncpy(cc, c, 1);
 								if (*c == '"')
-									String_append(List, "\"");
+									StringDynamic_append(List, "\"");
 								else
-									String_append(List, cc);
+									StringDynamic_append(List, cc);
 							}
-							String_append(List, "\"");
+							StringDynamic_append(List, "\"");
 						}
 					} else 
 						if (strcmpi(argument[i+1],"all") == 0) {
-							String_append(List, "[");
+							StringDynamic_append(List, "[");
 	
 							for (size_t j=0; j<header->number_of_keys; j++) {
 								size_t key_pointer_pos = sizeof(igsedb_header) + (header->number_of_keys + j) * sizeof(size_t);
 								memcpy(&key_pointer, buffer+key_pointer_pos, sizeof(igsedb_pointer));
 								
-								String_append(List, "]+[\"");
+								StringDynamic_append(List, "]+[\"");
 								for (; key_pointer.start<key_pointer.end-1; key_pointer.start++) {
 									char *c = buffer+key_pointer.start;
 									char cc[2] = "";
 									strncpy(cc, c, 1);
 									if (*c == '"')
-										String_append(List, "\"");
-									String_append(List, cc);
+										StringDynamic_append(List, "\"");
+									StringDynamic_append(List, cc);
 								}
-								String_append(List, "\"");
+								StringDynamic_append(List, "\"");
 							}
 	
-							String_append(List, "]]+[[");
+							StringDynamic_append(List, "]]+[[");
 	
 							for (j=0; j<header->number_of_keys; j++) {
 								size_t value_pointer_pos = sizeof(igsedb_header) + (header->number_of_keys*2 + j) * sizeof(size_t);
@@ -2458,19 +2464,19 @@ case C_IGSE_DB:
 								if (j == header->number_of_keys-1)
 									value_pointer.end = buffer_size;
 								
-								String_append(List, "]+[\"");
+								StringDynamic_append(List, "]+[\"");
 								for (; value_pointer.start<value_pointer.end-1; value_pointer.start++) {
 									char *c = buffer+value_pointer.start;
 									char cc[2] = "";
 									strncpy(cc, c, 1);
 									if (*c == '"')
-										String_append(List, "\"");
-									String_append(List, cc);
+										StringDynamic_append(List, "\"");
+									StringDynamic_append(List, cc);
 								}
-								String_append(List, "\"");
+								StringDynamic_append(List, "\"");
 							}
 	
-							String_append(List, "]");
+							StringDynamic_append(List, "]");
 						}
 				}
 			} break;
@@ -2512,10 +2518,10 @@ case C_IGSE_DB:
 	}
 
 	QWritef("[%s],[%s]]", List.text, MissingKeys.text);
-	String_end(file_contents);
-	String_end(buf_filename);
-	String_end(List);
-	String_end(MissingKeys);
+	StringDynamic_end(file_contents);
+	StringDynamic_end(buf_filename);
+	StringDynamic_end(List);
+	StringDynamic_end(MissingKeys);
 		
 	if (file)
 		fclose(file);

@@ -22,7 +22,7 @@ You may use this source code for personal entertainment purposes only. Any comme
 #include <tlhelp32.h>	// Traversing process modules
 #include "errno.h"		// Error constants
 #include "shlobj.h"		// Copying files to the clipboard
-#include "..\common_functions.cpp"	// String type
+#include "..\common_functions.cpp"	// StringDynamic, String types
 #include <time.h>		// Random number
 #include <io.h>			// Converting HANDLE to FILE
 #include <fcntl.h>		// Converting HANDLE to FILE
@@ -589,7 +589,6 @@ void ParseScript(char *com, FULLHANDLE file)
 						case C_IGSE_WRITE : 
 						case C_STRING_ISNUMBER : 
 						case C_STRING_ISVARIABLE :
-						case C_STRING_CUT : 
 						case C_STRING_TRIM : 
 						case C_STRING_SPLIT : 
 						case C_STRING_CASE : 
@@ -607,6 +606,9 @@ void ParseScript(char *com, FULLHANDLE file)
 						case C_STRING_JOIN : 
 							enable_unit_separator = argument_hash[argument_num-1]==NAMED_ARG_TEXT || argument_hash[argument_num-1]==NAMED_ARG_MERGE;
 							break;
+							
+						case C_STRING_CUT :
+							enable_unit_separator = argument_hash[argument_num-1]==NAMED_ARG_TEXT || argument_hash[argument_num-1]==NAMED_ARG_STARTFIND || argument_hash[argument_num-1]==NAMED_ARG_ENDFIND; break;
 					}
 				}
 				

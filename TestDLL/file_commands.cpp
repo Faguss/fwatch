@@ -329,11 +329,11 @@ case C_FILE_MODLIST:
 	hFind		 = FindFirstFile("*", &fd);
 
 	if (hFind != INVALID_HANDLE_VALUE) {
-		String Names, Attributes, Versions, Dates;
-		String_init(Names);
-		String_init(Attributes);
-		String_init(Versions);
-		String_init(Dates);
+		StringDynamic Names, Attributes, Versions, Dates;
+		StringDynamic_init(Names);
+		StringDynamic_init(Attributes);
+		StringDynamic_init(Versions);
+		StringDynamic_init(Dates);
 
 		char sub_folder[][16] = {
 			"addons", 
@@ -365,7 +365,7 @@ case C_FILE_MODLIST:
 				DWORD attributes = GetFileAttributes(path2);
 
 				if (attributes != -1  &&  attributes & FILE_ATTRIBUTE_DIRECTORY) {
-					String_append_quotes(Names, "]+[\"", fd.cFileName, "\"");
+					StringDynamic_append_quotes(Names, "]+[\"", fd.cFileName, "\"");
 
 					sprintf(path2, "%s\\__gs_id", fd.cFileName);
 					FILE *f = fopen(path2, "r");
@@ -378,9 +378,9 @@ case C_FILE_MODLIST:
 
 						while (pch) {
 							switch (i) {
-								case 0 : String_append_quotes(Attributes, "]+[\"", pch, "\""); break;
-								case 1 : String_append_format(Versions, "]+[%s", pch); break;
-								case 2 : String_append_format(Dates, "]+[%s", pch); break;
+								case 0 : StringDynamic_append_quotes(Attributes, "]+[\"", pch, "\""); break;
+								case 1 : StringDynamic_append_format(Versions, "]+[%s", pch); break;
+								case 2 : StringDynamic_append_format(Dates, "]+[%s", pch); break;
 							}
 
 							i++;
@@ -389,9 +389,9 @@ case C_FILE_MODLIST:
 
 						fclose(f);
 					} else {
-						String_append(Attributes, "]+[\"\"");
-						String_append(Versions, "]+[0");
-						String_append(Dates, "]+[0");
+						StringDynamic_append(Attributes, "]+[\"\"");
+						StringDynamic_append(Versions, "]+[0");
+						StringDynamic_append(Dates, "]+[0");
 					}
 
 					break;
@@ -400,9 +400,9 @@ case C_FILE_MODLIST:
 		} while (FindNextFile(hFind, &fd));
 		FindClose(hFind);
 
-		double bytes             = 0;
-		char customfilename[256] = "";
-		char path_to_user[256]   = "";
+		double bytes              = 0;
+		char custom_filename[256] = "";
+		char path_to_user[256]    = "";
 
 		// Check if profile is using a custom face
 		sprintf(path_to_user, "Users\\%s\\UserInfo.cfg", username);
@@ -425,7 +425,7 @@ case C_FILE_MODLIST:
 
 				if (hFind != INVALID_HANDLE_VALUE) {
 					if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 102400) {
-						strncpy(customfilename, fd.cFileName, 255);
+						strncpy(custom_filename, fd.cFileName, 255);
 						bytes = fd.nFileSizeLow;
 					}
 
@@ -436,7 +436,7 @@ case C_FILE_MODLIST:
 
 					if (hFind != INVALID_HANDLE_VALUE)
 						if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 102400) {
-							strncpy(customfilename, fd.cFileName, 255);
+							strncpy(custom_filename, fd.cFileName, 255);
 							bytes = fd.nFileSizeLow;
 						}
 
@@ -463,7 +463,7 @@ case C_FILE_MODLIST:
 
 				if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 51200) {
 					bytes = fd.nFileSizeLow;
-					strncpy(customfilename, fd.cFileName, 255);
+					strncpy(custom_filename, fd.cFileName, 255);
 				}
 			} while (FindNextFile(hFind, &fd) != 0);
 			FindClose(hFind);
@@ -472,7 +472,7 @@ case C_FILE_MODLIST:
 		
 		// Output result
 		QWrite_err(FWERROR_NONE, 0);
-		QWritef("[%s],[%s],[%s],[%s],\"%s", Names.text, Attributes.text, Versions.text, Dates.text, customfilename);
+		QWritef("[%s],[%s],[%s],[%s],\"%s", Names.text, Attributes.text, Versions.text, Dates.text, custom_filename);
 
 		FileSize size = DivideBytes(bytes);
 
@@ -481,10 +481,10 @@ case C_FILE_MODLIST:
 		hash              = fnv1a_hash(hash, Versions.text, Versions.length, OPTION_NONE);
 
 		QWritef("\",[%f,%f,%f],\"%u\",\"%s\"]", size.bytes, size.kilobytes, size.megabytes, hash, username);
-		String_end(Names);
-		String_end(Attributes);
-		String_end(Versions);
-		String_end(Dates);
+		StringDynamic_end(Names);
+		StringDynamic_end(Attributes);
+		StringDynamic_end(Versions);
+		StringDynamic_end(Dates);
 	} else {
 		QWrite_err(FWERROR_WINAPI, 2, GetLastError(), username);
 		QWrite("[],[]]"); 

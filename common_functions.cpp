@@ -93,18 +93,18 @@ bool IsNumberInArray(int number, const int* array, int array_size) {
 
 
 // Custom string initilization
-void String_init(String &str) {
-	memset(str.stack, 0, String_init_capacity);
+void StringDynamic_init(StringDynamic &str) {
+	memset(str.stack, 0, StringDynamic_init_capacity);
 	str.text     = str.stack;
 	str.length   = 0;
-	str.capacity = String_init_capacity;
+	str.capacity = StringDynamic_init_capacity;
 }
 
 
 
 
 // Custom string heap allocation
-int String_allocate(String &str, size_t new_capacity) {
+int StringDynamic_allocate(StringDynamic &str, size_t new_capacity) {
 	if (str.capacity >= new_capacity)
 		return 0;
 
@@ -134,14 +134,14 @@ int String_allocate(String &str, size_t new_capacity) {
 
 
 // Custom string concatenation
-int String_append_len(String &str, const char *input, size_t input_length) {
+int StringDynamic_append_len(StringDynamic &str, const char *input, size_t input_length) {
 	if (input_length > 0) {
 		size_t new_length = str.length + input_length;
 
 		if (new_length+1 > str.capacity) {
-			size_t new_capacity = str.length + (input_length<String_init_capacity ? String_init_capacity : input_length) + 1;
+			size_t new_capacity = str.length + (input_length<StringDynamic_init_capacity ? StringDynamic_init_capacity : input_length) + 1;
 			
-			if (String_allocate(str, new_capacity) != 0)
+			if (StringDynamic_allocate(str, new_capacity) != 0)
 				return new_capacity;
 		}
 
@@ -153,21 +153,21 @@ int String_append_len(String &str, const char *input, size_t input_length) {
 	return 0;
 }
 
-int String_append(String &str, const char *text) {
-	return String_append_len(str, text, strlen(text));
+int StringDynamic_append(StringDynamic &str, const char *text) {
+	return StringDynamic_append_len(str, text, strlen(text));
 }
 
 
 
 
 // Custom string concatenation with quotes around
-int String_append_quotes(String &str, const char *left, char *text, const char *right) {
-	String_append(str, left);
+int StringDynamic_append_quotes(StringDynamic &str, const char *left, char *text, const char *right) {
+	StringDynamic_append(str, left);
 
 	char *quote = strchr(text, '\"');
 
 	if (!quote) 
-		String_append(str, text); 
+		StringDynamic_append(str, text); 
 	else {
 		int pos     = 0;
 		int lastPos = 0;
@@ -176,18 +176,20 @@ int String_append_quotes(String &str, const char *left, char *text, const char *
 		do {
 			pos       = quote - text;
 			text[pos] = '\0';
-			String_append(str, text+lastPos);
-			String_append(str, "\"\"");
+
+			StringDynamic_append(str, text+lastPos);
+			StringDynamic_append(str, "\"\"");
+
 			text[pos] = '\"';
 			lastPos = pos + 1;
 		} while ((quote = strchr(text+lastPos, '\"')));
 
 		if (lastPos < len)
-			String_append(str, text+lastPos);
+			StringDynamic_append(str, text+lastPos);
 
 	}
 
-	String_append(str, right);
+	StringDynamic_append(str, right);
 	return 0;
 }
 
@@ -195,12 +197,12 @@ int String_append_quotes(String &str, const char *left, char *text, const char *
 
 
 // Custom string deallocation
-void String_end(String &str) {
+void StringDynamic_end(StringDynamic &str) {
 	if (str.text != str.stack) {
 		free(str.text);
 		str.text     = str.stack;
 		str.length   = 0;
-		str.capacity = String_init_capacity;
+		str.capacity = StringDynamic_init_capacity;
 	}
 }
 
@@ -208,8 +210,8 @@ void String_end(String &str) {
 
 
 // Copy file contents to a custom string
-int String_readfile(String &str, char *path) {
-	String_init(str);
+int StringDynamic_readfile(StringDynamic &str, char *path) {
+	StringDynamic_init(str);
 
 	FILE *f = fopen(path, "rb");
 	if (!f)
@@ -219,7 +221,7 @@ int String_readfile(String &str, char *path) {
 	int file_size = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
-	if (String_allocate(str, file_size+1) != 0) 
+	if (StringDynamic_allocate(str, file_size+1) != 0) 
 		return -1;
 
 	int bytes_read       = fread(str.text, 1, file_size, f);
@@ -229,7 +231,7 @@ int String_readfile(String &str, char *path) {
 	if (bytes_read == file_size)
 		return 0;
 	else {
-		String_end(str);
+		StringDynamic_end(str);
 		return -2;
 	}
 }
@@ -238,7 +240,7 @@ int String_readfile(String &str, char *path) {
 
 
 // Custom string concatenation according to a given format
-int String_append_format(String &str, const char *format, ...) {
+int StringDynamic_append_format(StringDynamic &str, const char *format, ...) {
 	int space_free     = 0;
 	int space_required = 0;
 	
@@ -254,7 +256,7 @@ int String_append_format(String &str, const char *format, ...) {
 			space_required = str.capacity * 2;
 
 		if (space_required+1 > space_free) {
-			int result = String_allocate(str, str.capacity+((space_required+1)-space_free));
+			int result = StringDynamic_allocate(str, str.capacity+((space_required+1)-space_free));
 			if (result != 0) {
 				va_end(args);
 				return result;

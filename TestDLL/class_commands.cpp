@@ -5,7 +5,7 @@
 #define MAX_CLASSESINASINGLELINE 128
 #define CLASSPATH classpath[10][128]
 
-case C_CLASS_LIST:
+case C_CLASS_LIST:	//TODO: remove this command on release because it's obsolete
 {  // Return list of classes in a file
 
 	char *arg_filename      = empty_string;
@@ -42,8 +42,8 @@ case C_CLASS_LIST:
 
 
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = arg_filename;
 
 	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
@@ -77,7 +77,7 @@ case C_CLASS_LIST:
 	{
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		QWrite("0,[],[],[]]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	};
 
@@ -120,7 +120,7 @@ case C_CLASS_LIST:
 		
 		QWrite_err(FWERROR_MALLOC, 2, failedBuf, failedBufL);
 		QWrite("0,[],[],[]]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		free(line);
 		free(match);
 		free(classes);
@@ -466,7 +466,7 @@ case C_CLASS_LIST:
 		// If error - error info was already passed; now empty arrays
 		QWritef("%d,[],[],[]]", J);
 
-	String_end(buf_filename);
+	StringDynamic_end(buf_filename);
 	free(line); 
 	free(match); 
 	free(classes); 
@@ -486,7 +486,7 @@ break;
 
 
 
-case C_CLASS_TOKEN:
+case C_CLASS_TOKEN:	//TODO: remove this command on release because it's obsolete
 { // Return all properties from a class
 
 	// Read arguments -------------------------------------------------
@@ -547,8 +547,8 @@ case C_CLASS_TOKEN:
 
 
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = arg_filename;
 
 	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
@@ -584,7 +584,7 @@ case C_CLASS_TOKEN:
 	{
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		QWrite("0,\"0\",[],[]]");
-		String_end(buf_filename); 
+		StringDynamic_end(buf_filename); 
 		break;
 	};
 
@@ -622,7 +622,7 @@ case C_CLASS_TOKEN:
 
 		QWrite_err(FWERROR_MALLOC, 2, failedBuf, failedBufL);
 		QWrite("0,\"0\",[],[]]");
-		String_end(buf_filename); 
+		StringDynamic_end(buf_filename); 
 		free(line);
 		free(match);
 		free(names);
@@ -1137,7 +1137,7 @@ case C_CLASS_TOKEN:
 		// If error - error info was already passed; give empty arrays to the game
 		QWritef("%d,\"%d\",[],[]]", J, classOff);
 
-	String_end(buf_filename);
+	StringDynamic_end(buf_filename);
 	free(names); 
 	free(values); 
 	free(line); 
@@ -1156,7 +1156,7 @@ break;
 
 
 
-case C_CLASS_MODIFY:
+case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolete
 { // Modify class name in a file
 
 	// Read arguments -------------------------------------------------
@@ -1241,8 +1241,8 @@ case C_CLASS_MODIFY:
 
 
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = arg_filename;
 	
 	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR)) {
@@ -1288,7 +1288,7 @@ case C_CLASS_MODIFY:
 	{
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		QWrite("0]");
-		String_end(buf_filename); 
+		StringDynamic_end(buf_filename); 
 		break;
 	};
 
@@ -1307,7 +1307,7 @@ case C_CLASS_MODIFY:
 	{
 		QWrite_err(FWERROR_MALLOC, 2, "buf", buf_size);
 		QWrite("0]");
-		String_end(buf_filename); 
+		StringDynamic_end(buf_filename); 
 		fclose(f);
 		break;
 	};
@@ -1343,7 +1343,7 @@ case C_CLASS_MODIFY:
 
 		QWrite_err(FWERROR_MALLOC, 2, failedBuf, failedBufL);
 		QWrite("0]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		free(line);
 		free(line2);
 		free(match);
@@ -1859,7 +1859,7 @@ case C_CLASS_MODIFY:
 
 
 	delete[] buf; 
-	String_end(buf_filename); 
+	StringDynamic_end(buf_filename); 
 	free(line); 
 	free(line2); 
 	free(match);
@@ -1877,7 +1877,7 @@ break;
 
 
 
-case C_CLASS_MODTOK:
+case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolete
 { // Modify property within a class
 
 	// Read arguments -------------------------------------------------
@@ -1993,8 +1993,8 @@ case C_CLASS_MODTOK:
 
 
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = arg_filename;
 	
 	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR)) {
@@ -2049,7 +2049,7 @@ case C_CLASS_MODTOK:
 	{
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		QWrite("0]");
-		String_end(buf_filename); 
+		StringDynamic_end(buf_filename); 
 		break;
 	};
 
@@ -2068,7 +2068,7 @@ case C_CLASS_MODTOK:
 	{
 		QWrite_err(FWERROR_MALLOC, 2, "buf", buf_size);
 		QWrite("0]");
-		String_end(buf_filename); 
+		StringDynamic_end(buf_filename); 
 		fclose(f);
 		break;
 	};
@@ -2103,7 +2103,7 @@ case C_CLASS_MODTOK:
 
 		QWrite_err(FWERROR_MALLOC, 2, failedBuf, failedBufL);	
 		QWrite("0]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
  		free(line);
 		free(line2);
 		free(match);
@@ -2956,7 +2956,7 @@ case C_CLASS_MODTOK:
 
 
 	delete[] buf; 
-	String_end(buf_filename); 
+	StringDynamic_end(buf_filename); 
 	free(line); 
 	free(line2); 
 	free(match);
@@ -3040,8 +3040,8 @@ case C_CLASS_READ:
 	}
 
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = arg_filename;
 
 	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
@@ -3112,7 +3112,7 @@ case C_CLASS_READ:
 	if (!file) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		QWrite("[],[],0]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
@@ -3120,7 +3120,7 @@ case C_CLASS_READ:
 	if (fseek(file, 0, SEEK_END) != 0) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		QWrite("[],[],0]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
 	};
@@ -3129,21 +3129,21 @@ case C_CLASS_READ:
 	if (file_size == 0xFFFFFFFF) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		QWrite("[],[],0]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
 	} else
 		file_size -= arg_offset;
 
 	// Allocate buffer
-	String file_contents;
-	String_init(file_contents);
+	StringDynamic file_contents;
+	StringDynamic_init(file_contents);
 	
-	int result = String_allocate(file_contents, file_size+1);
+	int result = StringDynamic_allocate(file_contents, file_size+1);
 	if (result != 0) {
 		QWrite_err(FWERROR_MALLOC, 2, "file_contents", file_size+1);
 		QWrite("[],[],0]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
@@ -3154,8 +3154,8 @@ case C_CLASS_READ:
 
 	if (bytes_read != file_size) {		
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);		
-		String_end(buf_filename);
-		String_end(file_contents);
+		StringDynamic_end(buf_filename);
+		StringDynamic_end(file_contents);
 		QWrite("[],[],0]");
 		fclose(file);
 		break;
@@ -3188,13 +3188,13 @@ case C_CLASS_READ:
 		BLOCK
 	};
 	
-	String output_class[predefined_capacity];
-	String output_inherit[predefined_capacity];
-	String output_bytes[predefined_capacity];
-	String output_property[predefined_capacity];
-	String output_value[predefined_capacity];
+	StringDynamic output_class[predefined_capacity];
+	StringDynamic output_inherit[predefined_capacity];
+	StringDynamic output_bytes[predefined_capacity];
+	StringDynamic output_property[predefined_capacity];
+	StringDynamic output_value[predefined_capacity];
 	
-	String *all_output_strings[] = {
+	StringDynamic *all_output_strings[] = {
 		output_class,
 		output_inherit,
 		output_bytes,
@@ -3205,13 +3205,13 @@ case C_CLASS_READ:
 	
 	for (int z=0; z<classpath_capacity; z++)
 		for (int j=0; j<all_output_strings_num; j++) {
-			String_init(all_output_strings[j][z]);
-			String_append(all_output_strings[j][z], "[");
+			StringDynamic_init(all_output_strings[j][z]);
+			StringDynamic_append(all_output_strings[j][z], "[");
 		}
 		
-	String output_classpath_bytes;
-	String_init(output_classpath_bytes);
-	String_append(output_classpath_bytes, "[");
+	StringDynamic output_classpath_bytes;
+	StringDynamic_init(output_classpath_bytes);
+	StringDynamic_append(output_classpath_bytes, "[");
   
 	int comment           = NONE;
 	int expect            = PROPERTY;
@@ -3331,7 +3331,7 @@ case C_CLASS_READ:
 
 						for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
 							for (int k=0; k<all_output_strings_num; k++)
-								String_append(all_output_strings[k][j], "]");
+								StringDynamic_append(all_output_strings[k][j], "]");
 					}
 						
 					expect = SEMICOLON;
@@ -3458,13 +3458,13 @@ case C_CLASS_READ:
 
 								if (level < classpath_capacity) {
 									// Add property name
-									String_append_format(output_property[level], "]+[\"%s\"", property);
+									StringDynamic_append_format(output_property[level], "]+[\"%s\"", property);
 
 									// Add property value
-									String_append(output_value[level], "]+[");
+									StringDynamic_append(output_value[level], "]+[");
 
 									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"'))
-										String_append(output_value[level], "\"");
+										StringDynamic_append(output_value[level], "\"");
 
 									// Convert arrays (square brackets) and strings (double quotes) so that "call" command in OFP can be used
 									if (is_array || (wrap==YES_WRAP && value[0]=='\"')) {
@@ -3473,21 +3473,21 @@ case C_CLASS_READ:
 												in_quote = !in_quote;
 
 											if (text[j]=='{' && !in_quote && wrap==NO_WRAP)
-												String_append(output_value[level], "[");
+												StringDynamic_append(output_value[level], "[");
 											else 
 												if (text[j]=='}' && !in_quote && wrap==NO_WRAP)
-													String_append(output_value[level], "]");
+													StringDynamic_append(output_value[level], "]");
 												else 
 													if (text[j]=='"' && (wrap==YES_WRAP || wrap==NODOUBLE_WRAP))
-														String_append(output_value[level], "\"\"");
+														StringDynamic_append(output_value[level], "\"\"");
 													else 
-														String_append_len(output_value[level], text+j, 1);
+														StringDynamic_append_len(output_value[level], text+j, 1);
 										}
 									} else
-										String_append(output_value[level], value);
+										StringDynamic_append(output_value[level], value);
 									
 									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"'))
-										String_append(output_value[level], "\"");
+										StringDynamic_append(output_value[level], "\"");
 								}
 							}
 						}
@@ -3520,11 +3520,11 @@ case C_CLASS_READ:
 						}
 
 						if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
-							String *output_array = expect==CLASS_NAME ? output_class : output_inherit;
-							int level            = class_level - classpath_current;
+							StringDynamic *output_array = expect==CLASS_NAME ? output_class : output_inherit;
+							int level                   = class_level - classpath_current;
 
 							if (level < classpath_capacity && !classpath_done)
-								String_append_format(output_array[level], "]+[\"%s\"", text+word_start);
+								StringDynamic_append_format(output_array[level], "]+[\"%s\"", text+word_start);
 						}
 						
 						is_inherit = expect == CLASS_INHERIT;
@@ -3547,12 +3547,12 @@ case C_CLASS_READ:
 								int level = class_level - classpath_current;
 								
 								if (level < classpath_capacity && !classpath_done)
-									String_append(output_inherit[level], "]+[\"\"");
+									StringDynamic_append(output_inherit[level], "]+[\"\"");
 							}
 						}
 						
 						if (classpath_match) {
-							String_append_format(output_classpath_bytes, "]+[\"%d\"", i+1);
+							StringDynamic_append_format(output_classpath_bytes, "]+[\"%d\"", i+1);
 							classpath_match = false;
 						}
 								
@@ -3560,7 +3560,7 @@ case C_CLASS_READ:
 							int level = class_level - classpath_current;
 
 							if (level < classpath_capacity)
-								String_append_format(output_bytes[level], "]+[\"%d\"", i+1);
+								StringDynamic_append_format(output_bytes[level], "]+[\"%d\"", i+1);
 						}
 						
 						class_level++;
@@ -3574,7 +3574,7 @@ case C_CLASS_READ:
 
 							for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
 								for (int k=0; k<all_output_strings_num; k++)
-									String_append(all_output_strings[k][j], "]+[[");
+									StringDynamic_append(all_output_strings[k][j], "]+[[");
 						}
 					} else
 						if (!isspace(c)) {	//syntax error
@@ -3633,7 +3633,7 @@ case C_CLASS_READ:
 	for (z=0; z<classpath_capacity && z<=output_level; z++) {
 		for (int j=0; j<all_output_strings_num; j++) {
 			QWritef("_output_%s%d=%s];", output_strings_name[j], z, all_output_strings[j][z].text);
-			String_end(all_output_strings[j][z]);
+			StringDynamic_end(all_output_strings[j][z]);
 		}
 	}
 	
@@ -3684,9 +3684,9 @@ case C_CLASS_READ:
 
 	QWritef("],%s],%d]", output_classpath_bytes.text, classpath_current);
 
-	String_end(output_classpath_bytes);
-	String_end(file_contents);
-	String_end(buf_filename);
+	StringDynamic_end(output_classpath_bytes);
+	StringDynamic_end(file_contents);
+	StringDynamic_end(buf_filename);
 }
 break;
 
@@ -3725,8 +3725,8 @@ case C_CLASS_READSQM:
 	}
 
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = arg_filename;
 
 	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR))
@@ -3739,14 +3739,14 @@ case C_CLASS_READSQM:
 	FILE *file = fopen(ptr_filename, "rb");
 	if (!file) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
 	// Find file size
 	if (fseek(file, 0, SEEK_END) != 0) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
 	};
@@ -3754,19 +3754,19 @@ case C_CLASS_READSQM:
 	size_t file_size = ftell(file);
 	if (file_size == 0xFFFFFFFF) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
 	}
 
 	// Allocate buffer
-	String file_content;
-	String_init(file_content);
+	StringDynamic file_content;
+	StringDynamic_init(file_content);
 	
-	int result = String_allocate(file_content, file_size+1);
+	int result = StringDynamic_allocate(file_content, file_size+1);
 	if (result != 0) {
 		QWrite_err(FWERROR_MALLOC, 2, "file_content", file_size);
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
@@ -3776,8 +3776,8 @@ case C_CLASS_READSQM:
 
 	if (bytes_read != file_size) {		
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);		
-		String_end(buf_filename);
-		String_end(file_content);
+		StringDynamic_end(buf_filename);
+		StringDynamic_end(file_content);
 		fclose(file);
 		break;
 	}
@@ -3991,8 +3991,8 @@ case C_CLASS_READSQM:
 	//---------------------------------------------------------------------------
 	QWrite_err(FWERROR_NONE, 0);
 
-	String_end(file_content);
-	String_end(buf_filename);
+	StringDynamic_end(file_content);
+	StringDynamic_end(buf_filename);
 }
 break;
 
@@ -4082,11 +4082,11 @@ case C_CLASS_WRITE :
 		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
 		QWrite("0]");
 		break;
-	};
+	}
 	
 	// Verify and update path to the file
-	String buf_filename;
-	String_init(buf_filename);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
 	char *ptr_filename = arg_filename;
 
 	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
@@ -4101,7 +4101,7 @@ case C_CLASS_WRITE :
 	if (!file) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		QWrite("0]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
@@ -4109,7 +4109,7 @@ case C_CLASS_WRITE :
 	if (fseek(file, 0, SEEK_END) != 0) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		QWrite("0]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
 	};
@@ -4118,20 +4118,20 @@ case C_CLASS_WRITE :
 	if (file_size == 0xFFFFFFFF) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
 		QWrite("0]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
 	};
 
 	// Allocate buffer
-	String file_contents;
-	String_init(file_contents);
+	StringDynamic file_contents;
+	StringDynamic_init(file_contents);
 	int buffer_max = file_size + 1 + arg_merge_length;
-	int result     = String_allocate(file_contents, buffer_max);
+	int result     = StringDynamic_allocate(file_contents, buffer_max);
 	if (result != 0) {
 		QWrite_err(FWERROR_MALLOC, 2, "file_contents", buffer_max);
 		QWrite("0]");
-		String_end(buf_filename);
+		StringDynamic_end(buf_filename);
 		break;
 	}
 
@@ -4142,8 +4142,8 @@ case C_CLASS_WRITE :
 
 	if (bytes_read != file_size) {		
 		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);		
-		String_end(buf_filename);
-		String_end(file_contents);
+		StringDynamic_end(buf_filename);
+		StringDynamic_end(file_contents);
 		QWrite("0]");
 		fclose(file);
 		break;
@@ -4203,7 +4203,7 @@ case C_CLASS_WRITE :
 				file_contents.length -= removed_length;
 				save_changes          = true;
 			} else {
-				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_renameproperty, ptr_filename);
+				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_deleteproperty, ptr_filename);
 				goto class_write_end;
 			}
 		}
@@ -4222,7 +4222,7 @@ case C_CLASS_WRITE :
 				file_contents.length -= removed_length;
 				save_changes          = true;
 			} else {
-				QWrite_err(FWERROR_CLASS_NOCLASS, 2, arg_renameclass, ptr_filename);
+				QWrite_err(FWERROR_CLASS_NOCLASS, 2, arg_deleteclass, ptr_filename);
 				goto class_write_end;
 			}
 		}
@@ -4292,6 +4292,6 @@ case C_CLASS_WRITE :
 	class_write_end:
 	QWritef("%d]", classpath_current);
 	
-	String_end(file_contents);
-	String_end(buf_filename);
+	StringDynamic_end(file_contents);
+	StringDynamic_end(buf_filename);
 } break;
