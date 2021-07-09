@@ -1594,7 +1594,8 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 				return ErrorMessage(STR_DOWNLOAD_PATH_ERROR);
 	
 			url = url.substr(0,find) + "\"fwatch\\tmp\\" + path + "\" " + url.substr(end);
-		}
+		} else
+			find += output.length();
 		
 		find = url.find(output, find);
 	}
