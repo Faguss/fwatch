@@ -30,7 +30,7 @@ You may use this source code for personal entertainment purposes only. Any comme
 extern GLOBAL_VARIABLES_TESTDLL global;
 
 #define SCRIPT_VERSION	1.16		// Script engine version
-#define MAX_PARAMS		32			// Maximum parameters for commands
+#define MAX_PARAMS		64			// Maximum parameters for commands
 #define WGET_MINWAIT	1000
 #define PIPEBUFSIZE		4096
 
@@ -169,9 +169,10 @@ enum COMMAND_HASHES {
 	C_STRING_WORDPOS      = 1620765186u,
 };
 
-unsigned int commands_named_arguments[] = {
+unsigned int commands_named_arguments[] = { // sorted
 	C_CLASS_READ2,
 	C_IGSE_FIND,
+	C_STRING_SIZE,
 	C_STRING_ISNUMBER,
 	C_STRING_CUT,
 	C_IGSE_RENAME,
@@ -196,6 +197,7 @@ unsigned int commands_named_arguments[] = {
 	C_CLASS_MODTOK,
 	C_CLASS_WRITE,
 	C_MEM_SETCAM,
+	C_STRING_DOMAIN,
 	C_STRING_REPLACECHAR,
 	C_STRING_CASE,
 	C_MEM_SETWEATHER,
@@ -209,7 +211,7 @@ unsigned int commands_named_arguments[] = {
 	C_STRING_JOIN
 };
 
-unsigned int commands_memory[] = {
+unsigned int commands_memory[] = { // sorted
 	C_MEM_GETRESPAWNTYPE,
 	C_EXE_WEBSITE,
 	C_INPUT_MULTI,
@@ -281,6 +283,7 @@ enum NAMED_ARGUMENTS {
 	NAMED_ARG_MAXTIDE             = 437406701u,
 	NAMED_ARG_TRACKTIME           = 459210109u,
 	NAMED_ARG_SOURCE              = 466561496u,
+	NAMED_ARG_NUMBER              = 467038368u,
 	NAMED_ARG_ACTION_SIZE         = 467552881u,
 	NAMED_ARG_ACTION_W            = 529460405u,
 	NAMED_ARG_ACTION_X            = 546238024u,
@@ -292,6 +295,7 @@ enum NAMED_ARGUMENTS {
 	NAMED_ARG_CLOUDSSPEED         = 675179266u,
 	NAMED_ARG_RENAMEPROPERTY      = 769516826u,
 	NAMED_ARG_WORDDELIMITER       = 834005314u,
+	NAMED_ARG_URL                 = 848251934u,
 	NAMED_ARG_LIMIT               = 853203252u,
 	NAMED_ARG_BRIGHTNESS          = 886071850u,
 	NAMED_ARG_CHAT_FONT           = 902884201u,
@@ -372,6 +376,7 @@ enum NAMED_ARGUMENTS {
 	NAMED_ARG_MAXLIGHTS           = 2281039248u,
 	NAMED_ARG_WAIT                = 2301512864u,
 	NAMED_ARG_CHAT_COLORDIRECT    = 2373422770u,
+	NAMED_ARG_KEEPWWW             = 2464564123u,
 	NAMED_ARG_POSITION            = 2471448074u,
 	NAMED_ARG_ACTUALOVERCAST      = 2480966134u,
 	NAMED_ARG_GROUPDIR_H          = 2482955540u,
@@ -392,7 +397,9 @@ enum NAMED_ARGUMENTS {
 	NAMED_ARG_FLAREDURATION       = 3022446051u,
 	NAMED_ARG_LOWER               = 3038577850u,
 	NAMED_ARG_ACTION_ROWS         = 3073035893u,
+	NAMED_ARG_OBJECT              = 3099987130u,
 	NAMED_ARG_MERGE               = 3111536167u,
+	NAMED_ARG_SHORT               = 3122818005u,
 	NAMED_ARG_FOVLEFT             = 3130206285u,
 	NAMED_ARG_TEXT                = 3185987134u,
 	NAMED_ARG_MIDDLESINGLE        = 3186492500u,
@@ -414,6 +421,7 @@ enum NAMED_ARGUMENTS {
 	NAMED_ARG_LEADER_W            = 3543383202u,
 	NAMED_ARG_OPEN                = 3546203337u,
 	NAMED_ARG_LEADER_Y            = 3576938440u,
+	NAMED_ARG_FINDCHAR            = 3581622558u,
 	NAMED_ARG_LEADER_X            = 3593716059u,
 	NAMED_ARG_ONLYNAME            = 3599284660u,
 	NAMED_ARG_ACTION_COLORTEXT    = 3629826064u,
@@ -455,18 +463,6 @@ enum NAMED_ARGUMENTS {
 
 
 
-// List of accessible locations
-const int allowed_paths_num = 8;
-static char allowed_paths[allowed_paths_num][32] = {
-	"in-game-script-editor",
-	"flashpointcutscenemaker",
-	"missioneditor3d",
-	"@addontest",
-	"fwatch\\idb",
-	"fwatch/idb",
-	"fwatch\\tmp",
-	"fwatch/tmp"
-};
 
 
 
@@ -476,52 +472,41 @@ static char allowed_paths[allowed_paths_num][32] = {
 
 
 
-
-
-
-
-
-// Parse a script command
-void ParseScript(char *com, FULLHANDLE file) 
+// Parse and execute Fwatch command
+void ParseScript(String &command, FULLHANDLE file) 
 {
-	global.out = file.handle;
+	global.out                 = file.handle;
+	global.option_error_output = OPTION_NONE;
 
 	// Tokenize and hash command line
-	bool match_command         = true;
-	bool expect_space          = false;
-	bool named_arguments       = false;
-	bool enable_unit_separator = false;
-	bool in_quote              = false;
-	bool named_arg_in_quote    = false;
-	size_t argument_num        = 0;
-	size_t argument_end        = 0;
-	char *argument[MAX_PARAMS]             = {0};
-	size_t argument_length[MAX_PARAMS]     = {0};
+	bool match_command                     = true;
+	bool expect_space                      = false;
+	bool named_arguments                   = false;
+	bool enable_unit_separator             = false;
+	bool in_quote                          = false;
+	bool named_arg_in_quote                = false;
+	bool is_name                           = true;
+	size_t argument_num                    = 0;
+	String argument[MAX_PARAMS]            = {0};
 	unsigned int argument_hash[MAX_PARAMS] = {0};
 
-	for (size_t i=0; argument_num<MAX_PARAMS && !argument_end; i++) {
-		// End of the string
-		if (com[i] == '\0') {
-			argument_end = i;
-
-			// If last argument is a named argument with an empty value
-			if (named_arguments  &&  argument_hash[argument_num-1]!=0  &&  argument[argument_num]==NULL) {
-				expect_space           = true;
-				argument[argument_num] = com + i;
-			}
-		}
-		
+	for (size_t i=0;  i<=command.length && argument_num<MAX_PARAMS-2;  i++) {		
 		// End of the word
-		if ((isspace(com[i]) && !enable_unit_separator && !in_quote)  ||  argument_end  ||  (!enable_unit_separator && named_arguments && com[i]==':')  ||  (enable_unit_separator && com[i]==0x1F)  ||  (named_arg_in_quote && com[i]=='\"')) {
-
+		if (
+			(isspace(command.text[i]) && !enable_unit_separator && !in_quote)  ||              // whitespace not in quote ends an argument
+			command.text[i] == '\0'  ||                                                        // zero terminator ends all types of arguments
+			(!enable_unit_separator && named_arguments && command.text[i]==':' && is_name)  || // colon ends name part of the named argument
+			(enable_unit_separator && command.text[i]==0x1F)  ||                               // unit separator ends special named arguments
+			(named_arg_in_quote && command.text[i]=='\"')                                      // quote ends named argument that started with a quote
+		) {
 			// If named argument started with quotation mark
-			if (!enable_unit_separator && named_arguments && com[i]==':' && in_quote) {
-				argument[argument_num]++;
+			if (!enable_unit_separator  &&  named_arguments  &&  command.text[i]==':'  &&  in_quote) {
+				argument[argument_num].text++;
 				named_arg_in_quote = true;
 			}
 
 			// When named argument ends with quotation mark then end on it
-			if (named_arg_in_quote && com[i]=='\"') {
+			if (named_arg_in_quote  &&  command.text[i]=='\"') {
 				named_arg_in_quote = false;
 				in_quote           = false;
 			}
@@ -529,25 +514,29 @@ void ParseScript(char *com, FULLHANDLE file)
 			// Determine length of the argument
 			if (expect_space) {
 				expect_space                  = false;
-				argument_length[argument_num] = com+i - argument[argument_num];
+				argument[argument_num].length = command.text+i - argument[argument_num].text;
 				argument_num++;
 			}
 
 			if (argument_num > 1) {
-				char current_character = com[i];
-				com[i]                 = '\0';
+				char current_character = command.text[i];
+				command.text[i]        = '\0';
 
 				// Hash command name
 				if (argument_num==2  &&  match_command) {
 					match_command       = false;
-					argument_hash[0]    = fnv1a_hash(FNV_BASIS, argument[0], i, OPTION_LOWERCASE);
+					argument_hash[0]    = fnv1a_hash(FNV_BASIS, argument[0].text, i, OPTION_LOWERCASE);
 					named_arguments     = binary_search(argument_hash[0], commands_named_arguments, 0, sizeof(commands_named_arguments)/sizeof(commands_named_arguments[0])-1) >= 0;
-					global.command_hash = argument_hash[0];
 				}
 				
 				// Hash named arguments
 				if (named_arguments && current_character==':') {
-					argument_hash[argument_num-1] = fnv1a_hash(FNV_BASIS, argument[argument_num-1], com+i-argument[argument_num-1], OPTION_LOWERCASE);
+					argument_hash[argument_num-1] = fnv1a_hash(FNV_BASIS, argument[argument_num-1].text, command.text+i-argument[argument_num-1].text, OPTION_LOWERCASE);
+					is_name                       = false;
+					
+					// Mark beginning of the next argument (in case it's empty)
+					expect_space                = true;
+					argument[argument_num].text = command.text + i + 1;
 					
 					// Determine if argument is terminated by unit separator (0x1F)
 					switch(argument_hash[0]) {
@@ -587,6 +576,7 @@ void ParseScript(char *com, FULLHANDLE file)
 
 						case C_CLIP_COPY : 
 						case C_IGSE_WRITE : 
+						case C_STRING_SIZE :
 						case C_STRING_ISNUMBER : 
 						case C_STRING_ISVARIABLE :
 						case C_STRING_TRIM : 
@@ -600,7 +590,7 @@ void ParseScript(char *com, FULLHANDLE file)
 							break;
 
 						case C_STRING_FIND : 
-							enable_unit_separator = argument_hash[argument_num-1]==NAMED_ARG_TEXT || argument_hash[argument_num-1]==NAMED_ARG_FIND;
+							enable_unit_separator = argument_hash[argument_num-1]==NAMED_ARG_TEXT || argument_hash[argument_num-1]==NAMED_ARG_FIND || argument_hash[argument_num-1]==NAMED_ARG_FINDCHAR;
 							break;
 
 						case C_STRING_JOIN : 
@@ -610,7 +600,8 @@ void ParseScript(char *com, FULLHANDLE file)
 						case C_STRING_CUT :
 							enable_unit_separator = argument_hash[argument_num-1]==NAMED_ARG_TEXT || argument_hash[argument_num-1]==NAMED_ARG_STARTFIND || argument_hash[argument_num-1]==NAMED_ARG_ENDFIND; break;
 					}
-				}
+				} else
+					is_name = true;
 				
 				if (enable_unit_separator  &&  current_character==0x1F)
 					enable_unit_separator = false;
@@ -618,16 +609,17 @@ void ParseScript(char *com, FULLHANDLE file)
 		} else {
 			// Beginning of the word
 			if (!expect_space) {
-				expect_space           = true;
-				argument[argument_num] = com + i;
+				expect_space                = true;
+				argument[argument_num].text = command.text + i;
 			}
 				
-			if (com[i] == '\"' && !enable_unit_separator)
+			if (command.text[i] == '\"' && !enable_unit_separator)
 				in_quote = !in_quote;
 		}
 
-		if (com[i] == 0x1E)	// record separator back to unit separator (was converted by IGSE_LOAD)
-			com[i] = 0x1F;
+		// turn record separator back to the unit separator (IGSE_LOAD converts it)
+		if (command.text[i] == 0x1E)	
+			command.text[i] = 0x1F;
 	}
 	
 
@@ -635,7 +627,7 @@ void ParseScript(char *com, FULLHANDLE file)
 	SIZE_T stBytes = 0;
 	HANDLE phandle = NULL;
 
-	if (binary_search(argument_hash[0], commands_memory, 0, sizeof(commands_memory) / sizeof(commands_memory[0]))-1) {
+	if (binary_search(argument_hash[0], commands_memory, 0, sizeof(commands_memory) / sizeof(commands_memory[0])-1) >= 0) {
 		phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, global.pid);
 
 		if (!phandle) {
@@ -650,8 +642,11 @@ void ParseScript(char *com, FULLHANDLE file)
 	}
 
 
-	global.option_error_output = OPTION_NONE;
-	char empty_string[]        = "";
+	// Default empty value for text arguments
+	char empty_char[]               = "";
+	const size_t empty_char_index   = MAX_PARAMS - 1;
+	argument[empty_char_index].text = empty_char;
+	String empty_string             = {empty_char, 0};
 
 	// Execute command
 	switch (argument_hash[0]) {
@@ -666,7 +661,7 @@ void ParseScript(char *com, FULLHANDLE file)
 		#include "igse_commands.cpp"
 
 		default:
-			QWritef("ERROR: Unknown command %s", com);
+			QWritef("ERROR: Unknown command %s", command.text);
 			break;
 	}
 

@@ -36,8 +36,8 @@ case C_MEM_SETCURSOR:
 
 	int base     = 0;
 	float pos[2] = {
-		(float)atof(argument[2]) * 2 - 1,
-		(float)atof(argument[3]) * 2 - 1
+		(float)atof(argument[2].text) * 2 - 1,
+		(float)atof(argument[3].text) * 2 - 1
 	};
 
 	switch(global_exe_version[global.exe_index]) {
@@ -76,7 +76,7 @@ case C_MEM_GETWORLD:
 
 
 	// Simple or extended info
-	if (argument_num<=2  ||  strcmpi(argument[2],"extended")!=0)
+	if (argument_num<=2  ||  strcmpi(argument[2].text,"extended")!=0)
 		QWrite(island);
 	else {
 		// Get island size
@@ -141,7 +141,7 @@ case C_MEM_SETMAP:
 
 	int base    = 0;
 	int	pointer = 0;
-	bool is_map = String2Bool(argument[2]);
+	bool is_map = String_bool(argument[2]);
 
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x7B4028; break;
@@ -368,12 +368,12 @@ case C_MEM_SETGRAPHICS:
 					ReadProcessMemory(phandle,(LPVOID)(p1+0x2C), &global.restore_float[FLOAT_BRIGHTNESS], 4, &stBytes);
 				}
 
-				float val = (float)atof(argument[i+1]);
+				float val = (float)atof(argument[i+1].text);
 				WriteProcessMemory(phandle,(LPVOID)(p1+0x2C), &val, 4, &stBytes);
 			} break;
 
 			case NAMED_ARG_VISUALQUALITY : {
-				float val = (float)atof(argument[i+1]);
+				float val = (float)atof(argument[i+1].text);
 				WriteProcessMemory(phandle,(LPVOID)(p2+0x53C), &val, 4, &stBytes);
 			} break;
 
@@ -383,7 +383,7 @@ case C_MEM_SETGRAPHICS:
 					ReadProcessMemory(phandle,(LPVOID)(p3+0x5B0), &global.restore_byte[BYTE_OBJECT_SHADOWS], 1, &stBytes);
 				}
 
-				int val = atoi(argument[i+1]);
+				int val = atoi(argument[i+1].text);
 				if (val < 0) val=0;
 				if (val > 1) val=1;
 				WriteProcessMemory(phandle, (LPVOID)(p3+0x5B0), &val, 1, &stBytes);
@@ -395,7 +395,7 @@ case C_MEM_SETGRAPHICS:
 					ReadProcessMemory(phandle,(LPVOID)(p3+0x5B1), &global.restore_byte[BYTE_VEHICLE_SHADOWS], 1, &stBytes);
 				}
 
-				int val = atoi(argument[i+1]);
+				int val = atoi(argument[i+1].text);
 				if (val < 0) val=0;
 				if (val > 1) val=1;
 				WriteProcessMemory(phandle, (LPVOID)(p3+0x5B1), &val, 1, &stBytes);
@@ -407,14 +407,14 @@ case C_MEM_SETGRAPHICS:
 					ReadProcessMemory(phandle,(LPVOID)(p3+0x5B2), &global.restore_byte[BYTE_CLOUDLETS], 1, &stBytes);
 				}
 
-				int val = atoi(argument[i+1]);
+				int val = atoi(argument[i+1].text);
 				if (val < 0) val=0;
 				if (val > 1) val=1;
 				WriteProcessMemory(phandle, (LPVOID)(p3+0x5B2), &val, 1, &stBytes);
 			}
 
 			case NAMED_ARG_LANDSCAPEDISTANCE : {
-				float val = (float)atof(argument[i+1]);
+				float val = (float)atof(argument[i+1].text);
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD068; break;
 					case VER_199 : base=0x7CC028; break;
@@ -425,7 +425,7 @@ case C_MEM_SETGRAPHICS:
 			} break;
 
 			case NAMED_ARG_OBJECTSDISTANCE : {
-				float val = (float)atof(argument[i+1]);
+				float val = (float)atof(argument[i+1].text);
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD06C; break;
 					case VER_199 : base=0x7CC02C; break;
@@ -436,7 +436,7 @@ case C_MEM_SETGRAPHICS:
 			} break;
 
 			case NAMED_ARG_VIEWDISTANCE : {
-				float val = (float)atof(argument[i+1]);
+				float val = (float)atof(argument[i+1].text);
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD070; break;
 					case VER_199 : base=0x7CC030; break;
@@ -458,13 +458,13 @@ case C_MEM_SETGRAPHICS:
 						ReadProcessMemory(phandle,(LPVOID)base, &global.restore_float[FLOAT_RADAR], 4, &stBytes);
 					}
 
-					float val = (float)atof(argument[i+1]);
+					float val = (float)atof(argument[i+1].text);
 					WriteProcessMemory(phandle, (LPVOID)base, &val, 4, &stBytes);
 				}
 			}
 
 			case NAMED_ARG_SHADOWSDISTANCE : {
-				float val = (float)atof(argument[i+1]);
+				float val = (float)atof(argument[i+1].text);
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD078; break;
 					case VER_199 : base=0x7CC038; break;
@@ -487,7 +487,7 @@ case C_MEM_SETGRAPHICS:
 						ReadProcessMemory(phandle,(LPVOID)base, &global.restore_int[INT_MAX_OBJECTS], 4, &stBytes);
 					}
 
-					int val = atoi(argument[i+1]);
+					int val = atoi(argument[i+1].text);
 					WriteProcessMemory(phandle, (LPVOID)base, &val, 4, &stBytes);
 				}
 			} break;
@@ -505,7 +505,7 @@ case C_MEM_SETGRAPHICS:
 						ReadProcessMemory(phandle,(LPVOID)base, &global.restore_float[FLOAT_TRACK1], 4, &stBytes);
 					}
 
-					float val = (float)atof(argument[i+1]);
+					float val = (float)atof(argument[i+1].text);
 					WriteProcessMemory(phandle, (LPVOID)base, &val, 4, &stBytes);
 				}
 			} break;
@@ -523,7 +523,7 @@ case C_MEM_SETGRAPHICS:
 						ReadProcessMemory(phandle,(LPVOID)base, &global.restore_float[FLOAT_TRACK2], 4, &stBytes);
 					}
 
-					float val = (float)atof(argument[i+1]);
+					float val = (float)atof(argument[i+1].text);
 					WriteProcessMemory(phandle, (LPVOID)base, &val, 4, &stBytes);
 				}
 			} break;
@@ -541,7 +541,7 @@ case C_MEM_SETGRAPHICS:
 						ReadProcessMemory(phandle,(LPVOID)base, &global.restore_int[INT_MAX_LIGHTS], 4, &stBytes);
 					}
 
-					int val = atoi(argument[i+1]);
+					int val = atoi(argument[i+1].text);
 					WriteProcessMemory(phandle, (LPVOID)base, &val, 4, &stBytes);
 				}
 			} break;
@@ -552,7 +552,7 @@ case C_MEM_SETGRAPHICS:
 					ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40), &global.restore_float[FLOAT_FOVLEFT], 4, &stBytes);
 				}
 
-				float val = (float)atof(argument[i+1]);
+				float val = (float)atof(argument[i+1].text);
 				WriteProcessMemory(phandle, (LPVOID)(p1+0x40), &val, 4, &stBytes);
 			} break;
 
@@ -562,7 +562,7 @@ case C_MEM_SETGRAPHICS:
 					ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+4), &global.restore_float[FLOAT_FOVTOP], 4, &stBytes);
 				}
 
-				float val = (float)atof(argument[i+1]);
+				float val = (float)atof(argument[i+1].text);
 				WriteProcessMemory(phandle, (LPVOID)(p1+0x40+4), &val, 4, &stBytes);
 			} break;
 
@@ -572,7 +572,7 @@ case C_MEM_SETGRAPHICS:
 					ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+8), &global.restore_float[FLOAT_UITOPLEFTX], 4, &stBytes);
 				}
 
-				float val = (float)atof(argument[i+1]);
+				float val = (float)atof(argument[i+1].text);
 				WriteProcessMemory(phandle, (LPVOID)(p1+0x40+8), &val, 4, &stBytes);
 			} break;
 
@@ -582,7 +582,7 @@ case C_MEM_SETGRAPHICS:
 					ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+12), &global.restore_float[FLOAT_UITOPLEFTY], 4, &stBytes);
 				}
 
-				float val = (float)atof(argument[i+1]);
+				float val = (float)atof(argument[i+1].text);
 				WriteProcessMemory(phandle, (LPVOID)(p1+0x40+12), &val, 4, &stBytes);
 			} break;
 
@@ -592,7 +592,7 @@ case C_MEM_SETGRAPHICS:
 					ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+16), &global.restore_float[FLOAT_UIBOTTOMRIGHTX], 4, &stBytes);
 				}
 
-				float val = (float)atof(argument[i+1]);
+				float val = (float)atof(argument[i+1].text);
 				WriteProcessMemory(phandle, (LPVOID)(p1+0x40+16), &val, 4, &stBytes);
 			} break;
 
@@ -602,7 +602,7 @@ case C_MEM_SETGRAPHICS:
 					ReadProcessMemory(phandle,(LPVOID)(LPVOID)(p1+0x40+20), &global.restore_float[FLOAT_UIBOTTOMRIGHTY], 4, &stBytes);
 				}
 
-				float val = (float)atof(argument[i+1]);
+				float val = (float)atof(argument[i+1].text);
 				WriteProcessMemory(phandle, (LPVOID)(p1+0x40+20), &val, 4, &stBytes);
 			} break;
 		}
@@ -757,7 +757,7 @@ case C_MEM_SETPLAYERANIM:
 
 
 	bool restartPath = false;
-	int animcode     = atoi(argument[2]);
+	int animcode     = atoi(argument[2].text);
 
 	if (animcode<0  ||  !pointer[0]) 
 		break;
@@ -852,7 +852,7 @@ case C_MEM_SETRESPAWNTYPE:
 	}
 
 	int pointer = 0;
-	int respawn = atoi(argument[2]);
+	int respawn = atoi(argument[2].text);
 	int base	= 0;
 
 	switch(global_exe_version[global.exe_index]) {
@@ -1005,7 +1005,7 @@ case C_MEM_SETPLAYERVIEW:
 		break;
 	}
 
-	argument[2] = stripq(argument[2]);
+	String_trim_quotes(argument[2]);
 
 	int pointer = 0;
 	int mode    = -1;
@@ -1018,16 +1018,16 @@ case C_MEM_SETPLAYERVIEW:
 
 	if (base) {
 		// Convert string to number
-		if (strcmpi(argument[2],"INTERNAL") == 0) 
+		if (strcmpi(argument[2].text,"INTERNAL") == 0) 
 			mode = 0; 
 		else
-			if (strcmpi(argument[2],"GUNNER") == 0) 
+			if (strcmpi(argument[2].text,"GUNNER") == 0) 
 				mode = 1; 
 			else
-				if (strcmpi(argument[2],"EXTERNAL") == 0) 
+				if (strcmpi(argument[2].text,"EXTERNAL") == 0) 
 					mode = 2; 
 				else
-					if (strcmpi(argument[2],"GROUP") == 0) 
+					if (strcmpi(argument[2].text,"GROUP") == 0) 
 					mode = 3; 
 				else 
 					break;
@@ -1073,17 +1073,18 @@ case C_MEM_ERROR:
 	if (pointer[max_loops] == 0) 
 		break;
 
-	char error_msg[512] = "";
-	ReadProcessMemory(phandle, (LPVOID)pointer[max_loops], &error_msg, 512, &stBytes);
-	int len = strlen(error_msg);
+	char error_msg_buf[512] = "";
+	ReadProcessMemory(phandle, (LPVOID)pointer[max_loops], &error_msg_buf, 512, &stBytes);
+
+	String error_msg = {error_msg_buf, strlen(error_msg_buf)};
 
 	// Default mode - just return the text
 	if (argument_num == 2)
-		QWritel(error_msg, len);
+		QWritel(error_msg.text, error_msg.length);
 	else 
 		// Optional mode - copy text to clipboard
-		if (argument_num>2  &&  strcmpi(argument[2],"clip")==0)
-			if (CopyToClip(error_msg, len, false)) {
+		if (argument_num>2  &&  strcmpi(argument[2].text,"clip")==0)
+			if (CopyToClip(error_msg, false)) {
 				global.option_error_output = OPTION_ERROR_ARRAY_CLOSE;
 				QWrite_err(FWERROR_NONE, 0);
 			}
@@ -1148,58 +1149,53 @@ case C_MEM_SETPLAYERAIM:
 
 
 		// Parse input
-		i               = 0;
-		int j           = global_exe_version[global.exe_index]!=VER_199 ? max_loops : max_loops-1;
-		char *arguments = argument[2];
-		char *pch       = strtok(arguments, "[,]\" ");
+		int index   = 0;
+		int j       = global_exe_version[global.exe_index]!=VER_199 ? max_loops : max_loops-1;
+		String item = {NULL, 0};
+		size_t pos  = 0;
 
-		while (pch) {	
-			if (strcmp(pch,"-") == 0) {
-				i++; 
-				pch = strtok (NULL, "[,]\" "); 
-				continue;
+		while ((item = String_tokenize(argument[2], "[,]", pos, OPTION_NONE)).length > 0) {	
+			if (strcmp(item.text,"-") != 0) {
+				double num = atof(item.text);
+				float fnum = (float)num;
+
+				switch (index) {
+					// Mouse target direction
+					case 0 : {
+						float m_sin = (float)sin(deg2rad(num));
+						float m_cos = (float)cos(deg2rad(num));
+
+						WriteProcessMemory(phandle, (LPVOID)pointer[j],     &m_sin, 4, &stBytes);
+						WriteProcessMemory(phandle, (LPVOID)(pointer[j]+8), &m_cos, 4, &stBytes);
+					} break;
+
+					// Gun offset
+					case 1 : {
+						num  = sin(deg2rad(num));
+						fnum = float(num*-1);
+
+						WriteProcessMemory(phandle, (LPVOID)pointer2[max_loops],	 &fnum, 4, &stBytes);
+						WriteProcessMemory(phandle, (LPVOID)(pointer2[max_loops]+4), &fnum, 4, &stBytes);
+					} break;
+
+					// Mouse target pitch
+					case 2: WriteProcessMemory(phandle, (LPVOID)(pointer[j]+4), &fnum, 4, &stBytes); break;
+
+					// Gun pitch
+					case 3: WriteProcessMemory(phandle, (LPVOID)(pointer2[max_loops]+8),  &fnum, 4, &stBytes); break;
+
+					// Gun velocity horiz
+					case 4: WriteProcessMemory(phandle, (LPVOID)(pointer2[max_loops]+20), &fnum, 4, &stBytes); break;
+
+					// Gun velocity vert
+					case 5: WriteProcessMemory(phandle, (LPVOID)(pointer2[max_loops]+16), &fnum, 4, &stBytes); break;
+
+					// Gun pitch2
+					case 6: WriteProcessMemory(phandle, (LPVOID)(pointer2[max_loops]+12), &fnum, 4, &stBytes); break;
+				}
 			}
 
-			double num = atof(pch);
-			float fnum = (float)num;
-
-			switch(i) {
-				// Mouse target direction
-				case 0 : {
-					float m_sin = (float)sin(deg2rad(num));
-					float m_cos = (float)cos(deg2rad(num));
-
-					WriteProcessMemory(phandle, (LPVOID)pointer[j],     &m_sin,    4, &stBytes);
-					WriteProcessMemory(phandle, (LPVOID)(pointer[j]+8), &m_cos,    4, &stBytes);
-				} break;
-
-				// Gun offset
-				case 1 : {
-					num  = sin(deg2rad(num));
-					fnum = float(num*-1);
-
-					WriteProcessMemory(phandle, (LPVOID)pointer2[max_loops],	 &fnum, 4, &stBytes);
-					WriteProcessMemory(phandle, (LPVOID)(pointer2[max_loops]+4), &fnum, 4, &stBytes);
-				} break;
-
-				// Mouse target pitch
-				case 2: WriteProcessMemory(phandle, (LPVOID)(pointer[j]+4), &fnum, 4, &stBytes); break;
-
-				// Gun pitch
-				case 3: WriteProcessMemory(phandle, (LPVOID)(pointer2[max_loops]+8),  &fnum, 4, &stBytes); break;
-
-				// Gun velocity horiz
-				case 4: WriteProcessMemory(phandle, (LPVOID)(pointer2[max_loops]+20), &fnum, 4, &stBytes); break;
-
-				// Gun velocity vert
-				case 5: WriteProcessMemory(phandle, (LPVOID)(pointer2[max_loops]+16), &fnum, 4, &stBytes); break;
-
-				// Gun pitch2
-				case 6: WriteProcessMemory(phandle, (LPVOID)(pointer2[max_loops]+12), &fnum, 4, &stBytes); break;
-			}
-
-			i++;
-			pch = strtok (NULL, "[,]\" ");
+			index++;
 		}
 	}
 }
@@ -1307,20 +1303,20 @@ case C_MEM_SETDIFFICULTY:
 	}
 
 
-	bool SinglePlayer = strcmpi(argument[2],"sp")==0 || strcmpi(argument[2],"false")==0;
-	bool MultiPlayer  = strcmpi(argument[2],"mp")==0 || strcmpi(argument[2],"true")==0;
-	bool veteran      = false;
-	int base          = 0;
-	int pointer       = 0;
-	int offset        = 0;
-	int	offsets[][4]  = {
+	bool single_player = strcmpi(argument[2].text,"sp")==0 || strcmpi(argument[2].text,"false")==0;
+	bool multi_player  = strcmpi(argument[2].text,"mp")==0 || strcmpi(argument[2].text,"true")==0;
+	bool veteran       = false;
+	int base           = 0;
+	int pointer        = 0;
+	int offset         = 0;
+	int	offsets[][4]   = {
 		{0x7DD0C8, 0x7DD0D4, 0x75A380, 0x75A38C},	//ofp
 		{0x7CC088, 0x7CC094, 0x75A410, 0x75A41C}	//cwa
 	};
 
 
 	// Select address from the array based on the arguments
-	if (SinglePlayer  ||  global.is_server) {
+	if (single_player  ||  global.is_server) {
 		if (argument_hash[0]==C_MEM_GETDIFFICULTY  &&  argument_num<4) {		// not enough params
 			QWrite("[]"); 
 			break;
@@ -1329,7 +1325,7 @@ case C_MEM_SETDIFFICULTY:
 		int i = global_exe_version[global.exe_index]!=VER_199 ? 0 : 1;	// which game
 		int j = 0;				// which difficulty
 
-		if (strcmpi(argument[3],"veteran")==0  ||  strcmpi(argument[3],"false")==0) {
+		if (strcmpi(argument[3].text,"veteran")==0  ||  strcmpi(argument[3].text,"false")==0) {
 			veteran = true;
 			j++;
 		}
@@ -1339,7 +1335,7 @@ case C_MEM_SETDIFFICULTY:
 
 		offset = offsets[i][j];
 	} else 
-		if (MultiPlayer) {
+		if (multi_player) {
 			// player server
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196 : base=0x783378; break;
@@ -1395,23 +1391,24 @@ case C_MEM_SETDIFFICULTY:
 		QWrite("]");
 	} else {
 		// Change twelve bytes one by one
-		int i     = 0;
-		char *pch = strtok(argument[4], "[,]\" ");
+		int i      = 0;
+		size_t pos = 0;
+		String item;
 
-		while (pch!=NULL  &&  i<12) {
+		while ((item = String_tokenize(argument[4], "[,]", pos, OPTION_NONE)).length>0  &&  i<12) {
 			int setting = -1;
 
-			if (strcmpi(pch,"false")==0  ||  strcmpi(pch,"0")==0) 
+			if (strcmpi(item.text,"false")==0  ||  strcmpi(item.text,"0")==0) 
 				setting = 0;
 			
-			if (strcmpi(pch,"true")==0  ||  strcmpi(pch,"1")==0) 
+			if (strcmpi(item.text,"true")==0  ||  strcmpi(item.text,"1")==0) 
 				setting = 1;
 
 			if (setting >= 0) {
-				int pos = veteran ? RESTORE_VETERAN : RESTORE_CADET;
-				int pos2= veteran ? BYTE_VETERAN    : BYTE_CADET;
+				int pos  = veteran ? RESTORE_VETERAN : RESTORE_CADET;
+				int pos2 = veteran ? BYTE_VETERAN    : BYTE_CADET;
 
-				if ((SinglePlayer || global.is_server)  &&  !global.restore_memory[pos+i]) {	
+				if ((single_player || global.is_server)  &&  !global.restore_memory[pos+i]) {
 					global.restore_memory[pos+i] = 1;
 					ReadProcessMemory(phandle,(LPVOID)(offset+i), &global.restore_byte[pos2+i], 1, &stBytes);
 				}
@@ -1419,7 +1416,6 @@ case C_MEM_SETDIFFICULTY:
 				WriteProcessMemory(phandle, (LPVOID)(offset+i), &setting,  1, &stBytes);
 			}
 
-			pch = strtok(NULL, "[,]\" ");
 			i++;
 		}
 	}
@@ -1440,7 +1436,7 @@ case C_MEM_SETRADIOBOX:
 	int base     = 0;
 	int	pointer  = 0;
 	int pointer2 = 0;
-	int value    = String2Bool(argument[2]);
+	bool value   = String_bool(argument[2]);
 
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x79F8D0; break;
@@ -1463,7 +1459,7 @@ break;
 case C_MEM_GETSPEEDKEY:
 { // Get forward/backward movement
 
-	bool rawMode  = argument_num>2 && strcmpi(argument[2],"raw")==0; // Optional mode activated by argument
+	bool rawMode  = argument_num>2 && strcmpi(argument[2].text,"raw")==0; // Optional mode activated by argument
 	int offset[]  = {0x0, 0x8, 0x4, 0xC};	// In order: fast (E), forward (W), slow (Q), reverse (S)
 	int	weight[]  = {3,2,1,-2};
 	int	max_loops = sizeof(offset)/sizeof(offset[0]);
@@ -1562,16 +1558,16 @@ case C_MEM_SETSPEEDKEY:
 	
 	if (base) {
 		// String to number
-		if (strcmpi(argument[2],"fast") == 0) 
+		if (strcmpi(argument[2].text,"fast") == 0) 
 			i = 0;
 		else 
-			if (strcmpi(argument[2],"slow") == 0) 
+			if (strcmpi(argument[2].text,"slow") == 0) 
 				i = 2;
 			else 
-				if (strcmpi(argument[2],"forward") == 0) 
+				if (strcmpi(argument[2].text,"forward") == 0) 
 					i = 1;
 				else 
-					if (strcmpi(argument[2],"reverse") == 0) 
+					if (strcmpi(argument[2].text,"reverse") == 0) 
 						i = 3;
 
 
@@ -1581,7 +1577,7 @@ case C_MEM_SETSPEEDKEY:
 
 
 		// For "stop" set all of them to zero
-		if (strcmpi(argument[2],"stop") == 0)
+		if (strcmpi(argument[2].text,"stop") == 0)
 			for (i=0; i<max_loops; i++) {
 				val = 0;
 				WriteProcessMemory(phandle, (LPVOID)(base+offset[i]), &val, 2, &stBytes);
@@ -1646,9 +1642,9 @@ case C_MEM_GETPLAYERHATCH:
 	// Parameter specified - return specific seat
 	if (argument_num >= 3) {
 		int j = 0;
-		if (strcmpi(argument[2],"commander") == 0) j = 0;
-		if (strcmpi(argument[2],"driver") == 0)    j = 1;
-		if (strcmpi(argument[2],"gunner") == 0)    j = 2;
+		if (strcmpi(argument[2].text,"commander") == 0) j = 0;
+		if (strcmpi(argument[2].text,"driver") == 0)    j = 1;
+		if (strcmpi(argument[2].text,"gunner") == 0)    j = 2;
 
 		QWritef("%d", values[j]);
 	} else
@@ -1672,13 +1668,13 @@ case C_MEM_SETPLAYERHATCH:
 	int modif[3]   = {0x784, 0x8, 0x0};
 	int max_loops  = sizeof(pointer) / sizeof(pointer[0]) - 1;
 
-	if (strcmpi(argument[2],"driver") == 0) 
+	if (strcmpi(argument[2].text,"driver") == 0) 
 		modif[2] = 0x4D2;
 
-	if (strcmpi(argument[2],"gunner") == 0) 
+	if (strcmpi(argument[2].text,"gunner") == 0) 
 		modif[2] = 0x4D6;
 
-	if (strcmpi(argument[2],"commander") == 0) 
+	if (strcmpi(argument[2].text,"commander") == 0) 
 		modif[2] = 0x4CE;
 
 	if (modif[2] == 0) 
@@ -1705,7 +1701,7 @@ case C_MEM_SETPLAYERHATCH:
 
 		// If passed an extra argument - change to specific value
 		if (argument_num > 3) {
-			if (strcmpi(argument[3],"true") == 0) 
+			if (strcmpi(argument[3].text,"true") == 0) 
 				value = 0; 
 			else 
 				value = 16256;
@@ -1794,19 +1790,19 @@ case C_MEM_SETPLAYERLADDER:
 
 	if (pointer[0]) {
 		// Change position on the ladder
-		float pos = (float)atof(argument[2]);
+		float pos = (float)atof(argument[2].text);
 
-		if (strcmp(argument[2],"-") != 0)
+		if (strcmp(argument[2].text,"-") != 0)
 			WriteProcessMemory(phandle, (LPVOID)(pointer[max_loops]+4), &pos, 4, &stBytes);
 
 
 		// Change ladder
 		if (argument_num > 3) {
-			if (strcmp(argument[3],"-") == 0) 
+			if (strcmp(argument[3].text,"-") == 0) 
 				break;
 
 			int currID	= -1;
-			int ID		= atoi(argument[3]);
+			int ID		= atoi(argument[3].text);
 
 			// Only if player is already on a ladder
 			ReadProcessMemory(phandle, (LPVOID)pointer[max_loops], &currID, 4, &stBytes);
@@ -1850,7 +1846,7 @@ case C_MEM_MASTERSERVER:
 	}
 
 	// Optional mode - read instead of writing
-	if (argument_num==3  &&  strcmpi(argument[2],"get")==0) {
+	if (argument_num==3  &&  strcmpi(argument[2].text,"get")==0) {
 		ReadProcessMemory(phandle, (LPVOID)master_base1, &serv1, 64, &stBytes);
 		ReadProcessMemory(phandle, (LPVOID)master_base2, &serv2, 19, &stBytes);
 		
@@ -1869,12 +1865,10 @@ case C_MEM_MASTERSERVER:
 	}
 
 	// Change addresses
-	argument[3] = stripq(argument[3]);
-	strncpy(serv1, argument[3], 63);
+	strncpy(serv1, String_trim_quotes(argument[3]), 63);
 
 	if (argument_num > 4) 
-		argument[4] = stripq(argument[4]),
-		strncpy(serv2, argument[4], 18);
+		strncpy(serv2, String_trim_quotes(argument[4]), 18);
 
 	if (strcmp(serv1,"") != 0)
 		WriteProcessMemory(phandle, (LPVOID)master_base1, &serv1, 64, &stBytes);
@@ -1999,9 +1993,7 @@ case C_MEM_MISSIONINFO:
 		} else
 			buffer_ptr = buffer;
 
-		QWrite("\"");
-		QWriteDoubleQ(buffer_ptr);
-		QWrite("\"");
+		QWritef("{%s}", buffer_ptr);
 	}
 
 	QWrite("]");
@@ -2105,7 +2097,7 @@ case C_MEM_BULLETS:
 		for (int j=0; j<array_size; j++)
 			if (argument_hash[i] == valid_arguments[j]) {
 				set[j]   = 1;
-				value[j] = (float)atof(argument[i+1]);
+				value[j] = (float)atof(argument[i+1].text);
 				break;
 			}
 
@@ -2193,17 +2185,17 @@ case C_MEM_SETWEATHER:
 
 				// floats
 				if (j<16  ||  j>20)
-					valueFLT[j] = (float)atof(argument[i+1]);
+					valueFLT[j] = (float)atof(argument[i+1].text);
 				
 				// integers
 				if (j == 16)
-					valueINT[0] = atoi(argument[i+1]);
+					valueINT[0] = atoi(argument[i+1].text);
 
 				if (j == 18)
-					valueINT[1] = atoi(argument[i+1]);
+					valueINT[1] = atoi(argument[i+1].text);
 
 				if (j == 20)
-					valueINT[2] = atoi(argument[i+1]);
+					valueINT[2] = atoi(argument[i+1].text);
 
 				// float array
 				if (j==17  ||  j==19) {
@@ -2211,11 +2203,11 @@ case C_MEM_SETWEATHER:
 					char tmp[64] = "";
 					int tmp_len  = 0;
 
-					for (size_t k=0; k<argument_length[i+1]; k++) {
-						if (argument[i+1][k] == '[')
+					for (size_t k=0; k<argument[i+1].length; k++) {
+						if (argument[i+1].text[k] == '[')
 							continue;						
 
-						if (argument[i+1][k]==','  ||  argument[i+1][k]==']') {
+						if (argument[i+1].text[k]==','  ||  argument[i+1].text[k]==']') {
 							tmp[tmp_len] = '\0';
 
 							if (j == 17)
@@ -2227,7 +2219,7 @@ case C_MEM_SETWEATHER:
 							tmp_len = 0;
 							index++;
 						} else
-							tmp[tmp_len++] = argument[i+1][k];
+							tmp[tmp_len++] = argument[i+1].text[k];
 					}
 				}
 
@@ -2383,7 +2375,7 @@ case C_MEM_SETCAM:
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_MP : 
-				multiplayer = String2Bool(argument[i+1]);
+				multiplayer = String_bool(argument[i+1]);
 				break;
 
 			case NAMED_ARG_EXTCAMERAPOSITION : {
@@ -2393,17 +2385,17 @@ case C_MEM_SETCAM:
 				char tmp[64]   = "";
 				float extcam[] = {0,0,0};
 
-				for (size_t j=0; j<argument_length[i+1]; j++) {
-					if (argument[i+1][j] == '[')
+				for (size_t j=0; j<argument[i+1].length; j++) {
+					if (argument[i+1].text[j] == '[')
 						continue;			
 
-					if (argument[i+1][j]==','  ||  argument[i+1][j]==']') {
+					if (argument[i+1].text[j]==','  ||  argument[i+1].text[j]==']') {
 						tmp[tmp_len]  = '\0';
 						extcam[index] = (float)atof(tmp);
 						tmp_len       = 0;
 						index++;
 					} else
-						tmp[tmp_len++] = argument[i+1][j];
+						tmp[tmp_len++] = argument[i+1].text[j];
 				}
 
 				int pointer[]    = {0,0,0,0};
@@ -2524,19 +2516,20 @@ case C_MEM_HUD:
 				if (IsNumberInArray(j, hud_int_list, sizeof(hud_int_list)/sizeof(hud_int_list[0]))) {
 					if (IsNumberInArray(j, hud_color_list, sizeof(hud_color_list)/sizeof(hud_color_list[0]))) {
 						int index              = 0;
-						char *number           = strtok(argument[i+1], "[,];");
 						unsigned char color[4] = {0,0,0,0};
+						String number          = {NULL, 0};
+						size_t subvalue_pos    = 0;
 
-						while (number  &&  index<4) {
-							color[index++] = (unsigned char)(atof(number) * 255);
-							number         = strtok(NULL, "[,];");
+						while ((number = String_tokenize(argument[i+1], "[,];", subvalue_pos, OPTION_NONE)).length>0  &&  index<4) {
+							String_trim_space(number);
+							color[index++] = (unsigned char)(atof(number.text) * 255);
 						}
 
 						currentINT[j] = ((color[3] << 24) | (color[0] << 16) | (color[1] << 8) | color[2]);
 					} else
-						currentINT[j] = atoi(argument[i+1]);
+						currentINT[j] = atoi(argument[i+1].text);
 				} else
-					current[j] = (float)atof(argument[i+1]);
+					current[j] = (float)atof(argument[i+1].text);
 
 				break;
 			}

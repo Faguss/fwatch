@@ -1,5 +1,5 @@
 ; Script supplied with Fwatch v1.13
-; onScreenTyping 2.2
+; onScreenTyping (updated for fwatch 1.16)
 ; For simulating keyboard writing
 ; Full documentation: http://ofp-faguss.com/files/onscreentyping.pdf
 
@@ -79,7 +79,7 @@
 	_updateMark 	= true
 	_markStart 		= 0
 	_markEnd 		= 0
-	_length 		= call loadFile Format ["\:STRING SIZE %1", _string]
+	_length 		= call loadFile Format ["\:STRING SIZE text:%1", _string]
 	_CurrPos 		= _length
 	_LastPos 		= -1
 	

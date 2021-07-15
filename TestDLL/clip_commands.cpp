@@ -5,59 +5,57 @@
 case C_CLIP_COPY:
 { // Copy text to clipboard
 
-	bool append     = false;
-	char *text      = empty_string;
-	char *escape    = empty_string;
-	int text_length = 0;
+	bool arg_append  = false;
+	char *arg_escape = empty_char;
+	size_t arg_text  = empty_char_index;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_APPEND :
-				append = String2Bool(argument[i+1]);
+				arg_append = String_bool(argument[i+1]);
 				break;
 
 			case NAMED_ARG_ESCAPE : 
-				escape = argument[i+1];
+				arg_escape = argument[i+1].text;
 				break;
 
 			case NAMED_ARG_TEXT : 
-				text        = argument[i+1];
-				text_length = argument_length[i+1];
+				arg_text = i + 1;
 				break;
 		}
 	}
 
 
 	// Process escape sequences
-	char tmp[16]	  = "";
-	bool number_start = false;
-	int quantity	  = -1;
+	char number_string[16] = "";
+	bool number_start      = false;
+	int quantity	       = -1;
 
-	for (i=0; escape[i]!='\0'; i++)	{
-		if (!number_start  &&  isdigit(escape[i]))
+	for (i=0; arg_escape[i]!='\0'; i++)	{
+		if (!number_start  &&  isdigit(arg_escape[i]))
 			number_start = true;
 
 		if (number_start) {
-			if (!isdigit(escape[i])) {
+			if (!isdigit(arg_escape[i])) {
 				number_start = false;
-				quantity     = atoi(tmp);
-				strcpy(tmp, "");
+				quantity     = atoi(number_string);
+				strcpy(number_string, "");
 			} else
-				sprintf(tmp, "%s%c", tmp, escape[i]);
+				strncat(number_string, arg_escape+i, 1);
 		}
 		
-		if (escape[i] == 't') {
-			text     = EscSequences(text, OPTION_TAB, quantity);
+		if (arg_escape[i] == 't') {
+			String_escape_sequences(argument[arg_text], OPTION_TAB, quantity);
 			quantity = -1;
 		}
 
-		if (escape[i] == 'n') {
-			text     = EscSequences(text, OPTION_LF, quantity);
+		if (arg_escape[i] == 'n') {
+			String_escape_sequences(argument[arg_text], OPTION_LF, quantity);
 			quantity = -1;
 		}
 	}
 
-	if (CopyToClip(text, strlen(text), append)) {
+	if (CopyToClip(argument[arg_text], arg_append)) {
 		global.option_error_output = OPTION_ERROR_ARRAY_CLOSE;
 		QWrite_err(FWERROR_NONE, 0);
 	}
@@ -79,10 +77,10 @@ case C_CLIP_GET:
 	int length = 0; 
 
 	if (argument_num > 2) 
-		pos = atoi(argument[2]);
+		pos = atoi(argument[2].text);
 
 	if (argument_num > 3) 
-		length = atoi(argument[3]);
+		length = atoi(argument[3].text);
 
 
 	if (!OpenClipboard(NULL)) 
@@ -144,21 +142,21 @@ case C_CLIP_GETLINE:
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_START : 
-				Start = atoi(argument[i+1]);
+				Start = atoi(argument[i+1].text);
 				break;
 
 			case NAMED_ARG_END : 
-				End = atoi(argument[i+1]);
+				End = atoi(argument[i+1].text);
 				break;
 
 			case NAMED_ARG_CUT : 
 				Cut   = true;
-				Limit = atoi(argument[i+1]);
+				Limit = atoi(argument[i+1].text);
 				if (Limit < 0) Limit=0;
 				break;
 
 			case NAMED_ARG_SPLIT : 
-				FullLines = String2Bool(argument[i+1]);
+				FullLines = String_bool(argument[i+1]);
 				break;
 		}
 	}
@@ -365,73 +363,71 @@ case C_CLIP_TOFILE:
 
 	global.option_error_output = OPTION_ERROR_ARRAY_CLOSE;
 
-	char *arg_filename        = empty_string;
+	size_t arg_file           = empty_char_index;
+	size_t arg_prefix         = empty_char_index;
+	size_t arg_suffix         = empty_char_index;
 	char arg_mode_default[16] = "nooverwrite";
 	char *arg_mode            = arg_mode_default;
-	char *arg_escape          = empty_string;
-	char *arg_prefix          = empty_string;
-	char *arg_suffix          = empty_string;
-	int arg_filename_length   = 0;
+	char *arg_escape          = empty_char;
 	
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_FILE :
-				arg_filename        = argument[i+1];
-				arg_filename_length = argument_length[i+1];
+				arg_file = i + 1;
 				break;
 
 			case NAMED_ARG_MODE : 
-				arg_mode = argument[i+1];
+				arg_mode = argument[i+1].text;
 				break;
 
 			case NAMED_ARG_PREFIX :
-				arg_prefix = argument[i+1];
+				arg_prefix = i + 1;
 				break;
 
 			case NAMED_ARG_SUFFIX : 
-				arg_suffix = argument[i+1];
+				arg_suffix = i + 1;
 				break;
 
 			case NAMED_ARG_ESCAPE : 
-				arg_escape = argument[i+1];
+				arg_escape = argument[i+1].text;
 				break;
 		}
 	}
 
 	// File not specified
-	if (arg_filename_length == 0) {
-		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+	if (argument[arg_file].length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
 		break;
 	}
 
 
 	// Replace \t and \n
-	char tmp[16]     = "";
-	bool numberStart = false;
-	int quantity     = -1;
+	char number_string[16] = "";
+	bool number_start      = false;
+	int quantity           = -1;
 
 	for (i=0; arg_escape[i]!='\0'; i++) {
-		if (!numberStart  &&  isdigit(arg_escape[i]))
-			numberStart = true;
+		if (!number_start  &&  isdigit(arg_escape[i]))
+			number_start = true;
 
-		if (numberStart) {
+		if (number_start) {
 			if (!isdigit(arg_escape[i])) {
-				numberStart = false;
-				quantity    = atoi(tmp);
-				strcpy(tmp, "");
+				number_start = false;
+				quantity     = atoi(number_string);
+				strcpy(number_string, "");
 			} else
-				sprintf(tmp, "%s%c", tmp, arg_escape[i]);
+				strncat(number_string, arg_escape+i, 1);
 		}
 		
 		if (arg_escape[i] == 't') {
-			arg_prefix = EscSequences(arg_prefix, OPTION_TAB, quantity);
-			arg_suffix = EscSequences(arg_suffix, OPTION_TAB, quantity);
+			String_escape_sequences(argument[arg_prefix], OPTION_TAB, quantity);
+			String_escape_sequences(argument[arg_suffix], OPTION_TAB, quantity);
 			quantity   = -1;
 		}
 
 		if (arg_escape[i] == 'n') {
-			arg_prefix = EscSequences(arg_prefix, OPTION_CRLF, quantity);
-			arg_suffix = EscSequences(arg_suffix, OPTION_CRLF, quantity);
+			String_escape_sequences(argument[arg_prefix], OPTION_CRLF, quantity);
+			String_escape_sequences(argument[arg_suffix], OPTION_CRLF, quantity);
 			quantity   = -1;
 		}
 	}
@@ -458,16 +454,15 @@ case C_CLIP_TOFILE:
 	// Verify and update path to the file
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
-	char *ptr_filename = arg_filename;
-	int path_type      = VerifyPath(&ptr_filename, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR);
 
+	int path_type = VerifyPath(argument[arg_file], buf_filename, OPTION_RESTRICT_TO_MISSION_DIR);
 	if (path_type == PATH_ILLEGAL) {
 		CloseClipboard();
 		break;
 	}
 
 	// Check if file already exists
-	FILE *f     = fopen(ptr_filename, "r");
+	FILE *f     = fopen(argument[arg_file].text, "r");
 	bool exists = false;
 
 	if (f) {
@@ -477,7 +472,7 @@ case C_CLIP_TOFILE:
 
 	// Overwriting not allowed
 	if (exists  &&  strcmpi(arg_mode,"nooverwrite")==0) {
-		QWrite_err(FWERROR_FILE_EXISTS, 1, ptr_filename);
+		QWrite_err(FWERROR_FILE_EXISTS, 1, argument[arg_file].text);
 		CloseClipboard();
 		StringDynamic_end(buf_filename);
 		break;
@@ -486,14 +481,14 @@ case C_CLIP_TOFILE:
 	// Mode "overwrite" means trashing existing file
 	if (exists  &&  strcmpi(arg_mode,"overwrite")==0) {
 		if (path_type == PATH_DOWNLOAD_DIR) {	// Delete if it's \fwatch\download\ location
-			if (remove(ptr_filename) != 0) {
-				QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+			if (remove(argument[arg_file].text) != 0) {
+				QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 				CloseClipboard();
 				StringDynamic_end(buf_filename);
 				break;
 			}
 		} else {
-			if (!trashFile(ptr_filename,strlen(ptr_filename),0)) {	// Trash for all other places
+			if (!trashFile(argument[arg_file], OPTION_NONE)) {	// Trash for all other places
 				CloseClipboard();
 				StringDynamic_end(buf_filename);
 				break;
@@ -503,9 +498,9 @@ case C_CLIP_TOFILE:
 
 
 	// Write file
-	if ((f = fopen(ptr_filename, open_mode))) {
-		if (strcmp(arg_prefix,"")!=0)
-			fprintf(f, arg_prefix);
+	if ((f = fopen(argument[arg_file].text, open_mode))) {
+		if (argument[arg_prefix].length > 0)
+			fprintf(f, argument[arg_prefix].text);
 
 		HANDLE clipboard_data = GetClipboardData(CF_TEXT);
 		char *clipboard_text  = (char*)GlobalLock(clipboard_data);
@@ -513,18 +508,18 @@ case C_CLIP_TOFILE:
 		fwrite(clipboard_text, 1, strlen(clipboard_text), f);
 
 		if (ferror(f)) 
-			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+			QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		else {
 			QWrite_err(FWERROR_NONE, 0);
 
-			if (strcmp(arg_suffix,"")!=0)
-				fprintf(f, arg_suffix);
+			if (argument[arg_suffix].length > 0)
+				fprintf(f, argument[arg_suffix].text);
 		}
 
 		GlobalUnlock(clipboard_data);
 		fclose(f);
 	} else 
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 
 	CloseClipboard();
 	StringDynamic_end(buf_filename);
@@ -550,17 +545,18 @@ case C_CLIP_FROMFILE:
 	}
 	
 	// Verify and update path to the file
+	String_trim_quotes(argument[2]);
+
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
-	char *ptr_filename = stripq(argument[2]);
 
-	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR))
+	if (!VerifyPath(argument[2], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR))
 		break;
 
 
-	FILE *f = fopen(ptr_filename, "rb");
+	FILE *f = fopen(argument[2].text, "rb");
 	if (!f) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[2].text);
 		StringDynamic_end(buf_filename);
 		break;
 	}
@@ -585,12 +581,13 @@ case C_CLIP_FROMFILE:
 
 	if (result == fsize) {
 		filetext[fsize] = '\0';
-		bool append     = argument_num>3 && strcmpi(argument[3],"a") == 0;
+		bool append     = argument_num>3 && strcmpi(argument[3].text,"a") == 0;
 
-		if (CopyToClip(filetext, fsize, append))
+		String text_to_copy = {filetext, fsize};
+		if (CopyToClip(text_to_copy, append))
 			QWrite_err(FWERROR_NONE, 0);
 	} else
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[2].text);
 
 	delete[] filetext;
 	StringDynamic_end(buf_filename);
@@ -608,7 +605,7 @@ break;
 
 case C_CLIP_COPYFILE:
 case C_CLIP_CUTFILE:
-{ // Copy file names to clipboard
+{ // Copy file names to the Windows clipboard
 
 	global.option_error_output = OPTION_ERROR_ARRAY_CLOSE;
 	
@@ -617,50 +614,54 @@ case C_CLIP_CUTFILE:
 		break;
 	}
 
-	TCHAR pwd[MAX_PATH];
-	GetCurrentDirectory(MAX_PATH, pwd);
 
-	int pwd_len          = strlen(pwd);
-	int all_files_length = argument_end + (pwd_len+strlen(global.mission_path)+2) * (argument_num-2);
-	int copied_files     = 0;
-	int check_mode       = OPTION_SUPPRESS_ERROR | (argument_hash[0]==C_CLIP_COPYFILE ? OPTION_ALLOW_GAME_ROOT_DIR : OPTION_RESTRICT_TO_MISSION_DIR);
+	// Calculate length of all the paths
+	size_t all_files_length = 0;
 
-	StringDynamic buf_filename;
-	StringDynamic_init(buf_filename);
+	for (size_t i=2; i<argument_num; i++)
+		all_files_length += global.game_dir_length + global.mission_path_length + argument[i].length + 2;
 
 
 	// Create list of files separated by \0 with paths starting from drive
 	// http://www.codeguru.com/cpp/w-p/clipboard/article.php/c2997/Copying-Files-into-Explorer.htm
 	DROPFILES dobj = { 20, { 0, 0 }, 0, 1 };
-	int nGblLen    = sizeof(dobj) + all_files_length*2 + 5;//lots of nulls and multibyte_char
+	SIZE_T nGblLen = sizeof(dobj) + all_files_length*2 + 5;//lots of nulls and multibyte_char
 	HGLOBAL hGbl   = GlobalAlloc(GMEM_ZEROINIT|GMEM_MOVEABLE|GMEM_DDESHARE, nGblLen);
 	char *sData    = (char*)GlobalLock(hGbl);
 	memcpy(sData, &dobj, 20);
 	wchar_t *sWStr = (wchar_t*)(sData + 20);
+	wchar_t *backup = sWStr;
 
-	// Parse arguments passed to this command
-	for (size_t i=2; i<argument_num; i++) {
-		char *ptr_filename = stripq(argument[i]);
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
+	size_t copied_files = 0;
 
-		if (VerifyPath(&ptr_filename, buf_filename, check_mode)) {
-			int ptr_filename_len = buf_filename.length>0 ? buf_filename.length : strlen(ptr_filename);
+	// Copy all the paths into a single buffer
+	for (i=2; i<argument_num; i++) {
+		buf_filename.length = 0;
+		String_trim_quotes(argument[i]);
 
-			mbstowcs(sWStr          , pwd         , pwd_len);
-			mbstowcs(sWStr+pwd_len  , "\\"        , 1);
-			mbstowcs(sWStr+pwd_len+1, ptr_filename, ptr_filename_len);
+		if (VerifyPath(argument[i], buf_filename, OPTION_SUPPRESS_ERROR | (argument_hash[0]==C_CLIP_COPYFILE ? OPTION_ALLOW_GAME_ROOT_DIR : OPTION_RESTRICT_TO_MISSION_DIR))) {
+			mbstowcs(sWStr, global.game_dir , global.game_dir_length);
+			sWStr += global.game_dir_length;
 
-			sWStr += pwd_len + 1 + ptr_filename_len + 1;
-			buf_filename.length = 0;
+			mbstowcs(sWStr, "\\", 1);
+			sWStr += 1;
+
+			mbstowcs(sWStr, argument[i].text, argument[i].length);
+			sWStr += argument[i].length + 1;
+
 			copied_files++;
 		}
 	}
 
+	GlobalUnlock(hGbl);
 	StringDynamic_end(buf_filename);
+
 
 	// If nothing was copied
 	if (copied_files == 0) {
 		QWrite_err(FWERROR_PARAM_PATH_LEAVING, 1, "");
-		GlobalUnlock(hGbl);
 		break;
 	}
 
@@ -679,7 +680,7 @@ case C_CLIP_CUTFILE:
 			QWrite_err(FWERROR_CLIP_COPY, 1, GetLastError());
 		}
 
-		// Register 'copy' or 'cut' effect
+		// Register "copy" or "cut" effect
 		UINT uFormat       = RegisterClipboardFormat(CFSTR_PREFERREDDROPEFFECT);
 		HGLOBAL hGbl2      = GlobalAlloc(GMEM_FIXED, sizeof(DWORD));
 		DWORD *pDropEffect = (DWORD*)GlobalLock(hGbl2);
@@ -692,8 +693,6 @@ case C_CLIP_CUTFILE:
 		error = true;
 		QWrite_err(FWERROR_CLIP_OPEN, 1, GetLastError());
 	}
-
-	GlobalUnlock(hGbl);
 
 	if (!error)
 		QWrite_err(FWERROR_NONE, 0);
@@ -709,31 +708,41 @@ break;
 
 
 case C_CLIP_PASTEFILE:
-{ // Paste files from clipboard
-	//http://bcbjournal.org/forums/viewtopic.php?f=10&t=1363
+{ // Copy files from locations stored in the Windows clipboard
+  // http://bcbjournal.org/forums/viewtopic.php?f=10&t=1363
 
-	// Check optional argument
-	bool list_files = argument_num>2  &&  strcmpi(argument[2],"?list")==0;
+	size_t arg_destination = empty_char_index;
+	bool arg_list_files    = false;
+
+	if (argument_num > 2) {
+		arg_destination = 2;
+		String_trim_quotes(argument[arg_destination]);
+		arg_list_files = strcmpi(argument[arg_destination].text,"?list") == 0;
+	}
 
 
-	// Verify and update path to the file
+	// Verify and update destination path
 	StringDynamic buf_destination;
 	StringDynamic_init(buf_destination);
-	char *ptr_destination = argument_num>2 && !list_files ? stripq(argument[2]) : NULL;
-	int destination_type  = 0;
-	int destination_len   = 0;
+	int destination_type = 0;
+	int options          = OPTION_RESTRICT_TO_MISSION_DIR;
 
-	if (!list_files) {
-		destination_type = VerifyPath(&ptr_destination, buf_destination, OPTION_RESTRICT_TO_MISSION_DIR);
+	if (argument[arg_destination].length==0 || (argument[arg_destination].length>0 && argument[arg_destination].text[argument[arg_destination].length-1]!='\\' && argument[arg_destination].text[argument[arg_destination].length-1]!='/'))
+		options |= OPTION_ASSUME_TRAILING_SLASH;
 
+	if (!arg_list_files) {
+		destination_type = VerifyPath(argument[arg_destination], buf_destination, options);
+
+		// If path wasn't copied to the dynamic buffer then do it anyway because we need it later
 		if (destination_type != PATH_ILLEGAL) {
 			if (buf_destination.length == 0)
-				StringDynamic_append(buf_destination, ptr_destination);
+				StringDynamic_appends(buf_destination, argument[arg_destination]);
 
-			if (buf_destination.text[buf_destination.length-1] != '\\')
+			if (options & OPTION_ASSUME_TRAILING_SLASH)
 				StringDynamic_append(buf_destination, "\\");
 
-			destination_len = buf_destination.length;
+			argument[arg_destination].text   = buf_destination.text;
+			argument[arg_destination].length = buf_destination.length;
 		} else {
 			QWrite("\"\",[]]");
 			StringDynamic_end(buf_destination);
@@ -761,7 +770,7 @@ case C_CLIP_PASTEFILE:
 	}
 
 
-	// Find registered effect
+	// Find what's the registered effect
 	DWORD dwEffect = 0;
 	DWORD dwFormat = RegisterClipboardFormat(CFSTR_PREFERREDDROPEFFECT);
 	HANDLE hGlobal = GetClipboardData(dwFormat);
@@ -780,7 +789,7 @@ case C_CLIP_PASTEFILE:
 		DROPEFFECT_SCROLL
 	};
 
-	char effect_name[][16] = {
+	const char effect_name[][16] = {
 		"none",
 		"copy",
 		"move",
@@ -788,10 +797,8 @@ case C_CLIP_PASTEFILE:
 		"scroll"
 	};
 
-	int effect_id   = 0;
-	int effect_size = sizeof(effect) / sizeof(effect[0]);
-
-	for (int i=0; i<effect_size; i++)
+	size_t effect_id = 0;
+	for (size_t i=0; i<sizeof(effect)/sizeof(effect[0]); i++)
 		if (dwEffect & effect[i]) {
 			effect_id = i;
 			break;
@@ -799,7 +806,7 @@ case C_CLIP_PASTEFILE:
 
 
 	// Prohibit actions other than move or copy
-	if (!list_files  &&  ~dwEffect & DROPEFFECT_COPY  &&  ~dwEffect & DROPEFFECT_MOVE) {
+	if (!arg_list_files  &&  ~dwEffect & DROPEFFECT_COPY  &&  ~dwEffect & DROPEFFECT_MOVE) {
 		QWrite_err(FWERROR_CLIP_EFFECT, 0);
 		QWritef("\"%s\",[]]", effect_name[effect_id]);
 		CloseClipboard();
@@ -809,9 +816,9 @@ case C_CLIP_PASTEFILE:
 
 
 	// Get data
-	HANDLE Data = GetClipboardData(CF_HDROP);
+	HANDLE clipboard_handle = GetClipboardData(CF_HDROP);
 
-	if (!Data) {
+	if (!clipboard_handle) {
 		QWrite_err(FWERROR_CLIP_EMPTY, 0);
 		QWrite("\"\",[]]");
 		CloseClipboard();
@@ -819,12 +826,12 @@ case C_CLIP_PASTEFILE:
 		break;
 	}
 
-	DROPFILES *df = (DROPFILES*) GlobalLock(Data);
+	DROPFILES *df = (DROPFILES*) GlobalLock(clipboard_handle);
 
 	if (!df->fWide)	{
 		QWrite_err(FWERROR_CLIP_LOCK, 1, GetLastError());
 		QWrite("\"\",[]]");
-		GlobalUnlock(Data);
+		GlobalUnlock(clipboard_handle);
 		CloseClipboard();
 		StringDynamic_end(buf_destination);
 		break;
@@ -838,20 +845,11 @@ case C_CLIP_PASTEFILE:
 	QWritef("\"%s\",[", effect_name[effect_id]);
 
 
-	// Get current working dir
-	TCHAR pwd[MAX_PATH];
-	GetCurrentDirectory(MAX_PATH, pwd);
-
-
-	// Parse filenames
+	// Parse filepaths from the clipboard
 	StringDynamic buf_source;
 	StringDynamic_init(buf_source);
-	int pwd_len      = strlen(pwd);
-	int mission_len  = strlen(global.mission_path);
-	int name_start   = 0;
-
-	//global.error_within_error = true;
-	global.option_error_output = OPTION_ERROR_ARRAY_CLOSE;
+	size_t name_start          = 0;
+	global.option_error_output = OPTION_ERROR_ARRAY_NESTED | OPTION_ERROR_ARRAY_CLOSE;
 
 	for (i=0; pFilenames[name_start]!='\0'; i++) {
 		if (pFilenames[i] == '\0') {
@@ -859,66 +857,69 @@ case C_CLIP_PASTEFILE:
 			wchar_t *wide_path      = pFilenames + name_start;
 			size_t wide_path_length = wcslen(wide_path) + 1;
 			
-			if (StringDynamic_allocate(buf_source, wide_path_length) == 0) 
-				wcstombs(buf_source.text, wide_path, wide_path_length);
+			if (StringDynamic_allocate(buf_source, wide_path_length*2) == 0)
+				buf_source.length = wcstombs(buf_source.text, wide_path, wide_path_length);
 			else {
-				QWrite("]]]");
-				global.option_error_output = OPTION_ERROR_ARRAY_CLOSE;
+				QWrite("]];");
+				global.option_error_output = OPTION_NONE;
 				QWrite_err(FWERROR_MALLOC, 2, "buf_source", wide_path_length);
+				QWrite("\"\", [");
 				StringDynamic_end(buf_source);
 				break;
 			}
 
 
-			// Convert path (starting from drive) to OFP format for logging and for verification
-			char *absolute_path = buf_source.text;
-			char *relative_path = absolute_path;
-			bool is_game_dir    = false;
+			// Convert absolute path (starting from drive) to the OFP relative path - for logging and verification
+			char *absolute_path  = buf_source.text;
+			String relative_path = {buf_source.text, buf_source.length};
+			bool is_game_dir     = false;
 
-			if (strncmpi(absolute_path, pwd, pwd_len) == 0) {
-				absolute_path += pwd_len + 1;
-				relative_path  = absolute_path;
-				is_game_dir    = true;
+			// if game dir
+			if (strncmpi(absolute_path, global.game_dir, global.game_dir_length) == 0) {
+				absolute_path        += global.game_dir_length + 1;
+				relative_path.text    = absolute_path;
+				relative_path.length -= global.game_dir_length + 1;
+				is_game_dir           = true;
 
-				if (strncmpi(absolute_path, global.mission_path, mission_len) == 0)
-					relative_path += mission_len;
-				else {
+				// if mission dir
+				if (strncmpi(absolute_path, global.mission_path, global.mission_path_length) == 0) {
+					relative_path.text   += global.mission_path_length;
+					relative_path.length -= global.mission_path_length;
+				} else {
+					// if game root dir
 					memcpy(absolute_path-3, "..\\", 3);
-					relative_path = absolute_path - 3;
+					relative_path.text    = absolute_path - 3;
+					relative_path.length += 3;
 				}
 			}
 
-
-			// Log
 			QWritef("]+[[\"%s\",", relative_path);
 
-
-			// Verify path
-			int source_type = VerifyPath(&relative_path, buf_source, OPTION_SUPPRESS_ERROR | OPTION_SUPPRESS_CONVERSION);
-			bool allow_copy = true;
+			int source_type = VerifyPath(relative_path, buf_source, OPTION_SUPPRESS_ERROR | OPTION_SUPPRESS_CONVERSION);
+			bool path_valid = true;
 
 
-			// Not allowed to move files to the download directory
+			// Not allowed to move files to the fwatch\tmp directory
 			if (is_game_dir  &&  dwEffect & DROPEFFECT_MOVE  &&  source_type!=PATH_DOWNLOAD_DIR  &&  destination_type==PATH_DOWNLOAD_DIR) {
-				QWrite_err(FWERROR_FILE_MOVETOTMP, 2, relative_path, buf_destination);
-				allow_copy = false;
+				QWrite_err(FWERROR_FILE_MOVETOTMP, 2, relative_path.text, buf_destination);
+				path_valid = false;
 			}
 
 
 			// Copy filename from the source path to the destination path
-			char *last_slash = strrchr(relative_path, '\\');
-			StringDynamic_append(buf_destination, last_slash!=NULL ? last_slash+1 : relative_path);
+			char *last_slash = strrchr(relative_path.text, '\\');
+			StringDynamic_append(buf_destination, last_slash!=NULL ? last_slash+1 : relative_path.text);
 
 
-			// Perform file operation
-			if (allow_copy) {
-				if (!list_files) {
+			// Execute move/copy
+			if (path_valid) {
+				if (!arg_list_files) {
 					if (dwEffect & DROPEFFECT_MOVE) {
-						if (MoveFileEx(absolute_path,buf_destination.text,0) == 0) {
+						if (MoveFileEx(absolute_path,buf_destination.text,0)) {
 							QWrite_err(FWERROR_NONE, 0);
 							EmptyClipboard();
 						} else 
-							QWrite_err(FWERROR_ERRNO, 2, errno, absolute_path);
+							QWrite_err(FWERROR_WINAPI, 1, GetLastError());
 					}
 
 					if (dwEffect & DROPEFFECT_COPY) {
@@ -932,21 +933,20 @@ case C_CLIP_PASTEFILE:
 			}
 
 
-			// Reset
+			// Reset before the next file
 			buf_source.length      = 0;
-			buf_destination.length = destination_len;
+			buf_destination.length = argument[arg_destination].length;
 			name_start             = i + 1;
 			QWrite("]");
 		}
 	}
 
-	//global.error_within_error = false;
 	QWrite("]]");
 
 	StringDynamic_end(buf_source);
 	StringDynamic_end(buf_destination);
 
-	GlobalUnlock(Data);
+	GlobalUnlock(clipboard_handle);
 	CloseClipboard();
 }
 break;

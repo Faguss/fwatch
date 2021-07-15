@@ -9,8 +9,7 @@ case C_FILE_EXISTS:
 		break;
 	}
 
-	char *file = stripq(argument[2]);
-	if(fdbExists(file))
+	if(fdbExists(String_trim_quotes(argument[2])))
 		QWrite("1");
 	else
 		QWrite("-1");
@@ -30,9 +29,8 @@ case C_FILE_READ:
 	}
 
 	global.option_error_output |= OPTION_ERROR_ARRAY_LOCAL;
-	char *file = stripq(argument[2]);
-	char *var = stripq(argument[3]);
-	QWrite(fdbGet(file, var));
+
+	QWrite(fdbGet(String_trim_quotes(argument[2]), String_trim_quotes(argument[3])));
 }
 break;
 
@@ -49,10 +47,8 @@ case C_FILE_WRITE:
 	}
 
 	global.option_error_output |= OPTION_ERROR_ARRAY_LOCAL;
-	char *file = stripq(argument[2]);
-	char *var = stripq(argument[3]);
-	char *val = argument[4];
-	if(fdbPut(file, var, val, false))			//v1.13 additional arguments
+
+	if(fdbPut(String_trim_quotes(argument[2]), String_trim_quotes(argument[3]), argument[4].text, false))
 		QWrite("1");
 	else
 		QWrite("-1");
@@ -71,10 +67,7 @@ case C_FILE_QWRITE:
 		break;
 	}
 
-	char *file = stripq(argument[2]);
-	char *var = stripq(argument[3]);
-	char *val = argument[4];
-	if(fdbPutQ(file, var, val))
+	if(fdbPutQ(String_trim_quotes(argument[2]), String_trim_quotes(argument[3]), argument[4].text))
 		QWrite("1");
 	else
 		QWrite("-1");
@@ -94,10 +87,8 @@ case C_FILE_AWRITE:
 	}
 
 	global.option_error_output |= OPTION_ERROR_ARRAY_LOCAL;
-	char *file = stripq(argument[2]);
-	char *var = stripq(argument[3]);
-	char *val = argument[4];
-	if(fdbPut(file, var, val, true))			//v1.13 additional arguments
+
+	if(fdbPut(String_trim_quotes(argument[2]), String_trim_quotes(argument[3]), argument[4].text, true))
 		QWrite("1");
 	else
 		QWrite("-1");
@@ -116,8 +107,7 @@ case C_FILE_VARS:
 		break;
 	}
 
-	char *file = stripq(argument[2]);
-	char *res = fdbVars(file);
+	char *res = fdbVars(String_trim_quotes(argument[2]));
 	QWrite(res);
 	delete[] res;
 }
@@ -135,8 +125,7 @@ case C_FILE_READVARS:
 		break;
 	}
 
-	char *file = stripq(argument[2]);
-	char *res = fdbReadvars(file);
+	char *res = fdbReadvars(String_trim_quotes(argument[2]));
 	QWrite(res);
 	delete[] res;
 }
@@ -154,9 +143,7 @@ case C_FILE_REMOVE:
 		break;
 	}
 
-	char *file = stripq(argument[2]);
-	char *var = stripq(argument[3]);
-	if(fdbRemove(file, var))
+	if(fdbRemove(String_trim_quotes(argument[2]), String_trim_quotes(argument[3])))
 		QWrite("1");
 	else
 		QWrite("-1");
@@ -175,8 +162,7 @@ case C_FILE_DELETE:
 		break;
 	}
 
-	char *file = stripq(argument[2]);
-	if(fdbDelete(file))
+	if(fdbDelete(String_trim_quotes(argument[2])))
 		QWrite("1");
 	else
 		QWrite("-1");
@@ -212,8 +198,8 @@ case C_FILE_WGET:
 		pipe = CreateNamedPipe(file.filename, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
 								PIPE_UNLIMITED_INSTANCES, PIPEBUFSIZE, PIPEBUFSIZE, NMPWAIT_USE_DEFAULT_WAIT, NULL);
 
-	char *cline = new char[256+strlen(file.filename)+argument_length[2]];
-	sprintf(cline, "-q --tries=1 --output-document=\"%s\" --timeout=3 --user-agent=fwatch/%.2f %s", file.filename, SCRIPT_VERSION, argument[2]);
+	char *cline = new char[256+strlen(file.filename)+argument[2].length];
+	sprintf(cline, "-q --tries=1 --output-document=\"%s\" --timeout=3 --user-agent=fwatch/%.2f %s", file.filename, SCRIPT_VERSION, argument[2].text);
 
 	// Win23 API bloat
 	STARTUPINFO si;
@@ -296,7 +282,8 @@ case C_FILE_READ2:
 	}
 
 	global.option_error_output |= OPTION_ERROR_ARRAY_LOCAL;
-	fdbGet2(stripq(argument[2]), stripq(argument[3]));
+
+	fdbGet2(String_trim_quotes(argument[2]), String_trim_quotes(argument[3]));
 }
 break;
 
@@ -365,26 +352,27 @@ case C_FILE_MODLIST:
 				DWORD attributes = GetFileAttributes(path2);
 
 				if (attributes != -1  &&  attributes & FILE_ATTRIBUTE_DIRECTORY) {
-					StringDynamic_append_quotes(Names, "]+[\"", fd.cFileName, "\"");
+					StringDynamic_appendf(Names, "]+[{%s}", fd.cFileName);
 
 					sprintf(path2, "%s\\__gs_id", fd.cFileName);
 					FILE *f = fopen(path2, "r");
 
 					if (f) {
-						char data[128] = "";
-						fread(data, sizeof(char), 127, f);
-						char *pch = strtok(data, ";");
-						int i     = 0;
+						char data_buffer[256] = "";
+						fread(data_buffer, sizeof(char), 255, f);
+						String data = {data_buffer, strlen(data_buffer)};
+						String item;
+						int index = 0;
+						size_t data_pos = 0;
 
-						while (pch) {
-							switch (i) {
-								case 0 : StringDynamic_append_quotes(Attributes, "]+[\"", pch, "\""); break;
-								case 1 : StringDynamic_append_format(Versions, "]+[%s", pch); break;
-								case 2 : StringDynamic_append_format(Dates, "]+[%s", pch); break;
+						while ((item = String_tokenize(data,";",data_pos,OPTION_NONE)).length > 0) {
+							switch (index) {
+								case 0 : StringDynamic_appendf(Attributes, "]+[{%s}", item.text); break;
+								case 1 : StringDynamic_appendf(Versions, "]+[%s", item.text); break;
+								case 2 : StringDynamic_appendf(Dates, "]+[%s", item.text); break;
 							}
 
-							i++;
-							pch = strtok (NULL, ";");
+							index++;
 						}
 
 						fclose(f);

@@ -8,34 +8,32 @@
 case C_CLASS_LIST:	//TODO: remove this command on release because it's obsolete
 {  // Return list of classes in a file
 
-	char *arg_filename      = empty_string;
-	char *raw_path          = empty_string;
-	int arg_filename_length = 0;
-	int start_pos           = 0;
-	bool start_pos_set      = false;
+	size_t arg_file      = empty_char_index;
+	size_t arg_classpath = empty_char_index;
+	int start_pos        = 0;
+	bool start_pos_set   = false;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_FILE :
-				arg_filename        = argument[i+1];
-				arg_filename_length = argument_length[i+1];
+				arg_file = i + 1;
 				break;
 
 			case NAMED_ARG_CLASSPATH :
-				raw_path = stripq(argument[i+1]);
+				arg_classpath = i + 1;
 				break;
 
 			case NAMED_ARG_OFFSET :
 				start_pos_set = true;
-				start_pos     = atoi(argument[i+1]);
+				start_pos     = atoi(argument[i+1].text);
 				break;
 		}
 	}
 	
 
 	// File not specified
-	if (arg_filename_length == 0) {
-		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+	if (argument[arg_file].length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
 		QWrite("0,[],[],[]]");
 		break;
 	}
@@ -44,27 +42,30 @@ case C_CLASS_LIST:	//TODO: remove this command on release because it's obsolete
 	// Verify and update path to the file
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
-	char *ptr_filename = arg_filename;
 
-	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
 		QWrite("0,[],[],[]]");
 		break;
 	}
 
 
 	// Class path
-	int J			= 0;	// J is current index
-	int K			= -1;	// K is max
+	int J = 0;	// J is current index
+	int K = -1;	// K is max
 	char CLASSPATH;
-	char *pch2		= strtok(raw_path, "[,]");
+	String item;
+	size_t arg_classpath_pos = 0;
 
-	while (pch2!=NULL  &&  K<10)	//from ofp array to char array
+	while ((item = String_tokenize(argument[arg_classpath], "[,]", arg_classpath_pos, OPTION_NONE)).length>0  &&  K<10)	//from ofp array to char array
 	{
 		K++;
-		char *item = stripq(pch2);
+		String_trim_quotes(item);
+		String_trim_space(item);
+
+		if (item.length > 127)
+			item.length = 127;
 		
-		strncpy(classpath[K], Trim(item), 127);
-		pch2 = strtok(NULL, "[,]");
+		strncpy(classpath[K], item.text, item.length);
 	};
 	// ----------------------------------------------------------------
 
@@ -72,10 +73,10 @@ case C_CLASS_LIST:	//TODO: remove this command on release because it's obsolete
 
 	// Parse text -----------------------------------------------------
 	// Open file
-	FILE *f = fopen(ptr_filename, "r");
+	FILE *f = fopen(argument[arg_file].text, "r");
 	if (!f) 
 	{
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		QWrite("0,[],[],[]]");
 		StringDynamic_end(buf_filename);
 		break;
@@ -166,7 +167,7 @@ case C_CLASS_LIST:	//TODO: remove this command on release because it's obsolete
 	while((ret = fgets(line, lineLen ,f)))
 	{
 		if (ferror(f)) {
-			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+			QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 			error = true;
 		}
 
@@ -455,7 +456,7 @@ case C_CLASS_LIST:	//TODO: remove this command on release because it's obsolete
 	if (!error) {
 		// If couldn't find classes that were in the class path
 		if (J <= K)	{
-			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[J], J, ++K, ptr_filename);
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[J], J, ++K, argument[arg_file].text);
 			QWritef("%d,[],[],[]]", J);
 		} else {
 			// No issues - output data
@@ -490,47 +491,45 @@ case C_CLASS_TOKEN:	//TODO: remove this command on release because it's obsolete
 { // Return all properties from a class
 
 	// Read arguments -------------------------------------------------
-	char *arg_filename	    = empty_string;
-	char *raw_path          = empty_string;
-	char *Target		    = empty_string;
-	char *Wrap			    = empty_string;
-	bool NoWrap			    = false;
-	bool NoDoubleWrap	    = false;
-	bool start_pos_set      = false;
-	int  start_pos          = 0;
-	int arg_filename_length = 0;
+	size_t arg_file	     = empty_char_index;
+	size_t arg_classpath = empty_char_index;
+	char *Target         = empty_char;
+	char *Wrap           = empty_char;
+	bool NoWrap          = false;
+	bool NoDoubleWrap    = false;
+	bool start_pos_set   = false;
+	int  start_pos       = 0;
 
 	// Parse arguments
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_FILE :
-				arg_filename        = argument[i+1];
-				arg_filename_length = argument_length[i+1];
+				arg_file = i + 1;
 				break;
 
 			case NAMED_ARG_CLASSPATH :
-				raw_path = stripq(argument[i+1]);
+				arg_classpath = i + 1;
 				break;
 
 			case NAMED_ARG_OFFSET :
 				start_pos_set = true;
-				start_pos     = atoi(argument[i+1]);
+				start_pos     = atoi(argument[i+1].text);
 				break;
 
 			case NAMED_ARG_TOKEN :
-				Target = argument[i+1];
+				Target = argument[i+1].text;
 				break;
 
 			case NAMED_ARG_WRAP :
-				Wrap = argument[i+1];
+				Wrap = argument[i+1].text;
 				break;
 		}
 	}
 
 
 	// File not specified
-	if (arg_filename_length == 0) {
-		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+	if (argument[arg_file].length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
 		QWrite("0,\"0\",[],[]]");
 		break;
 	};
@@ -549,26 +548,30 @@ case C_CLASS_TOKEN:	//TODO: remove this command on release because it's obsolete
 	// Verify and update path to the file
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
-	char *ptr_filename = arg_filename;
 
-	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
 		QWrite("0,\"0\",[],[]]");
 		break;
 	}
 
 
 	// Class path
-	int J			= 0;	// J is current index, 
-	int K			= -1;	// K is max
+	int J = 0;	// J is current index
+	int K = -1;	// K is max
 	char CLASSPATH;
-	char *pch		= strtok(raw_path, "[,]");
+	String item;
+	size_t arg_classpath_pos = 0;
 
-	while (pch!=NULL  &&  K<10)	//from ofp array to char array
+	while ((item = String_tokenize(argument[arg_classpath], "[,]", arg_classpath_pos, OPTION_NONE)).length>0  &&  K<10)	//from ofp array to char array
 	{
 		K++;
-		char *item = stripq(pch);
-		strncpy(classpath[K], Trim(item), 127);
-		pch = strtok(NULL, "[,]");
+		String_trim_quotes(item);
+		String_trim_space(item);
+
+		if (item.length > 127)
+			item.length = 127;
+		
+		strncpy(classpath[K], item.text, item.length);
 	};
 
 	// If searching for specific token
@@ -579,10 +582,10 @@ case C_CLASS_TOKEN:	//TODO: remove this command on release because it's obsolete
 
 	// Parse text -----------------------------------------------------
 	// Open file
-	FILE *f = fopen(ptr_filename, "r");
+	FILE *f = fopen(argument[arg_file].text, "r");
 	if (!f) 
 	{
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		QWrite("0,\"0\",[],[]]");
 		StringDynamic_end(buf_filename); 
 		break;
@@ -675,7 +678,7 @@ case C_CLASS_TOKEN:	//TODO: remove this command on release because it's obsolete
 	while ((ret = fgets(line, lineLen ,f)))
 	{	
 		if (ferror(f)) {
-			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+			QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 			error = true;
 		}
 
@@ -1126,7 +1129,7 @@ case C_CLASS_TOKEN:	//TODO: remove this command on release because it's obsolete
 	if (!error) {
 		// If couldn't find classes that were in the class path
 		if (J <= K) {
-			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[J], J, ++K, ptr_filename);
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[J], J, ++K, argument[arg_file].text);
 			QWritef("%d,\"%d\",[],[]]", J, classOff);
 		} else {
 			// No issues - output data
@@ -1160,51 +1163,49 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 { // Modify class name in a file
 
 	// Read arguments -------------------------------------------------
-	int action              = 0;
-	int arg_filename_length = 0;
-	char *arg_filename      = empty_string;
-	char *raw_path          = empty_string;
-	char *Target            = empty_string;
-	char *RenameDst         = empty_string;
+	int action           = 0;
+	size_t arg_file      = empty_char_index;
+	size_t arg_classpath = empty_char_index;
+	size_t Target        = empty_char_index;
+	char *RenameDst      = empty_char;
 
 
 	// Parse arguments
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_FILE :
-				arg_filename        = argument[i+1];
-				arg_filename_length = argument_length[i+1];
+				arg_file = i + 1;
 				break;
 
 			case NAMED_ARG_CLASSPATH :
-				raw_path = stripq(argument[i+1]);
+				arg_classpath = i + 1;
 				break;
 
 			case NAMED_ARG_ADD :
 				action = 1;
-				Target = argument[i+1];
+				Target = i + 1;
 				break;
 
 			case NAMED_ARG_RENAME :
 				action = 2;
-				Target = argument[i+1];
+				Target = i + 1;
 				break;
 
 			case NAMED_ARG_TO :
-				RenameDst = argument[i+1];
+				RenameDst = argument[i+1].text;
 				break;
 
 			case NAMED_ARG_DELETE :
 				action = 3;
-				Target = argument[i+1];
+				Target = i + 1;
 				break;
 		}
 	}
 
 
 	// File not specified
-	if (arg_filename_length == 0) {
-		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+	if (argument[arg_file].length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
 		QWrite("0]");
 		break;
 	};
@@ -1220,10 +1221,10 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 
 
 	// Nothing to rename to
-	if (action==2  &&  (strcmp(Target,"")==0 || strcmp(RenameDst,"")==0))
+	if (action==2  &&  (argument[Target].length==0 || strcmp(RenameDst,"")==0))
 	{
 		char tmp[20] = "";
-		if (strcmp(Target,"") == 0) 
+		if (argument[Target].length == 0)
 			strcat(tmp, "OldName");
 
 		if (strcmp(RenameDst,"") == 0)
@@ -1243,50 +1244,57 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 	// Verify and update path to the file
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
-	char *ptr_filename = arg_filename;
 	
-	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_RESTRICT_TO_MISSION_DIR)) {
 		QWrite("0]");
 		break;
 	}
 
 
 	// Class path
-	int J			= 0;	// J is current index
-	int K			= -1;	// K is max
-	char CLASSPATH; 
-	char *pch		= strtok(raw_path, "[,]");
+	int J = 0;	// J is current index
+	int K = -1;	// K is max
+	char CLASSPATH;
+	String item;
+	size_t arg_classpath_pos = 0;
 
-	while (pch!=NULL  &&  K<10)	//from ofp array to char array
+	while ((item = String_tokenize(argument[arg_classpath], "[,]", arg_classpath_pos, OPTION_NONE)).length>0  &&  K<10)	//from ofp array to char array
 	{
 		K++;
-		char *item = stripq(pch);
-		strncpy(classpath[K], Trim(item), 127);
-		pch = strtok(NULL, "[,]");
+		String_trim_quotes(item);
+		String_trim_space(item);
+
+		if (item.length > 127)
+			item.length = 127;
+		
+		strncpy(classpath[K], item.text, item.length);
 	};
 
 
 	// Split argument into classname and inherit
-	char *WantedClass	= Target; 
-	char *inherit		= NULL;
+	String WantedClass	= argument[Target];
+	String inherit		= empty_string;
+	char *pch;
 
-	if ((pch = strchr(WantedClass, ':')))
+	if ((pch = strchr(WantedClass.text, ':')))
 	{
-		int pos			 = pch - WantedClass;
-		inherit			 = WantedClass + pos + 1;
-		WantedClass[pos] = '\0';
+		size_t pos		      = pch - WantedClass.text;
+		inherit.text	      = WantedClass.text + pos + 1;
+		inherit.length        = WantedClass.length - (pos+1);
+		WantedClass.text[pos] = '\0';
+		WantedClass.length    = pos;
 	};
 
-	WantedClass = Trim(WantedClass);
-	inherit		= Trim(inherit);
+	String_trim_space(WantedClass);
+	String_trim_space(inherit);
 	// ----------------------------------------------------------------
 
 
 	// Open file ------------------------------------------------------
-	FILE *f = fopen(ptr_filename, "r");
+	FILE *f = fopen(argument[arg_file].text, "r");
 	if (!f) 
 	{
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		QWrite("0]");
 		StringDynamic_end(buf_filename); 
 		break;
@@ -1300,7 +1308,7 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 	int bufsize  = 0;
 	int fsize	 = ftell(f);
 	size_t buf_size = fsize + 70;
-	for (size_t z=0;z<argument_num;z++)buf_size+=argument_length[z];
+	for (size_t z=0;z<argument_num;z++)buf_size+=argument[z].length;
 	buf			 = new char[buf_size];
 
 	if (!buf)
@@ -1377,7 +1385,7 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 	while((ret = fgets(line, lineLen ,f)))
 	{
 		if (ferror(f)) {
-			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+			QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 			error = 1;
 		}
 
@@ -1556,7 +1564,7 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 
 				sprintf(line2, "\n%s\tclass %s ", tabs, WantedClass);
 
-				if (strcmp(inherit,"") != 0) 
+				if (inherit.length > 0) 
 					sprintf(line2, "%s: %s ", line2,inherit);
 
 				sprintf(line2, "%s\n%s\t{\n%s\t};\n%s};\n",line2,tabs,tabs,tabs);
@@ -1638,14 +1646,14 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 					if (line[i] == '{') 
 						level2--;
 
-					if (K==-1  &&  action==1  &&  level2==0  &&  strcmpi(match,WantedClass)==0) 
+					if (K==-1  &&  action==1  &&  level2==0  &&  strcmpi(match,WantedClass.text)==0) 
 					{
 						error	= 2 ; 
 						jobDone = true;
 					};
 
 					// Output class name
-					if (reached  &&  strcmpi(match,WantedClass)==0)
+					if (reached  &&  strcmpi(match,WantedClass.text)==0)
 					{
 						// If it's the same class that you wanted to add
 						if (action == 1) 
@@ -1803,11 +1811,11 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 	{
 		// If couldn't find classes that were in the class path
 		if (J <= K)
-			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[J], J, ++K, ptr_filename);
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[J], J, ++K, argument[arg_file].text);
 		else 
 			// Couldn't remove/rename global class
 			if (action>1  &&  !jobDone) 
-				QWrite_err(FWERROR_CLASS_NOCLASS, 2, WantedClass, ptr_filename);
+				QWrite_err(FWERROR_CLASS_NOCLASS, 2, WantedClass, argument[arg_file].text);
 		else
 		{
 			// Add new global class
@@ -1815,7 +1823,7 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 			{
 				sprintf(line, "\nclass %s ", WantedClass);
 
-				if (strcmp(inherit,"") != 0) 
+				if (inherit.length > 0) 
 					sprintf(line, "%s: %s ", line,inherit);
 
 				sprintf(line, "%s\n{\n};\n", line);
@@ -1826,32 +1834,32 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 			};
 
 			// Rewrite the file
-			f = fopen(ptr_filename, "w");
+			f = fopen(argument[arg_file].text, "w");
 			if (f) 
 			{
 				fwrite(buf, 1, strlen(buf), f);
 
 				if (ferror(f)) 
-					QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+					QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 				else
 					QWrite_err(FWERROR_NONE, 0);
 
 				fclose(f);
 			}
 			else 
-				QWrite_err(FWERROR_ERRNO, errno, ptr_filename);
+				QWrite_err(FWERROR_ERRNO, errno, argument[arg_file].text);
 		};
 	};
 	
 
 	// Class already exists
 	if (error == 2) 
-		QWrite_err(FWERROR_CLASS_EXISTS, 2, WantedClass, ptr_filename);
+		QWrite_err(FWERROR_CLASS_EXISTS, 2, WantedClass, argument[arg_file].text);
 
 
 	// Couldn't find class
 	if (error == 3) 
-		QWrite_err(FWERROR_CLASS_NOCLASS, 2, WantedClass, ptr_filename);
+		QWrite_err(FWERROR_CLASS_NOCLASS, 2, WantedClass, argument[arg_file].text);
 
 
 	// Output position in the class path
@@ -1881,52 +1889,50 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 { // Modify property within a class
 
 	// Read arguments -------------------------------------------------
-	int action              = 0; 
-	int ARRtargetID         = -1;
-	int ArrAppend           = 0;
-	int ArrDelete           = 0;
-	int arg_filename_length = 0;
-	char *arg_filename      = empty_string;
-	char *raw_path          = empty_string;
-	char *WantedToken       = empty_string;
-	char *WantedValue       = empty_string;
-	char *RenameDst         = empty_string;
+	int action           = 0; 
+	int ARRtargetID      = -1;
+	int ArrAppend        = 0;
+	int ArrDelete        = 0;
+	size_t arg_file      = empty_char_index;
+	size_t arg_classpath = empty_char_index;
+	size_t WantedToken   = empty_char_index;
+	char *WantedValue    = empty_char;
+	char *RenameDst      = empty_char;
 
 
 	// Parse arguments
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_FILE :
-				arg_filename        = argument[i+1];
-				arg_filename_length = argument_length[i+1];
+				arg_file = i + 1;
 				break;
 
 			case NAMED_ARG_CLASSPATH :
-				raw_path = stripq(argument[i+1]);
+				arg_classpath = i + 1;
 				break;
 
 			case NAMED_ARG_ADD : 		// add/overwrite
 				action      = 1; 
-				WantedToken = argument[i+1];
+				WantedToken = i + 1;
 				break;
 
 			case NAMED_ARG_APPEND : 	// append
 				action      = 4; 
-				WantedToken = argument[i+1];
+				WantedToken = i + 1;
 				break;
 
 			case NAMED_ARG_RENAME :		// rename source
 				action      = 2; 
-				WantedToken = argument[i+1];
+				WantedToken = i + 1;
 				break;
 
 			case NAMED_ARG_TO :			// rename destination
-				RenameDst = argument[i+1];
+				RenameDst = argument[i+1].text;
 				break;
 
 			case NAMED_ARG_DELETE : 	// remove property 
 				action      = 3;
-				WantedToken = argument[i+1];
+				WantedToken = i + 1;
 				break;
 
 			case NAMED_ARG_INDEX :		// modify item inside array
@@ -1938,22 +1944,22 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 						ArrAppend = 1;
 
 					action      = 5; 
-					ARRtargetID = atoi(argument[i+1]);
+					ARRtargetID = atoi(argument[i+1].text);
 				} break;
 		}
 	}
 
 
 	// File not specified
-	if (arg_filename_length == 0) {
-		QWrite_err(FWERROR_PARAM_EMPTY, 1, "WantedFile");
+	if (argument[arg_file].length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
 		QWrite("0]");
 		break;
 	};
 
 
 	// If action was not determined
-	if (action==0  ||  (action==5  &&  strcmp(WantedToken,"")==0))
+	if (action==0  ||  (action==5  &&  argument[WantedToken].length==0))
 	{
 		QWrite_err(FWERROR_PARAM_ACTION, 0);
 		QWrite("0]");
@@ -1962,11 +1968,11 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 
 
 	// Nothing to rename to
-	if (action==2  &&  (strcmp(WantedToken,"")==0 || strcmp(RenameDst,"")==0))
+	if (action==2  &&  (argument[WantedToken].length==0 || strcmp(RenameDst,"")==0))
 	{
 		char tmp[20] = "";
 
-		if (strcmp(WantedToken,"") == 0) 
+		if (argument[WantedToken].length == 0) 
 			strcat(tmp, "OldName");
 
 		if (strcmp(RenameDst,"") == 0)
@@ -1995,41 +2001,47 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 	// Verify and update path to the file
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
-	char *ptr_filename = arg_filename;
 	
-	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_RESTRICT_TO_MISSION_DIR)) {
 		QWrite("0]");
 		break;
 	}
 		
 
 	// Class path
-	int J			= 0;	// J is current index
-	int K			= -1;	// K is max
+	int J = 0;	// J is current index
+	int K = -1;	// K is max
 	char CLASSPATH;
-	char *pch		= strtok(raw_path, "[,]");
-	
-	while (pch!=NULL  &&  K<10)	//from ofp array to char array
+	String item;
+	size_t arg_classpath_pos = 0;
+
+	while ((item = String_tokenize(argument[arg_classpath], "[,]", arg_classpath_pos, OPTION_NONE)).length>0  &&  K<10)	//from ofp array to char array
 	{
 		K++;
-		char *item = stripq(pch);
-		strncpy(classpath[K], Trim(item), 127);
-		pch = strtok(NULL, "[,]");
+		String_trim_quotes(item);
+		String_trim_space(item);
+
+		if (item.length > 127)
+			item.length = 127;
+		
+		strncpy(classpath[K], item.text, item.length);
 	};
 
 
 	// Separate property name and value
-	if ((pch = strchr(WantedToken,'='))) 
+	char *pch;
+	if ((pch = strchr(argument[WantedToken].text,'='))) 
 	{
-		int pos				= pch - WantedToken;
-		WantedToken[pos]	= '\0';
-		WantedValue			= WantedToken + pos + 1;
+		int pos				            = pch - argument[WantedToken].text;
+		argument[WantedToken].text[pos]	= '\0';
+		argument[WantedToken].length    = pos;
+		WantedValue			            = argument[WantedToken].text + pos + 1;
 
 		if (ArrDelete) 
 			WantedValue = NULL;
 	};
 
-	WantedToken = Trim(WantedToken);
+	String_trim_space(argument[WantedToken]);
 
 
 	// Replace array brackets
@@ -2044,10 +2056,10 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 
 	// Parse text -----------------------------------------------------
 	// Open file
-	FILE *f = fopen(ptr_filename, "r");
+	FILE *f = fopen(argument[arg_file].text, "r");
 	if (!f) 
 	{
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		QWrite("0]");
 		StringDynamic_end(buf_filename); 
 		break;
@@ -2061,7 +2073,7 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 	int bufsize  = 0;
 	int fsize	 = ftell(f);
 	size_t buf_size = fsize + 70;
-	for (size_t z=0;z<argument_num;z++)buf_size+=argument_length[z];
+	for (size_t z=0;z<argument_num;z++)buf_size+=argument[z].length;
 	buf = new char[buf_size];
 
 	if (!buf)
@@ -2148,7 +2160,7 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 	while ((ret = fgets(line, lineLen ,f)))
 	{   
 		if (ferror(f)) {
-			QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+			QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 			error = 1;
 		}
 
@@ -2386,7 +2398,7 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 					bool addEndingBracket   = false;
 					bool addEndingSemiColon = false;
 					
-					if (WantedToken[strlen(WantedToken)-1] == ']'  &&  WantedToken[strlen(WantedToken)-2] == '[')
+					if (argument[WantedToken].text[argument[WantedToken].length-1] == ']'  &&  argument[WantedToken].text[argument[WantedToken].length-2] == '[')
 					{
 						addEndingBracket   = true;
 						addEndingSemiColon = true;
@@ -2659,7 +2671,7 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
                     
 
                     // If that's the one we're looking for
-					if(strcmpi(match,WantedToken) == 0)
+					if(strcmpi(match,argument[WantedToken].text) == 0)
 					{
 						// if add/overwrite/replacesingleitem then rememember pos
 						if (action==1  ||  action==4  ||  action==5) 
@@ -2897,7 +2909,7 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 	{
 		// If couldn't find classes that were in the class path
 		if (J <= K)
-			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[J], J, ++K, ptr_filename);
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[J], J, ++K, argument[arg_file].text);
 		else
 			// Add new global property
 			if (K==-1  &&  foundTokenPos<0  &&  (action==1 || action==4))
@@ -2922,33 +2934,33 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 			{
 				// ...an item inside array
 				if (action==5  &&  ARRcurrent>0  &&  ARRcurrent<ARRtargetID)	
-					QWrite_err(FWERROR_CLASS_NOITEM, 3, ARRtargetID, WantedToken, ptr_filename);
+					QWrite_err(FWERROR_CLASS_NOITEM, 3, ARRtargetID, WantedToken, argument[arg_file].text);
 				else
 					 // not an array
 					if (action==5 && foundTokenPos>=0 && ARRcurrent<0)     
-						QWrite_err(FWERROR_CLASS_NOTARRAY, 2, WantedToken, ptr_filename);
+						QWrite_err(FWERROR_CLASS_NOTARRAY, 2, WantedToken, argument[arg_file].text);
 					else
 						// ...a property
-						QWrite_err(FWERROR_CLASS_NOVAR, 2, WantedToken, ptr_filename);
+						QWrite_err(FWERROR_CLASS_NOVAR, 2, WantedToken, argument[arg_file].text);
 			};
 
 		// Rewrite the file
 		if (!error)
 		{	
-			f = fopen(ptr_filename, "w");
+			f = fopen(argument[arg_file].text, "w");
 			if (f) 
 			{
 				fwrite(buf, 1, strlen(buf), f);
 
 				if (ferror(f)) 
-					QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+					QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 				else
 					QWrite_err(FWERROR_NONE, 0);
 
 				fclose(f);
 			}
 			else
-				QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+				QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		};
 	}
 
@@ -2979,62 +2991,54 @@ case C_CLASS_READ:
 	const int predefined_capacity = 8;
 
 	// Read arguments------------------------------------------------------------
-	char *arg_filename      = empty_string;
-	char *arg_classpath     = empty_string;
-	char *arg_wrap          = empty_string;
-	char *arg_findproperty  = empty_string;
-	int arg_offset          = 0;
-	int arg_classpath_pos   = -1;
-	int arg_level           = predefined_capacity;
-	int art_filename_length = 0;
-	bool arg_verify         = false;
+	size_t arg_file       = empty_char_index;
+	size_t arg_path       = empty_char_index;
+	char *arg_wrap        = empty_char;
+	size_t arg_find       = empty_char_index;
+	int arg_offset        = 0;
+	int arg_classpath_pos = -1;
+	int arg_level         = predefined_capacity;
+	bool arg_verify       = false;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_FILE : 
-				arg_filename        = argument[i+1];
-				art_filename_length = argument_length[i+1];
+				arg_file = i + 1;
 				break;
 
 			case NAMED_ARG_PATH :
-				arg_classpath = argument[i+1];
+				arg_path = i + 1;
 				break;
 			
 			case NAMED_ARG_OFFSET : 
-				arg_offset = atoi(argument[i+1]);
+				arg_offset = atoi(argument[i+1].text);
 				break;
 			
-			case NAMED_ARG_FIND : {
-				arg_findproperty          = argument[i+1];
-				int arg_findproperty_last = argument_length[i+1] - 1;
-
-				if (arg_findproperty[0]=='[' && arg_findproperty[arg_findproperty_last]==']') {
-					arg_findproperty++;
-					arg_findproperty[arg_findproperty_last] = '\0';
-				}
-			} break;
+			case NAMED_ARG_FIND :
+				arg_find = i + 1;
+			break;
 
 			case NAMED_ARG_WRAP : 
-				arg_wrap = argument[i+1];
+				arg_wrap = argument[i+1].text;
 				break;
 			
 			case NAMED_ARG_PATHPOS : 
-				arg_classpath_pos = atoi(argument[i+1]);
+				arg_classpath_pos = atoi(argument[i+1].text);
 				break;
 			
 			case NAMED_ARG_MAXLEVEL : 
-				arg_level = atoi(argument[i+1]);
+				arg_level = atoi(argument[i+1].text);
 				break;
 
 			case NAMED_ARG_VERIFY : 
-				arg_verify = String2Bool(argument[i+1]);
+				arg_verify = String_bool(argument[i+1]);
 				break;
 		}
 	}
 	
 	// File not specified
-	if (art_filename_length == 0) {
-		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+	if (argument[arg_file].length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
 		QWrite("[],[],0]");
 		break;
 	}
@@ -3042,25 +3046,24 @@ case C_CLASS_READ:
 	// Verify and update path to the file
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
-	char *ptr_filename = arg_filename;
 
-	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
 		QWrite("[],[],0]");
 		break;
 	}
 
 
 	// Class path
+	char *classpath[predefined_capacity];
 	int classpath_capacity = arg_level!=predefined_capacity ? arg_level : predefined_capacity;
 	int classpath_current  = 0;
 	int classpath_size     = 0;
-	char *classpath[predefined_capacity];
-	char *class_name = strtok(arg_classpath, "[,]");
+	size_t arg_path_pos    = 0;
+	String item;
 
-	//from ofp array to char array
-	while (class_name!=NULL  &&  classpath_size<classpath_capacity) {
-		classpath[classpath_size++] = stripq(class_name);
-		class_name                  = strtok(NULL, "[,]");
+	while ((item = String_tokenize(argument[arg_path], "[,]", arg_path_pos, OPTION_NONE)).length > 0  &&  classpath_size<classpath_capacity) {
+		String_trim_quotes(item);
+		classpath[classpath_size++] = item.text;
 	}
 
 	if (arg_offset > 0) {
@@ -3092,25 +3095,20 @@ case C_CLASS_READ:
 	const int properties_to_find_capacity = 64;
 	char *properties_to_find[properties_to_find_capacity];
 	int properties_to_find_size = 0;
+	size_t arg_find_pos = 0;
 
-	if (arg_findproperty[0] == '-') {
-		arg_findproperty[0]     = '\0';
-		properties_to_find_size = -1;
-	} else {
-		char *property = strtok(arg_findproperty, ",");
-		while (property!=NULL  &&  properties_to_find_size<properties_to_find_capacity) {
-			properties_to_find[properties_to_find_size++] = stripq(property);
-			property                                      = strtok(NULL, ",");
-		}
+	while ((item = String_tokenize(argument[arg_find], "[,]", arg_find_pos, OPTION_NONE)).length>0  &&  properties_to_find_size<properties_to_find_capacity) {
+		String_trim_quotes(item);
+		properties_to_find[properties_to_find_size++] = item.text;
 	}
 	//---------------------------------------------------------------------------
 	
 
 
 	// Open wanted file -----------------------------------------------------------------	
-	FILE *file = fopen(ptr_filename, "rb");
+	FILE *file = fopen(argument[arg_file].text, "rb");
 	if (!file) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		QWrite("[],[],0]");
 		StringDynamic_end(buf_filename);
 		break;
@@ -3118,7 +3116,7 @@ case C_CLASS_READ:
 
 	// Find file size
 	if (fseek(file, 0, SEEK_END) != 0) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		QWrite("[],[],0]");
 		StringDynamic_end(buf_filename);
 		fclose(file);
@@ -3127,7 +3125,7 @@ case C_CLASS_READ:
 
 	size_t file_size = ftell(file);
 	if (file_size == 0xFFFFFFFF) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		QWrite("[],[],0]");
 		StringDynamic_end(buf_filename);
 		fclose(file);
@@ -3153,7 +3151,7 @@ case C_CLASS_READ:
 	file_contents.text[file_size] = '\0';
 
 	if (bytes_read != file_size) {		
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);		
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);		
 		StringDynamic_end(buf_filename);
 		StringDynamic_end(file_contents);
 		QWrite("[],[],0]");
@@ -3458,7 +3456,7 @@ case C_CLASS_READ:
 
 								if (level < classpath_capacity) {
 									// Add property name
-									StringDynamic_append_format(output_property[level], "]+[\"%s\"", property);
+									StringDynamic_appendf(output_property[level], "]+[\"%s\"", property);
 
 									// Add property value
 									StringDynamic_append(output_value[level], "]+[");
@@ -3481,7 +3479,7 @@ case C_CLASS_READ:
 													if (text[j]=='"' && (wrap==YES_WRAP || wrap==NODOUBLE_WRAP))
 														StringDynamic_append(output_value[level], "\"\"");
 													else 
-														StringDynamic_append_len(output_value[level], text+j, 1);
+														StringDynamic_appendl(output_value[level], text+j, 1);
 										}
 									} else
 										StringDynamic_append(output_value[level], value);
@@ -3524,7 +3522,7 @@ case C_CLASS_READ:
 							int level                   = class_level - classpath_current;
 
 							if (level < classpath_capacity && !classpath_done)
-								StringDynamic_append_format(output_array[level], "]+[\"%s\"", text+word_start);
+								StringDynamic_appendf(output_array[level], "]+[\"%s\"", text+word_start);
 						}
 						
 						is_inherit = expect == CLASS_INHERIT;
@@ -3552,7 +3550,7 @@ case C_CLASS_READ:
 						}
 						
 						if (classpath_match) {
-							StringDynamic_append_format(output_classpath_bytes, "]+[\"%d\"", i+1);
+							StringDynamic_appendf(output_classpath_bytes, "]+[\"%d\"", i+1);
 							classpath_match = false;
 						}
 								
@@ -3560,7 +3558,7 @@ case C_CLASS_READ:
 							int level = class_level - classpath_current;
 
 							if (level < classpath_capacity)
-								StringDynamic_append_format(output_bytes[level], "]+[\"%d\"", i+1);
+								StringDynamic_appendf(output_bytes[level], "]+[\"%d\"", i+1);
 						}
 						
 						class_level++;
@@ -3655,15 +3653,15 @@ case C_CLASS_READ:
 				sprintf(insteadof, "%c", separator);
 
 			sprintf(error_msg, "%s instead of %s", encountered, insteadof);
-			QWrite_err(FWERROR_CLASS_SYNTAX, 4, error_msg, line_num, column_num, ptr_filename);
+			QWrite_err(FWERROR_CLASS_SYNTAX, 4, error_msg, line_num, column_num, argument[arg_file].text);
 		} else
 			QWrite_err(FWERROR_NONE, 0);
 	} else {
 		if (classpath_current < classpath_size)
-			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, ++classpath_size, ptr_filename);
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, ++classpath_size, argument[arg_file].text);
 		else
 			if (properties_to_find_size>0 && !property_found)
-				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_findproperty, ptr_filename);
+				QWrite_err(FWERROR_CLASS_NOVAR, 2, argument[arg_find], argument[arg_file].text);
 			else
 				QWrite_err(FWERROR_NONE, 0);
 	}
@@ -3705,47 +3703,43 @@ case C_CLASS_READSQM:
 { // Convert SQM file to SQF format
 
 	global.option_error_output = OPTION_ERROR_ARRAY_CLOSE;
-
-	char *arg_filename      = empty_string;
-	int arg_filename_length = 0;
+	size_t arg_file            = empty_char_index;
 	
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_FILE : 
-				arg_filename        = argument[i+1];
-				arg_filename_length = argument_length[i+1];
+				arg_file = i + 1;
 				break;
 		}
 	}
 
 	// File not specified
-	if (arg_filename_length == 0) {
-		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+	if (argument[arg_file].length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
 		break;
 	}
 
 	// Verify and update path to the file
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
-	char *ptr_filename = arg_filename;
 
-	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR))
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR))
 		break;
 	//---------------------------------------------------------------------------
 	
 
 
 	// Open wanted file -----------------------------------------------------------------	
-	FILE *file = fopen(ptr_filename, "rb");
+	FILE *file = fopen(argument[arg_file].text, "rb");
 	if (!file) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		StringDynamic_end(buf_filename);
 		break;
 	}
 
 	// Find file size
 	if (fseek(file, 0, SEEK_END) != 0) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
@@ -3753,40 +3747,44 @@ case C_CLASS_READSQM:
 
 	size_t file_size = ftell(file);
 	if (file_size == 0xFFFFFFFF) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		StringDynamic_end(buf_filename);
 		fclose(file);
 		break;
 	}
 
 	// Allocate buffer
-	StringDynamic file_content;
-	StringDynamic_init(file_content);
+	StringDynamic file_content_dynamic;
+	StringDynamic_init(file_content_dynamic);
 	
-	int result = StringDynamic_allocate(file_content, file_size+1);
+	int result = StringDynamic_allocate(file_content_dynamic, file_size+1);
 	if (result != 0) {
-		QWrite_err(FWERROR_MALLOC, 2, "file_content", file_size);
+		QWrite_err(FWERROR_MALLOC, 2, "file_content_dynamic", file_size);
 		StringDynamic_end(buf_filename);
 		break;
 	}
 
 	// Copy text to buffer
 	fseek(file, 0, SEEK_SET);
-	size_t bytes_read = fread(file_content.text, 1, file_size, file);
+	size_t bytes_read = fread(file_content_dynamic.text, 1, file_size, file);
 
 	if (bytes_read != file_size) {		
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);		
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		StringDynamic_end(buf_filename);
-		StringDynamic_end(file_content);
+		StringDynamic_end(file_content_dynamic);
 		fclose(file);
 		break;
 	}
 
-	file_content.length = bytes_read;
+	file_content_dynamic.length = bytes_read;
 	fclose(file);
 
-	int inside            = 0;
-	const int capacity    = 8;
+	String file_content;
+	file_content.text   = file_content_dynamic.text;
+	file_content.length = file_content_dynamic.length;
+
+	int inside         = 0;
+	const int capacity = 8;
 	
 	int opened_classes[capacity] = {0};
 
@@ -3833,35 +3831,35 @@ case C_CLASS_READSQM:
 	SQM_Init(state);
 	
 	while (state.i < file_content.length) {
-		switch (SQM_Parse(file_content.text, file_content.length, state, SQM_ACTION_GET_NEXT_ITEM, NULL, 0)) {
+		switch (SQM_Parse(file_content, state, SQM_ACTION_GET_NEXT_ITEM, empty_string)) {
 			case SQM_OUTPUT_PROPERTY : {								
 				if (inside & CLASS_MISSION) {
 					// Convert array format by replacing brackets
-					if (state.property[state.property_length-1]==']' && state.property[state.property_length-2]=='[') {
-						state.property[state.property_length-1] = ' ';
-						state.property[state.property_length-2] = ' ';
+					if (state.property.text[state.property.length-1]==']' && state.property.text[state.property.length-2]=='[') {
+						state.property.text[state.property.length-1] = ' ';
+						state.property.text[state.property.length-2] = ' ';
 						
 						bool in_quote = false;
 	
-						for (size_t i=0; i<state.value_length; i++) {
-							if (!in_quote  &&  state.value[i]=='{')
-								state.value[i] = '[';
+						for (size_t i=0; i<state.value.length; i++) {
+							if (!in_quote  &&  state.value.text[i]=='{')
+								state.value.text[i] = '[';
 	
-							if (!in_quote  &&  state.value[i]=='}')
-								state.value[i] = ']';
+							if (!in_quote  &&  state.value.text[i]=='}')
+								state.value.text[i] = ']';
 	
-							if (state.value[i] == '"')
+							if (state.value.text[i] == '"')
 								in_quote = !in_quote;
 						}
 					}
 					
 					// Remove "side=" from a group
 					if (inside & CLASS_GROUPS && inside & CLASS_ITEM && ~inside & CLASS_VEHICLES) {
-						if (strncmpi("side",state.property,state.property_length)==0) {
-							if (state.value[state.value_length-1] == ';')
-								state.value_length--;
+						if (strncmpi("side",state.property.text,state.property.length)==0) {
+							if (state.value.text[state.value.length-1] == ';')
+								state.value.length--;
 							
-							QWritel(state.value, state.value_length);
+							QWrites(state.value);
 							QWrite(",");
 						}
 					}
@@ -3875,14 +3873,14 @@ case C_CLASS_READSQM:
 						inside & CLASS_INTEL
 					) {
 						QWrite("_");
-						QWritel(state.property, state.value_end - state.property_start);
+						QWritel(state.property.text, state.value_end - state.property_start);
 					}
 				}
 			} break;
 			
 			case SQM_OUTPUT_CLASS : {							
 				for (int z=0; z<class_max; z++) {
-					if (strncmpi(state.class_name,class_names[z],strlen(class_names[z])) == 0) {
+					if (strncmpi(state.class_name.text,class_names[z],strlen(class_names[z])) == 0) {
 						int level             = state.class_level - 1;
 						int opened            = class_ids[z];
 						opened_classes[level] = opened;
@@ -3991,7 +3989,7 @@ case C_CLASS_READSQM:
 	//---------------------------------------------------------------------------
 	QWrite_err(FWERROR_NONE, 0);
 
-	StringDynamic_end(file_content);
+	StringDynamic_end(file_content_dynamic);
 	StringDynamic_end(buf_filename);
 }
 break;
@@ -4011,75 +4009,59 @@ break;
 case C_CLASS_WRITE : 
 { // Modify class and properties in a file
 
-	char *arg_filename               = empty_string;
-	char *arg_merge                  = empty_string;
-	char *arg_classpath              = empty_string;
-	char *arg_deleteclass            = empty_string;
-	char *arg_deleteproperty         = empty_string;
-	char *arg_renameclass            = empty_string;
-	char *arg_renameproperty         = empty_string;
-	char *arg_renameto               = empty_string;
-    char *arg_offset                 = empty_string;
-	size_t arg_filename_length       = 0;
-	size_t arg_merge_length          = 0;
-	size_t arg_deleteclass_length    = 0;
-	size_t arg_deleteproperty_length = 0;
-	size_t arg_renameclass_length    = 0;
-	size_t arg_renameproperty_length = 0;
-	size_t arg_renameto_length       = 0;
-	size_t arg_offset_length         = 0;
+	size_t arg_file           = empty_char_index;
+	size_t arg_merge          = empty_char_index;
+	size_t arg_path           = empty_char_index;
+	size_t arg_deleteclass    = empty_char_index;
+	size_t arg_deleteproperty = empty_char_index;
+	size_t arg_renameclass    = empty_char_index;
+	size_t arg_renameproperty = empty_char_index;
+	size_t arg_to             = empty_char_index;
+    size_t arg_offset         = empty_char_index;
 	
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch(argument_hash[i]) {
 			case NAMED_ARG_FILE :
-				arg_filename        = argument[i+1];
-				arg_filename_length = argument_length[i+1];
+				arg_file = i + 1;
 				break;
 				
 			case NAMED_ARG_MERGE : 
-				arg_merge        = argument[i+1];
-				arg_merge_length = argument_length[i+1];
+				arg_merge = i + 1;
 				break;
 				
 			case NAMED_ARG_PATH :
-				arg_classpath        = argument[i+1];
+				arg_path = i + 1;
 				break;
 				
 			case NAMED_ARG_DELETECLASS : 
-				arg_deleteclass        = argument[i+1];
-				arg_deleteclass_length = argument_length[i+1];
+				arg_deleteclass = i + 1;
 				break;
 				
 			case NAMED_ARG_DELETEPROPERTY : 
-				arg_deleteproperty        = argument[i+1];
-				arg_deleteproperty_length = argument_length[i+1];
+				arg_deleteproperty = i + 1;
 				break;
 				
 			case NAMED_ARG_RENAMECLASS : 
-				arg_renameclass        = argument[i+1];
-				arg_renameclass_length = argument_length[i+1];
+				arg_renameclass = i + 1;
 				break;
 				
 			case NAMED_ARG_RENAMEPROPERTY : 
-				arg_renameproperty        = argument[i+1];
-				arg_renameproperty_length = argument_length[i+1];
+				arg_renameproperty = i + 1;
 				break;
 				
 			case NAMED_ARG_TO : 
-				arg_renameto        = argument[i+1];
-				arg_renameto_length = argument_length[i+1];
+				arg_to = i + 1;
 				break;
 				
 			case NAMED_ARG_OFFSET :
-				arg_offset        = argument[i+1];
-				arg_offset_length = argument_length[i+1];
+				arg_offset = i + 1;
 				break;
 		}
 	}
 	
 	// File not specified
-	if (arg_filename_length == 0) {
-		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_filename");
+	if (argument[arg_file].length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
 		QWrite("0]");
 		break;
 	}
@@ -4087,9 +4069,8 @@ case C_CLASS_WRITE :
 	// Verify and update path to the file
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
-	char *ptr_filename = arg_filename;
 
-	if (!VerifyPath(&ptr_filename, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
 		QWrite("0]");
 		break;
 	}
@@ -4097,9 +4078,9 @@ case C_CLASS_WRITE :
 
 
 	// Open wanted file -----------------------------------------------------------------	
-	FILE *file = fopen(ptr_filename, "rb");
+	FILE *file = fopen(argument[arg_file].text, "rb");
 	if (!file) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		QWrite("0]");
 		StringDynamic_end(buf_filename);
 		break;
@@ -4107,7 +4088,7 @@ case C_CLASS_WRITE :
 
 	// Find file size
 	if (fseek(file, 0, SEEK_END) != 0) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		QWrite("0]");
 		StringDynamic_end(buf_filename);
 		fclose(file);
@@ -4116,7 +4097,7 @@ case C_CLASS_WRITE :
 
 	size_t file_size = ftell(file);
 	if (file_size == 0xFFFFFFFF) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		QWrite("0]");
 		StringDynamic_end(buf_filename);
 		fclose(file);
@@ -4124,12 +4105,13 @@ case C_CLASS_WRITE :
 	};
 
 	// Allocate buffer
-	StringDynamic file_contents;
-	StringDynamic_init(file_contents);
-	int buffer_max = file_size + 1 + arg_merge_length;
-	int result     = StringDynamic_allocate(file_contents, buffer_max);
+	StringDynamic file_contents_dynamic;
+	StringDynamic_init(file_contents_dynamic);
+
+	int buffer_max = file_size + 1 + argument[arg_merge].length;
+	int result     = StringDynamic_allocate(file_contents_dynamic, buffer_max);
 	if (result != 0) {
-		QWrite_err(FWERROR_MALLOC, 2, "file_contents", buffer_max);
+		QWrite_err(FWERROR_MALLOC, 2, "file_contents_dynamic", buffer_max);
 		QWrite("0]");
 		StringDynamic_end(buf_filename);
 		break;
@@ -4137,39 +4119,42 @@ case C_CLASS_WRITE :
 
 	// Copy text to buffer
 	fseek(file, 0, SEEK_SET);
-	size_t bytes_read    = fread(file_contents.text, 1, file_size, file);
-	file_contents.length = bytes_read;
+	size_t bytes_read            = fread(file_contents_dynamic.text, 1, file_size, file);
+	file_contents_dynamic.length = bytes_read;
 
 	if (bytes_read != file_size) {		
-		QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);		
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		StringDynamic_end(buf_filename);
-		StringDynamic_end(file_contents);
+		StringDynamic_end(file_contents_dynamic);
 		QWrite("0]");
 		fclose(file);
 		break;
 	}
 
 	fclose(file);
-	
+
+	String file_contents = {file_contents_dynamic.text, file_contents_dynamic.length};
 	SQM_ParseState source_state;
 	SQM_Init(source_state);
 	
+	char *classpath[SQM_CLASSPATH_CAPACITY];
+	String item;
 	int classpath_current = 0;
 	int classpath_size    = 0;
-	char *classpath[SQM_CLASSPATH_CAPACITY];
-	char *classpath_item = strtok(arg_classpath, "[,]");  
+	size_t arg_path_pos   = 0;
 	
-	while (classpath_item!=NULL  &&  classpath_size<SQM_CLASSPATH_CAPACITY) {
-		classpath[classpath_size++] = classpath_item;
-		classpath_item = strtok(NULL, "[,]");
+	while ((item = String_tokenize(argument[arg_path],"[,]",arg_path_pos,OPTION_NONE)).length>0  &&  classpath_size<SQM_CLASSPATH_CAPACITY) {
+		classpath[classpath_size++] = item.text;
 	}
 	
-	if (arg_offset_length != 0) {
-		source_state.i    = strtoul(arg_offset, NULL, 0);
+	if (argument[arg_offset].length != 0) {
+		source_state.i    = strtoul(argument[arg_offset].text, NULL, 0);
 		classpath_current = classpath_size;
 	} else {
 		for (int i=0; i<classpath_size; i++) {
-			if (SQM_Parse(file_contents.text, file_contents.length, source_state, SQM_ACTION_FIND_CLASS, classpath[i], strlen(classpath[i]))) {
+			String path = {classpath[i], strlen(classpath[i])};
+
+			if (SQM_Parse(file_contents, source_state, SQM_ACTION_FIND_CLASS, path)) {
 				classpath_current++;
 			} else
 				break;
@@ -4183,19 +4168,19 @@ case C_CLASS_WRITE :
 		bool save_changes = false;
 		
 		// Merge classes	
-		if (arg_merge_length > 0) {
+		if (argument[arg_merge].length > 0) {
 			SQM_ParseState merge_state;
 			SQM_Init(merge_state);
 
-			if (SQM_Merge(arg_merge, arg_merge_length, merge_state, file_contents, source_state))
+			if (SQM_Merge(argument[arg_merge], merge_state, file_contents_dynamic, source_state))
 				save_changes = true;
 		}
 		
 		// Delete property
-		if (arg_deleteproperty_length > 0) {
+		if (argument[arg_deleteproperty].length > 0) {
 			SQM_ParseState source_state_copy = source_state;
 	
-			if ((result = SQM_Parse(file_contents.text, file_contents.length, source_state_copy, SQM_ACTION_FIND_PROPERTY, arg_deleteproperty, arg_deleteproperty_length))) {
+			if ((result = SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_PROPERTY, argument[arg_deleteproperty]))) {
 				size_t removed_length = source_state_copy.value_end - source_state_copy.property_start;
 				
 				shift_buffer_chunk(file_contents.text, source_state_copy.value_end, file_contents.length, removed_length, OPTION_LEFT);
@@ -4203,17 +4188,17 @@ case C_CLASS_WRITE :
 				file_contents.length -= removed_length;
 				save_changes          = true;
 			} else {
-				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_deleteproperty, ptr_filename);
+				QWrite_err(FWERROR_CLASS_NOVAR, 2, argument[arg_deleteproperty].text, argument[arg_file].text);
 				goto class_write_end;
 			}
 		}
 		
 		// Delete class
-		if (arg_deleteclass_length > 0) {				
+		if (argument[arg_deleteclass].length > 0) {				
 			SQM_ParseState source_state_copy = source_state;
 	
-			if ((result = SQM_Parse(file_contents.text, file_contents.length, source_state_copy, SQM_ACTION_FIND_CLASS, arg_deleteclass, arg_deleteclass_length))) {
-				SQM_Parse(file_contents.text, file_contents.length, source_state_copy, SQM_ACTION_FIND_CLASS_END, NULL, 0);
+			if ((result = SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_CLASS, argument[arg_deleteclass]))) {
+				SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_CLASS_END, empty_string);
 				
 				size_t removed_length = source_state_copy.i - source_state_copy.class_start;
 				
@@ -4222,76 +4207,76 @@ case C_CLASS_WRITE :
 				file_contents.length -= removed_length;
 				save_changes          = true;
 			} else {
-				QWrite_err(FWERROR_CLASS_NOCLASS, 2, arg_deleteclass, ptr_filename);
+				QWrite_err(FWERROR_CLASS_NOCLASS, 2, arg_deleteclass, argument[arg_file].text);
 				goto class_write_end;
 			}
 		}
 		
 		// Rename property
-		if (arg_renameproperty_length>0  &&  arg_renameto_length>0) {
+		if (argument[arg_renameproperty].length>0  &&  argument[arg_to].length>0) {
 			SQM_ParseState source_state_copy = source_state;
 	
-			if ((result = SQM_Parse(file_contents.text, file_contents.length, source_state_copy, SQM_ACTION_FIND_PROPERTY, arg_renameproperty, arg_renameproperty_length))) {
-				size_t shift_amount  = arg_renameto_length >= source_state_copy.property_length ? arg_renameto_length-source_state_copy.property_length : source_state_copy.property_length-arg_renameto_length;
-				bool shift_direction = arg_renameto_length >= source_state_copy.property_length;
+			if ((result = SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_PROPERTY, argument[arg_renameproperty]))) {
+				size_t shift_amount  = argument[arg_to].length >= source_state_copy.property.length ? argument[arg_to].length-source_state_copy.property.length : source_state_copy.property.length-argument[arg_to].length;
+				bool shift_direction = argument[arg_to].length >= source_state_copy.property.length;
 				save_changes         = true;
 				
 				shift_buffer_chunk(file_contents.text, source_state_copy.property_end, file_contents.length, shift_amount, shift_direction);
-				memcpy(source_state_copy.property, arg_renameto, arg_renameto_length);
+				memcpy(source_state_copy.property.text, argument[arg_to].text, argument[arg_to].length);
 				
 				file_contents.length += shift_amount * (shift_direction ? 1 : -1);
 			} else {
-				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_renameproperty, ptr_filename);
+				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_renameproperty, argument[arg_file].text);
 				goto class_write_end;
 			}
 		} else
 			// Rename class
-			if (arg_renameclass_length > 0  &&  arg_renameto_length > 0) {
+			if (argument[arg_renameclass].length > 0  &&  argument[arg_to].length > 0) {
 				SQM_ParseState source_state_copy = source_state;
 				
-				if ((result = SQM_Parse(file_contents.text, file_contents.length, source_state_copy, SQM_ACTION_FIND_CLASS, arg_renameclass, arg_renameclass_length))) {
+				if ((result = SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_CLASS, argument[arg_renameclass]))) {
 					size_t current_name_length = source_state_copy.class_name_full_end - source_state_copy.class_name_start;
-					size_t shift_amount        = arg_renameto_length >= current_name_length ? arg_renameto_length-current_name_length : current_name_length-arg_renameto_length;
-					bool shift_direction       = arg_renameto_length >= current_name_length;
+					size_t shift_amount        = argument[arg_to].length >= current_name_length ? argument[arg_to].length-current_name_length : current_name_length-argument[arg_to].length;
+					bool shift_direction       = argument[arg_to].length >= current_name_length;
 					save_changes               = true;
 					
 					shift_buffer_chunk(file_contents.text, source_state_copy.class_name_full_end, file_contents.length, shift_amount, shift_direction);
-					memcpy(source_state_copy.class_name, arg_renameto, arg_renameto_length);
+					memcpy(source_state_copy.class_name.text, argument[arg_to].text, argument[arg_to].length);
 					
 					file_contents.length += shift_amount * (shift_direction ? 1 : -1);
 				} else {
-					QWrite_err(FWERROR_CLASS_NOCLASS, 2, arg_renameclass, ptr_filename);
+					QWrite_err(FWERROR_CLASS_NOCLASS, 2, arg_renameclass, argument[arg_file].text);
 					goto class_write_end;
 				}
 			}
 		
 		// Rewrite file
 		if (save_changes) {
-			if ((file = fopen(ptr_filename, "wb"))) {
+			if ((file = fopen(argument[arg_file].text, "wb"))) {
 				fwrite(file_contents.text, 1, file_contents.length, file);
 	
 				if (ferror(file)) 
-					QWrite_err(FWERROR_ERRNO, 2, errno, ptr_filename);
+					QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 				else
 					QWrite_err(FWERROR_NONE, 0);
 	
 				fclose(file);
 			} else 
-				QWrite_err(FWERROR_ERRNO, errno, ptr_filename);
+				QWrite_err(FWERROR_ERRNO, errno, argument[arg_file].text);
 		} else 
-			if (!result && arg_merge_length==0)
+			if (!result && argument[arg_merge].length==0)
 				QWrite_err(FWERROR_PARAM_ACTION, 0);
 			else
 				QWrite_err(FWERROR_NONE, 0);
 	} else
 		if (classpath_current < classpath_size)
-			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, classpath_size, ptr_filename);
+			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, classpath_size, argument[arg_file].text);
 		else
 			QWrite_err(FWERROR_NONE, 0);
 
 	class_write_end:
 	QWritef("%d]", classpath_current);
 	
-	StringDynamic_end(file_contents);
+	StringDynamic_end(file_contents_dynamic);
 	StringDynamic_end(buf_filename);
 } break;

@@ -3,12 +3,14 @@
 // -----------------------------------------------------------------
 
 // Remove quotation marks from string
-char* stripq(char *str) {
-	if(str[0] == '"' && str[strlen(str)-1] == '"') {
-		str++;
-		str[strlen(str)-1] = '\0';
+char* String_trim_quotes(String input) {
+	if (input.text[0]=='"'  &&  input.text[input.length-1]=='"') {
+		input.text++;
+		input.length -= 2;
+		input.text[input.length] = '\0';
 	}
-	return str;
+
+	return input.text;
 }
 
 
@@ -18,12 +20,7 @@ char* stripq(char *str) {
 
 
 void QWrite(const char *str) {
-	DWORD foo;
-	unsigned int l = strlen(str);
-	WriteFile(global.out, str, l, &foo, NULL);
-
-	if(foo < l)
-		DebugMessage("WARNING! Wanted to write %d bytes but only %d written", strlen(str), foo);
+	QWritel(str, strlen(str));
 }
 
 
@@ -49,7 +46,7 @@ const char* getBool(short b) {
 
 
 // Format special keys to string
-void QWrite_formatKey(int c) {
+void QWrite_format_key(int c) {
 	//v1.13 updated key list
 	//http://msdn.microsoft.com/en-us/library/windows/desktop/dd375731%28v=vs.85%29.aspx
 	#define VK_XBUTTON1		0x05
@@ -386,7 +383,7 @@ char* str_replace(const char *strbuf, const char *strold, const char *strnew, in
 
 //v1.13 Search for string insensitive
 //http://www.codeguru.com/cpp/cpp/string/article.php/c5641/Case-Insensitive-strstr.htm
-char* strstr2(String &source, String &to_find, int options) {
+char* String_find(String &source, String &to_find, int options) {
 	if (source.length==0 || to_find.length==0)
 		return NULL;
 	
@@ -431,29 +428,19 @@ char* strstr2(String &source, String &to_find, int options) {
 
 
 // v1.13 Move given file to the system recycle bin
-bool trashFile(char *path, int len, int error_behaviour) {
-	// Allocate buffer
-	int buffer_length = 256 + 1 + len + 2;
-	char *buffer      = (char*) malloc(buffer_length);
+bool trashFile(String file, int error_behaviour) {
+	StringDynamic buffer;
+	StringDynamic_init(buffer);
 
-	if (!buffer) {
-		if (error_behaviour != -1)
-			QWrite_err(FWERROR_MALLOC, 2, "trashFile", buffer_length);
+	StringDynamic_appendl(buffer, global.game_dir, global.game_dir_length);
+	StringDynamic_append(buffer, "\\");
+	StringDynamic_appends(buffer, file);
+	StringDynamic_appendl(buffer, "\0", 1);
 
-		return false;
-	}
-
-	// Build path
-	GetCurrentDirectory(256, buffer);
-	strcat(buffer, "\\");
-	strcat(buffer, path);
-	buffer[strlen(buffer)+1] = '\0';
-
-	// Trash file
 	SHFILEOPSTRUCT shfos;
 	shfos.hwnd   = NULL;
 	shfos.wFunc  = FO_DELETE;
-	shfos.pFrom  = buffer;
+	shfos.pFrom  = buffer.text;
 	shfos.pTo    = NULL;
 	shfos.fFlags = FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO;
 	int result   = SHFileOperation(&shfos);
@@ -462,7 +449,7 @@ bool trashFile(char *path, int len, int error_behaviour) {
 	if (error_behaviour==1  &&  (result==1026 || result==ERROR_FILE_NOT_FOUND)) 
 		result = 0;
 
-	free(buffer);
+	StringDynamic_end(buffer);
 
 	if (result == 0)	
 		return true; 
@@ -568,7 +555,10 @@ void FileTimeToString(FILETIME &ft, bool systime, char *str) {
 
 
 // v1.13 Copy data to clipboard
-bool CopyToClip(char *input, int input_length, bool append) {
+bool CopyToClip(String &input, bool append) {
+	if (input.length==0 && append)
+		return true;
+
 	if (!OpenClipboard(NULL)) {
 		QWrite_err(FWERROR_CLIP_OPEN, 1, GetLastError());
 		return false;
@@ -593,14 +583,14 @@ bool CopyToClip(char *input, int input_length, bool append) {
 
 
 	// Allocate new buffer for transfering text to the clipboard
-	HGLOBAL clip_new_buffer = GlobalAlloc(GMEM_ZEROINIT|GMEM_FIXED, clip_length + input_length + 1);
+	HGLOBAL clip_new_buffer = GlobalAlloc(GMEM_ZEROINIT|GMEM_FIXED, clip_length + input.length + 1);
 	char *clip_new          = (char*)GlobalLock(clip_new_buffer);
 
 	if (append) {
-		memcpy(clip_new            , clip , clip_length);
-		memcpy(clip_new+clip_length, input, input_length);
+		memcpy(clip_new            , clip      , clip_length);
+		memcpy(clip_new+clip_length, input.text, input.length);
 	} else
-		memcpy(clip_new, input, input_length);
+		memcpy(clip_new, input.text, input.length);
 
 	GlobalUnlock(clip_handle);
 
@@ -620,7 +610,7 @@ bool CopyToClip(char *input, int input_length, bool append) {
 
 	GlobalUnlock(clip_new_buffer);
 	CloseClipboard();
-	return ok ? 1 : 0;
+	return ok ? true : false;
 }
 
 
@@ -630,45 +620,35 @@ bool CopyToClip(char *input, int input_length, bool append) {
 
 
 // v1.13 Custom handling of escape sequences
-char* EscSequences(char *txt, int mode, int quantity) {
+void String_escape_sequences(String input, int mode, int quantity) {
 	bool shift = false;
 	int count  = 0;
 
-	for (int i=0;  txt[i]!='\0';  i++) {
-		if (txt[i] == '\\') {
+	for (size_t i=0;  i<input.length;  i++) {
+		if (input.text[i] == '\\') {
 			// Replace char
-			if (mode==OPTION_TAB  &&  txt[i+1]=='t') {
+			if (mode==OPTION_TAB  &&  input.text[i+1]=='t') {
 				count++;
-				shift  = true;
-				txt[i] = '\t';
+				input.text[i] = '\t';
+				shift_buffer_chunk(input.text, i+1, input.length, 1, OPTION_LEFT);
 			}
 
-			if (mode==OPTION_LF  &&  txt[i+1]=='n') {
+			if (mode==OPTION_LF  &&  input.text[i+1]=='n') {
 				count++;
-				shift  = true;
-				txt[i] = '\n';
+				input.text[i] = '\n';
+				shift_buffer_chunk(input.text, i+1, input.length, 1, OPTION_LEFT);
 			}
 
-			if (mode==OPTION_CRLF  &&  txt[i+1]=='n') {
+			if (mode==OPTION_CRLF  &&  input.text[i+1]=='n') {
 				count++;
-				txt[i]   = '\r';
-				txt[i+1] = '\n';
-			}
-
-			// Shift other chars to the left (thus making the string shorter)
-			for (int j=i+1; shift; j++) {
-				txt[j] = txt[j+1]; 
-
-				if (txt[j] == '\0') 
-					shift = false;
+				input.text[i]   = '\r';
+				input.text[i+1] = '\n';
 			}
 		}
 
 		if (count>=quantity  &&  quantity>=0)
 			break;
 	}
-
-	return txt;
 }
 
 
@@ -677,24 +657,7 @@ char* EscSequences(char *txt, int mode, int quantity) {
 
 
 
-
-// v1.14 Like QWrite but doubles the quotes
-void QWriteDoubleQ(char *txt) {
-	for (int i=0; txt[i]!='\0'; i++) {
-		if (txt[i] == '\"') 
-			QWritel("\"", 1);
-
-		QWritel(txt+i, 1);
-	}
-}
-
-
-
-
-
-
-
-void QWrite_Joystick(int customJoyID) {
+void QWrite_joystick(int customJoyID) {
 	// If passed -2 then quit this function
 	if (customJoyID == -2) {
 		QWrite("[]");
@@ -858,7 +821,7 @@ void QWrite_Joystick(int customJoyID) {
 
 
 // Write mission path information
-void createPathSqf(LPCSTR lpFileName, int len, int offset) {
+void createPathSqf(LPCSTR lpFileName, size_t len, int offset) {
 	DWORD ticks = GetTickCount();
 
 	// Don't write multiple times at once
@@ -926,28 +889,29 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset) {
 	fprintf(f, "[%d,%d,[\"", pathType, len2);
 
 	// output mission path
-	size_t mission_path_len = 0;
+	global.mission_path_length = 0;
 
 	for (int i=0; i<len2; i++)
 		if (lpFileName[i]=='\\'  ||  lpFileName[i]=='/') {
 			if (i != len2-1)
 				fprintf(f, "\",\"");
 
-			global.mission_path[mission_path_len++] = '\\';
+			global.mission_path[global.mission_path_length++] = '\\';
 		} else {
 			fprintf(f, "%c", lpFileName[i]);
-			global.mission_path[mission_path_len++] = lpFileName[i];
+			global.mission_path[global.mission_path_length++] = lpFileName[i];
 		}
 
-	global.mission_path[mission_path_len] = '\0';
+	global.mission_path[global.mission_path_length] = '\0';
 	fprintf(f, "\"]]");
 	fclose(f);
 
 	
 	// Is this is a new mission?
-	if (strcmp(global.mission_path_previous, global.mission_path) !=0)
-		strcpy(global.mission_path_previous, global.mission_path);
-	else {
+	if (global.mission_path_length!=global.mission_path_previous_length  ||  strcmp(global.mission_path_previous, global.mission_path) !=0) {
+		memcpy(global.mission_path_previous, global.mission_path, global.mission_path_length+1);
+		global.mission_path_previous_length = global.mission_path_length;
+	} else {
 		int base = 0;
 
 		switch(global_exe_version[global.exe_index]) {
@@ -991,16 +955,16 @@ void createPathSqf(LPCSTR lpFileName, int len, int offset) {
 
 
 // Interpret bool value from a text
-bool String2Bool(char *txt) {
-	txt = Trim(txt);
+bool String_bool(String &input) {
+	String_trim_space(input);
 
-	if (strcmpi(txt,"false") == 0  ||  strcmpi(txt,"") == 0)
+	if (input.length==0  ||  strcmpi(input.text,"0")==0  ||  strcmpi(input.text,"false")==0)
 		return false;
 
-	if (strcmpi(txt,"true") == 0)
+	if (strcmpi(input.text,"1")==0  ||  strcmpi(input.text,"true")==0)
 		return true;
 
-	return atoi(txt) ? 1 : 0;
+	return atoi(input.text) ? true : false;
 }
 
 
@@ -1658,84 +1622,94 @@ strnatcasecmp(nat_char const *a, nat_char const *b) {
 
 
 
-
-int VerifyPath(char **ptr_filename, StringDynamic &str, int options) {
-	int i             = 0;
-	int item_start    = 0;
-	int item_index    = 0;
+// Verify and convert user input path from relative to absolute
+int VerifyPath(String &path, StringDynamic &buffer, int options) {
+	size_t item_start = 0;
+	size_t item_index = 0;
 	int level         = 0;
-	bool root_dir     = false;
-	bool fwatch_dir   = false;
-	bool illegal_dir  = false;
-	bool download_dir = false;
-	bool allowed_dir  = false;
-	char *path        = *ptr_filename;
+	bool dir_root     = false;
+	bool dir_fwatch   = false;
+	bool dir_illegal  = false;
+	bool dir_download = false;
+	bool dir_allowed  = false;
+	char *item        = path.text;
 	
-	static char allowed_dirs[][32] = {
+	const char allowed_dirs[][32] = {
 		"in-game-script-editor",
 		"flashpointcutscenemaker",
 		"missioneditor3d",
 		"@addontest",
 		"set-pos-in-game"
 	};
-	int allowed_dirs_num = sizeof(allowed_dirs) / sizeof(allowed_dirs[0]);
 
-	while (true) {
-		if (path[i]=='\\' || path[i]=='/' || path[i]=='\0') {
-			char backup = path[i];
-			path[i]     = '\0';
-			char *item  = path + item_start;
+
+	for (size_t i=0; i<=path.length; i++) {
+		if (path.text[i]=='\\' || path.text[i]=='/' || path.text[i]=='\0') {
+			char backup  = path.text[i];
+			path.text[i] = '\0';
+			item         = path.text + item_start;
 
 			if (strcmp(item,"..") == 0) {
 				if (item_index == 0)
-					root_dir = true;
+					dir_root = true;
 				else {
 					level--;
 
 					if (level < 0) {
-						path[i] = backup;
+						path.text[i] = backup;
 						break;
 					}
 					
-					if (root_dir) {
+					if (dir_root) {
 						if (level == 0) {
-							fwatch_dir  = false;
-							allowed_dir = false;
+							dir_fwatch  = false;
+							dir_allowed = false;
 						}
 							
 						if (level < 2)
-							download_dir = false;
+							dir_download = false;
 					}
 				}
 			} else
 				if (backup != '\0')
 					level++;
 				
-			if (root_dir && level==1) {
+			if (dir_root && level==1) {
 				if (strcmpi(item,"fwatch") == 0)
-					fwatch_dir = true;
+					dir_fwatch = true;
 				else
-					for(int j=0; j<allowed_dirs_num; j++)
+					for (int j=0; j<sizeof(allowed_dirs)/sizeof(allowed_dirs[0]); j++)
 						if (strcmpi(item,allowed_dirs[j]) == 0)
-							allowed_dir = true;
+							dir_allowed = true;
 			}
 
-			if (fwatch_dir && level==2) {
+			if (dir_fwatch && level==2) {
 				if (strcmpi(item,"data")==0 || strcmpi(item,"mdb")==0) {
-					illegal_dir = true;
-					path[i]     = backup;
+					dir_illegal  = true;
+					path.text[i] = backup;
 					break;
 				}
 
 				if (strcmpi(item,"tmp") == 0)
-					download_dir = true;
+					dir_download = true;
 			}
 			
-			path[i] = backup;
+			path.text[i] = backup;
 			
-			if (path[i] == '\0') {
-				if (fwatch_dir && level==1)
-					illegal_dir = true;
+			if (path.text[i] == '\0') {
+				if (dir_fwatch && level==1) {
+					dir_illegal = true;
+
+					if (options & OPTION_ASSUME_TRAILING_SLASH) {
+						if (strcmpi(item,"idb") == 0)
+							dir_illegal = false;
+						else
+							if (strcmpi(item,"tmp") == 0) {
+								dir_illegal  = false;
+								dir_download = true;
+							}
+					}
+				}
 
 				break;
 			}
@@ -1743,29 +1717,30 @@ int VerifyPath(char **ptr_filename, StringDynamic &str, int options) {
 			item_start = i + 1;
 			item_index++;
 		}
-		
-		i++;
 	}
-	
-	if (illegal_dir) {
+
+
+	if (dir_illegal) {
 		if (~options & OPTION_SUPPRESS_ERROR)
 			QWrite_err(FWERROR_PARAM_PATH_RESTRICTED, 1, path);
 	} else
-		if (root_dir && !fwatch_dir && !allowed_dir && options & OPTION_RESTRICT_TO_MISSION_DIR) {
+		if (dir_root  &&  !dir_fwatch  &&  !dir_allowed  &&  options & OPTION_RESTRICT_TO_MISSION_DIR) {
 			if (~options & OPTION_SUPPRESS_ERROR)
 				QWrite_err(FWERROR_PARAM_PATH_LEAVING, 1, path);
 		} else
 			if (level >= 0) {
 				if (~options & OPTION_SUPPRESS_CONVERSION) {
-					if (root_dir)
-						*ptr_filename += 3;
-					else {
-						StringDynamic_append_format(str, "%s%s", global.mission_path, *ptr_filename);
-						*ptr_filename = str.text;
+					if (dir_root) {
+						path.text   += 3;
+						path.length -= 3;
+					} else {
+						StringDynamic_appendf(buffer, "%s%s", global.mission_path, path.text);
+						path.text   = buffer.text;
+						path.length = buffer.length;
 					}
 				}
 
-				return download_dir ? PATH_DOWNLOAD_DIR : PATH_LEGAL;
+				return dir_download ? PATH_DOWNLOAD_DIR : PATH_LEGAL;
 			}
 
 	return PATH_ILLEGAL;
@@ -1854,8 +1829,8 @@ int DeleteWrapper(char *refcstrRootDirectory) {
 
 	StringDynamic_init(strFilePath);
 	StringDynamic_init(strPattern);
-	StringDynamic_append_format(strFilePath, "%s\\", refcstrRootDirectory);
-	StringDynamic_append_format(strPattern, "%s\\*.*", refcstrRootDirectory);
+	StringDynamic_appendf(strFilePath, "%s\\", refcstrRootDirectory);
+	StringDynamic_appendf(strPattern, "%s\\*.*", refcstrRootDirectory);
 	
 	int saved_length = strFilePath.length;
 	hFile            = FindFirstFile(strPattern.text, &FileInformation);
@@ -2086,20 +2061,6 @@ void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle, bool notify) {
 
 
 
-// Shift substring in a string buffer to the left or right
-void shift_buffer_chunk(char *buffer, size_t chunk_start, size_t chunk_end, size_t shift_distance, bool rightwards) {
-	if (rightwards)
-		for (size_t i=chunk_end+shift_distance;  i>=chunk_start+shift_distance;  i--)
-			buffer[i] = buffer[i-shift_distance];
-	else
-		for (size_t i=chunk_start;  i<chunk_end;  i++)
-			buffer[i-shift_distance] = buffer[i];
-}
-
-
-
-
-
 
 // Output formatted text to the game
 void QWritef(const char *format, ...) {
@@ -2121,7 +2082,7 @@ void QWritef(const char *format, ...) {
 
 
 // Output text to the game with specified length
-void QWritel(const char *input, unsigned int input_length) {
+void QWritel(const char *input, size_t input_length) {
 	if (input_length > 0) {
 		DWORD bytes_written;
 		WriteFile(global.out, input, input_length, &bytes_written, NULL);
@@ -2200,13 +2161,12 @@ BinarySearchResult binary_search_str(char *buffer, size_t array_size, unsigned i
 
 
 void QWrite_err(int code_primary, int arg_num, ...) {
-	if (!global.out) {
+	if (!global.out)
 		return;
-	}
 
-	char format[128]     = "";
-	DWORD code_secondary = ERROR_SUCCESS;
-	LPVOID winapi_msg    = NULL;
+	char format[128]      = "";
+	DWORD code_secondary  = ERROR_SUCCESS;
+	LPVOID winapi_msg_ptr = NULL;
 
 	va_list arg_list;
 	va_start(arg_list, arg_num);
@@ -2236,7 +2196,7 @@ void QWrite_err(int code_primary, int arg_num, ...) {
 			NULL,
 			code_secondary, 
 			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-			(LPTSTR) &winapi_msg,
+			(LPTSTR) &winapi_msg_ptr,
 			0,
 			NULL);
 		} break;
@@ -2296,22 +2256,23 @@ void QWrite_err(int code_primary, int arg_num, ...) {
 		default : sprintf(format, "Unknown error %d", code_primary);
 	}
 
-	// Handle error within error
-	// Log errors to file
+	//TODO: Log errors to file
 	if (~global.option_error_output & OPTION_ERROR_ARRAY_SUPPRESS) {
-		// If this function was used before then semi-colon is required
-		if (global.option_error_output & OPTION_ERROR_ARRAY_STARTED)
-			QWrite(";");
-		else
-			global.option_error_output |= OPTION_ERROR_ARRAY_STARTED;
+		// If this function is being called for another time then separate arrays with semi-colon
+		if (~global.option_error_output & OPTION_ERROR_ARRAY_NESTED) {
+			if (global.option_error_output & OPTION_ERROR_ARRAY_STARTED)
+				QWrite(";");
+			else
+				global.option_error_output |= OPTION_ERROR_ARRAY_STARTED;
+		}
 
 		// Start output
 		if (global.option_error_output & OPTION_ERROR_ARRAY_LOCAL)
 			QWrite("_fwatch_error=");
 
-		QWritef("[%s,%d,%d,\"", getBool(code_primary==FWERROR_NONE), code_primary, code_secondary);
+		QWritef("[%s,%d,%d,{", getBool(code_primary==FWERROR_NONE), code_primary, code_secondary);
 
-		if (winapi_msg) {
+		if (winapi_msg_ptr) {
 			switch (code_primary) {
 				case FWERROR_CLIP_OPEN  : QWrite("Couldn't open clipboard -"); break;
 				case FWERROR_CLIP_CLEAR : QWrite("Couldn't clear clipboard"); break;
@@ -2319,36 +2280,31 @@ void QWrite_err(int code_primary, int arg_num, ...) {
 				case FWERROR_CLIP_LOCK  : QWrite("GlobalLock failed"); break;
 			}
 
-			Trim((char*)winapi_msg);
-			QWriteDoubleQ((char*)winapi_msg);
-			LocalFree(winapi_msg);
+			String winapi_msg = {(char*)winapi_msg_ptr, strlen((char*)winapi_msg_ptr)};
+			String_trim_space(winapi_msg);
+			QWrites(winapi_msg);
+			LocalFree(winapi_msg_ptr);
 
-			for (int i=1; i<arg_num; i++) {
-				QWrite(" - ");
-				QWriteDoubleQ(va_arg(arg_list, char*));
-			}
+			for (int i=1; i<arg_num; i++)
+				QWritef(" - %s", va_arg(arg_list, char*));
 		} else
 			if (code_primary == FWERROR_ERRNO) {
-				QWriteDoubleQ(strerror(code_secondary));
+				QWrite(strerror(code_secondary));
 
-				for (int i=1; i<arg_num; i++) {
-					QWrite(" - ");
-					char *arg = va_arg(arg_list, char*);
-					QWriteDoubleQ(arg);
-				}
-			} else {
+				for (int i=1; i<arg_num; i++)
+					QWritef(" - %s", va_arg(arg_list, char*));
+			} else
 				vfprintf(global.outf, format, arg_list);
-			}
 
 		va_end(arg_list);
 
 		if (global.option_error_output & OPTION_ERROR_ARRAY_CLOSE)
-			QWrite("\"]");
+			QWrite("}]");
 		else
 			if (global.option_error_output & OPTION_ERROR_ARRAY_LOCAL)
-				QWrite("\"];");
+				QWrite("}];");
 			else
-				QWrite("\",");
+				QWrite("},");
 	}
 }
 
@@ -2401,40 +2357,40 @@ void SQM_Init(SQM_ParseState &input) {
 	input.is_inherit        = false;
 	input.purge_comment     = false;
 	input.separator         = ' ';
-	strcpy(input.empty_string, "");
+	strcpy(input.empty_char, "");
 
 	// Output
-	input.property            = input.empty_string;
+	input.property.text       = input.empty_char;
+	input.property.length     = 0;
 	input.property_start      = 0;
 	input.property_end        = 0;
-	input.property_length     = 0;
-	input.value               = input.empty_string;
+	input.value.text          = input.empty_char;
+	input.value.length        = 0;
 	input.value_start         = 0;
 	input.value_end           = 0;
-	input.value_length        = 0;
-	input.class_name          = input.empty_string;
-	input.class_name_length   = 0;
+	input.class_name.text     = input.empty_char;
+	input.class_name.length   = 0;
 	input.class_start         = 0;
 	input.class_end           = 0;
 	input.class_length        = 0;
 	input.class_name_full_end = 0;
-	input.inherit             = input.empty_string;
-	input.inherit_length      = 0;
+	input.inherit.text        = input.empty_char;
+	input.inherit.length      = 0;
 	input.scope_end           = 0;
 }
 
 // Read OFP file with classes
-int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_type, char *to_find, size_t to_find_length) {
+int SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_find) {
 	int initial_level = state.class_level;
 	
-	for (; state.i<text_length; state.i++) {
-		char c = text[state.i];
+	for (; state.i<input.length; state.i++) {
+		char c = input.text[state.i];
 
 		// Parse preprocessor comment
 		switch (state.comment) {
 			case SQM_NONE  : {
 				if (c == '/' && !state.in_quote) {
-					char c2 = text[state.i+1];
+					char c2 = input.text[state.i+1];
 					
 					if (c2 == '/')
 						state.comment = SQM_LINE;
@@ -2461,7 +2417,7 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 			}
 			
 			case SQM_BLOCK : {
-				if (state.i>0 && text[state.i-1]=='*' && c=='/')
+				if (state.i>0 && input.text[state.i-1]=='*' && c=='/')
 					state.comment = SQM_NONE;
 
 				continue;
@@ -2472,11 +2428,11 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 		if (!state.first_char && (c=='\r' || c=='\n')) {
 			state.first_char = true;
 			
-			if (state.macro && text[state.i-1] != '\\')
+			if (state.macro && input.text[state.i-1] != '\\')
 				state.macro = false;
 		}
 		
-		if (!isspace(text[state.i])  &&  state.first_char) {
+		if (!isspace(input.text[state.i])  &&  state.first_char) {
 			state.first_char = false;
 			
 			if (c == '#')
@@ -2508,8 +2464,8 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 					if ((action_type == SQM_ACTION_FIND_CLASS_END || action_type==SQM_ACTION_FIND_CLASS_END_CONVERT) && state.class_level+1==initial_level) {
 
 						// Include separator in the class length
-						for (size_t z=state.i; z<=text_length; z++) {
-							if (z == text_length || text[z]==';' || text[z]=='\n') {
+						for (size_t z=state.i; z<=input.length; z++) {
+							if (z == input.length || input.text[z]==';' || input.text[z]=='\n') {
 								state.i = z;
 								break;
 							}
@@ -2538,27 +2494,27 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 					}
 				} else
 					if (state.word_started) {
-						if (strncmp(text+state.word_start,"class",5)==0) {
+						if (strncmp(input.text+state.word_start,"class",5)==0) {
 							state.expect = SQM_CLASS_NAME;
 							
 							if (action_type != SQM_ACTION_FIND_CLASS_END && action_type != SQM_ACTION_FIND_CLASS_END_CONVERT)
 								state.class_start = state.word_start;
 						} else 
-							if (strncmp(text+state.word_start,"enum",4)==0) {
+							if (strncmp(input.text+state.word_start,"enum",4)==0) {
 								state.expect    = SQM_ENUM_BRACKET;
 								state.separator = '{';
 							} else 
-								if (strncmp(text+state.word_start,"__EXEC",6)==0) {
+								if (strncmp(input.text+state.word_start,"__EXEC",6)==0) {
 									state.expect    = SQM_EXEC_BRACKET;
 									state.separator = '(';
 								} else {
 									state.expect          = SQM_EQUALITY;
 									state.separator       = '=';
-									state.property        = text + state.word_start;
+									state.property.text   = input.text + state.word_start;
+									state.property.length = state.property_end - state.property_start;
 									state.property_start  = state.word_start;
 									state.property_end    = state.i;
-									state.property_length = state.property_end - state.property_start;
-									state.is_array        = text[state.i-2]=='[' && text[state.i-1]==']';
+									state.is_array        = input.text[state.i-2]=='[' && input.text[state.i-1]==']';
 								}
 
 						state.word_started = false;
@@ -2598,14 +2554,14 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 					state.array_level++;
 					
 					if (SQM_ACTION_FIND_CLASS_END_CONVERT)
-						text[state.i] = '{';
+						input.text[state.i] = '{';
 				}
 
 				if (!state.in_quote && (c=='}' || c==']')) {
 					state.array_level--;
 					
 					if (SQM_ACTION_FIND_CLASS_END_CONVERT)
-						text[state.i] = '}';
+						input.text[state.i] = '}';
 
 					// Remove trailing commas
 					/*for (int z=state.i-1; z>0 && (isspace(text[z]) || text[z]==',' || text[z]=='}' || text[z]==']'); z--)
@@ -2624,34 +2580,34 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 					}
 				} else {
 					if (!state.in_quote && state.array_level==0 && (c==';' || c=='\r' || c=='\n')) {
-						state.value        = text + state.word_start;
+						state.value.text   = input.text + state.word_start;
 						state.value_start  = state.word_start;
 						state.value_end    = state.i;
 						
 						// Include separator in the length
-						for (size_t z=state.i; z<=text_length; z++) {
-							if (z == text_length) {
+						for (size_t z=state.i; z<=input.length; z++) {
+							if (z == input.length) {
 								state.value_end = z;
 								break;
 							}
 							
-							if (text[z]==';' || text[z]=='\n') {
+							if (input.text[z]==';' || input.text[z]=='\n') {
 								state.value_end = z + 1;
 								break;
 							}
 						}
 						
-						state.value_length = state.value_end - state.word_start;
+						state.value.length = state.value_end - state.word_start;
 						state.word_started = false;
 						state.expect       = SQM_PROPERTY;
 						
 						if (
-							action_type==SQM_ACTION_GET_NEXT_ITEM || 
+							action_type == SQM_ACTION_GET_NEXT_ITEM || 
 							(
-								action_type == SQM_ACTION_FIND_PROPERTY && 
-								state.class_level == initial_level && 
-								state.property_length == to_find_length &&
-								strncmpi(state.property,to_find,to_find_length)==0
+								action_type           == SQM_ACTION_FIND_PROPERTY && 
+								state.class_level     == initial_level && 
+								state.property.length == to_find.length &&
+								strncmpi(state.property.text, to_find.text, to_find.length) == 0
 							)
 						) {
 							state.i++;
@@ -2673,14 +2629,14 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 				} else
 					if (state.word_started) {
 						if (state.expect == SQM_CLASS_NAME) {
-							state.class_name        = text + state.word_start;
-							state.class_name_length = state.i - state.word_start;
+							state.class_name.text   = input.text + state.word_start;
+							state.class_name.length = state.i - state.word_start;
 							state.class_name_start  = state.word_start;
-							state.inherit           = state.empty_string;
-							state.inherit_length    = 0;
+							state.inherit.text      = state.empty_char;
+							state.inherit.length    = 0;
 						} else {
-							state.inherit        = text + state.word_start;
-							state.inherit_length = state.i - state.word_start;
+							state.inherit.text   = input.text + state.word_start;
+							state.inherit.length = state.i - state.word_start;
 						}
 						
 						state.is_inherit          = state.expect == SQM_CLASS_INHERIT;
@@ -2704,12 +2660,12 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 						
 						// Return starting position of this class
 						if (
-							action_type==SQM_ACTION_GET_NEXT_ITEM || 
+							action_type == SQM_ACTION_GET_NEXT_ITEM || 
 							(
-								action_type == SQM_ACTION_FIND_CLASS && 
-								state.class_level-1 == initial_level && 
-								state.class_name_length == to_find_length && 
-								strncmpi(state.class_name,to_find,to_find_length) == 0
+								action_type             == SQM_ACTION_FIND_CLASS && 
+								state.class_level-1     == initial_level && 
+								state.class_name.length == to_find.length && 
+								strncmpi(state.class_name.text, to_find.text, to_find.length) == 0
 							)
 						) {
 							state.i++;
@@ -2752,7 +2708,7 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 		}
 	}
 	
-	state.scope_end = text_length;
+	state.scope_end = input.length;
 	return SQM_OUTPUT_END_OF_SCOPE;
 }
 
@@ -2761,45 +2717,48 @@ int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_
 
 
 // Copy classes and properties from "merge" to "source"
-int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, StringDynamic &source, SQM_ParseState &source_state) {
+int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_dynamic, SQM_ParseState &source_state) {
 	int merge_parse_result             = 0;
 	SQM_ParseState source_state_backup = source_state;
 	bool buffer_modified               = false;
+	char empty_char[]                  = "";
+	String empty_string                = {empty_char, 0};
 	
-	while ((merge_parse_result = SQM_Parse(merge, merge_length, merge_state, SQM_ACTION_GET_NEXT_ITEM, NULL, 0))) {
+	while ((merge_parse_result = SQM_Parse(merge, merge_state, SQM_ACTION_GET_NEXT_ITEM, empty_string))) {
 		switch (merge_parse_result) {
 			case SQM_OUTPUT_PROPERTY : {
 				// Convert array format from SQS to SQM
-				if (merge_state.property[merge_state.property_length-1]==']' && merge_state.property[merge_state.property_length-2]=='[') {
+				if (merge_state.property.text[merge_state.property.length-1]==']' && merge_state.property.text[merge_state.property.length-2]=='[') {
 					bool in_quote = false;
 
-					for (size_t i=0; i<merge_state.value_length; i++) {
-						if (!in_quote  &&  merge_state.value[i]=='[')
-							merge_state.value[i] = '{';
+					for (size_t i=0; i<merge_state.value.length; i++) {
+						if (!in_quote  &&  merge_state.value.text[i]=='[')
+							merge_state.value.text[i] = '{';
 
-						if (!in_quote  &&  merge_state.value[i]==']')
-							merge_state.value[i] = '}';
+						if (!in_quote  &&  merge_state.value.text[i]==']')
+							merge_state.value.text[i] = '}';
 
-						if (merge_state.value[i] == '"')
+						if (merge_state.value.text[i] == '"')
 							in_quote = !in_quote;
 					}
 				}
 
 				source_state      = source_state_backup;
-				int source_result = SQM_Parse(source.text, source.length, source_state, SQM_ACTION_FIND_PROPERTY, merge_state.property, merge_state.property_length);
+				String source     = {source_dynamic.text, source_dynamic.length};
+				int source_result = SQM_Parse(source, source_state, SQM_ACTION_FIND_PROPERTY, merge_state.property);
 
 				// Replace property
 				switch (source_result) {
 					case SQM_OUTPUT_PROPERTY : {																		
-						size_t shift_amount  = merge_state.value_length >= source_state.value_length ? merge_state.value_length-source_state.value_length : source_state.value_length-merge_state.value_length;
-						bool shift_direction = merge_state.value_length >= source_state.value_length;
+						size_t shift_amount  = merge_state.value.length >= source_state.value.length ? merge_state.value.length-source_state.value.length : source_state.value.length-merge_state.value.length;
+						bool shift_direction = merge_state.value.length >= source_state.value.length;
 
-						shift_buffer_chunk(source.text, source_state.value_end, source.length, shift_amount, shift_direction);						
-						memcpy(source_state.value, merge_state.value, merge_state.value_length);
+						shift_buffer_chunk(source_dynamic.text, source_state.value_end, source_dynamic.length, shift_amount, shift_direction);						
+						memcpy(source_state.value.text, merge_state.value.text, merge_state.value.length);
 
-						source.length             += shift_amount * (shift_direction ? 1 : -1);
-						source.text[source.length] = '\0';
-						buffer_modified            = true;
+						source_dynamic.length                     += shift_amount * (shift_direction ? 1 : -1);
+						source_dynamic.text[source_dynamic.length] = '\0';
+						buffer_modified                            = true;
 					} break;
 
 					case SQM_OUTPUT_END_OF_SCOPE : {
@@ -2807,11 +2766,11 @@ int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, Str
 						
 						// Check what's the last character in the source
 						bool add_semicolon = false;
-						for (size_t z=source_state.scope_end-1;  source_state.scope_end>0 && source.length>0;  z--) {
-							if (source.text[z]=='\n' || source.text[z]==';')
+						for (size_t z=source_state.scope_end-1;  source_state.scope_end>0 && source_dynamic.length>0;  z--) {
+							if (source_dynamic.text[z]=='\n' || source_dynamic.text[z]==';')
 								break;
 							else
-								if (!isspace(source.text[z])) {
+								if (!isspace(source_dynamic.text[z])) {
 									add_semicolon = true;
 									break;
 								}
@@ -2822,41 +2781,42 @@ int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, Str
 						
 						const size_t added_length = (merge_state.value_end - merge_state.property_start) + add_semicolon;
 
-						shift_buffer_chunk(source.text, source_state.scope_end, source.length, added_length, OPTION_RIGHT);
+						shift_buffer_chunk(source_dynamic.text, source_state.scope_end, source_dynamic.length, added_length, OPTION_RIGHT);
 						
 						if (add_semicolon)
-							memset(source.text+source_state.scope_end, ';', 1);
+							memset(source_dynamic.text+source_state.scope_end, ';', 1);
 													
-						memcpy(source.text+source_state.scope_end+add_semicolon, merge_state.property, merge_state.value_end-merge_state.property_start);
+						memcpy(source_dynamic.text+source_state.scope_end+add_semicolon, merge_state.property.text, merge_state.value_end-merge_state.property_start);
 
-						source.length             += added_length;
-						source.text[source.length] = '\0';
-						buffer_modified = true;
+						source_dynamic.length                     += added_length;
+						source_dynamic.text[source_dynamic.length] = '\0';
+						buffer_modified                            = true;
 					} break;
 				}
 			} break;
 			
 			case SQM_OUTPUT_CLASS : {
 				source_state      = source_state_backup;
-				int source_result = SQM_Parse(source.text, source.length, source_state, SQM_ACTION_FIND_CLASS, merge_state.class_name, merge_state.class_name_length);
+				String source     = {source_dynamic.text, source_dynamic.length};
+				int source_result = SQM_Parse(source, source_state, SQM_ACTION_FIND_CLASS, merge_state.class_name);
 				
 				switch (source_result) {
 					case SQM_OUTPUT_CLASS : {
 						// If the clas exists in source then scan it recursively
-						if (SQM_Merge(merge, merge_length, merge_state, source, source_state))
+						if (SQM_Merge(merge, merge_state, source_dynamic, source_state))
 							buffer_modified = true;
 					} break;
 
 					case SQM_OUTPUT_END_OF_SCOPE : {
 						// If the class doesn't exist in source then copy the entire thing
-						SQM_Parse(merge, merge_length, merge_state, SQM_ACTION_FIND_CLASS_END_CONVERT, NULL, 0);
+						SQM_Parse(merge, merge_state, SQM_ACTION_FIND_CLASS_END_CONVERT, empty_string);
 						
-						shift_buffer_chunk(source.text, source_state.scope_end, source.length, merge_state.class_length, OPTION_RIGHT);
-						memcpy(source.text+source_state.scope_end, merge+merge_state.class_start, merge_state.class_length);
+						shift_buffer_chunk(source_dynamic.text, source_state.scope_end, source_dynamic.length, merge_state.class_length, OPTION_RIGHT);
+						memcpy(source_dynamic.text+source_state.scope_end, merge.text+merge_state.class_start, merge_state.class_length);
 
-						source.length             += merge_state.class_length;
-						source.text[source.length] = '\0';
-						buffer_modified = true;
+						source_dynamic.length                     += merge_state.class_length;
+						source_dynamic.text[source_dynamic.length] = '\0';
+						buffer_modified                            = true;
 					} break;
 				}
 			} break;
@@ -2866,7 +2826,7 @@ int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, Str
 	return buffer_modified;
 }
 
-char* strstr2_old(const char *arg1, size_t arg1_len, const char *arg2, size_t arg2_len, int options) {	//TODO: remove this on release
+char* strstr2_old(const char *arg1, size_t arg1_len, const char *arg2, size_t arg2_len, int options) {	//TODO: remove this function
 	if (arg1_len==0 || arg2_len==0)
 		return NULL;
 	
@@ -2902,4 +2862,12 @@ char* strstr2_old(const char *arg1, size_t arg1_len, const char *arg2, size_t ar
 	}
 
 	return NULL;
+}
+
+
+
+
+// Output text to the game with specified length
+void QWrites(String &input) {
+	QWritel(input.text, input.length);
 }

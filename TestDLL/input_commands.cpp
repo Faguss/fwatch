@@ -25,7 +25,7 @@ case C_INPUT_GETKEYS:				// v1.1 updateda
 				if (!side && i>=0xA0 && i<=0xA5) continue;	//v1.1 skip side SHIFT,CTRL,ALT
 				if (side  && i>=16   && i<=18)   continue;	//v1.1 skip SHIFT,CTRL,ALT
 				if (f) QWrite(",");
-				QWrite_formatKey(i);
+				QWrite_format_key(i);
 				f = true;
 			}
 		}
@@ -62,7 +62,7 @@ case C_INPUT_AGETKEYS:				// v1.1 updated
 				if (!side && i>=0xA0 && i<=0xA5) continue;	//v1.1 skip side SHIFT,CTRL,ALT
 				if (side  && i>=16   && i<=18)   continue;	//v1.1 skip SHIFT,CTRL,ALT
 				if (f) QWrite(",");
-				QWrite_formatKey(i);
+				QWrite_format_key(i);
 				f = true;
 			}
 		}
@@ -82,7 +82,7 @@ case C_INPUT_GETKEY:
 		QWrite("ERROR: Not enough parameters");
 		break;
 	}
-	char idx = toupper(argument[2][0]);
+	char idx = toupper(argument[2].text[0]);
 				
 	if((GetKeyState(idx) & 0x8000) >> 15 && checkActiveWindow())
 		QWrite("1");
@@ -102,7 +102,7 @@ case C_INPUT_AGETKEY:
 		QWrite("ERROR: Not enough parameters");
 		break;
 	}
-	char idx = toupper(argument[2][0]);
+	char idx = toupper(argument[2].text[0]);
 				
 	if(GetAsyncKeyState(idx) & 0x0001 && checkActiveWindow())
 		QWrite("1");
@@ -142,8 +142,8 @@ case C_INPUT_SETMOUSE:
 		break;
 	}
 
-	unsigned int mx = atoi(argument[2]);
-	unsigned int my = atoi(argument[3]);
+	unsigned int mx = atoi(argument[2].text);
+	unsigned int my = atoi(argument[3].text);
 				
 	// Get mouse position etc.
 	if(checkActiveWindow()) { // Do not set cursor pos is OFP window is not active
@@ -180,7 +180,7 @@ break;
 case C_INPUT_GETJOYSTICK:
 { // Read joystick input using windows api
 
-	QWrite_Joystick(argument_num>2 ? atoi(argument[2]) : - 1);
+	QWrite_joystick(argument_num>2 ? atoi(argument[2].text) : - 1);
 }
 break;
 
@@ -202,7 +202,7 @@ case C_INPUT_MULTI:
 			{
 				if (i>=16 && i<=18) continue;	// skip shift,alt,ctrl
 				QWrite("]+[");
-				QWrite_formatKey(i);
+				QWrite_format_key(i);
 			};
 	QWrite("],[");
 	//-----------------------------------------------------------------------------------------------
@@ -214,7 +214,7 @@ case C_INPUT_MULTI:
 			{
 				if (i>=16 && i<=18)  continue;	// skip shift,alt,ctrl
 				QWrite("]+[");
-				QWrite_formatKey(i);
+				QWrite_format_key(i);
 			};
 	QWrite("],[");
 	//-----------------------------------------------------------------------------------------------
@@ -317,7 +317,7 @@ case C_INPUT_MULTI:
 
 	// INPUT GETJOYSTICK ----------------------------------------------------------------------------
 	if (argument_num >= 3) 
-		QWrite_Joystick(atoi(argument[2]));
+		QWrite_joystick(atoi(argument[2].text));
 	else
 		QWrite("[]");
 	//-----------------------------------------------------------------------------------------------

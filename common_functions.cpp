@@ -67,14 +67,18 @@ int strncmpi(const char *ps1, const char *ps2, int n) {
 
 
 // Remove whitespace from a string
-char* Trim(char *txt) {
-	while (isspace(txt[0])) 
-		txt++;
+char* String_trim_space(String &input) {
+	while (isspace(input.text[0])) {
+		input.text++;
+		input.length--;
+	}
 
-	for (int i=strlen(txt)-1;  i>=0 && isspace(txt[i]);  i--) 
-		txt[i] = '\0';
+	for (size_t i=input.length-1;  i>=0 && isspace(input.text[i]);  i--) {
+		input.text[i] = '\0';
+		input.length--;
+	}
 
-	return txt;
+	return input.text;
 }
 
 
@@ -93,116 +97,87 @@ bool IsNumberInArray(int number, const int* array, int array_size) {
 
 
 // Custom string initilization
-void StringDynamic_init(StringDynamic &str) {
-	memset(str.stack, 0, StringDynamic_init_capacity);
-	str.text     = str.stack;
-	str.length   = 0;
-	str.capacity = StringDynamic_init_capacity;
+void StringDynamic_init(StringDynamic &buffer) {
+	memset(buffer.stack, 0, StringDynamic_init_capacity);
+
+	buffer.text     = buffer.stack;
+	buffer.length   = 0;
+	buffer.capacity = StringDynamic_init_capacity;
 }
 
 
 
 
 // Custom string heap allocation
-int StringDynamic_allocate(StringDynamic &str, size_t new_capacity) {
-	if (str.capacity >= new_capacity)
+int StringDynamic_allocate(StringDynamic &buffer, size_t new_capacity) {
+	if (buffer.capacity >= new_capacity)
 		return 0;
 
 	char *new_pointer;
 
-	if (str.text == str.stack) {
+	if (buffer.text == buffer.stack) {
 		new_pointer = (char *) malloc(new_capacity);
 		if (!new_pointer)
 			return new_capacity;
 
 		memset(new_pointer, 0, new_capacity);
-		memcpy(new_pointer, str.text, str.length);
+		memcpy(new_pointer, buffer.text, buffer.length);
 	} else {
-		new_pointer = (char *) realloc(str.text, new_capacity);
+		new_pointer = (char *) realloc(buffer.text, new_capacity);
 		if (!new_pointer)
 			return new_capacity;
 
-		memset(new_pointer+str.length, 0, new_capacity-str.length);
+		memset(new_pointer+buffer.length, 0, new_capacity-buffer.length);
 	}
 
-	str.text     = new_pointer;
-	str.capacity = new_capacity;
+	buffer.text     = new_pointer;
+	buffer.capacity = new_capacity;
 	return 0;
 }
 
 
 
 
-// Custom string concatenation
-int StringDynamic_append_len(StringDynamic &str, const char *input, size_t input_length) {
+// Dynamic string concatenation with given length
+int StringDynamic_appendl(StringDynamic &buffer, const char *input, size_t input_length) {
 	if (input_length > 0) {
-		size_t new_length = str.length + input_length;
+		size_t new_length = buffer.length + input_length;
 
-		if (new_length+1 > str.capacity) {
-			size_t new_capacity = str.length + (input_length<StringDynamic_init_capacity ? StringDynamic_init_capacity : input_length) + 1;
+		if (new_length+1 > buffer.capacity) {
+			size_t new_capacity = buffer.length + (input_length<StringDynamic_init_capacity ? StringDynamic_init_capacity : input_length) + 1;
 			
-			if (StringDynamic_allocate(str, new_capacity) != 0)
+			if (StringDynamic_allocate(buffer, new_capacity) != 0)
 				return new_capacity;
 		}
 
-		memcpy(str.text+str.length, input, input_length);
-		memset(str.text+new_length, 0, 1);
-		str.length = new_length;
+		memcpy(buffer.text+buffer.length, input, input_length);
+		memset(buffer.text+new_length, 0, 1);
+		buffer.length = new_length;
 	}
 
 	return 0;
 }
 
-int StringDynamic_append(StringDynamic &str, const char *text) {
-	return StringDynamic_append_len(str, text, strlen(text));
+// Dynamic string concatenation without given length
+int StringDynamic_append(StringDynamic &buffer, const char *input) {
+	return StringDynamic_appendl(buffer, input, strlen(input));
 }
 
-
-
-
-// Custom string concatenation with quotes around
-int StringDynamic_append_quotes(StringDynamic &str, const char *left, char *text, const char *right) {
-	StringDynamic_append(str, left);
-
-	char *quote = strchr(text, '\"');
-
-	if (!quote) 
-		StringDynamic_append(str, text); 
-	else {
-		int pos     = 0;
-		int lastPos = 0;
-		int len     = strlen(text);
-		
-		do {
-			pos       = quote - text;
-			text[pos] = '\0';
-
-			StringDynamic_append(str, text+lastPos);
-			StringDynamic_append(str, "\"\"");
-
-			text[pos] = '\"';
-			lastPos = pos + 1;
-		} while ((quote = strchr(text+lastPos, '\"')));
-
-		if (lastPos < len)
-			StringDynamic_append(str, text+lastPos);
-
-	}
-
-	StringDynamic_append(str, right);
-	return 0;
+// Dynamic string concatenation with String struct
+int StringDynamic_appends(StringDynamic &buffer, String &input) {
+	return StringDynamic_appendl(buffer, input.text, input.length);
 }
 
 
 
 
 // Custom string deallocation
-void StringDynamic_end(StringDynamic &str) {
-	if (str.text != str.stack) {
-		free(str.text);
-		str.text     = str.stack;
-		str.length   = 0;
-		str.capacity = StringDynamic_init_capacity;
+void StringDynamic_end(StringDynamic &buffer) {
+	if (buffer.text != buffer.stack) {
+		free(buffer.text);
+		buffer.text     = buffer.stack;
+		buffer.length   = 0;
+		buffer.capacity = StringDynamic_init_capacity;
 	}
 }
 
@@ -210,8 +185,8 @@ void StringDynamic_end(StringDynamic &str) {
 
 
 // Copy file contents to a custom string
-int StringDynamic_readfile(StringDynamic &str, char *path) {
-	StringDynamic_init(str);
+int StringDynamic_readfile(StringDynamic &buffer, const char *path) {
+	StringDynamic_init(buffer);
 
 	FILE *f = fopen(path, "rb");
 	if (!f)
@@ -221,17 +196,17 @@ int StringDynamic_readfile(StringDynamic &str, char *path) {
 	int file_size = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
-	if (StringDynamic_allocate(str, file_size+1) != 0) 
+	if (StringDynamic_allocate(buffer, file_size+1) != 0) 
 		return -1;
 
-	int bytes_read       = fread(str.text, 1, file_size, f);
-	str.length           = bytes_read;
-	str.text[bytes_read] = '\0';
+	int bytes_read          = fread(buffer.text, 1, file_size, f);
+	buffer.length           = bytes_read;
+	buffer.text[bytes_read] = '\0';
 
 	if (bytes_read == file_size)
 		return 0;
 	else {
-		StringDynamic_end(str);
+		StringDynamic_end(buffer);
 		return -2;
 	}
 }
@@ -240,7 +215,7 @@ int StringDynamic_readfile(StringDynamic &str, char *path) {
 
 
 // Custom string concatenation according to a given format
-int StringDynamic_append_format(StringDynamic &str, const char *format, ...) {
+int StringDynamic_appendf(StringDynamic &buffer, const char *format, ...) {
 	int space_free     = 0;
 	int space_required = 0;
 	
@@ -248,21 +223,21 @@ int StringDynamic_append_format(StringDynamic &str, const char *format, ...) {
 	va_start(args, format);
 	
 	do {
-		space_free     = str.capacity - str.length;
-		space_required = _vsnprintf(str.text+str.length, space_free, format, args);
+		space_free     = buffer.capacity - buffer.length;
+		space_required = _vsnprintf(buffer.text+buffer.length, space_free, format, args);
 
 		// https://stackoverflow.com/questions/43178776/vsnprintf-returns-the-size-over-given-buffer-size
 		if (space_required == -1)
-			space_required = str.capacity * 2;
+			space_required = buffer.capacity * 2;
 
 		if (space_required+1 > space_free) {
-			int result = StringDynamic_allocate(str, str.capacity+((space_required+1)-space_free));
+			int result = StringDynamic_allocate(buffer, buffer.capacity+((space_required+1)-space_free));
 			if (result != 0) {
 				va_end(args);
 				return result;
 			}
 		} else
-			str.length += space_required;
+			buffer.length += space_required;
 	} while (space_required+1 > space_free);
 
 	va_end(args);
@@ -349,4 +324,65 @@ void db_pid_save(WatchProgramInfo input) {
 	}
 
 	free(record);
+}
+
+
+
+// Split string by selected characters
+String String_tokenize(String &source, const char *delimiter, size_t &i, int options) 
+{
+	size_t word_start = 0;
+	bool in_brackets  = false;
+	bool word_started = false;
+
+	for (;  i<=source.length;  i++) {
+		// Ignore delimeters inside square brackets		
+		if (options & OPTION_SKIP_SQUARE_BRACKETS) {
+			if (source.text[i] == '[')
+				in_brackets = true;
+				
+			if (source.text[i] == ']')
+				in_brackets = false;
+		}
+
+		bool is_delimeter = false;
+
+		// Check if current character is a delimiter
+		if (!in_brackets)
+			for (int j=0;  delimiter[j]!='\0' && !is_delimeter;  j++)
+				if (source.text[i] == delimiter[j])
+					is_delimeter = true;
+
+		// Mark beginning of the word
+		if (!word_started  &&  (!is_delimeter || i==source.length)) {
+			word_start   = i;
+			word_started = true;
+		}
+
+		// End the word
+		if (word_started  &&  (is_delimeter ||  i==source.length)) {
+			source.text[i] = '\0';
+			String item    = {source.text+word_start, i-word_start};
+			i++;
+			return item;
+		}
+	}
+
+	String item = {source.text+source.length, 0};
+	return item;
+}
+
+
+
+
+
+
+// Shift substring in a string buffer to the left or right
+void shift_buffer_chunk(char *buffer, size_t chunk_start, size_t chunk_end, size_t shift_distance, bool rightwards) {
+	if (rightwards)
+		for (size_t i=chunk_end+shift_distance;  i>=chunk_start+shift_distance;  i--)
+			buffer[i] = buffer[i-shift_distance];
+	else
+		for (size_t i=chunk_start;  i<chunk_end;  i++)
+			buffer[i-shift_distance] = buffer[i];
 }

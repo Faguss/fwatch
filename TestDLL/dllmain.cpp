@@ -21,8 +21,12 @@ GLOBAL_VARIABLES_TESTDLL global = {
 
 	0,   // option_error_output
 
-	NULL,// mission_path
-	NULL,// mission_path_previous
+	"",  // current_dir
+	0,   // current_dir_length;
+	"",  // mission_path
+	0,   // mission_path_length
+	"",  // mission_path_previous
+	0,   // mission_path_previous_length
 	0,   // mission_path_savetime
 	0,   // pid
 	0,	 // external_program_id
@@ -49,7 +53,7 @@ typedef HANDLE (WINAPI *NewCreateFileA_Type)(LPCSTR lpFileName, DWORD  dwDesired
 // Function prototypes.
 HANDLE WINAPI NewCreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD  dwShareMode, LPSECURITY_ATTRIBUTES  lpSecurityAttributes, DWORD  dwCreationDistribution, DWORD  dwFlagsAndAttributes, HANDLE  hTemplateFile);
 
-HANDLE HandleCommand(char *command, bool nomap); // in chandler.cpp
+HANDLE HandleCommand(String &command, bool nomap); // in chandler.cpp
 
 // Hook structure.
 enum
@@ -83,7 +87,7 @@ void DebugMessage(const char *first, ...)
 // Hook function.
 HANDLE WINAPI NewCreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD  dwShareMode, LPSECURITY_ATTRIBUTES  lpSecurityAttributes, DWORD  dwCreationDistribution, DWORD  dwFlagsAndAttributes, HANDLE  hTemplateFile) {
 	//DebugMessage("fwatch: NewCreateFileA %s %d %d %d", lpFileName, dwFlagsAndAttributes, dwShareMode, dwCreationDistribution);
-	int len = strlen(lpFileName);
+	size_t len = strlen(lpFileName);
 
 	// Check if game is starting a new mission; if so then save mission dir path to a file
 	if (!strchr(lpFileName, ':')) {
@@ -112,7 +116,10 @@ HANDLE WINAPI NewCreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD  dw
 		if(dwFlagsAndAttributes == 128) {
 			// Script is being opened for execution
 
-			char *com = (char*)lpFileName + (!strncmp(":", lpFileName, 1) ? 1 : 9);
+			String com = {
+				(char*)lpFileName + (!strncmp(":", lpFileName, 1) ? 1 : 9),
+				len - (!strncmp(":", lpFileName, 1) ? 1 : 9)
+			};
 
 			//DebugMessage("fwatch: command: %s", command);
 
@@ -174,6 +181,9 @@ BOOL APIENTRY DllMain( HINSTANCE hModule, DWORD fdwReason, LPVOID lpReserved )
 				global.is_server = strstr(global_exe_name[i],"_server.exe") != NULL;
 				global.pid       = GetCurrentProcessId();
 				global.outf      = NULL;
+
+				GetCurrentDirectory(MAX_PATH, global.game_dir);
+				global.game_dir_length = strlen(global.game_dir);
 
 				// Find addresses of modules
 				HANDLE phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, global.pid);

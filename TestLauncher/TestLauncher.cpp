@@ -51,7 +51,6 @@ enum COMMAND_ID {
 };
 
 unsigned long GetIP(char *host);
-char* Tokenize(char *string, char *delimiter, size_t &i, size_t string_length, bool square_brackets, bool reverse);
 void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT);
 int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_name);
 void ModfolderMissionsReturn(bool is_dedicated_server);
@@ -173,7 +172,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	// Handle exe arguments
 	// Remove the ones meant for Fwatch and pass the rest to the game
-	int lpCmdLine_size         = strlen(lpCmdLine);
+	String command_line        = {lpCmdLine, strlen(lpCmdLine)};
+	String word                = {NULL, 0};
+	size_t command_line_pos    = 0;
 	bool launch_client         = true;
 	bool listen_server         = false;
 	bool add_nomap             = true;
@@ -183,83 +184,74 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	int custom_exe             = -1;
 	ThreadArguments client_arg = {false, false, false, &mailslot};
 
-	for (int i=0, begin=-1; i<=lpCmdLine_size; i++) {
-		bool complete_word = i == lpCmdLine_size;
+	while ((word = String_tokenize(command_line, " \t\r\n", command_line_pos, OPTION_NONE)).length > 0) {
+		if (strcmp(word.text,"-nomap") == 0)
+			add_nomap = false;
 
-		if (isspace(lpCmdLine[i]))
-			complete_word = true;
+		if (strcmp(word.text,"-nolaunch") == 0) {
+			launch_client = false;
+			buffer_shift  = true;
+		}
 
-		if (!complete_word  &&  begin<0)
-			begin = i;
+		if (strncmp(word.text,"-gamespy=",9) == 0) {
+			strncpy(global.master_server1, word.text+9, 64);
+			client_arg.is_custom_master1 = true;
+			buffer_shift = true;
+		}
 
-		if (complete_word  &&  begin>=0) {
-			char *word   = lpCmdLine + begin;
-			char prev    = lpCmdLine[i];
-			lpCmdLine[i] = '\0';
+		if (strncmp(word.text,"-udpsoft=",9) == 0) {
+			strncpy(global.master_server2, word.text+9, 18);
+			client_arg.is_custom_master2 = true;
+			buffer_shift = true;
+		}
 
-			if (strncmp(word,"-nomap",6) == 0)
-				add_nomap = false;
+		if (strcmp(word.text,"-reporthost") == 0) {
+			listen_server = true;
+			buffer_shift  = true;
+		}
 
-			if (strncmp(word,"-nolaunch",9) == 0) {
-				launch_client = false;
-				buffer_shift  = true;
-			}
+		if (strcmp(word.text,"-removenomap") == 0) {
+			add_nomap    = false;
+			buffer_shift = true;
+		}
 
-			if (strncmp(word,"-gamespy=",9) == 0) {
-				strncpy(global.master_server1, word+9, 64);
-				client_arg.is_custom_master1 = true;
-				buffer_shift = true;
-			}
+		if (strcmp(word.text,"-steam") == 0) {
+			launch_client = false;
+			launch_steam  = true;
+			buffer_shift  = true;
+		}
 
-			if (strncmp(word,"-udpsoft=",9) == 0) {
-				strncpy(global.master_server2, word+9, 18);
-				client_arg.is_custom_master2 = true;
-				buffer_shift = true;
-			}
-
-			if (strncmp(word,"-reporthost",11) == 0) {
-				listen_server = true;
-				buffer_shift  = true;
-			}
-
-			if (strncmp(word,"-removenomap",12) == 0) {
-				add_nomap    = false;
-				buffer_shift = true;
-			}
-
-			if (strncmp(word,"-steam",6) == 0) {
-				launch_client = false;
-				launch_steam  = true;
-				buffer_shift  = true;
-			}
-
-			if (strncmp(word,"-run=",5) == 0) {
-				for (int i=0; i<global_exe_num; i++) {
-					if (strcmpi(global_exe_name[i], word+5) == 0) {
-						custom_exe = i;
-						break;
-					}
+		if (strncmp(word.text,"-run=",5) == 0) {
+			for (int i=0; i<global_exe_num; i++) {
+				if (strcmpi(global_exe_name[i], word.text+5) == 0) {
+					custom_exe = i;
+					break;
 				}
-
-				buffer_shift = true;
 			}
 
-			if (fi)
-				fprintf(fi, "%s\"%s\"", (first_item ? "" : ","), word);
+			buffer_shift = true;
+		}
 
-			first_item   = false;
-			lpCmdLine[i] = prev;
+		if (fi)
+			fprintf(fi, "%s\"%s\"", (first_item ? "" : ","), word.text);
 
-			if (buffer_shift) {
-				memcpy(lpCmdLine+begin, lpCmdLine+i, lpCmdLine_size-i+1);
-				lpCmdLine_size -= (i - begin);
-				i               = begin - 1;
-				buffer_shift    = false;
-			}
+		first_item = false;
 
-			begin = -1;
+		if (buffer_shift) {
+			size_t shift_amount = command_line_pos - (word.text - command_line.text);
+
+			shift_buffer_chunk(command_line.text, command_line_pos, command_line.length, shift_amount, OPTION_LEFT);
+
+			command_line.length -= shift_amount;
+			command_line_pos    -= shift_amount;
+			buffer_shift         = false;
 		}
 	}
+
+	// Untokenize because it's used later to launch the game
+	for (size_t i=0; i<command_line.length; i++)
+		if (command_line.text[i] == '\0')
+			command_line.text[i] = ' ';
 
 	if (fi) {
 		fprintf(fi,"]]");
@@ -353,21 +345,21 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		DWORD dwExitCode = STILL_ACTIVE;
 		bool launched    = false;
 
-		StringDynamic command_line;
-		StringDynamic_init(command_line);
-		StringDynamic_append_format(command_line, " %s%s", (add_nomap ? "-nomap " : ""), lpCmdLine);
+		StringDynamic command_line_new;
+		StringDynamic_init(command_line_new);
+		StringDynamic_appendf(command_line_new, " %s%s", (add_nomap ? "-nomap " : ""), command_line.text);
 
 		for (int i=0; i<global_exe_num; i++) {
 			if (custom_exe!=-1 && custom_exe!=i || strstr(global_exe_name[i],"_server.exe"))
 				continue;
 
-			if (CreateProcess(global_exe_name[i], command_line.text, NULL, NULL, false, 0, NULL,NULL,&si,&pi)) {
+			if (CreateProcess(global_exe_name[i], command_line_new.text, NULL, NULL, false, 0, NULL,NULL,&si,&pi)) {
 				launched = true;
 				break;
 			}
 		}
 		
-		StringDynamic_end(command_line);
+		StringDynamic_end(command_line_new);
 
 		if (launched) {
 			_beginthread((void(*)(void*))FwatchPresence, 0, &client_arg);
@@ -394,11 +386,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 			if (RegOpenKey(HKEY_CURRENT_USER,"Software\\Valve\\Steam",&hKey) == ERROR_SUCCESS) {
 				if (RegQueryValueEx(hKey, "SteamExe" , 0, &dwType, (BYTE*)SteamExe , &SteamExeSize) == ERROR_SUCCESS) {
-					StringDynamic command_line;
-					StringDynamic_init(command_line);
-					StringDynamic_append_format(command_line, "\"start \"\" \"%s\" -applaunch 65790 %s%s\"", SteamExe, (add_nomap ? "-nomap " : ""), lpCmdLine);
-					system(command_line.text);
-					StringDynamic_end(command_line);
+					StringDynamic command_line_new;
+					StringDynamic_init(command_line_new);
+					StringDynamic_appendf(command_line_new, "\"start \"\" \"%s\" -applaunch 65790 %s%s\"", SteamExe, (add_nomap ? "-nomap " : ""), command_line.text);
+					system(command_line_new.text);
+					StringDynamic_end(command_line_new);
 				}
 
 				RegCloseKey(hKey);
@@ -456,54 +448,11 @@ unsigned long GetIP(char *host)
 
 
 
-// Split string by given characters; each call returns the next part; must supply current pos and length
-char* Tokenize(char *string, char *delimiter, size_t &i, size_t string_length, bool square_brackets, bool reverse) 
-{
-	int delimiter_len = strlen(delimiter);
-	bool in_brackets  = false;
-
-	for (int begin=-1;  !reverse && i<=string_length || reverse && i>=-1;  reverse ? i-- : i++) {
-		if (square_brackets && string[i] == '[')
-			in_brackets = true;
-
-		if (square_brackets && string[i] == ']')
-			in_brackets = false;
-
-		bool is_delim = false;
-
-		// Check if current character is a delimiter
-		for (int j=0; j<delimiter_len; j++)
-			if (string[i] == delimiter[j] && !in_brackets  ||  delimiter[j]==' ' && isspace(string[i])) {
-				is_delim = true;
-				break;
-			}
-
-		// Mark beginning of the word
-		if (begin<0  &&  (!is_delim || (!reverse && i==string_length || reverse && i==-1)))
-			begin = i + (!reverse ? 0 : 1);
-
-		// End the word
-		if (begin>=0  &&  (is_delim ||  (!reverse && i==string_length || reverse && i==-1))) {
-			string[(!reverse ? i : begin)] = '\0';
-			
-			if (!reverse && i<string_length)
-				i++;
-				
-			return (!reverse ? string+begin : string+i+1);
-		}
-	}
-
-	return "";
-}
-
-
-
-
 // Parse Fwatch modfolder configuration and fill arrays with new values
 void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT)
 {
-	StringDynamic config;
-	if (StringDynamic_readfile(config, filename) != 0)
+	StringDynamic buf_config;
+	if (StringDynamic_readfile(buf_config, filename) != 0)
 		return;
 
 	memset(no_ar    , 0, sizeof(no_ar));
@@ -511,67 +460,65 @@ void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, i
 	memset(custom   , 0, sizeof(custom));
 	memset(customINT, 0, sizeof(customINT));
 
-	char *token		= "";
-	size_t config_pos  = 0;
-	int value_index = -1;
-	
-	while (config_pos < config.length) {
-		char *setting = Tokenize(config.text, ";", config_pos, config.length, true, false);
+	String config     = {buf_config.text, buf_config.length};
+	String property   = {NULL, 0};
+	size_t config_pos = 0;
 
-		char *equality = strchr(setting, '=');
+	// For each config property
+	while ((property = String_tokenize(config, ";", config_pos, OPTION_SKIP_SQUARE_BRACKETS)).length > 0) {
+		char *equality = strchr(property.text, '=');
 		if (equality == NULL)
 			continue;
 
-		setting      = Trim(setting);
-		int pos      = equality - setting;
-		setting[pos] = '\0';
-		value_index  = -1;
-		int	max_loops = sizeof(hud_names) / sizeof(hud_names[0]);
+		String_trim_space(property);
+		size_t equality_pos         = equality - property.text;
+		property.text[equality_pos] = '\0';
+		int property_index          = -1;
 
-		for (int i=0; i<max_loops; i++) {
-			if (strcmpi(setting,hud_names[i])==0) {
-				value_index = i;
+		for (int i=0;  i<sizeof(hud_names)/sizeof(hud_names[0]);  i++)
+			if (strcmpi(property.text,hud_names[i]) == 0) {
+				property_index = i;
 				break;
 			}
-		}
 		
-		if (value_index < 0)
+		if (property_index < 0)
 			continue;
 
-		setting           = setting + pos + 1;
-		size_t values_len = strlen(setting);
-		size_t values_pos = 0;
+		String value     = {property.text+equality_pos+1, property.length-equality_pos-1};
+		String subvalue  = {NULL, 0};
+		size_t value_pos = 0;
 
-		while (values_pos < values_len) {
-			char *value = Tokenize(setting, ",", values_pos, values_len, true, false);
-			value = Trim(value);
+		// For each property value
+		while ((subvalue = String_tokenize(value, ",", value_pos, OPTION_SKIP_SQUARE_BRACKETS)).length > 0) {
+			String_trim_space(subvalue);
 
-			if (strcmpi(value, "noar")==0)
-				no_ar[value_index] = 1;
+			if (strcmpi(subvalue.text, "noar")==0)
+				no_ar[property_index] = 1;
 			else {
-				is_custom[value_index] = 1;
+				is_custom[property_index] = 1;
 
 				if (IsNumberInArray(i,hud_int_list,sizeof(hud_int_list)/sizeof(hud_int_list[0]))) {
 					if (IsNumberInArray(i,hud_color_list,sizeof(hud_color_list)/sizeof(hud_color_list[0]))) {
 						int index              = 0;
-						char *number           = strtok(value, "[,];");
 						unsigned char color[4] = {0,0,0,0};
+						String number          = {NULL, 0};
+						size_t subvalue_pos    = 0;
 
-						while (number != NULL  &&  index<4) {
-							color[index++] = (unsigned char)(atof(number) * 255);
-							number         = strtok(NULL, "[,];");
+						while ((number = String_tokenize(subvalue, "[,];", subvalue_pos, OPTION_NONE)).length>0  &&  index<4) {
+							String_trim_space(number);
+							color[index++] = (unsigned char)(atof(number.text) * 255);
 						}
 
-						customINT[value_index] = ((color[3] << 24) | (color[0] << 16) | (color[1] << 8) | color[2]);
+						customINT[property_index] = ((color[3] << 24) | (color[0] << 16) | (color[1] << 8) | color[2]);
 					} else
-						customINT[value_index] = atoi(value);
+						customINT[property_index] = atoi(subvalue.text);
 				} else
-					custom[value_index] = (float)atof(value);
+					custom[property_index] = (float)atof(subvalue.text);
 			}
 		}
 	}
 
-	StringDynamic_end(config);
+	StringDynamic_end(buf_config);
 }
 
 
@@ -590,6 +537,7 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_
 		char destination[1024]      = "";
 		wchar_t source_w[1024]      = L"";
 		wchar_t destination_w[1024] = L"";
+		wchar_t extension[5]        = L"";
 
 		sprintf(source     , "%s\\Missions", mod);
 		sprintf(destination, "Missions\\%s", mod);
@@ -648,11 +596,11 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_
 			size_t folder_src_len = strlen(folder_src[i]);
 			size_t folder_dst_len = strlen(folder_dst[i]);
 
-			mbstowcs(folder_src_w, folder_src[i], folder_src_len+1);
-			mbstowcs(folder_dst_w, folder_dst[i], folder_dst_len+1);
+			MultiByteToWideChar(CP_UTF8, 0, folder_src[i], folder_src_len+1, folder_src_w, 1023);
+			MultiByteToWideChar(CP_UTF8, 0, folder_dst[i], folder_dst_len+1, folder_dst_w, 1023);
 			
 			// Source path is: mod\MPMissions\*
-			mbstowcs(source_w, mod, mod_len+1);
+			MultiByteToWideChar(CP_UTF8, 0, mod, mod_len+1, source_w, 1023);
 			wcscat(source_w  , L"\\");
 			wcscat(source_w  , folder_src_w);
 			wcscat(source_w  , L"\\*");
@@ -662,7 +610,7 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_
 			wcscat(destination_w, L"\\");
 
 			hFind = FindFirstFileW(source_w, &fd);
-			wcstombs(source, source_w, wcslen(source_w)+1);
+			WideCharToMultiByte(CP_UTF8,0,source_w,-1,source,1023,NULL,NULL);
 
 			bool only_folders = i >= 3;
 
@@ -685,7 +633,14 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_
 						dot++;
 					}
 
-					if (dots>=1 && dir || (!dir && dots>=2 && wcscmp(fd.cFileName+filename_length-4,L".pbo")==0) || (only_folders && dir)) {
+					// Lowercase extension
+					if (filename_length > 3) {
+						wcsncpy(extension, fd.cFileName+filename_length-4, 4);
+						_wcslwr(extension);
+					} else
+						wcscpy(extension, L"");
+
+					if (dots>=1 && dir || (!dir && dots>=2 && wcscmp(extension,L".pbo")==0) || (only_folders && dir)) {
 						wcscpy(source_w + mod_len + folder_src_len + 2, fd.cFileName);
 						wcscpy(destination_w + folder_dst_len + 1, fd.cFileName);
 
@@ -695,19 +650,20 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_
 							create_res_addons = false;
 						}
 
+						WideCharToMultiByte(CP_UTF8,0,source_w,-1,source,1023,NULL,NULL);
+						WideCharToMultiByte(CP_UTF8,0,destination_w,-1,destination,1023,NULL,NULL);
+
 						if (MoveFileExW(source_w, destination_w, 0)) {
 							file_count++;
-							wcstombs(source, source_w, wcslen(source_w)+1);
 
-							if (i >= 5) {
-								wcstombs(destination, destination_w, wcslen(destination_w)+1);
+							if (i >= 5)
 								fprintf(f, "%s?%s\n", source, destination);
-							} else 
+							else
 								fprintf(f, "%s\n", source);
 						}
 					}
 				} 
-				while (FindNextFileW(hFind, &fd) != 0);
+				while (FindNextFileW(hFind, &fd));
 				FindClose(hFind);
 			}
 		}
@@ -727,77 +683,99 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 	char filename[64] = "fwatch\\data\\sortMissions";
 	strcat(filename, is_dedicated_server ? "_server.txt" : ".txt");
 
-	StringDynamic mission_list;
-	if (StringDynamic_readfile(mission_list, filename) != 0)
+	StringDynamic buf_mission_list;
+	if (StringDynamic_readfile(buf_mission_list, filename) != 0)
 		return;
 
-	size_t i                    = 0;
 	int word_start              = 0;
 	char backup_buffer[1024]    = "";
 	wchar_t source_w[1024]      = L"";
 	wchar_t destination_w[1024] = L"";
-				
-	while (i < mission_list.length) {
-		char *destination = Tokenize(mission_list.text, "\r\n", i, mission_list.length, false, false);
-		char *source      = strchr(destination,'\\');
-		bool remove_line  = false;
-		
-		if (source != NULL) {
-			source++;
+	String mission_list         = {buf_mission_list.text, buf_mission_list.length};
+	String destination          = {NULL, 0};
+	size_t mission_list_pos     = 0;
 
-			char *separator = strchr(destination,'?');
+	while ((destination = String_tokenize(mission_list, "\r\n", mission_list_pos, OPTION_NONE)).length > 0) {
+		char *source     = strchr(destination.text, '\\');
+		bool remove_line = false;
+		
+		// Legitimate line contains a backslash
+		if (source) {
+			source++;
+			char *separator = strchr(destination.text, '?');
 			
 			// Check if line is: source?destination
+			// For example: @mod\Missions?Missions\@mod
 			if (separator != NULL) {
-				int separator_pos          = separator - destination;
-				source                     = destination + separator_pos + 1;
-				destination[separator_pos] = '\0';
+				int separator_pos               = separator - destination.text;
+				source                          = destination.text + separator_pos + 1;
+				destination.text[separator_pos] = '\0';
 				
-				if (MoveFileEx(source, destination, 0))
+				if (MoveFileEx(source, destination.text, 0))
 					remove_line = true;
-
-				destination[separator_pos] = '?';
-
-			// Otherwise it's just source where destination can be derived from it
+				else
+					destination.text[separator_pos] = '?';
 			} else {
-				if (strncmpi(source,"IslandCutscenes\\_RES\\",21)==0) {
+				// Otherwise it's only a source location but destination can be derived from it
+				// For example: @mod\MPMissions\name.island.pbo
+				size_t source_length = (destination.text + destination.length) - source;
+				
+				// Check if it's island cutscene
+				if (strncmpi(source,"IslandCutscenes\\_RES\\",21) == 0) {
 					strcpy(backup_buffer, "Res\\Addons\\");
 					strcat(backup_buffer, source+21);
-					source = backup_buffer;
+					
+					source_length += 11 - 21;
+					source         = backup_buffer;
 				} else
-					if (strncmpi(source,"IslandCutscenes\\",16)==0) {
+					if (strncmpi(source,"IslandCutscenes\\",16) == 0) {
 						strcpy(backup_buffer, "Addons\\");
 						strcat(backup_buffer, source+16);
-						source = backup_buffer;
+						
+						source_length += 7 - 16;
+						source         = backup_buffer;
 					}
 
-				size_t source_len      = strlen(source);
-				size_t destination_len = strlen(destination);
-				mbstowcs(source_w, source, source_len+1);
-				mbstowcs(destination_w, destination, destination_len+1);
+				MultiByteToWideChar(CP_UTF8, 0, source          , source_length+1     , source_w     , 1023);
+				MultiByteToWideChar(CP_UTF8, 0, destination.text, destination.length+1, destination_w, 1023);
 
-				if (MoveFileExW(source_w, destination_w, 0))
+				if (MoveFileExW(source_w, destination_w, 0)) {
 					remove_line = true;
+				} else {
+					// Check if the file still  exists
+					WIN32_FILE_ATTRIBUTE_DATA fad;
+
+					if (GetFileAttributesExW(source_w, GetFileExInfoStandard, &fad) == -1)
+						remove_line = true;
+				}
 			}
 		} else
 			remove_line = true;
 		
-		if (i > 0)
-			mission_list.text[i-1] = '\r';
 		
-		// Cut text in the middle of the buffer and close the gap
-		if (remove_line) {
-			if (mission_list.text[i] == '\n') 
-				i++;
-				
-			memcpy(mission_list.text+word_start, mission_list.text+i, mission_list.length-i);
+		// Restore new line character
+		if (mission_list_pos < mission_list.length) {
+			if (mission_list.text[mission_list_pos] == '\n') {
+				if (mission_list_pos > 0)
+					mission_list.text[mission_list_pos-1] = '\r';
+					
+				mission_list_pos++;
+			} else
+				mission_list.text[mission_list_pos-1] = '\n';
+		}
+		
+		
+		// Remove current line from the buffer
+		if (remove_line) {					
+			size_t shift_amount = mission_list_pos - word_start;
+
+			shift_buffer_chunk(mission_list.text, mission_list_pos, mission_list.length, shift_amount, OPTION_LEFT);
 			
-			int len              = i - word_start;
-			i                   -= len;
-			mission_list.length -= len;
+			mission_list_pos    -= shift_amount;
+			mission_list.length -= shift_amount;
 		}
 
-		word_start = i;
+		word_start = mission_list_pos;
 	}
 
 	mission_list.text[mission_list.length] = '\0';
@@ -808,7 +786,7 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 		fclose(f);
 	}
 
-	StringDynamic_end(mission_list);
+	StringDynamic_end(buf_mission_list);
 }
 // ******************************************************************************************************
 
@@ -852,6 +830,7 @@ void FwatchPresence(ThreadArguments *arg)
 	int master_server1_address = 0;
 	int master_server2_address = 0;
 	int transfered_missions    = 0;
+	bool transfer_missions     = true;
 	int signal_action          = -1;
 	char *signal_buffer        = "";
 
@@ -966,7 +945,7 @@ void FwatchPresence(ThreadArguments *arg)
 			GetWindowText(hwnd, current_window_name, 32);
 
 			for (int i=0; i<global_window_num && game_pid==0; i++) {
-				if (strncmp(current_window_name, global_window_name[i], strlen(global_window_name[i])) == 0) {
+				if (strcmp(current_window_name, global_window_name[i]) == 0) {
 					DWORD pid = 0;
 					GetWindowThreadProcessId(hwnd, &pid);
 					HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
@@ -1013,8 +992,9 @@ void FwatchPresence(ThreadArguments *arg)
 
 		// If there's no game
 		if (game_pid==0 || game_param_address==0) {
-			if (transfered_missions > 0) {
+			if (!transfer_missions) {
 				transfered_missions = 0;
+				transfer_missions   = true;
 				ModfolderMissionsReturn(arg->is_dedicated_server);
 			}
 
@@ -1077,33 +1057,36 @@ void FwatchPresence(ThreadArguments *arg)
 			ReadProcessMemory(phandle, (LPVOID)game_param_address, &game_param_address, 4, &stBytes);
 			ReadProcessMemory(phandle, (LPVOID)game_param_address, &game_param        , game_param_max, &stBytes);
 
-			int word_start = -1;
-			game_mods_num  = 0;
+			size_t word_start = 0;
+			bool word_started = false;
+			game_mods_num     = 0;
 
 			// Copy mod names into array
-			for (int i=0; i<game_param_max; i++) {
+			for (size_t i=0; i<game_param_max; i++) {
 				if (game_param[i] == '\0') {
 					if (strncmp(game_param+word_start,"-mod=",5) == 0) {
-						char *value      = game_param + word_start + 5;
-						size_t value_len = strlen(value);
+						String value     = {game_param+word_start+5, strlen(game_param+word_start+5)};
+						String item;
 						size_t value_pos = 0;
 
-						while (value_pos < value_len  &&  game_mods_num < game_mods_max)
-							game_mods[game_mods_num++] = Tokenize(value, ";", value_pos, value_len, false, false);
+						while ((item = String_tokenize(value, ";", value_pos, OPTION_NONE)).length>0  && game_mods_num<game_mods_max)
+							game_mods[game_mods_num++] = item.text;
 					}
 
 					if (game_param[i+1] == '\0')
 						break;
 
-					word_start = -1;
+					word_started = false;
 				} else
-					if (word_start == -1)
-						word_start = i;
+					if (!word_started) {
+						word_start   = i;
+						word_started = true;
+					}
 			}
 
 			// Read fwatch configuration from each mod
 			if (!arg->is_dedicated_server)
-				for (i=0; i<game_mods_num; i++)
+				for (int i=0; i<game_mods_num; i++)
 					if (strlen(game_mods[i]) < 485) {
 						char filename[512] = "";
 						sprintf(filename, "%s\\bin\\config_fwatch_hud.cfg", game_mods[i]);
@@ -1227,9 +1210,12 @@ void FwatchPresence(ThreadArguments *arg)
 			
 			// If it's a game instance that we have accessed before
 			// Transfer mission files from each mod
-			if (transfered_missions==0 && game_mods_num>0)			
+			if (transfer_missions && game_mods_num>0) {
+				transfer_missions = false;
+
 				for (int i=game_mods_num-1; i>=0; i--)
 					transfered_missions += ModfolderMissionsTransfer(game_mods[i], arg->is_dedicated_server, player_name);
+			}
 
 			// Refresh master servers (user can change them in the main menu)
 			ReadProcessMemory(phandle, (LPVOID)master_server1_address, &global.master_server1, 64, &stBytes);
@@ -1867,19 +1853,21 @@ void WatchProgram(ThreadArguments *arg)
 					DWORD bytes_read     = 0;
 
 					if (ReadFile(*arg->mailslot, message_buffer, message_size, &bytes_read, 0)) {
-						unsigned int hash = 0;
-						int db_id         = 0;
-						char *params      = "";
-						size_t value_pos  = 0;
-						int value_index   = 0;
+						String message      = {message_buffer, message_size};
+						String token;
+						unsigned int hash   = 0;
+						int db_id           = 0;
+						char empty_string[] = "";
+						char *params        = empty_string;
+						size_t message_pos  = 0;
+						int value_index     = 0;
 
-						while (value_pos < (int)message_size) {
-							char *token = Tokenize(message_buffer, "|", value_pos, message_size, false, false);
+						while ((token = String_tokenize(message, "|", message_pos, OPTION_NONE)).length > 0) {
 
 							switch(value_index++) {
-								case 0 : hash   = strtoul(token, NULL, 0); break;
-								case 1 : db_id  = atoi(token); break;
-								case 2 : params = token; break;
+								case 0 : hash   = strtoul(token.text, NULL, 0); break;
+								case 1 : db_id  = atoi(token.text); break;
+								case 2 : params = token.text; break;
 							}
 						}
 
@@ -1969,8 +1957,8 @@ void WatchProgram(ThreadArguments *arg)
 											}
 										}
 										
-										StringDynamic_append_format(path_pbo, "%s.pbo", path_dir.text);
-										StringDynamic_append_format(path_dir_file, "%s\\", path_dir.text);
+										StringDynamic_appendf(path_pbo, "%s.pbo", path_dir.text);
+										StringDynamic_appendf(path_dir_file, "%s\\", path_dir.text);
 										
 										StringDynamic buffer_pbo;
 										int result = StringDynamic_readfile(buffer_pbo, path_pbo.text);

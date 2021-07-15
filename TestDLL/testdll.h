@@ -300,8 +300,12 @@ struct GLOBAL_VARIABLES_TESTDLL {
 
 	int option_error_output;
 
+	TCHAR game_dir[MAX_PATH];
+	size_t game_dir_length;
 	char mission_path[256];
+	size_t mission_path_length;
 	char mission_path_previous[256];
+	size_t mission_path_previous_length;
 	DWORD mission_path_savetime;
 	DWORD pid;
 	int external_program_id;
@@ -315,7 +319,6 @@ struct GLOBAL_VARIABLES_TESTDLL {
 
 	HANDLE out;
 	FILE *outf;
-	unsigned int command_hash;
 };
 
 static const char global_exe_name[][32] = {
@@ -425,27 +428,23 @@ struct SQM_ParseState {
 	bool is_inherit;        // is word an inhheritance class name
 	bool purge_comment;     // should the current comment be removed from the text
 	char separator;         // character to expect that will end the current word
-	char empty_string[1];   // default value for string pointers
+	char empty_char[1];     // default value for string pointers
 
 	// Output
-	char *property;     // Last property
+	String property;            // Last encountered property
 	size_t property_start;
 	size_t property_end;
-	size_t property_length;
-	char *value;       // Last value
+	String value;               // Last encountered value
 	size_t value_start;
 	size_t value_end;
-	size_t value_length;
-	char *class_name;  // Last class
-	size_t class_name_length;
+	String class_name;          // Last encountered class
 	size_t class_start;
 	size_t class_end;
 	size_t class_length;
-	size_t class_name_start; //including the word class itself
+	size_t class_name_start;    // including the word class itself
 	size_t class_name_full_end; // including the inherit
-	char *inherit;  // Last class inherit name
-	size_t inherit_length;
-	size_t scope_end;  // End of current class
+	String inherit;             // Last encountered class inherit name
+	size_t scope_end;           // End of current class
 };
 
 enum SQM_EXPECT {
@@ -484,14 +483,15 @@ enum SQM_ACTION {
 	SQM_ACTION_FIND_CLASS_END_CONVERT
 };
 
-#define FNV_PRIME 16777619
-#define FNV_BASIS 2166136261
+#define FNV_PRIME 16777619u
+#define FNV_BASIS 2166136261u
 
 enum OPTIONS_VERIFYPATH {
 	OPTION_RESTRICT_TO_MISSION_DIR = 0x1,
 	OPTION_ALLOW_GAME_ROOT_DIR     = 0x2,
 	OPTION_SUPPRESS_ERROR          = 0x4,
 	OPTION_SUPPRESS_CONVERSION     = 0x8,
+	OPTION_ASSUME_TRAILING_SLASH   = 0x10,
 
 	PATH_ILLEGAL      = 0,
 	PATH_LEGAL        = 0x1,
@@ -530,7 +530,12 @@ enum OPTIONS_QWRITE_ERR {
 	OPTION_ERROR_ARRAY_STARTED  = 0x1,
 	OPTION_ERROR_ARRAY_LOCAL    = 0x2,
 	OPTION_ERROR_ARRAY_CLOSE    = 0x4,
-	OPTION_ERROR_ARRAY_SUPPRESS = 0x8
+	OPTION_ERROR_ARRAY_SUPPRESS = 0x8,
+	OPTION_ERROR_ARRAY_NESTED   = 0x10
+};
+
+enum OPTIONS_TOKENIZE {
+	OPTION_SKIP_SQUARE_BRACKETS = 0x1
 };
 
 enum FWATCH_ERRORS {
@@ -612,85 +617,94 @@ TESTDLL_API LRESULT CALLBACK HookProc(int nCode, WPARAM wParam, LPARAM lParam);
 TESTDLL_API void InstallHook();
 TESTDLL_API void RemoveHook();
 
-// for dllmain.cpp
-void DebugMessage(const char *first, ...); 
-//extern bool nomap;
-
-#define WH_KEYBOARD_LL 13
-typedef struct {
-    DWORD vkCode;
-    DWORD scanCode;
-    DWORD flags;
-    DWORD time;
-    DWORD dwExtraInfo;
-} KBDLLHOOKSTRUCT, *PKBDLLHOOKSTRUCT;
-
 // for scripth.cpp
 typedef struct {
 	HANDLE handle;
-	char	filename[512];
+	char   filename[512];
 } FULLHANDLE;
 
-void ParseScript(char *com, FULLHANDLE file);
-void QWrite_formatKey(int c);
-const char* getBool(short b);
+// string
+void      ParseScript(String &command, FULLHANDLE file);
+const     char* getBool(short b);
+int       strncmpi(const char *ps1, const char *ps2, int n);
+int       GetCharType(char c);
+StringPos ConvertStringPos(char *range_start, char *range_end, char *range_length, size_t text_length);
+int       VerifyPath(String &pointer, StringDynamic &buffer, int options);
+void      PurgeComments(char *text, int string_start, int string_end);
+void      shift_buffer_chunk(char *buffer, size_t chunk_start, size_t chunk_end, size_t shift_distance, bool rightwards);
+char*     str_replace(const char *strbuf, const char *strold, const char *strnew, int options);	//TODO: remove
+char*     strstr2_old(const char *arg1, size_t arg1_len, const char *arg2, size_t arg2_len, int options); //TODO: remove
+void      SQM_Init(SQM_ParseState &input);
+int       SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_find);
+int       SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source, SQM_ParseState &source_state);
+
+// winapi
+void DebugMessage(const char *first, ...); 
 bool checkActiveWindow(void);
+void SystemTimeToString(SYSTEMTIME &st, bool systime, char *str);
+void FileTimeToString(FILETIME &ft, bool systime, char *str);
+bool CopyToClip(String &input, bool append);
+bool trashFile(String file, int error_behaviour);
+int  DeleteWrapper(char *refcstrRootDirectory);
 
+// files
+void             createPathSqf(LPCSTR lpFileName, size_t len, int offset);
+void             db_pid_save(WatchProgramInfo input);
+WatchProgramInfo db_pid_load(int db_id_wanted);
 
+// math
+double             rad2deg(double num);
+double             deg2rad(double num);
+bool               IsNumberInArray(int number, const int *array, int array_size);
+unsigned int       fnv1a_hash (unsigned int hash, char *text, int text_length, bool lowercase);
+int                binary_search(unsigned item_to_find, unsigned int *array, int low, int high);
+BinarySearchResult binary_search_str(char *buffer, size_t array_size, unsigned int value_to_find, size_t low, size_t high);
+FileSize           DivideBytes(double bytes);
 
+// misc
+void RestoreMemValues(bool isMissionEditor);
+void NotifyFwatchAboutErrorLog();
+void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle, bool notify);
 
+// Output for the game
+void QWrite(const char *str);
+void QWritef(const char *format, ...);
+void QWritel(const char *input, size_t input_length);
+void QWrites(String &str);
+void QWrite_err(int code_primary, int arg_num, ...);
+void QWrite_format_key(int c);
+void QWrite_joystick(int customJoyID);
+
+// String
+bool   String_bool(String &input);
+char*  String_find(String &source, String &to_find, int options);
+char*  String_trim_quotes(String input);
+char*  String_trim_space(String &input);
+String String_tokenize(String &source, const char *delimiter, size_t &i, int options);
+void   String_escape_sequences(String input, int mode, int quantity);
+
+// StringDynamic
+void StringDynamic_init(StringDynamic &buffer);
+void StringDynamic_end(StringDynamic &buffer);
+int  StringDynamic_allocate(StringDynamic &buffer, size_t new_maximal_length);
+int  StringDynamic_readfile(StringDynamic &buffer, const char *path);
+int  StringDynamic_append(StringDynamic &buffer, const char *text);
+int  StringDynamic_appendl(StringDynamic &buffer, const char *text, size_t text_length);
+int  StringDynamic_appendf(StringDynamic &buffer, const char *format, ...);
+int  StringDynamic_appends(StringDynamic &buffer, String &input);
 
 // for fdb.cpp
-char* fdbGet(char* file, char* var);							//v1.13 additional arguments
-bool  fdbPut(char* file, char* svar, char* val, bool append);//v1.13 additional arguments
+char* fdbGet(char* file, char* var);
+bool  fdbPut(char* file, char* svar, char* val, bool append);
 bool  fdbPutQ(char* file, char* svar, char* val);
 bool  fdbExists(char* file);
 char* fdbVars(char* file);
 char* fdbReadvars(char* file);
 bool  fdbRemove(char* file, char* var);
 bool  fdbDelete(char* file);
-void  fdbGet2(char* file, char* var);							//v1.1
+void  fdbGet2(char* file, char* var);
 
-
-
-void QWrite(const char *str);
-char* stripq(char *str);
-
-// New functions
-//1.11
-DWORD findProcess(const char *exe_name);
-
-//1.12
-char* str_replace(const char *strbuf, const char *strold, const char *strnew, int options);
-
-//1.13
-char* strstr2(String &source, String &to_find, int options);
-char* strstr2_old(const char *arg1, size_t arg1_len, const char *arg2, size_t arg2_len, int options);
-int strncmpi(const char *ps1, const char *ps2, int n);
-bool trashFile(char *path, int len, int error_behaviour);
-double rad2deg(double num);
-double deg2rad(double num);
-void SystemTimeToString(SYSTEMTIME &st, bool systime, char *str);
-void FileTimeToString(FILETIME &ft, bool systime, char *str);
-bool CopyToClip(char *input, int input_length, bool append);
-char* Trim(char *txt);
-void FWerror(int code, int secondaryCode, char *text1, char *text2, int num1, int num2);
-char* EscSequences(char *txt, int mode, int quantity);
-
-//1.14
-void QWriteDoubleQ(char *txt);
-void QWrite_Joystick(int customJoyID);
-void createPathSqf(LPCSTR lpFileName, int len, int offset);
-
-//1.15
-bool String2Bool(char *txt);
-
-// Find integer in an integer array
-bool IsNumberInArray(int number, const int *array, int array_size);
-StringPos ConvertStringPos(char *range_start, char *range_end, char *range_length, size_t text_length);
-int GetCharType(char c);
-void RestoreMemValues(bool isMissionEditor);
-
+// strnatcmp.c
 typedef char nat_char;
 static inline int nat_isdigit(nat_char a);
 static inline int nat_isspace(nat_char a);
@@ -700,30 +714,3 @@ static int compare_left(nat_char const *a, nat_char const *b);
 static int strnatcmp0(nat_char const *a, nat_char const *b, int fold_case);
 int strnatcmp(nat_char const *a, nat_char const *b);
 int strnatcasecmp(nat_char const *a, nat_char const *b);
-
-void StringDynamic_init(StringDynamic &str);
-int StringDynamic_allocate(StringDynamic &str, size_t new_maximal_length);
-int StringDynamic_append_len(StringDynamic &str, const char *text, size_t text_length);
-int StringDynamic_append(StringDynamic &str, const char *text);
-int StringDynamic_append_quotes(StringDynamic &str, const char *left, char *text, const char *right);
-void StringDynamic_end(StringDynamic &str);
-int StringDynamic_readfile(StringDynamic &str, char *path);
-int VerifyPath(char **ptr_filename, StringDynamic &str, int mode);
-unsigned int fnv1a_hash (unsigned int hash, char *text, int text_length, bool lowercase);
-void PurgeComments(char *text, int string_start, int string_end);
-int DeleteWrapper(char *refcstrRootDirectory);
-WatchProgramInfo db_pid_load(int db_id_wanted);
-void db_pid_save(WatchProgramInfo input);
-void NotifyFwatchAboutErrorLog();
-void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle, bool notify);
-void shift_buffer_chunk(char *buffer, size_t chunk_start, size_t chunk_end, size_t shift_distance, bool rightwards);
-void QWritef(const char *format, ...);
-void QWritel(const char *str, unsigned int length);
-int binary_search(unsigned item_to_find, unsigned int *array, int low, int high);
-BinarySearchResult binary_search_str(char *buffer, size_t array_size, unsigned int value_to_find, size_t low, size_t high);
-void QWrite_err(int code_primary, int arg_num, ...);
-FileSize DivideBytes(double bytes);
-int StringDynamic_append_format_debug(StringDynamic &str, const char *format, ...);
-void SQM_Init(SQM_ParseState &input);
-int SQM_Parse(char *text, size_t text_length, SQM_ParseState &state, int action_type, char *to_find, size_t to_find_length);
-int SQM_Merge(char *merge, size_t merge_length, SQM_ParseState &merge_state, StringDynamic &source, SQM_ParseState &source_state);

@@ -341,7 +341,7 @@ FUNCTION_FIND_URL = {
 			_break = true
 		} else {
 			// remove http://www.
-			_array = call loadFile Format ["\:STRING DOMAIN %1", _this select 0];
+			_array = call loadFile Format ["\:STRING DOMAIN url:%1", _this select 0];
 			_find  = call loadFile Format ["\:STRING FIND text:%1find:%2", _this select 0, _array select 3];
 			_cut   = loadFile Format ["\:STRING CUT start:%1  text:%2", _find select 0, _this select 0];
 			
