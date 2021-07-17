@@ -1400,9 +1400,9 @@ case C_STRING_DOMAIN:
 
 	
 	String url[MAX_COMPONENTS];
-	size_t word_start = 0;
-	int expect        = SCHEME;
-	char separator[]  = ":@?#/";
+	size_t word_start      = 0;
+	int expect             = SCHEME;
+	const char separator[] = ":@?#/";
 
 	for (i=0; i<MAX_COMPONENTS; i++)
 		url[i] = empty_string;
@@ -1419,7 +1419,7 @@ case C_STRING_DOMAIN:
 		
 		// Check if it's word end
 		bool is_separator = false;
-		for (size_t j=0; j<=sizeof(separator)/sizeof(separator[0]) && !is_separator; j++)
+		for (size_t j=0; j<=sizeof(separator)/sizeof(separator[0])-1 && !is_separator; j++)
 			if (c == separator[j])
 				is_separator = true;
 				
@@ -1573,13 +1573,13 @@ case C_STRING_DOMAIN:
 	
 
 	// If IPv6
-	if (url[HOST].text[0]=='['  &&  url[HOST].text[url[HOST].length-1]==']') {
+	if (url[HOST].length>=1  &&  url[HOST].text[0]=='['  &&  url[HOST].text[url[HOST].length-1]==']') {
 		url[HOST].text   += 1;
 		url[HOST].length -= 2;
 	}
 	
 	// Strip www
-	if (~status & KEEP_WWW  &&  strncmpi("www.",url[HOST].text,4)==0) {
+	if (url[HOST].length>=4  &&  ~status & KEEP_WWW  &&  strncmpi("www.",url[HOST].text,4)==0) {
 		url[HOST].text   += 4;
 		url[HOST].length -= 4;
 	}
@@ -1604,7 +1604,7 @@ case C_STRING_DOMAIN:
 	size_t pos = 0;
 
 	while ((item = String_tokenize(url[HOST], ".", pos, OPTION_NONE)).length > 0)
-		QWritef("]+[{%s}", item);
+		QWritef("]+[{%s}", item.text);
 
 	QWrite("]");
 	

@@ -2511,9 +2511,9 @@ int SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_
 									state.expect          = SQM_EQUALITY;
 									state.separator       = '=';
 									state.property.text   = input.text + state.word_start;
-									state.property.length = state.property_end - state.property_start;
 									state.property_start  = state.word_start;
 									state.property_end    = state.i;
+									state.property.length = state.property_end - state.property_start;
 									state.is_array        = input.text[state.i-2]=='[' && input.text[state.i-1]==']';
 								}
 

@@ -334,6 +334,12 @@ String String_tokenize(String &source, const char *delimiter, size_t &i, int opt
 	size_t word_start = 0;
 	bool in_brackets  = false;
 	bool word_started = false;
+	
+	if (i==0  &&  options & OPTION_TRIM_SQUARE_BRACKETS  &&  source.text[0]=='['  &&  source.text[source.length-1]==']') {
+		source.text++;
+		source.length -= 2;
+		source.text[source.length] = '\0';
+	}
 
 	for (;  i<=source.length;  i++) {
 		// Ignore delimeters inside square brackets		

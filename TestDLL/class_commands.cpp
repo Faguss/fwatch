@@ -56,7 +56,7 @@ case C_CLASS_LIST:	//TODO: remove this command on release because it's obsolete
 	String item;
 	size_t arg_classpath_pos = 0;
 
-	while ((item = String_tokenize(argument[arg_classpath], "[,]", arg_classpath_pos, OPTION_NONE)).length>0  &&  K<10)	//from ofp array to char array
+	while ((item = String_tokenize(argument[arg_classpath], ",", arg_classpath_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  K<10)	//from ofp array to char array
 	{
 		K++;
 		String_trim_quotes(item);
@@ -562,7 +562,7 @@ case C_CLASS_TOKEN:	//TODO: remove this command on release because it's obsolete
 	String item;
 	size_t arg_classpath_pos = 0;
 
-	while ((item = String_tokenize(argument[arg_classpath], "[,]", arg_classpath_pos, OPTION_NONE)).length>0  &&  K<10)	//from ofp array to char array
+	while ((item = String_tokenize(argument[arg_classpath], ",", arg_classpath_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  K<10)	//from ofp array to char array
 	{
 		K++;
 		String_trim_quotes(item);
@@ -1258,7 +1258,7 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 	String item;
 	size_t arg_classpath_pos = 0;
 
-	while ((item = String_tokenize(argument[arg_classpath], "[,]", arg_classpath_pos, OPTION_NONE)).length>0  &&  K<10)	//from ofp array to char array
+	while ((item = String_tokenize(argument[arg_classpath], ",", arg_classpath_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  K<10)	//from ofp array to char array
 	{
 		K++;
 		String_trim_quotes(item);
@@ -2015,7 +2015,7 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 	String item;
 	size_t arg_classpath_pos = 0;
 
-	while ((item = String_tokenize(argument[arg_classpath], "[,]", arg_classpath_pos, OPTION_NONE)).length>0  &&  K<10)	//from ofp array to char array
+	while ((item = String_tokenize(argument[arg_classpath], ",", arg_classpath_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  K<10)	//from ofp array to char array
 	{
 		K++;
 		String_trim_quotes(item);
@@ -3061,7 +3061,7 @@ case C_CLASS_READ:
 	size_t arg_path_pos    = 0;
 	String item;
 
-	while ((item = String_tokenize(argument[arg_path], "[,]", arg_path_pos, OPTION_NONE)).length > 0  &&  classpath_size<classpath_capacity) {
+	while ((item = String_tokenize(argument[arg_path], ",", arg_path_pos, OPTION_TRIM_SQUARE_BRACKETS)).length > 0  &&  classpath_size<classpath_capacity) {
 		String_trim_quotes(item);
 		classpath[classpath_size++] = item.text;
 	}
@@ -3097,7 +3097,7 @@ case C_CLASS_READ:
 	int properties_to_find_size = 0;
 	size_t arg_find_pos = 0;
 
-	while ((item = String_tokenize(argument[arg_find], "[,]", arg_find_pos, OPTION_NONE)).length>0  &&  properties_to_find_size<properties_to_find_capacity) {
+	while ((item = String_tokenize(argument[arg_find], ",", arg_find_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  properties_to_find_size<properties_to_find_capacity) {
 		String_trim_quotes(item);
 		properties_to_find[properties_to_find_size++] = item.text;
 	}
@@ -3661,7 +3661,7 @@ case C_CLASS_READ:
 			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, ++classpath_size, argument[arg_file].text);
 		else
 			if (properties_to_find_size>0 && !property_found)
-				QWrite_err(FWERROR_CLASS_NOVAR, 2, argument[arg_find], argument[arg_file].text);
+				QWrite_err(FWERROR_CLASS_NOVAR, 2, argument[arg_find].text, argument[arg_file].text);
 			else
 				QWrite_err(FWERROR_NONE, 0);
 	}
@@ -4133,7 +4133,6 @@ case C_CLASS_WRITE :
 
 	fclose(file);
 
-	String file_contents = {file_contents_dynamic.text, file_contents_dynamic.length};
 	SQM_ParseState source_state;
 	SQM_Init(source_state);
 	
@@ -4143,7 +4142,7 @@ case C_CLASS_WRITE :
 	int classpath_size    = 0;
 	size_t arg_path_pos   = 0;
 	
-	while ((item = String_tokenize(argument[arg_path],"[,]",arg_path_pos,OPTION_NONE)).length>0  &&  classpath_size<SQM_CLASSPATH_CAPACITY) {
+	while ((item = String_tokenize(argument[arg_path],",",arg_path_pos,OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  classpath_size<SQM_CLASSPATH_CAPACITY) {
 		classpath[classpath_size++] = item.text;
 	}
 	
@@ -4152,7 +4151,8 @@ case C_CLASS_WRITE :
 		classpath_current = classpath_size;
 	} else {
 		for (int i=0; i<classpath_size; i++) {
-			String path = {classpath[i], strlen(classpath[i])};
+			String path          = {classpath[i], strlen(classpath[i])};
+			String file_contents = {file_contents_dynamic.text, file_contents_dynamic.length};
 
 			if (SQM_Parse(file_contents, source_state, SQM_ACTION_FIND_CLASS, path)) {
 				classpath_current++;
@@ -4179,7 +4179,8 @@ case C_CLASS_WRITE :
 		// Delete property
 		if (argument[arg_deleteproperty].length > 0) {
 			SQM_ParseState source_state_copy = source_state;
-	
+			String file_contents             = {file_contents_dynamic.text, file_contents_dynamic.length};
+
 			if ((result = SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_PROPERTY, argument[arg_deleteproperty]))) {
 				size_t removed_length = source_state_copy.value_end - source_state_copy.property_start;
 				
@@ -4196,6 +4197,7 @@ case C_CLASS_WRITE :
 		// Delete class
 		if (argument[arg_deleteclass].length > 0) {				
 			SQM_ParseState source_state_copy = source_state;
+			String file_contents             = {file_contents_dynamic.text, file_contents_dynamic.length};
 	
 			if ((result = SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_CLASS, argument[arg_deleteclass]))) {
 				SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_CLASS_END, empty_string);
@@ -4215,6 +4217,7 @@ case C_CLASS_WRITE :
 		// Rename property
 		if (argument[arg_renameproperty].length>0  &&  argument[arg_to].length>0) {
 			SQM_ParseState source_state_copy = source_state;
+			String file_contents             = {file_contents_dynamic.text, file_contents_dynamic.length};
 	
 			if ((result = SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_PROPERTY, argument[arg_renameproperty]))) {
 				size_t shift_amount  = argument[arg_to].length >= source_state_copy.property.length ? argument[arg_to].length-source_state_copy.property.length : source_state_copy.property.length-argument[arg_to].length;
@@ -4233,6 +4236,7 @@ case C_CLASS_WRITE :
 			// Rename class
 			if (argument[arg_renameclass].length > 0  &&  argument[arg_to].length > 0) {
 				SQM_ParseState source_state_copy = source_state;
+				String file_contents             = {file_contents_dynamic.text, file_contents_dynamic.length};
 				
 				if ((result = SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_CLASS, argument[arg_renameclass]))) {
 					size_t current_name_length = source_state_copy.class_name_full_end - source_state_copy.class_name_start;
@@ -4253,7 +4257,7 @@ case C_CLASS_WRITE :
 		// Rewrite file
 		if (save_changes) {
 			if ((file = fopen(argument[arg_file].text, "wb"))) {
-				fwrite(file_contents.text, 1, file_contents.length, file);
+				fwrite(file_contents_dynamic.text, 1, file_contents_dynamic.length, file);
 	
 				if (ferror(file)) 
 					QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);

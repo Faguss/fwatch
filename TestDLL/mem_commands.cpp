@@ -1154,7 +1154,7 @@ case C_MEM_SETPLAYERAIM:
 		String item = {NULL, 0};
 		size_t pos  = 0;
 
-		while ((item = String_tokenize(argument[2], "[,]", pos, OPTION_NONE)).length > 0) {	
+		while ((item = String_tokenize(argument[2], ",", pos, OPTION_TRIM_SQUARE_BRACKETS)).length > 0) {	
 			if (strcmp(item.text,"-") != 0) {
 				double num = atof(item.text);
 				float fnum = (float)num;
@@ -1395,7 +1395,7 @@ case C_MEM_SETDIFFICULTY:
 		size_t pos = 0;
 		String item;
 
-		while ((item = String_tokenize(argument[4], "[,]", pos, OPTION_NONE)).length>0  &&  i<12) {
+		while ((item = String_tokenize(argument[4], ",", pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  i<12) {
 			int setting = -1;
 
 			if (strcmpi(item.text,"false")==0  ||  strcmpi(item.text,"0")==0) 
@@ -2520,7 +2520,7 @@ case C_MEM_HUD:
 						String number          = {NULL, 0};
 						size_t subvalue_pos    = 0;
 
-						while ((number = String_tokenize(argument[i+1], "[,];", subvalue_pos, OPTION_NONE)).length>0  &&  index<4) {
+						while ((number = String_tokenize(argument[i+1], ",;", subvalue_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  index<4) {
 							String_trim_space(number);
 							color[index++] = (unsigned char)(atof(number.text) * 255);
 						}

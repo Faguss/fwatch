@@ -1370,7 +1370,7 @@ case C_IGSE_COPY:
 		if (CopyFile((LPCTSTR)argument[arg_source].text, (LPCTSTR)argument[arg_destination].text, path_type_destination!=PATH_DOWNLOAD_DIR))
 			QWrite_err(FWERROR_NONE, 0);
 		else
-			QWrite_err(FWERROR_WINAPI, 3, GetLastError(), argument[arg_source], argument[arg_destination]);
+			QWrite_err(FWERROR_WINAPI, 3, GetLastError(), argument[arg_source].text, argument[arg_destination].text);
 	}
 
 	StringDynamic_end(buf_source);

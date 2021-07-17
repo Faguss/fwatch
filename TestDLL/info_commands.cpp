@@ -90,7 +90,7 @@ case C_INFO_DATE:
 			size_t pos = 0;
 			String item;
 
-			while ((item = String_tokenize(argument[2], "[,]", pos, OPTION_NONE)).length > 0) {
+			while ((item = String_tokenize(argument[2], ",", pos, OPTION_TRIM_SQUARE_BRACKETS)).length > 0) {
 				// From ofp date array to systemtime structure
 				switch (index) {
 					case 0: st.wYear         = atoi(item.text); break;

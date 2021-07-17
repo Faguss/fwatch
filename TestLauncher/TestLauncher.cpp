@@ -172,53 +172,56 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	// Handle exe arguments
 	// Remove the ones meant for Fwatch and pass the rest to the game
-	String command_line        = {lpCmdLine, strlen(lpCmdLine)};
+	StringDynamic command_line;
+	StringDynamic_init(command_line);
+
+	String lpCmdLine_String    = {lpCmdLine, strlen(lpCmdLine)};
 	String word                = {NULL, 0};
-	size_t command_line_pos    = 0;
+	size_t lpCmdLine_pos       = 0;
 	bool launch_client         = true;
 	bool listen_server         = false;
 	bool add_nomap             = true;
 	bool launch_steam          = false;
 	bool first_item            = true;
-	bool buffer_shift          = false;
+	bool copy_param            = true;
 	int custom_exe             = -1;
 	ThreadArguments client_arg = {false, false, false, &mailslot};
 
-	while ((word = String_tokenize(command_line, " \t\r\n", command_line_pos, OPTION_NONE)).length > 0) {
+	while ((word = String_tokenize(lpCmdLine_String, " \t\r\n", lpCmdLine_pos, OPTION_NONE)).length > 0) {
 		if (strcmp(word.text,"-nomap") == 0)
 			add_nomap = false;
 
 		if (strcmp(word.text,"-nolaunch") == 0) {
 			launch_client = false;
-			buffer_shift  = true;
+			copy_param    = false;
 		}
 
 		if (strncmp(word.text,"-gamespy=",9) == 0) {
 			strncpy(global.master_server1, word.text+9, 64);
 			client_arg.is_custom_master1 = true;
-			buffer_shift = true;
+			copy_param                   = false;
 		}
 
 		if (strncmp(word.text,"-udpsoft=",9) == 0) {
 			strncpy(global.master_server2, word.text+9, 18);
 			client_arg.is_custom_master2 = true;
-			buffer_shift = true;
+			copy_param                   = false;
 		}
 
 		if (strcmp(word.text,"-reporthost") == 0) {
 			listen_server = true;
-			buffer_shift  = true;
+			copy_param    = false;
 		}
 
 		if (strcmp(word.text,"-removenomap") == 0) {
-			add_nomap    = false;
-			buffer_shift = true;
+			add_nomap  = false;
+			copy_param = false;
 		}
 
 		if (strcmp(word.text,"-steam") == 0) {
 			launch_client = false;
 			launch_steam  = true;
-			buffer_shift  = true;
+			copy_param    = false;
 		}
 
 		if (strncmp(word.text,"-run=",5) == 0) {
@@ -229,29 +232,20 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 				}
 			}
 
-			buffer_shift = true;
+			copy_param = false;
 		}
 
 		if (fi)
 			fprintf(fi, "%s\"%s\"", (first_item ? "" : ","), word.text);
 
+		if (copy_param) {
+			StringDynamic_append(command_line, " ");			
+			StringDynamic_appends(command_line, word);
+		} else
+			copy_param = true;
+
 		first_item = false;
-
-		if (buffer_shift) {
-			size_t shift_amount = command_line_pos - (word.text - command_line.text);
-
-			shift_buffer_chunk(command_line.text, command_line_pos, command_line.length, shift_amount, OPTION_LEFT);
-
-			command_line.length -= shift_amount;
-			command_line_pos    -= shift_amount;
-			buffer_shift         = false;
-		}
 	}
-
-	// Untokenize because it's used later to launch the game
-	for (size_t i=0; i<command_line.length; i++)
-		if (command_line.text[i] == '\0')
-			command_line.text[i] = ' ';
 
 	if (fi) {
 		fprintf(fi,"]]");
@@ -405,6 +399,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 
     RemoveHook();
+	StringDynamic_end(command_line);
 	ModfolderMissionsReturn(GAME_CLIENT);
 	ModfolderMissionsReturn(GAME_SERVER);
 	unlink("fwatch_info.sqf");
@@ -504,7 +499,7 @@ void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, i
 						String number          = {NULL, 0};
 						size_t subvalue_pos    = 0;
 
-						while ((number = String_tokenize(subvalue, "[,];", subvalue_pos, OPTION_NONE)).length>0  &&  index<4) {
+						while ((number = String_tokenize(subvalue, ",;", subvalue_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  index<4) {
 							String_trim_space(number);
 							color[index++] = (unsigned char)(atof(number.text) * 255);
 						}
@@ -687,7 +682,7 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 	if (StringDynamic_readfile(buf_mission_list, filename) != 0)
 		return;
 
-	int word_start              = 0;
+	size_t word_start           = 0;
 	char backup_buffer[1024]    = "";
 	wchar_t source_w[1024]      = L"";
 	wchar_t destination_w[1024] = L"";
@@ -1003,24 +998,12 @@ void FwatchPresence(ThreadArguments *arg)
 
 		phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, game_pid);
 
-		if (phandle == 0)
+		if (phandle == INVALID_HANDLE_VALUE)
 			continue;
 
 		// If this is a new game instance
 		if (game_pid != game_pid_last) {
 			if (!arg->is_dedicated_server) {
-				// Reset UI state
-				memset(ui_current    , 0, sizeof(ui_current));
-				memset(ui_currentINT , 0, sizeof(ui_currentINT));
-				memset(ui_written    , 0, sizeof(ui_written));
-				memset(ui_writtenINT , 0, sizeof(ui_writtenINT));
-				memset(ui_custom     , 0, sizeof(ui_custom));
-				memset(ui_customINT  , 0, sizeof(ui_customINT));
-				memset(ui_no_ar      , 0, sizeof(ui_no_ar));
-				memset(ui_is_custom  , 0, sizeof(ui_is_custom));
-
-				ReadUIConfig((global_exe_version[game_exe_index]==VER_196 ? "Res\\bin\\config_fwatch_hud.cfg" : "bin\\config_fwatch_hud.cfg"), ui_no_ar, ui_is_custom, ui_custom, ui_customINT);
-
 				// Find where UI coordinates are stored
 				ui_address      = 0;
 				ui_address_chat = 0;
@@ -1046,6 +1029,18 @@ void FwatchPresence(ThreadArguments *arg)
 					CloseHandle(phandle);
 					continue;
 				}
+
+				// Reset UI state
+				memset(ui_current    , 0, sizeof(ui_current));
+				memset(ui_currentINT , 0, sizeof(ui_currentINT));
+				memset(ui_written    , 0, sizeof(ui_written));
+				memset(ui_writtenINT , 0, sizeof(ui_writtenINT));
+				memset(ui_custom     , 0, sizeof(ui_custom));
+				memset(ui_customINT  , 0, sizeof(ui_customINT));
+				memset(ui_no_ar      , 0, sizeof(ui_no_ar));
+				memset(ui_is_custom  , 0, sizeof(ui_is_custom));
+
+				ReadUIConfig((global_exe_version[game_exe_index]==VER_196 ? "Res\\bin\\config_fwatch_hud.cfg" : "bin\\config_fwatch_hud.cfg"), ui_no_ar, ui_is_custom, ui_custom, ui_customINT);
 
 				if (ui_portrait_mode)
 					ui_portrait_calculate = true;
