@@ -4186,8 +4186,8 @@ case C_CLASS_WRITE :
 				
 				shift_buffer_chunk(file_contents.text, source_state_copy.value_end, file_contents.length, removed_length, OPTION_LEFT);
 				
-				file_contents.length -= removed_length;
-				save_changes          = true;
+				file_contents_dynamic.length -= removed_length;
+				save_changes                  = true;
 			} else {
 				QWrite_err(FWERROR_CLASS_NOVAR, 2, argument[arg_deleteproperty].text, argument[arg_file].text);
 				goto class_write_end;
@@ -4206,8 +4206,8 @@ case C_CLASS_WRITE :
 				
 				shift_buffer_chunk(file_contents.text, source_state_copy.i, file_contents.length, removed_length, OPTION_LEFT);
 				
-				file_contents.length -= removed_length;
-				save_changes          = true;
+				file_contents_dynamic.length -= removed_length;
+				save_changes                  = true;
 			} else {
 				QWrite_err(FWERROR_CLASS_NOCLASS, 2, arg_deleteclass, argument[arg_file].text);
 				goto class_write_end;
@@ -4227,7 +4227,7 @@ case C_CLASS_WRITE :
 				shift_buffer_chunk(file_contents.text, source_state_copy.property_end, file_contents.length, shift_amount, shift_direction);
 				memcpy(source_state_copy.property.text, argument[arg_to].text, argument[arg_to].length);
 				
-				file_contents.length += shift_amount * (shift_direction ? 1 : -1);
+				file_contents_dynamic.length += shift_amount * (shift_direction ? 1 : -1);
 			} else {
 				QWrite_err(FWERROR_CLASS_NOVAR, 2, arg_renameproperty, argument[arg_file].text);
 				goto class_write_end;
@@ -4247,7 +4247,7 @@ case C_CLASS_WRITE :
 					shift_buffer_chunk(file_contents.text, source_state_copy.class_name_full_end, file_contents.length, shift_amount, shift_direction);
 					memcpy(source_state_copy.class_name.text, argument[arg_to].text, argument[arg_to].length);
 					
-					file_contents.length += shift_amount * (shift_direction ? 1 : -1);
+					file_contents_dynamic.length += shift_amount * (shift_direction ? 1 : -1);
 				} else {
 					QWrite_err(FWERROR_CLASS_NOCLASS, 2, arg_renameclass, argument[arg_file].text);
 					goto class_write_end;
