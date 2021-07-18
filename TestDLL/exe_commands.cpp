@@ -261,7 +261,7 @@ case C_RESTART_SERVER:
 					String_trim_quotes(argument[arg_filename]);
 
 					if (VerifyPath(argument[arg_filename], buf_filename, OPTION_RESTRICT_TO_MISSION_DIR | OPTION_SUPPRESS_ERROR | OPTION_SUPPRESS_CONVERSION))
-						StringDynamic_appendf(param, "\\fwatch\\tmp\\%s\" ", arg_filename);
+						StringDynamic_appendf(param, "\\fwatch\\tmp\\%s\" ", argument[arg_filename].text);
 					else
 						StringDynamic_append(param, "\\fwatch\\tmp\" ");
 				} else

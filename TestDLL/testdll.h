@@ -679,7 +679,7 @@ void QWrite_joystick(int customJoyID);
 // String
 bool   String_bool(String &input);
 char*  String_find(String &source, String &to_find, int options);
-char*  String_trim_quotes(String input);
+char*  String_trim_quotes(String &input);
 char*  String_trim_space(String &input);
 String String_tokenize(String &source, const char *delimiter, size_t &i, int options);
 void   String_escape_sequences(String input, int mode, int quantity);

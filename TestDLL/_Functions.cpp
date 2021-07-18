@@ -3,7 +3,7 @@
 // -----------------------------------------------------------------
 
 // Remove quotation marks from string
-char* String_trim_quotes(String input) {
+char* String_trim_quotes(String &input) {
 	if (input.text[0]=='"'  &&  input.text[input.length-1]=='"') {
 		input.text++;
 		input.length -= 2;
@@ -630,13 +630,13 @@ void String_escape_sequences(String input, int mode, int quantity) {
 			if (mode==OPTION_TAB  &&  input.text[i+1]=='t') {
 				count++;
 				input.text[i] = '\t';
-				shift_buffer_chunk(input.text, i+1, input.length, 1, OPTION_LEFT);
+				shift_buffer_chunk(input.text, i+2, input.length+1, 1, OPTION_LEFT);
 			}
 
 			if (mode==OPTION_LF  &&  input.text[i+1]=='n') {
 				count++;
 				input.text[i] = '\n';
-				shift_buffer_chunk(input.text, i+1, input.length, 1, OPTION_LEFT);
+				shift_buffer_chunk(input.text, i+2, input.length+1, 1, OPTION_LEFT);
 			}
 
 			if (mode==OPTION_CRLF  &&  input.text[i+1]=='n') {
