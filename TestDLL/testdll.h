@@ -671,10 +671,12 @@ void WriterHeaderInErrorLog(void *ptr_logfile, void *ptr_phandle, bool notify);
 void QWrite(const char *str);
 void QWritef(const char *format, ...);
 void QWritel(const char *input, size_t input_length);
-void QWrites(String &str);
+void QWrites(String &input);
 void QWrite_err(int code_primary, int arg_num, ...);
 void QWrite_format_key(int c);
 void QWrite_joystick(int customJoyID);
+void QWriteq(const char *str);
+void QWritesq(String input);
 
 // String
 bool   String_bool(String &input);
@@ -689,10 +691,11 @@ void StringDynamic_init(StringDynamic &buffer);
 void StringDynamic_end(StringDynamic &buffer);
 int  StringDynamic_allocate(StringDynamic &buffer, size_t new_maximal_length);
 int  StringDynamic_readfile(StringDynamic &buffer, const char *path);
-int  StringDynamic_append(StringDynamic &buffer, const char *text);
-int  StringDynamic_appendl(StringDynamic &buffer, const char *text, size_t text_length);
+int  StringDynamic_append(StringDynamic &buffer, const char *input);
+int  StringDynamic_appendl(StringDynamic &buffer, const char *input, size_t text_length);
 int  StringDynamic_appendf(StringDynamic &buffer, const char *format, ...);
 int  StringDynamic_appends(StringDynamic &buffer, String &input);
+int  StringDynamic_appendq(StringDynamic &buffer, const char *input);
 
 // for fdb.cpp
 char* fdbGet(char* file, char* var);

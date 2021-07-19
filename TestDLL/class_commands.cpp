@@ -3825,8 +3825,9 @@ case C_CLASS_READSQM:
 	};
 	
 	int class_max = sizeof(class_ids) / sizeof(class_ids[0]);
-	
-	int units_in_this_group = 0;
+
+	bool class_vehicles_started = false;
+	int units_in_this_group     = 0;
 	SQM_ParseState state;
 	SQM_Init(state);
 	
@@ -3860,7 +3861,6 @@ case C_CLASS_READSQM:
 								state.value.length--;
 							
 							QWrites(state.value);
-							QWrite(",");
 						}
 					}
 					
@@ -3919,8 +3919,14 @@ case C_CLASS_READSQM:
 								case CLASS_VEHICLES : {														
 									if (~inside & CLASS_GROUPS)
 										QWrite("_Vehicles=[");
-									else
+									else {
+										if (!class_vehicles_started) {	// class group might not contain class vehicles so add comma only if it does
+											QWrite(",");
+											class_vehicles_started = true;
+										}
+										
 										QWrite("[");
+									}
 								} break;
 								
 								case CLASS_MARKERS : QWrite("_Markers=["); break;
@@ -3972,8 +3978,10 @@ case C_CLASS_READSQM:
 						case CLASS_VEHICLES : {
 							if (~inside & CLASS_GROUPS)
 								QWrite("];");
-							else
+							else {
+								class_vehicles_started = false;
 								QWrite("]");
+							}
 						} break;
 						
 						case CLASS_MARKERS : QWrite("];"); break;

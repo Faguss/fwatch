@@ -2258,7 +2258,7 @@ void QWrite_err(int code_primary, int arg_num, ...) {
 
 	//TODO: Log errors to file
 	if (~global.option_error_output & OPTION_ERROR_ARRAY_SUPPRESS) {
-		// If this function is being called for another time then separate arrays with semi-colon
+		// If this function is being called more than once then separate arrays with a semi-colon
 		if (~global.option_error_output & OPTION_ERROR_ARRAY_NESTED) {
 			if (global.option_error_output & OPTION_ERROR_ARRAY_STARTED)
 				QWrite(";");
@@ -2270,7 +2270,7 @@ void QWrite_err(int code_primary, int arg_num, ...) {
 		if (global.option_error_output & OPTION_ERROR_ARRAY_LOCAL)
 			QWrite("_fwatch_error=");
 
-		QWritef("[%s,%d,%d,{", getBool(code_primary==FWERROR_NONE), code_primary, code_secondary);
+		QWritef("[%s,%d,%d,\"", getBool(code_primary==FWERROR_NONE), code_primary, code_secondary);
 
 		if (winapi_msg_ptr) {
 			switch (code_primary) {
@@ -2282,29 +2282,33 @@ void QWrite_err(int code_primary, int arg_num, ...) {
 
 			String winapi_msg = {(char*)winapi_msg_ptr, strlen((char*)winapi_msg_ptr)};
 			String_trim_space(winapi_msg);
-			QWrites(winapi_msg);
+			QWritesq(winapi_msg);
 			LocalFree(winapi_msg_ptr);
 
-			for (int i=1; i<arg_num; i++)
-				QWritef(" - %s", va_arg(arg_list, char*));
+			for (int i=1; i<arg_num; i++) {
+				QWrite(" - ");
+				QWriteq(va_arg(arg_list, char*));
+			}
 		} else
 			if (code_primary == FWERROR_ERRNO) {
-				QWrite(strerror(code_secondary));
+				QWriteq(strerror(code_secondary));
 
-				for (int i=1; i<arg_num; i++)
-					QWritef(" - %s", va_arg(arg_list, char*));
+				for (int i=1; i<arg_num; i++) {
+					QWrite(" - ");
+					QWriteq(va_arg(arg_list, char*));
+				}
 			} else
 				vfprintf(global.outf, format, arg_list);
 
 		va_end(arg_list);
 
 		if (global.option_error_output & OPTION_ERROR_ARRAY_CLOSE)
-			QWrite("}]");
+			QWrite("\"]");
 		else
 			if (global.option_error_output & OPTION_ERROR_ARRAY_LOCAL)
-				QWrite("}];");
+				QWrite("\"];");
 			else
-				QWrite("},");
+				QWrite("\",");
 	}
 }
 
@@ -2870,4 +2874,34 @@ char* strstr2_old(const char *arg1, size_t arg1_len, const char *arg2, size_t ar
 // Output text to the game with specified length
 void QWrites(String &input) {
 	QWritel(input.text, input.length);
+}
+
+// Output text to the game doubling the amount of quotation marks
+void QWriteq(const char *str) {
+	size_t pos  = 0;
+	char *quote = NULL;
+	
+	while ((quote = strchr(str, '"'))) {
+		pos = quote - str;
+		QWritel(str, pos+1);
+		QWrite("\"");
+		str = quote + 1;
+	}
+	
+	QWrite(str);
+}
+
+void QWritesq(String input) {
+	size_t pos  = 0;
+	char *quote = NULL;
+	
+	while ((quote = strchr(input.text, '"'))) {
+		pos = quote - input.text;
+		QWritel(input.text, pos+1);
+		QWrite("\"");
+		input.text    = quote + 1;
+		input.length -= pos + 1;
+	}
+	
+	QWrites(input);
 }

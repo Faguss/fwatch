@@ -352,7 +352,9 @@ case C_FILE_MODLIST:
 				DWORD attributes = GetFileAttributes(path2);
 
 				if (attributes != -1  &&  attributes & FILE_ATTRIBUTE_DIRECTORY) {
-					StringDynamic_appendf(Names, "]+[{%s}", fd.cFileName);
+					StringDynamic_append(Names, "]+[\"");
+					StringDynamic_appendq(Names, fd.cFileName);
+					StringDynamic_append(Names, "\"");
 
 					sprintf(path2, "%s\\__gs_id", fd.cFileName);
 					FILE *f = fopen(path2, "r");

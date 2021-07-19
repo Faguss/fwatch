@@ -571,7 +571,9 @@ case C_IGSE_LIST:
 			if (strcmp(file_data.cFileName,".")==0  ||  strcmp(file_data.cFileName,"..")==0)
 				continue;
 
-			StringDynamic_appendf(Names, "]+[{%s}", file_data.cFileName);
+			StringDynamic_append(Names, "]+[\"");
+			StringDynamic_appendq(Names, file_data.cFileName);
+			StringDynamic_append(Names, "\"");
 
 			if (!arg_only_name) {
 				StringDynamic_appendf(Attributes, "]+[");
@@ -2290,8 +2292,11 @@ case C_IGSE_DB:
 					}
 					
 					buffer_size += buffer_shift_amount * (buffer_shift_direction ? 1 : -1);
-				} else
-					StringDynamic_appendf(MissingKeys, "]+[{%s}", key_name);
+				} else {
+					StringDynamic_append(MissingKeys, "]+[\"");
+					StringDynamic_appendq(MissingKeys, key_name);
+					StringDynamic_append(MissingKeys, "\"");
+				}
 			} break;
 			
 			case NAMED_ARG_REMOVE : {
@@ -2353,8 +2358,11 @@ case C_IGSE_DB:
 						if (j >= header->number_of_keys+key_to_remove.index)
 							*pointer -= sizeof(key_hash) + sizeof(key_pointer_pos) + sizeof(value_pointer_pos) + arg_value_length + value_length;
 					}
-				} else
-					StringDynamic_appendf(MissingKeys, "]+[{%s}", argument[i+1].text);
+				} else {
+					StringDynamic_append(MissingKeys, "]+[\"");
+					StringDynamic_appendq(MissingKeys, argument[i+1].text);
+					StringDynamic_append(MissingKeys, "\"");
+				}
 			} break;
 			
 			case NAMED_ARG_READ : {
@@ -2391,8 +2399,11 @@ case C_IGSE_DB:
 						
 					QWritel(buffer+value_pointer.start, value_pointer.end-1-value_pointer.start);
 					QWrite(";");
-				} else
-					StringDynamic_appendf(MissingKeys, "]+[{%s}", argument[i+1].text);
+				} else {
+					StringDynamic_append(MissingKeys, "]+[\"");
+					StringDynamic_appendq(MissingKeys, argument[i+1].text);
+					StringDynamic_append(MissingKeys, "\"");
+				}
 			} break;
 			
 			case NAMED_ARG_LIST : {

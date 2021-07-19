@@ -1896,13 +1896,22 @@ void WatchProgram(ThreadArguments *arg)
 							strcat(exe_path, exe_name);
 
 							// Create log file
+							// TODO: need to have separate files
 							SECURITY_ATTRIBUTES sa;
 							sa.nLength              = sizeof(sa);
 							sa.lpSecurityDescriptor = NULL;
 							sa.bInheritHandle       = TRUE;       
 
-							HANDLE logFile = CreateFile(TEXT("fwatch\\tmp\\exelog.txt"),
-								FILE_APPEND_DATA,
+							HANDLE logfile_stdout = CreateFile(TEXT("fwatch\\tmp\\exelog.txt"),
+								FILE_WRITE_DATA,
+								FILE_SHARE_WRITE | FILE_SHARE_READ,
+								&sa,
+								CREATE_ALWAYS,
+								FILE_ATTRIBUTE_NORMAL,
+								NULL );
+
+							HANDLE logfile_stderr = CreateFile(TEXT("fwatch\\tmp\\exelog_err.txt"),
+								FILE_WRITE_DATA,
 								FILE_SHARE_WRITE | FILE_SHARE_READ,
 								&sa,
 								CREATE_ALWAYS,
@@ -1916,8 +1925,8 @@ void WatchProgram(ThreadArguments *arg)
 							si.cb          = sizeof(si);
 							si.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
 							si.wShowWindow = SW_HIDE;
-							si.hStdOutput  = logFile;
-							si.hStdError   = logFile;
+							si.hStdOutput  = logfile_stdout;
+							si.hStdError   = logfile_stderr;
 							ZeroMemory(&pi, sizeof(pi));
 
 							if (CreateProcess(exe_path, params, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
@@ -2047,11 +2056,13 @@ void WatchProgram(ThreadArguments *arg)
 
 								CloseHandle(pi.hProcess);
 								CloseHandle(pi.hThread);
-								CloseHandle(logFile);
 							} else {
 								WatchProgramInfo info = {db_id, pi.dwProcessId, STILL_ACTIVE, GetLastError()};
 								db_pid_save(info);
 							}
+
+							CloseHandle(logfile_stdout);
+							CloseHandle(logfile_stderr);
 						}
 					}
 

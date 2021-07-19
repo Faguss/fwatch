@@ -981,7 +981,9 @@ case C_STRING_TOKENIZE:
 				QWrite("{}");
 		}
 		
-		QWritef("]+[{%s}", item.text);
+		QWrite("]+[\"");
+		QWritesq(item);
+		QWrite("\"");
 		count++;
 	}
 

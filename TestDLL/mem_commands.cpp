@@ -1993,7 +1993,9 @@ case C_MEM_MISSIONINFO:
 		} else
 			buffer_ptr = buffer;
 
-		QWritef("{%s}", buffer_ptr);
+		QWrite("\"");
+		QWriteq(buffer_ptr);
+		QWrite("\"");
 	}
 
 	QWrite("]");

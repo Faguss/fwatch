@@ -168,6 +168,23 @@ int StringDynamic_appends(StringDynamic &buffer, String &input) {
 	return StringDynamic_appendl(buffer, input.text, input.length);
 }
 
+// Dynamic string concatenation doubling the quotation marks
+int StringDynamic_appendq(StringDynamic &buffer, const char *input) {
+	size_t pos   = 0;
+	char *quote  = NULL;
+	int result   = 0;
+	
+	while ((quote = strchr(input, '"'))) {
+		pos    = quote - input;
+		result = StringDynamic_appendl(buffer, input, pos+1);
+		result = StringDynamic_append(buffer, "\"");
+		input  = quote + 1;
+	}
+	
+	result = StringDynamic_append(buffer, input);
+	return result;
+}
+
 
 
 
