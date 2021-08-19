@@ -2721,7 +2721,7 @@ int SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_
 
 
 // Copy classes and properties from "merge" to "source"
-int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_dynamic, SQM_ParseState &source_state) {
+int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_dynamic, SQM_ParseState &source_state, size_t arg_setpos, String &arg_setpos_value) {
 	int merge_parse_result             = 0;
 	SQM_ParseState source_state_backup = source_state;
 	bool buffer_modified               = false;
@@ -2753,16 +2753,104 @@ int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_
 
 				// Replace property
 				switch (source_result) {
-					case SQM_OUTPUT_PROPERTY : {																		
-						size_t shift_amount  = merge_state.value.length >= source_state.value.length ? merge_state.value.length-source_state.value.length : source_state.value.length-merge_state.value.length;
-						bool shift_direction = merge_state.value.length >= source_state.value.length;
+					case SQM_OUTPUT_PROPERTY : {
+						// Special "init" property modification
+						if (arg_setpos != SQM_SETPOS_NONE) {
+							
+							// If "this setpos" already exists
+							if (strncmpi(source_state.value.text,"\"this setpos",12) == 0) {
+								
+								// Is it "setpos" or "setposASL"
+								size_t type = SQM_SETPOS_REL;
 
-						shift_buffer_chunk(source_dynamic.text, source_state.value_end, source_dynamic.length, shift_amount, shift_direction);						
-						memcpy(source_state.value.text, merge_state.value.text, merge_state.value.length);
+								if (strncmpi(source_state.value.text+12,"asl",3) == 0)
+									type = SQM_SETPOS_ASL;
 
-						source_dynamic.length                     += shift_amount * (shift_direction ? 1 : -1);
-						source_dynamic.text[source_dynamic.length] = '\0';
-						buffer_modified                            = true;
+								if (type != arg_setpos) {
+									if (type == SQM_SETPOS_REL) {
+										shift_buffer_chunk(source_dynamic.text, source_state.value_start+12, source_dynamic.length, 3, OPTION_RIGHT);
+										memcpy(source_dynamic.text+source_state.value_start+12, "ASL", 3);
+										source_dynamic.length     += 3;
+										source_state.value.length += 3;
+									} else {
+										shift_buffer_chunk(source_dynamic.text, source_state.value_start+15, source_dynamic.length, 3, OPTION_LEFT);
+										source_dynamic.length     -= 3;
+										source_state.value.length -= 3;
+									}
+
+									source_dynamic.text[source_dynamic.length] = '\0';
+								}
+
+								// Find height number and replace it
+								int level      = 0;
+								int comma      = 0;
+								char *height   = NULL;
+								bool is_number = true;
+								size_t z       = 0;
+								size_t height_start = 0;
+								
+								for (; z<source_state.value.length; z++) {
+									if (level == 1) {
+										if (height)
+											if (source_state.value.text[z]!=']' && source_state.value.text[z]!='.' && !isspace(source_state.value.text[z]) && !isdigit(source_state.value.text[z]))
+												is_number = false;
+										
+										if (source_state.value.text[z] == ',')
+											comma++;
+										else
+											if (comma==2  &&  !height  &&  !isspace(source_state.value.text[z])) {
+												height       = source_state.value.text + z;
+												height_start = z;
+											}
+									}
+									
+									if (source_state.value.text[z] == '[')
+										level++;
+
+									if (source_state.value.text[z] == ']') {
+										level--;
+
+										if (level == 0)
+											break;
+									}
+								}
+
+								char *height_end     = source_state.value.text + z;
+								size_t height_length = height_end - height;
+
+								size_t shift_amount  = arg_setpos_value.length >= height_length ? arg_setpos_value.length-height_length : height_length-arg_setpos_value.length;
+								bool shift_direction = arg_setpos_value.length >= height_length;
+
+								shift_buffer_chunk(source_dynamic.text, height_end-source_dynamic.text, source_dynamic.length, shift_amount, shift_direction);
+								memcpy(height, arg_setpos_value.text, arg_setpos_value.length);
+
+								source_dynamic.length                     += shift_amount * (shift_direction ? 1 : -1);
+								source_dynamic.text[source_dynamic.length] = '\0';
+								buffer_modified                            = true;
+							} else {
+								// If there's no "this setpos" then prepend it
+								merge_state.value.text   += 1;
+								merge_state.value.length -= 3;	// Get rid of quotation marks
+
+								shift_buffer_chunk(source_dynamic.text, source_state.value_start+1, source_dynamic.length, merge_state.value.length, OPTION_RIGHT);
+								memcpy(source_state.value.text+1, merge_state.value.text, merge_state.value.length);
+
+								source_dynamic.length                     += merge_state.value.length;
+								source_dynamic.text[source_dynamic.length] = '\0';
+								buffer_modified                            = true;
+							}
+						} else {
+							// Normal property value replacement
+							size_t shift_amount  = merge_state.value.length >= source_state.value.length ? merge_state.value.length-source_state.value.length : source_state.value.length-merge_state.value.length;
+							bool shift_direction = merge_state.value.length >= source_state.value.length;
+
+							shift_buffer_chunk(source_dynamic.text, source_state.value_end, source_dynamic.length, shift_amount, shift_direction);
+							memcpy(source_state.value.text, merge_state.value.text, merge_state.value.length);
+
+							source_dynamic.length                     += shift_amount * (shift_direction ? 1 : -1);
+							source_dynamic.text[source_dynamic.length] = '\0';
+							buffer_modified                            = true;
+						}
 					} break;
 
 					case SQM_OUTPUT_END_OF_SCOPE : {
@@ -2806,13 +2894,13 @@ int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_
 				
 				switch (source_result) {
 					case SQM_OUTPUT_CLASS : {
-						// If the clas exists in source then scan it recursively
-						if (SQM_Merge(merge, merge_state, source_dynamic, source_state))
+						// If the class already exists in the source then scan it recursively
+						if (SQM_Merge(merge, merge_state, source_dynamic, source_state, 0, empty_string))
 							buffer_modified = true;
 					} break;
 
 					case SQM_OUTPUT_END_OF_SCOPE : {
-						// If the class doesn't exist in source then copy the entire thing
+						// If the class doesn't exist in the source then copy the entire thing
 						SQM_Parse(merge, merge_state, SQM_ACTION_FIND_CLASS_END_CONVERT, empty_string);
 						
 						shift_buffer_chunk(source_dynamic.text, source_state.scope_end, source_dynamic.length, merge_state.class_length, OPTION_RIGHT);

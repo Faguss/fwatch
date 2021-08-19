@@ -3704,11 +3704,16 @@ case C_CLASS_READSQM:
 
 	global.option_error_output = OPTION_ERROR_ARRAY_CLOSE;
 	size_t arg_file            = empty_char_index;
+	bool arg_readsetpos        = false;
 	
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_FILE : 
 				arg_file = i + 1;
+				break;
+
+			case NAMED_ARG_READSETPOS :
+				arg_readsetpos = String_bool(argument[i+1]);
 				break;
 		}
 	}
@@ -3874,6 +3879,53 @@ case C_CLASS_READSQM:
 					) {
 						QWrite("_");
 						QWritel(state.property.text, state.value_end - state.property_start);
+
+						// Extract height number from init="this setpos"
+						if (arg_readsetpos && inside & CLASS_VEHICLES && strncmpi("init",state.property.text,state.property.length)==0 && strncmpi("\"this setPos",state.value.text,12)==0) {
+							int level      = 0;
+							int comma      = 0;
+							char *height   = NULL;
+							bool is_number = true;
+							size_t z       = 0;
+							
+							for (; z<state.value.length; z++) {
+								if (level == 1) {
+									if (height)
+										if (state.value.text[z]!=']' && state.value.text[z]!='.' && !isspace(state.value.text[z]) && !isdigit(state.value.text[z]))
+											is_number = false;
+									
+									if (state.value.text[z] == ',')
+										comma++;
+
+									if (comma==2  &&  !height)
+										height = state.value.text + z + 1;
+								}
+								
+								if (state.value.text[z] == '[')
+									level++;
+
+								if (state.value.text[z]==']') {
+									level--;
+
+									if (level == 0)
+										break;
+								}
+							}
+
+							if (height && is_number) {
+								state.value.text[z] = '\0';
+								QWrite("_setpos=[");
+
+								if (tolower(state.value.text[12]) == 'a')
+									QWrite("2,");
+								else
+									QWrite("1,");
+
+								QWrite(height);
+								QWrite("];");
+								state.value.text[z] = ']';
+							}
+						}
 					}
 				}
 			} break;
@@ -4025,7 +4077,9 @@ case C_CLASS_WRITE :
 	size_t arg_renameclass    = empty_char_index;
 	size_t arg_renameproperty = empty_char_index;
 	size_t arg_to             = empty_char_index;
-    size_t arg_offset         = empty_char_index;
+    size_t arg_offset         = empty_char_index;	
+	size_t arg_setpos         = empty_char_index;
+	const int setpos_size     = 128;
 	
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch(argument_hash[i]) {
@@ -4063,6 +4117,10 @@ case C_CLASS_WRITE :
 				
 			case NAMED_ARG_OFFSET :
 				arg_offset = i + 1;
+				break;
+
+			case NAMED_ARG_SETPOS :
+				arg_setpos = i + 1;
 				break;
 		}
 	}
@@ -4116,7 +4174,7 @@ case C_CLASS_WRITE :
 	StringDynamic file_contents_dynamic;
 	StringDynamic_init(file_contents_dynamic);
 
-	int buffer_max = file_size + 1 + argument[arg_merge].length;
+	int buffer_max = file_size + 1 + argument[arg_merge].length + (arg_setpos!=empty_char_index ? setpos_size : 0);
 	int result     = StringDynamic_allocate(file_contents_dynamic, buffer_max);
 	if (result != 0) {
 		QWrite_err(FWERROR_MALLOC, 2, "file_contents_dynamic", buffer_max);
@@ -4150,9 +4208,8 @@ case C_CLASS_WRITE :
 	int classpath_size    = 0;
 	size_t arg_path_pos   = 0;
 	
-	while ((item = String_tokenize(argument[arg_path],",",arg_path_pos,OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  classpath_size<SQM_CLASSPATH_CAPACITY) {
+	while ((item = String_tokenize(argument[arg_path],",",arg_path_pos,OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  classpath_size<SQM_CLASSPATH_CAPACITY)
 		classpath[classpath_size++] = item.text;
-	}
 	
 	if (argument[arg_offset].length != 0) {
 		source_state.i    = strtoul(argument[arg_offset].text, NULL, 0);
@@ -4180,7 +4237,7 @@ case C_CLASS_WRITE :
 			SQM_ParseState merge_state;
 			SQM_Init(merge_state);
 
-			if (SQM_Merge(argument[arg_merge], merge_state, file_contents_dynamic, source_state))
+			if (SQM_Merge(argument[arg_merge], merge_state, file_contents_dynamic, source_state, 0, empty_string))
 				save_changes = true;
 		}
 		
@@ -4261,7 +4318,37 @@ case C_CLASS_WRITE :
 					goto class_write_end;
 				}
 			}
+
+		// Add init line with changing object's height
+		if (arg_setpos != empty_char_index) {
+			size_t setpos_id    = SQM_SETPOS_NONE;
+			String setpos_value = empty_string;
+			String item         = empty_string;
+			size_t pos          = 0;
+			size_t index        = 0;
+			
+			while ((item = String_tokenize(argument[arg_setpos],",",pos,OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  index<2) {
+				if (index == 0) {
+					setpos_id = atoi(item.text);
+				} else {
+					setpos_value = item;
+				}
+
+				index++;
+			}
+
+			char setpos_line[setpos_size];
+			sprintf(setpos_line, "init=\"this setPos%s [getPos this select 0, getPos this select 1, %s]; \";", (setpos_id==SQM_SETPOS_ASL ? "ASL" : ""), setpos_value.text);
+
+			String merge = {setpos_line, strlen(setpos_line)};
+			SQM_ParseState merge_state;
+			SQM_Init(merge_state);
+
+			if (SQM_Merge(merge, merge_state, file_contents_dynamic, source_state, setpos_id, setpos_value))
+				save_changes = true;
+		}
 		
+
 		// Rewrite file
 		if (save_changes) {
 			if ((file = fopen(argument[arg_file].text, "wb"))) {
@@ -4276,7 +4363,7 @@ case C_CLASS_WRITE :
 			} else 
 				QWrite_err(FWERROR_ERRNO, errno, argument[arg_file].text);
 		} else 
-			if (!result && argument[arg_merge].length==0)
+			if (!result && argument[arg_merge].length==0 && arg_setpos==SQM_SETPOS_NONE)
 				QWrite_err(FWERROR_PARAM_ACTION, 0);
 			else
 				QWrite_err(FWERROR_NONE, 0);
@@ -4291,4 +4378,5 @@ case C_CLASS_WRITE :
 	
 	StringDynamic_end(file_contents_dynamic);
 	StringDynamic_end(buf_filename);
-} break;
+} 
+break;

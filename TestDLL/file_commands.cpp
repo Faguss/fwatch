@@ -331,7 +331,9 @@ case C_FILE_MODLIST:
 			"Missions", 
 			"MPMissions", 
 			"Templates", 
-			"SPTemplates"
+			"SPTemplates",
+			"MissionsUsers",
+			"MPMissionsUsers"
 		};
 		int sub_folder_num = sizeof(sub_folder) / sizeof(sub_folder[0]);
 

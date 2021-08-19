@@ -483,6 +483,12 @@ enum SQM_ACTION {
 	SQM_ACTION_FIND_CLASS_END_CONVERT
 };
 
+enum SQM_SETPOS {
+	SQM_SETPOS_NONE,
+	SQM_SETPOS_REL,
+	SQM_SETPOS_ASL
+};
+
 #define FNV_PRIME 16777619u
 #define FNV_BASIS 2166136261u
 
@@ -637,7 +643,7 @@ char*     str_replace(const char *strbuf, const char *strold, const char *strnew
 char*     strstr2_old(const char *arg1, size_t arg1_len, const char *arg2, size_t arg2_len, int options); //TODO: remove
 void      SQM_Init(SQM_ParseState &input);
 int       SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_find);
-int       SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source, SQM_ParseState &source_state);
+int       SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_dynamic, SQM_ParseState &source_state, size_t arg_setpos, String &arg_setpos_value);
 
 // winapi
 void DebugMessage(const char *first, ...); 
