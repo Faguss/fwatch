@@ -376,7 +376,7 @@ case C_IGSE_WRITE:
 					buffer_shift_amount    = line_len + (carriage_return ? 2 : 1);
 					buffer_shift_direction = OPTION_RIGHT;
 
-					shift_buffer_chunk(buffer, line_end_pos, file_size, buffer_shift_amount, buffer_shift_direction);
+					shift_buffer_chunk(buffer, line_start_pos, file_size, buffer_shift_amount, buffer_shift_direction);
 					memcpy(line_start+line_len, "\r\n", 2);
 				}
 				
@@ -998,31 +998,31 @@ case C_IGSE_LOAD:
 				break;
 		// When in the middle of the line
 		} else {
-			if ((c!='\r' && (arg_output==OUTPUT_SQS_SEPARATE || arg_output==OUTPUT_SQS))  ||  (arg_output!=OUTPUT_SQS_SEPARATE && arg_output!=OUTPUT_SQS)) {
-				// Begin the line
-				if (line_start == -1) {
-					line_start = pos;
-					line_empty = false;
-					line_split = 0;
-					
-					if (line_num >= arg_line_start) {
-						switch(arg_output) {
-							case OUTPUT_SQS_SEPARATE : {
-								if (arg_split_lines) {
-									StringDynamic_append(sqs_lines, "]+[[\"");
-								} else
-									StringDynamic_append(sqs_lines, "]+[\"");
-		
-								StringDynamic_appendf(sqs_offsets, "\"%d\"]+[", arg_offset_start + pos);
-							} break;
-							
-							case OUTPUT_SQS : {
+			// Begin the line
+			if (line_start == -1) {
+				line_start = pos;
+				line_empty = false;
+				line_split = 0;
+				
+				if (line_num >= arg_line_start) {
+					switch(arg_output) {
+						case OUTPUT_SQS_SEPARATE : {
+							if (arg_split_lines) {
 								StringDynamic_append(sqs_lines, "]+[[\"");
-							} break;
-						}
+							} else
+								StringDynamic_append(sqs_lines, "]+[\"");
+	
+							StringDynamic_appendf(sqs_offsets, "\"%d\"]+[", arg_offset_start + pos);
+						} break;
+						
+						case OUTPUT_SQS : {
+							StringDynamic_append(sqs_lines, "]+[[\"");
+						} break;
 					}
 				}
-				
+			}
+
+			if ((c!='\r' && (arg_output==OUTPUT_SQS_SEPARATE || arg_output==OUTPUT_SQS))  ||  (arg_output!=OUTPUT_SQS_SEPARATE && arg_output!=OUTPUT_SQS)) {	
 				// Save current character
 				if (line_num>=arg_line_start  &&  (arg_limit_line_length==-1 || (arg_limit_line_length!=-1 && pos-line_start<arg_limit_line_length) || arg_split_lines)) {
 					switch (arg_output) {
