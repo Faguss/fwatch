@@ -28,18 +28,16 @@ FUNCTION_MODS2STRING = {
 	{
 		_index = [_x, _all_modsID] call FUNCTION_FIND;
 		if (_index >= 0) then {
-			_mod_name      = "";
-			_mod_forcename = false;
-			_mod_size      = "";
-			_mod_version   = -1;
-			call (_all_mods select _index);
-			_verTXT        = Format ["%1", _mod_version];
+			_mod_name    = _all_modsNAME select _index;
+			_mod_size    = _all_modsSIZE select _index;
+			_mod_version = _all_modsVER select _index;
+			_verTXT      = Format ["%1", _mod_version];
 
 			if (_separator != ";") then {
 				// Show version difference
 				_index2 = [_x, FWATCH_MODLISTID] call FUNCTION_FIND;
 				if (_index2 >= 0) then {
-					_my_version = FWATCH_MODLISTVER select _index2;
+					_my_version = (FWATCH_MODLISTCFG select _index2) select 0;
 
 					if (_my_version < _mod_version) then {
 						_verTXT = Format [MAINMENU_STR select 50, _my_version, _mod_version]
@@ -113,7 +111,7 @@ FUNCTION_SHOW_RED_TEXT = {
 
 
 FUNCTION_IS_MOD_MISSING = {
-	private ["_index", "_add_to_missing", "_assign", "_my_version", "_mod_name", "_mod_sizearray", "_mod_version", "_index2", "_index3", "_j"];
+	private ["_index", "_add_to_missing", "_assign", "_my_version", "_mod_name", "_mod_sizearray", "_index2", "_index3", "_j"];
 
 	// _x is unique id of the missing mod. I need to find its index in the mod database so I can get name and version
 	_index = [_x, _all_modsID] call FUNCTION_FIND;
@@ -121,17 +119,15 @@ FUNCTION_IS_MOD_MISSING = {
 		_add_to_missing = true;
 		_assign         = false;
 		_my_version     = 0;
-		_mod_name       = "";
-		_mod_sizearray  = [];
-		_mod_version    = 0;
-		call (_all_mods select _index);
+		_mod_name       = _all_modsNAME select _index;
+		_mod_sizearray  = [0,0,0];
 
 		// Look for the mod id in the user's mod list
 		_index2 = [_x, FWATCH_MODLISTID] call FUNCTION_FIND;
 		if (_index2 >= 0) then {
 			_mod_name       = FWATCH_MODLIST select _index2;
-			_my_version     = FWATCH_MODLISTVER select _index2;
-			_add_to_missing = _my_version < _mod_version;				// If user has older version
+			_my_version     = (FWATCH_MODLISTCFG select _index2) select 0;
+			_add_to_missing = _my_version < (_all_modsVER select _index);				// If user has older version
 		} else {
 			_index3 = [_mod_name,FWATCH_MODLIST] call FUNCTION_FIND;
 			if (_index3 >= 0) then {
@@ -148,7 +144,7 @@ FUNCTION_IS_MOD_MISSING = {
 
 			_j = -1; 
 			while "_j=_j+1; _j<count _missing_mods_sizearray" do {
-				_missing_mods_sizearray set [_j, (_missing_mods_sizearray select _j)+(_mod_sizearray select _j)]
+				_missing_mods_sizearray set [_j, (_missing_mods_sizearray select _j)+((_all_modsSIZEARRAY select _index) select _j)]
 			}
 		}
 	}
@@ -464,11 +460,8 @@ FUNCTION_GET_EXECUTE_PARAMS = {
 			};
 			
 			_index = [_x, _all_modsID] call FUNCTION_FIND;
-			if (_index >= 0) then {
-				_mod_name = "";
-				call (_all_mods select _index);
-				
-				_string  = _string  + _mod_name;
+			if (_index >= 0) then {				
+				_string  = _string  + (_all_modsNAME select _index);
 				_string2 = _string2 + _x;
 			}
 		}
@@ -514,7 +507,7 @@ FUNCTION_BUILD_QUERY_STRING = {
 			
 			if (_index >= 0) then {
 				_mod = _mod + (if (_mod=="") then {""} else {","}) + (FWATCH_MODLISTID select _index);
-				_ver = _ver + (if (_ver=="") then {""} else {","}) + Format["%1",(FWATCH_MODLISTVER select _index)];
+				_ver = _ver + (if (_ver=="") then {""} else {","}) + Format["%1",(FWATCH_MODLISTCFG select _index) select 0];
 			}
 		};
 		
@@ -532,6 +525,24 @@ FUNCTION_BUILD_QUERY_STRING = {
 			_mod = _mod + (if (_mod=="") then {""} else {","}) + ((_this select 1) select _i);
 			_ver = _ver + (if (_ver=="") then {""} else {","}) + Format["%1",((_this select 2) select _i)];
 		};
+		
+		_output = _output + "&mod=" + _mod + "&ver=" + _ver;
+	};
+	
+	if ((_this select 0) == "allusermods") then {
+		_mod    = "";
+		_ver    = "";
+		_output = _output + " --post-data=";
+		_i      = 0;
+		
+		{
+			if (_x != "") then {
+				_mod = _mod + (if (_mod=="") then {""} else {","}) + _x;
+				_ver = _ver + (if (_ver=="") then {""} else {","}) + Format["%1",(FWATCH_MODLISTCFG select _i) select 0];
+			};
+			_i = _i + 1
+		} 
+		forEach FWATCH_MODLISTID;
 		
 		_output = _output + "&mod=" + _mod + "&ver=" + _ver;
 	};
@@ -597,14 +608,13 @@ FUNCTION_MSG_LB = {
 FUNCTION_REFRESH_MODLIST = {
 	_ok = call loadFile ":file modlist";
 	if (_ok select 0) then {
-		FWATCH_MODLIST     = _ok select 4; 
-		FWATCH_MODLISTID   = _ok select 5; 
-		FWATCH_MODLISTVER  = _ok select 6; 
-		FWATCH_MODLISTDATE = _ok select 7; 
-		FWATCH_CUSTOMFILE  = _ok select 8; 
-		FWATCH_CUSTOMSIZE  = _ok select 9; 
-		FWATCH_MODLISTHASH = _ok select 10;
-		FWATCH_USERNAME    = _ok select 11;
+		FWATCH_MODLIST      = _ok select 4; 
+		FWATCH_MODLISTID    = _ok select 5;
+		FWATCH_MODLISTCFG   = _ok select 6; 
+		FWATCH_CUSTOMFILE   = _ok select 7; 
+		FWATCH_CUSTOMSIZE   = _ok select 8; 
+		FWATCH_MODLISTHASH  = _ok select 9;
+		FWATCH_USERNAME     = _ok select 10;
 	} else {
 		titleText [((MAINMENU_STR select 63)+(_ok select 3)),"PLAIN DOWN",0.1]
 	}
@@ -641,11 +651,9 @@ FUNCTION_READ_DOWNLOADED_FILE = {
 
 	if (GS_DOWNLOAD_RESULT select 0) then {
 		_fileContent   = loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\schedule.sqf";
-		_fileIntegrity = loadFile ("\:STRING CUT start:-5 text:" + _fileContent);
+		_fileIntegrity = call _fileContent;
 
-		if (_fileIntegrity == ";true") then {
-			call _fileContent;
-		} else {
+		if (Format ["%1",_fileIntegrity] != "true") then {
 			_error = true;
 			
 			if (_fileContent != "") then {
@@ -710,7 +718,7 @@ FUNCTION_BUILD_PREVIEW_LINK = {
 	
 	_positions = call loadFile ("\:STRING FIND find:/text:"+_url);
 	if (count _positions > 0) then {
-		_url = loadFile (Format ["\:STRING CUT end:%1text:", _positions select (count _positions-1)] + _url);
+		_url = loadFile (Format ["\:STRING CUT end:%1 text:", _positions select (count _positions-1)] + _url);
 	};
 	
 	_i=-1;
@@ -819,7 +827,22 @@ FUNCTION_STRINGTABLE = {
 			"Dostpêpne aktualizacje modów: %1",		//87
 			"[Do³¹cz po skoñczeniu: %1]",		//88
 			"[Poka¿ prywatne mody]",			//89
-			"Napisz has³a do prywatnych modów"	//90
+			"Napisz has³a do prywatnych modów",	//90
+			"[Wyszukaj]",		//91
+			"Wpisz nazwê moda lub kategorii (rozszerzenie; zbióraddonów; uzupe³nienie; zbiórmisji; narzêdzia)",	//92
+			"Typ:",			//93
+			"Do pobrania:",		//94
+			"Doda³:",		//95
+			"Opis:",		//96
+			"wymusza oryginaln¹ nazwê",	//97
+			"niezgodny z gr¹ sieciow¹",	//98
+			"rozszerzenie",		//99
+			"zbiór addonów",		//100
+			"uzupe³nienie",		//101
+			"zbiórmisji",		//102
+			"narzêdzia",			//103
+			"Opcje pod prawym przyciskiem lub spacj¹",		//104
+			"[Dodaj do kolejki]"	//105
 		];
 	};
 	
@@ -915,7 +938,22 @@ FUNCTION_STRINGTABLE = {
 			"Îáíîâèòü ìîäû: %1",	//87
 			"[Ïîäêëþ÷èòüñÿ ïîñëå îêîí÷àíèÿ: %1]",		//88
 			"[Ïîêàçàòü ÷àñòíûå ìîäû]",			//89
-			"Ââåäèòå ïàðîëü, ÷òîáû ïðîñìîòðåòü ìîäû"	//90
+			"Ââåäèòå ïàðîëü, ÷òîáû ïðîñìîòðåòü ìîäû",	//90
+			"[Íàéòè]",		//91
+			"Ââåäèòå íàçâàíèå ìîäà èëè íàçâàíèå êàòåãîðèè (çàìåíà; àääîíû; äîïîëíåíèå; ìèññèè; èíñòðóìåíòû)",		//92
+			"Òèï:",			//93
+			"Ñêà÷àòü:",		//94
+			"Äîáàâëåí:",		//95
+			"Îïèñàíèå:",		//96
+			"Îñòàâèòü îðèãèíàëíîå íàçâàíèå",	//97
+			"íåñîâìåñòèìî ñ ñåòåâîé èãðîé",	//98
+			"çàìåíà",		//99
+			"àääîíû",		//100
+			"äîïîëíåíèå",		//101
+			"ìèññèè",		//102
+			"èíñòðóìåíòû",			//103
+			"ùåëêíèòå ïðàâîé êíîïêîé èëè ïðîáåë äëÿ ïàðàìåòðîâ",		//104
+			"[Äîáàâèòü â Î÷åðåäü]"	//105
 		];
 	};
 	
@@ -1011,9 +1049,32 @@ FUNCTION_STRINGTABLE = {
 			"Available mod updates: %1",	//87
 			"[Connect when done: %1]",		//88
 			"[Show Private Mods]",			//89
-			"Type in password(s) to show private mod(s)"	//90
+			"Type in password(s) to show private mod(s)",	//90
+			"[Search]",		//91
+			"Type mod or category name (replacement; addonpack; supplement; missionpack; tools)",		//92
+			"Type:",			//93
+			"Download:",		//94
+			"Added by:",		//95
+			"Description:",		//96
+			"force original name",	//97
+			"multiplayer incompatible",	//98
+			"replacement",		//99
+			"addonpack",		//100
+			"supplement",		//101
+			"missionpack",		//102
+			"tools",			//103
+			"Right-click or space for options",		//104
+			"[Add to Queue]"	//105
 		];
 	};
+	
+	MAINMENU_STR_MODCAT = [
+		["replacement","rozszerzenie","çàìåíà"],
+		["addonpack","zbióraddonów","àääîíû"],
+		["supplement","uzupe³nienie","äîïîëíåíèå"],
+		["missionpack","zbiórmisji","ìèññèè"],
+		["tools","narzêdzia","èíñòðóìåíòû"]
+	];
 };
 
 
@@ -1045,4 +1106,110 @@ FUNCTION_LBADD = {
 		lbSetValue [6657, _entry, _this select 1];
 		lbSetColor [6657, _entry, _this select 2];
 	}
-}
+};
+
+
+
+FUNCTION_SHOW_MOD_INFO = {
+	private ["_index", "_type", "_description"];
+	_index = _this select 0;
+	_type  = _this select 1;
+	
+	if (_index >= 0) then {
+		"ctrlShow [_x,false]" forEach _serverDialog;
+		"ctrlShow [_x,true ]" forEach [6460, 6461, 6462];
+	
+		ctrlSetText [6462, _all_modsNAME select _index];
+		
+		_description = MAINMENU_STR select (99 + (_all_modsTYPE select _index));
+		if (_all_modsFORCENAME select _index) then {_description=Format["%1\n%2",_description, MAINMENU_STR select 97]};
+		if (!(_all_modsISMP select _index)) then {_description=Format["%1\n%2",_description, MAINMENU_STR select 98]};
+		
+		[6480, _description] call FUNCTION_CTRLSETTEXT;
+		ctrlSetText [6480, MAINMENU_STR select 93];
+		
+		[6530, _all_modsADDEDBY select _index] call FUNCTION_CTRLSETTEXT;
+		ctrlSetText [6530, MAINMENU_STR select 95];
+		
+		[6550, _all_modsDESCRIPTION select _index] call FUNCTION_CTRLSETTEXT;
+		ctrlSetText [6550, MAINMENU_STR select 96];
+		
+		if ((_all_modsDESCRIPTION select _index) != "") then {
+			[6540, (call loadFile Format ["\:STRING DOMAIN url:%1", (_all_modsWEBSITE select _index)]) select 3] call FUNCTION_CTRLSETTEXT
+		};
+		
+		ctrlShow [6464, true];
+		ctrlSetText [6464, MAINMENU_STR select 104];
+			
+		// Showing info for users mods
+		if (_type == "local") then {
+			_index_local = [_all_modsID select _index, FWATCH_MODLISTID] call FUNCTION_FIND;
+			if (_index_local >= 0) then {
+				[6470, Format["%1",(FWATCH_MODLISTCFG select _index_local) select 0]] call FUNCTION_CTRLSETTEXT;
+				
+				if (((FWATCH_MODLISTCFG select _index_local) select 0) < (_all_modsVER select _index)) then {
+					[6472, true] call FUNCTION_SHOW_RED_TEXT;
+					[6490, _all_modsSIZE select _index] call FUNCTION_CTRLSETTEXT;
+					ctrlSetText [6490, MAINMENU_STR select 94];
+				}
+			};			
+		// Showing info for mods from the db
+		} else {
+			[6470, Format["%1",_all_modsVER select _index]] call FUNCTION_CTRLSETTEXT;
+			
+			[6490, _all_modsSIZE select _index] call FUNCTION_CTRLSETTEXT;
+			ctrlSetText [6490, MAINMENU_STR select 94];
+		};
+		
+		// Logo
+		["logo_mod", "schedulemodlogo.bin", _all_modsLOGO select _index, _all_modsID select _index, _all_modsLOGOHASH select _index, _all_modsNAME select _index, lbCurSel 6657] call FUNCTION_DISPLAY_LOGO;
+	} else {
+		"ctrlShow [_x,false]" forEach _serverDialog;
+	}
+};
+
+
+
+FUNCTION_DISPLAY_LOGO = {
+	private ["_img_folder", "_database", "_url", "_record_id", "_global_hash", "_record_title", "_cursel", "_extension", "_logohash", "_download"];
+	_img_folder   = _this select 0;
+	_database     = _this select 1;
+	_url          = _this select 2;
+	_record_id    = _this select 3;
+	_global_hash  = _this select 4;
+	_record_title = _this select 5;
+	_cursel       = _this select 6;
+	
+	ctrlSetText [6461, ""];
+
+	// Read local record
+	_extension = "";
+	_logohash  = "";
+	call loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1  read:%2", _database, _record_id];
+	
+	// If logo exist at all
+	if (_global_hash != "") then {
+		_download = true;
+		
+		// does it exist locally
+		if (_global_hash == _logohash) then {
+			_ok = call loadFile Format ["\:IGSE NEW  mode:check  file:..\fwatch\tmp\schedule\%1\%2.%3", _img_folder, _record_id, _extension];
+			if (_ok select 0) then {
+				ctrlSetText [6461, Format ["..\fwatch\tmp\schedule\%1\%2.%3", _img_folder, _record_id, _extension]];
+				_download = false;
+			}
+		} else {
+			loadFile Format ["\:IGSE NEW  file:..\fwatch\tmp\schedule\%1\%2.%3  mode:delete", _img_folder, _record_id, _extension];
+		};
+		
+		// if not then download it
+		if (_download) then {
+			["download", _img_folder, _database, _url, _record_id, _global_hash, _record_title, _cursel] exec "..\fwatch\data\MainMenu.sqs"
+		}
+	} else {
+		// remove it locally
+		if (_logohash != "") then {
+			loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1  key:%2write:_extension="""";_logohash="""";", _database, _record_id];
+		}
+	}
+};

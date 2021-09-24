@@ -316,6 +316,7 @@ struct GLOBAL_VARIABLES_TESTDLL {
 	float restore_float[26];
 	int restore_hud_int[ARRAY_SIZE];
 	float restore_hud_float[ARRAY_SIZE];
+	char path_buffer[512];
 
 	HANDLE out;
 	FILE *outf;

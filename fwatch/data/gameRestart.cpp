@@ -1769,7 +1769,7 @@ int main(int argc, char *argv[])
 					bool is_force = false;
 					
 					if (data.size() >= 5) {
-						if (Equals(data[4],"true")) {
+						if (Equals(data[4],"true") || Equals(data[4],"1")) {
 							is_force = true;
 							
 							for (int i=0; i<required_mods[ID].size(); i++)

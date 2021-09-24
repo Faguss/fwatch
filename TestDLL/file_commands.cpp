@@ -316,11 +316,10 @@ case C_FILE_MODLIST:
 	hFind		 = FindFirstFile("*", &fd);
 
 	if (hFind != INVALID_HANDLE_VALUE) {
-		StringDynamic Names, Attributes, Versions, Dates;
-		StringDynamic_init(Names);
-		StringDynamic_init(Attributes);
-		StringDynamic_init(Versions);
-		StringDynamic_init(Dates);
+		StringDynamic ModNames, ModID, ModCfg;
+		StringDynamic_init(ModNames);
+		StringDynamic_init(ModID);
+		StringDynamic_init(ModCfg);
 
 		char sub_folder[][16] = {
 			"addons", 
@@ -354,9 +353,11 @@ case C_FILE_MODLIST:
 				DWORD attributes = GetFileAttributes(path2);
 
 				if (attributes != -1  &&  attributes & FILE_ATTRIBUTE_DIRECTORY) {
-					StringDynamic_append(Names, "]+[\"");
-					StringDynamic_appendq(Names, fd.cFileName);
-					StringDynamic_append(Names, "\"");
+					StringDynamic_append(ModNames, "]+[\"");
+					StringDynamic_appendq(ModNames, fd.cFileName);
+					StringDynamic_append(ModNames, "\"");
+					StringDynamic_append(ModID, "]+[{");
+					StringDynamic_append(ModCfg, "]+[[");
 
 					sprintf(path2, "%s\\__gs_id", fd.cFileName);
 					FILE *f = fopen(path2, "r");
@@ -371,21 +372,29 @@ case C_FILE_MODLIST:
 
 						while ((item = String_tokenize(data,";",data_pos,OPTION_NONE)).length > 0) {
 							switch (index) {
-								case 0 : StringDynamic_appendf(Attributes, "]+[{%s}", item.text); break;
-								case 1 : StringDynamic_appendf(Versions, "]+[%s", item.text); break;
-								case 2 : StringDynamic_appendf(Dates, "]+[%s", item.text); break;
+								case 0 : StringDynamic_appends(ModID, item); break;
+								case 3 : StringDynamic_appendf(ModCfg, "{%s},", item.text); break;
+								case 4 : {
+									if (strcmpi(item.text,"0") == 0)
+										StringDynamic_append(ModCfg, "false");
+									else
+										if (strcmpi(item.text,"1") == 0)
+											StringDynamic_append(ModCfg, "true");
+										else
+											StringDynamic_appendf(ModCfg, "%s", item.text); break;
+								} break;
+								default : StringDynamic_appendf(ModCfg, "%s,", item.text); break;
 							}
 
 							index++;
 						}
 
 						fclose(f);
-					} else {
-						StringDynamic_append(Attributes, "]+[\"\"");
-						StringDynamic_append(Versions, "]+[0");
-						StringDynamic_append(Dates, "]+[0");
-					}
+					} else
+						StringDynamic_append(ModCfg, "0,[],{},0");
 
+					StringDynamic_append(ModID, "}");
+					StringDynamic_append(ModCfg, "]");
 					break;
 				}
 			}
@@ -464,19 +473,17 @@ case C_FILE_MODLIST:
 		
 		// Output result
 		QWrite_err(FWERROR_NONE, 0);
-		QWritef("[%s],[%s],[%s],[%s],\"%s", Names.text, Attributes.text, Versions.text, Dates.text, custom_filename);
+		QWritef("[%s],[%s],[%s],\"%s", ModNames.text, ModID.text, ModCfg.text, custom_filename);
 
 		FileSize size = DivideBytes(bytes);
 
 		unsigned int hash = FNV_BASIS;
-		hash              = fnv1a_hash(hash, Attributes.text, Attributes.length, OPTION_NONE);
-		hash              = fnv1a_hash(hash, Versions.text, Versions.length, OPTION_NONE);
+		hash              = fnv1a_hash(hash, ModCfg.text, ModCfg.length, OPTION_NONE);
 
 		QWritef("\",[%f,%f,%f],\"%u\",\"%s\"]", size.bytes, size.kilobytes, size.megabytes, hash, username);
-		StringDynamic_end(Names);
-		StringDynamic_end(Attributes);
-		StringDynamic_end(Versions);
-		StringDynamic_end(Dates);
+		StringDynamic_end(ModNames);
+		StringDynamic_end(ModID);
+		StringDynamic_end(ModCfg);
 	} else {
 		QWrite_err(FWERROR_WINAPI, 2, GetLastError(), username);
 		QWrite("[],[]]"); 

@@ -52,7 +52,7 @@ enum COMMAND_ID {
 
 unsigned long GetIP(char *host);
 void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT);
-int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_name);
+int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_name, int game_version);
 void ModfolderMissionsReturn(bool is_dedicated_server);
 
 void FwatchPresence(ThreadArguments *arg);
@@ -136,6 +136,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		x++;
 	}
 
+
+
+	// Temporary solution for a problem that I've created for myself
+	if (GetFileAttributes("ColdWarAssault.exe") != 0xFFFFFFFF)
+		rename("res\\bin\\resource.cpp","res\\bin\\resource_disabled.cpp");
 
 
 	// Create mailslot
@@ -520,7 +525,7 @@ void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, i
 
 
 // Move mission files from the selected modfolder to the game missions folder
-int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_name)
+int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_name, int game_version)
 {
 	int file_count    = 0;
 	char filename[64] = "fwatch\\data\\sortMissions";
@@ -569,6 +574,9 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_
 			"Users\\"
 		};
 
+		if (game_version != VER_196)
+			strcpy(folder_dst[4], "Addons");
+
 		strcat(folder_dst[5], player_name);
 		strcat(folder_dst[5], "\\Missions");
 		strcat(folder_dst[6], player_name);
@@ -577,11 +585,6 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_
 		int folder_num           = sizeof(folder_src) / sizeof(folder_src[0]);
 		wchar_t folder_src_w[64] = L"";
 		wchar_t folder_dst_w[64] = L"";
-		bool create_res_addons   = true;
-		DWORD attributes         = GetFileAttributes("Res\\Addons");
-
-		if (attributes != 0xFFFFFFFF && attributes & FILE_ATTRIBUTE_DIRECTORY)
-			create_res_addons = false;
 
 		if (strcmp(player_name,"") == 0)
 			folder_num -= 2;
@@ -639,19 +642,13 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_
 						wcscpy(source_w + mod_len + folder_src_len + 2, fd.cFileName);
 						wcscpy(destination_w + folder_dst_len + 1, fd.cFileName);
 
-						if (i==4 && create_res_addons) {
-							CreateDirectory("Res", NULL);
-							CreateDirectory("Res\\Addons", NULL);
-							create_res_addons = false;
-						}
-
 						WideCharToMultiByte(CP_UTF8,0,source_w,-1,source,1023,NULL,NULL);
 						WideCharToMultiByte(CP_UTF8,0,destination_w,-1,destination,1023,NULL,NULL);
 
 						if (MoveFileExW(source_w, destination_w, 0)) {
 							file_count++;
 
-							if (i >= 5)
+							if (i >= 5  || (game_version!=VER_196 && i>=4))
 								fprintf(f, "%s?%s\n", source, destination);
 							else
 								fprintf(f, "%s\n", source);
@@ -1209,7 +1206,7 @@ void FwatchPresence(ThreadArguments *arg)
 				transfer_missions = false;
 
 				for (int i=game_mods_num-1; i>=0; i--)
-					transfered_missions += ModfolderMissionsTransfer(game_mods[i], arg->is_dedicated_server, player_name);
+					transfered_missions += ModfolderMissionsTransfer(game_mods[i], arg->is_dedicated_server, player_name, global_exe_version[game_exe_index]);
 			}
 
 			// Refresh master servers (user can change them in the main menu)

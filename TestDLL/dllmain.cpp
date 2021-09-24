@@ -144,6 +144,15 @@ HANDLE WINAPI NewCreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD  dw
 			strcpy((char*) lpFileName, "fwatch\\data\\true.sqf");
 
 		}
+
+		// On CWA there shouldn't be "Res" folder so we redirect from res\addons to addons
+		if (global_exe_version[global.exe_index]!=VER_196  &&  strncmpi(lpFileName,"anims\\..\\Res\\addons\\",20)==0) {
+			if (len < 511) {
+				strcpy(global.path_buffer, lpFileName);
+				shift_buffer_chunk(global.path_buffer, 13, len+1, 4, OPTION_LEFT);
+				lpFileName = global.path_buffer;
+			}
+		}
 	}
 
 
