@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2021,9,24,5,2,51,36,439,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2021,10,6,3,19,8,36,633,120,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -258,22 +258,6 @@
 	FWATCH_USERNAME    = "";
 	FWATCH_CURRMOD     = call loadFile ":mem modlist"
 	call FUNCTION_REFRESH_MODLIST
-	? _silent_mode : goto "DownloadMods"
-
-	; Put directories to the listbox
-	#ListModfolders
-	"ctrlShow [_x, false] " forEach [6301, 6311]
-	"ctrlSetText [_x,""""]" forEach [6300, 6301]
-	"ctrlShow [_x,false]" forEach _serverDialog
-
-	lbClear 6657
-	lbSetCurSel [6657,-1]
-	? count FWATCH_CURRMOD > 0 : [MAINMENU_STR select 6, 1, _color_gingerbrown] call FUNCTION_LBADD
-	[MAINMENU_STR select 82, 4, _color_gingerbrown] call FUNCTION_LBADD
-
-	_id = 0;
-	_i = 0
-	"_id=lbAdd [6657, _x]; lbSetData [6657, _id, FWATCH_MODLISTID select _i]; lbSetValue [6657, _id, 2]; if (_x in _mods) then {lbSetColor [6657, _id, [1,0,0,0.5]]; lbSetValue [6657, _id, 3]} else {if([_x,FWATCH_CURRMOD] call FUNCTION_FIND>=0) then {lbSetColor [6657,_id,[1,0.8,0.9,0.5]]}}; _i=_i+1" forEach FWATCH_MODLIST
 	
 	; load mod info
 	_all_url             = []
@@ -292,6 +276,23 @@
 	_all_modsLOGO        = []
 	_all_modsLOGOHASH    = []
 	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  read:modsread:url"
+	
+	? _silent_mode : goto "DownloadMods"
+
+	; Put directories to the listbox
+	#ListModfolders
+	"ctrlShow [_x, false] " forEach [6301, 6311]
+	"ctrlSetText [_x,""""]" forEach [6300, 6301]
+	"ctrlShow [_x,false]" forEach _serverDialog
+
+	lbClear 6657
+	lbSetCurSel [6657,-1]
+	? count FWATCH_CURRMOD > 0 : [MAINMENU_STR select 6, 1, _color_gingerbrown] call FUNCTION_LBADD
+	[MAINMENU_STR select 82, 4, _color_gingerbrown] call FUNCTION_LBADD
+
+	_id = 0;
+	_i = 0
+	"_id=lbAdd [6657, _x]; lbSetData [6657, _id, FWATCH_MODLISTID select _i]; lbSetValue [6657, _id, 2]; if (_x in _mods) then {lbSetColor [6657, _id, [1,0,0,0.5]]; lbSetValue [6657, _id, 3]} else {if([_x,FWATCH_CURRMOD] call FUNCTION_FIND>=0) then {lbSetColor [6657,_id,[1,0.8,0.9,0.5]]}}; _i=_i+1" forEach FWATCH_MODLIST
 	
 	? Format ["%1",_last_selected]!="scalar bool array string 0xfcffffef" : lbSetCurSel [6657, _last_selected+9]; lbSetCurSel [6657, _last_selected]; _last_selected=nil
 	goto "ResetLMB"
@@ -373,12 +374,13 @@
 		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:savestate"
 		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
 		? _install_status >= 0 : if (_silent_mode) then {_progress=call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"; titleText [_progress, "PLAIN", 0.1]; exit} else {goto "InstallDisplay"}
-
+	
+	; Silent mode - download only once per game launch
 	? !_silent_mode : goto "SkipSilent"
 	_start_time_old = ""
 	_start_time_new = (call loadFile ":info starttime") select 4
 	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  read:starttime"
-	? Format ["%1",_start_time_old] == Format ["%1",_start_time_new] : exit
+	? Format ["%1",_start_time_old] == Format ["%1",_start_time_new] : goto "SilentModeSkipDownload"
 	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:starttimewrite:_start_time_old=%1", _start_time_new]
 	#SkipSilent
 	
@@ -458,10 +460,10 @@
 	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:urlwrite:_all_url=" + (_all_url call FLIB_FORMAT) + ";_all_mirror=" + (_all_mirror call FLIB_FORMAT) + Format[";_update_available=%1;GS_FWATCH_LAST_UPDATE=%2",_update_available,GS_FWATCH_LAST_UPDATE])
 	GS_DOWNLOAD_MODSLIST = false
 	
+	#SilentModeSkipDownload
 	? _update_available : if (_silent_mode) then {titleText [MAINMENU_STR select 86,"PLAIN DOWN",1]; exit} else {goto "DisplayUpdateInformation"}
 	
 	; Verify modfolders
-	#VerifyModfolders
 	_missing_mods               = []
 	_missing_mods_id            = []
 	_missing_mods_name          = []
@@ -469,9 +471,10 @@
 	_missing_mods_myversion     = []
 	_missing_mods_sizearray     = [0,0,0]
 	_missing_mods_size          = ""
+	
+	#VerifyModfolders
 	_mods_that_user_doesnt_have = []
 	_mods_that_user_has         = []
-	;FUNCTION_IS_MOD_MISSING forEach _all_modsID
 	
 		_i = 0
 		? count _all_modsID == 0 : goto "DownloadMods_CheckForMissingMods_Skip" 

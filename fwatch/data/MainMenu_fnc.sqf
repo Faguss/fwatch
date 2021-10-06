@@ -1141,9 +1141,10 @@ FUNCTION_SHOW_MOD_INFO = {
 		ctrlShow [6464, true];
 		ctrlSetText [6464, MAINMENU_STR select 104];
 			
+		_index_local = [_all_modsID select _index, FWATCH_MODLISTID] call FUNCTION_FIND;
+		
 		// Showing info for users mods
 		if (_type == "local") then {
-			_index_local = [_all_modsID select _index, FWATCH_MODLISTID] call FUNCTION_FIND;
 			if (_index_local >= 0) then {
 				[6470, Format["%1",(FWATCH_MODLISTCFG select _index_local) select 0]] call FUNCTION_CTRLSETTEXT;
 				
@@ -1152,11 +1153,18 @@ FUNCTION_SHOW_MOD_INFO = {
 					[6490, _all_modsSIZE select _index] call FUNCTION_CTRLSETTEXT;
 					ctrlSetText [6490, MAINMENU_STR select 94];
 				}
-			};			
+			};
 		// Showing info for mods from the db
 		} else {
-			[6470, Format["%1",_all_modsVER select _index]] call FUNCTION_CTRLSETTEXT;
+			_description = Format ["%1",_all_modsVER select _index];
 			
+			if (_index_local >= 0) then {
+				if (((FWATCH_MODLISTCFG select _index_local) select 0) != (_all_modsVER select _index)) then {
+					_description = Format ["%1 --> %2", (FWATCH_MODLISTCFG select _index_local) select 0, _all_modsVER select _index];
+				}
+			};
+			
+			[6470, _description] call FUNCTION_CTRLSETTEXT;
 			[6490, _all_modsSIZE select _index] call FUNCTION_CTRLSETTEXT;
 			ctrlSetText [6490, MAINMENU_STR select 94];
 		};
