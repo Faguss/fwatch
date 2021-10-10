@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2021,10,6,3,19,8,36,633,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2021,10,9,6,22,24,11,553,120,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -370,6 +370,7 @@
 		_playingNow         = false
 		_access_code_mod    = ""
 		_mod_search_phrase  = ""
+		_progress           = ""
 		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  read:accesscodemodread:modsearch"
 		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:savestate"
 		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
@@ -667,6 +668,7 @@
 		_gamerestart_time   = ""
 		_voice_name         = ""
 		_run_voice_program  = false
+		_progress           = ""
 		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:savestate"
 		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
 		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\restart_info.sqf"
@@ -1064,6 +1066,7 @@
 	
 	_pid            = _ok select 4
 	_install_status = 0
+	_progress       = ""
 	? Format ["%1",_pid] == "scalar bool array string 0xfcffffef" : titleText [Format [MAINMENU_STR select 40,_result], "PLAIN", 1.5]; goto "Schedule"
 
 	; Save variables indicating that installation started
@@ -1089,7 +1092,8 @@
 
 		; Wait for the program to finish
 		#InstallWait
-		_progress = call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
+		_progressText = loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
+		if (count (call loadFile ("\:STRING FIND find:""text:"+_progressText)) == 2) then {_progress=call _progressText}
 		? _progress == "" : _progress=MAINMENU_STR select 10
 		? !(_auto_restart in [_current_auto_restart])   : goto "InstallDisplay"
 		? !(_run_voice_program in [_current_run_voice]) : goto "InstallDisplay"

@@ -628,7 +628,7 @@ void WriteProgressFile(int status, string input)
 
 	progressLog << "_auto_restart=" << (global.restart_game ? "true" : "false") 
 				<< ";_run_voice_program=" << (global.run_voice_program ? "true" : "false")
-				<< ";_install_status=" << status << ";\"" << ReplaceAll(input, "\"", "\"\"") << "\"";
+				<< ";_install_status=" << status << ";\"" << ReplaceAll(input, "\"", "'") << "\"";
 	progressLog.close();
 };
 
@@ -981,12 +981,12 @@ int ParseUnpackLog(string &error, string &file_name)
 			size_t percent = text.find_last_of("%");
 
 			if (percent != string::npos) {
-				if (percent < 2)
+				if (percent < 3)
 					percent = 0;
 				else
-					percent -= 2;
+					percent -= 3;
 
-				percentage  = text.substr(percent, 3);
+				percentage  = Trim(text.substr(percent, 4));
 				size_t dash = text.find("- ");
 
 				if (dash != string::npos)
