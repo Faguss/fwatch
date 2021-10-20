@@ -441,6 +441,7 @@ struct SQM_ParseState {
 	String class_name;          // Last encountered class
 	size_t class_start;
 	size_t class_end;
+	size_t class_name_end;
 	size_t class_length;
 	size_t class_name_start;    // including the word class itself
 	size_t class_name_full_end; // including the inherit

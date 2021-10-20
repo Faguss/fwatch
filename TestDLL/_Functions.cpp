@@ -2636,6 +2636,7 @@ int SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_
 							state.class_name.text   = input.text + state.word_start;
 							state.class_name.length = state.i - state.word_start;
 							state.class_name_start  = state.word_start;
+							state.class_name_end    = state.i;
 							state.inherit.text      = state.empty_char;
 							state.inherit.length    = 0;
 						} else {

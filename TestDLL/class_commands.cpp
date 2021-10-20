@@ -3835,13 +3835,28 @@ case C_CLASS_READSQM:
 	int units_in_this_group     = 0;
 	SQM_ParseState state;
 	SQM_Init(state);
+	int items_expect[capacity]  = {0};
+	int items_current[capacity] = {0};
+	int items_highest[capacity] = {-1};
+	int inside_backup[capacity] = {0};
+	int opened_classes_backup[capacity][capacity] = {0};
+	SQM_ParseState state_backup[capacity];
 	
+	for (i=0; i<capacity; i++)
+		items_highest[i] = -1;
+
 	while (state.i < file_content.length) {
 		switch (SQM_Parse(file_content, state, SQM_ACTION_GET_NEXT_ITEM, empty_string)) {
-			case SQM_OUTPUT_PROPERTY : {								
+			case SQM_OUTPUT_PROPERTY : {
 				if (inside & CLASS_MISSION) {
+					// Items have to be output in order - check if that is the case
+					bool in_order = true;
+					for (int y=state.class_level-1; y>=0; y--)
+						if (items_highest[y]!=-1  &&  items_current[y]!=items_expect[y])
+							in_order = false;
+
 					// Convert array format by replacing brackets
-					if (state.property.text[state.property.length-1]==']' && state.property.text[state.property.length-2]=='[') {
+					if (in_order  &&  state.property.text[state.property.length-1]==']' && state.property.text[state.property.length-2]=='[') {
 						state.property.text[state.property.length-1] = ' ';
 						state.property.text[state.property.length-2] = ' ';
 						
@@ -3860,7 +3875,7 @@ case C_CLASS_READSQM:
 					}
 					
 					// Remove "side=" from a group
-					if (inside & CLASS_GROUPS && inside & CLASS_ITEM && ~inside & CLASS_VEHICLES) {
+					if (in_order  &&  inside & CLASS_GROUPS  &&  inside & CLASS_ITEM  &&  ~inside & CLASS_VEHICLES) {
 						if (strncmpi("side",state.property.text,state.property.length)==0) {
 							if (state.value.text[state.value.length-1] == ';')
 								state.value.length--;
@@ -3868,14 +3883,25 @@ case C_CLASS_READSQM:
 							QWrites(state.value);
 						}
 					}
-					
+
+					// Remember this position so we can come back here when items aren't in order
+					if (strncmpi("items",state.property.text,state.property.length) == 0) {
+						state_backup[state.class_level]  = state;
+						inside_backup[state.class_level] = inside;
+						
+						for (int y=0; y<capacity; y++)
+							opened_classes_backup[state.class_level][y] = opened_classes[y];
+					}
+
 					// Convert properties to local vars by adding underscore
 					if (
-						(inside & CLASS_GROUPS && inside & CLASS_VEHICLES && inside & CLASS_ITEM && state.class_level==5) || 
+						((inside & CLASS_GROUPS && inside & CLASS_VEHICLES && inside & CLASS_ITEM && state.class_level==5) || 
 						(inside & CLASS_GROUPS && inside & CLASS_WAYPOINTS && inside & CLASS_ITEM && state.class_level==5) ||
 						(~inside & CLASS_GROUPS && (inside & CLASS_VEHICLES || inside & CLASS_MARKERS || inside & CLASS_SENSORS) && inside & CLASS_ITEM) ||
 						(inside & CLASS_EFFECTS) || 
-						inside & CLASS_INTEL
+						inside & CLASS_INTEL)
+						&&
+						in_order
 					) {
 						QWrite("_");
 						QWritel(state.property.text, state.value_end - state.property_start);
@@ -3930,37 +3956,56 @@ case C_CLASS_READSQM:
 				}
 			} break;
 			
-			case SQM_OUTPUT_CLASS : {							
+			case SQM_OUTPUT_CLASS : {
 				for (int z=0; z<class_max; z++) {
 					if (strncmpi(state.class_name.text,class_names[z],strlen(class_names[z])) == 0) {
 						int level             = state.class_level - 1;
 						int opened            = class_ids[z];
 						opened_classes[level] = opened;
 						inside               |= opened;
-										
-						if (inside & CLASS_MISSION)
+
+						bool in_order = true;
+						for (int y=level-1; y>=0; y--)
+							if (items_highest[y]!=-1  &&  items_current[y]!=items_expect[y])
+								in_order = false;
+
+						if (inside & CLASS_MISSION  &&  in_order) {
 							switch (opened) {
 								case CLASS_INTEL  : QWrite("_Intel={"); break;
 								case CLASS_GROUPS : QWrite("_Groups=["); break;
 								
 								case CLASS_ITEM : {
-									// Soldier group
-									if (inside & CLASS_GROUPS && level==2)
-										QWrite("[");
-										
-									// Soldier
-									if ((inside & CLASS_GROUPS && (inside & CLASS_VEHICLES || inside & CLASS_WAYPOINTS))) {
-										if (units_in_this_group > 0)
-											QWrite(",{");
-										else
-											QWrite("{");
-
-										units_in_this_group++;
-									}
+									// Find out class item number
+									char backup                             = file_content.text[state.class_name_end];
+									file_content.text[state.class_name_end] = '\0';
+									int item_number                         = atoi(state.class_name.text+4);
+									file_content.text[state.class_name_end] = backup;
+									items_current[level]                    = item_number;
 									
-									// Vehicle
-									if (~inside & CLASS_GROUPS && (inside & (CLASS_VEHICLES|CLASS_MARKERS|CLASS_SENSORS)))
-										QWrite("{");
+									// Remember the highest item number
+									if (items_current[level] > items_highest[level])
+										items_highest[level] = items_current[level];
+
+									// Output only if the item number is correct
+									if (items_current[level] == items_expect[level]) {
+										// Soldier group
+										if (inside & CLASS_GROUPS && level==2)
+											QWrite("[");
+											
+										// Soldier
+										if ((inside & CLASS_GROUPS && (inside & CLASS_VEHICLES || inside & CLASS_WAYPOINTS))) {
+											if (units_in_this_group > 0)
+												QWrite(",{");
+											else
+												QWrite("{");
+
+											units_in_this_group++;
+										}
+										
+										// Vehicle
+										if (~inside & CLASS_GROUPS && (inside & (CLASS_VEHICLES|CLASS_MARKERS|CLASS_SENSORS)))
+											QWrite("{");
+									}
 								} break;
 								
 								case CLASS_WAYPOINTS : {
@@ -3985,6 +4030,7 @@ case C_CLASS_READSQM:
 								case CLASS_SENSORS : QWrite("_Sensors=["); break;
 								case CLASS_EFFECTS : QWrite("_Effects={"); break;
 							}
+						}
 						
 						break;
 					}
@@ -4005,45 +4051,73 @@ case C_CLASS_READSQM:
 					goto class_readsqm_endparsing;
 				}
 				
-				if (inside & CLASS_MISSION)
-					switch (closed) {
-						case CLASS_INTEL    : QWrite("};"); break;
-						case CLASS_GROUPS   : QWrite("];"); break;
-						case CLASS_ITEM : {
-							// Soldier group
-							if (inside & CLASS_GROUPS && level==2) {
-								QWrite("]]+[");
-								units_in_this_group = 0;
-							}
-							
-							// Soldier/Waypoint
-							if (inside & CLASS_GROUPS && (inside & CLASS_VEHICLES || inside & CLASS_WAYPOINTS))
-								QWrite("}");
-							
-							// Vehicle
-							if (~inside & CLASS_GROUPS && inside & (CLASS_VEHICLES|CLASS_MARKERS|CLASS_SENSORS))
-								QWrite("}]+[");
-						} break;
+				if (inside & CLASS_MISSION) {
+					// Loop back if the item with the highest number wasn't printed yet
+					if (closed!=CLASS_ITEM  &&  items_expect[level+1]<=items_highest[level+1]) {
+						state  = state_backup[level+1];
+						inside = inside_backup[level+1];
 						
-						case CLASS_WAYPOINTS : QWrite("]"); break;
-						
-						case CLASS_VEHICLES : {
-							if (~inside & CLASS_GROUPS)
-								QWrite("];");
-							else {
-								class_vehicles_started = false;
-								QWrite("]");
-							}
-						} break;
-						
-						case CLASS_MARKERS : QWrite("];"); break;
-						case CLASS_SENSORS : QWrite("];"); break;
-						case CLASS_EFFECTS : QWrite("};"); break;
+						for (int y=0; y<capacity; y++)
+							opened_classes[y] = opened_classes_backup[level+1][y];
+
+						continue;
+					} else {
+						// Reset items counters
+						items_expect[level+1]  = 0;
+						items_current[level+1] = 0;
+						items_highest[level+1] = -1;
 					}
+
+					bool in_order = true;
+					for (int y=level-1; y>=0; y--)
+						if (items_highest[y]!=-1  &&  items_current[y]!=items_expect[y])
+							in_order = false;
+
+					if (in_order)
+						switch (closed) {
+							case CLASS_INTEL    : QWrite("};"); break;
+							case CLASS_GROUPS   : QWrite("];"); break;
+							case CLASS_ITEM : {
+								// Output only if the item number is correct
+								if (items_current[level] == items_expect[level]) {
+									items_expect[level]++;
+
+									// Soldier group
+									if (inside & CLASS_GROUPS && level==2) {
+										QWrite("]]+[");
+										units_in_this_group = 0;
+									}
+									
+									// Soldier/Waypoint
+									if (inside & CLASS_GROUPS && (inside & CLASS_VEHICLES || inside & CLASS_WAYPOINTS))
+										QWrite("}");
+									
+									// Vehicle
+									if (~inside & CLASS_GROUPS && inside & (CLASS_VEHICLES|CLASS_MARKERS|CLASS_SENSORS))
+										QWrite("}]+[");
+								}
+							} break;
+							
+							case CLASS_WAYPOINTS : QWrite("]"); break;
+							
+							case CLASS_VEHICLES : {
+								if (~inside & CLASS_GROUPS)
+									QWrite("];");
+								else {
+									class_vehicles_started = false;
+									QWrite("]");
+								}
+							} break;
+							
+							case CLASS_MARKERS : QWrite("];"); break;
+							case CLASS_SENSORS : QWrite("];"); break;
+							case CLASS_EFFECTS : QWrite("};"); break;
+						}
+				}
 			} break;
 		}
 	}
-	
+
 	class_readsqm_endparsing:
 
 	//---------------------------------------------------------------------------
