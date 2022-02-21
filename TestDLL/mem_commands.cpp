@@ -1211,6 +1211,16 @@ case C_MEM_MODLIST:
 
 //[[ifc22.dll + 0x2C154] + 0x0] + 0x0
 
+	bool arg_lower = false;
+
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_LOWERCASE : 
+				arg_lower = String_bool(argument[i+1]); 
+				break;
+		}
+	}
+
 	int base             = global.exe_address_ifc22 + 0x2C154;
 	char parameters[512] = "";
 
@@ -1225,7 +1235,10 @@ case C_MEM_MODLIST:
 	bool add_comma     = false;
 	QWrite("[");
 	
-	for (int i=0; i<512; i++) {
+	for (i=0; i<512; i++) {
+		if (arg_lower)
+			parameters[i] = tolower(parameters[i]);
+		
 		// Beginning of a parameter
 		if (!isspace(parameters[i])  &&  parameters[i]!='\0'  &&  word_begin==-1)
 			word_begin = i;

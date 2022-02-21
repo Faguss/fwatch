@@ -344,8 +344,8 @@ case C_STRING_COMPARE:
 	QWritef("%d", 
 		arg_natural_sort 
 			? arg_case_sensitive 
-				? strnatcasecmp(argument[arg_text1].text, argument[arg_text2].text) 
-				: strnatcmp(argument[arg_text1].text, argument[arg_text2].text)
+				? strnatcmp(argument[arg_text1].text, argument[arg_text2].text) 
+				: strnatcasecmp(argument[arg_text1].text, argument[arg_text2].text)
 			: arg_case_sensitive 
 				? strcmp(argument[arg_text1].text, argument[arg_text2].text) 
 				: strcmpi(argument[arg_text1].text, argument[arg_text2].text)

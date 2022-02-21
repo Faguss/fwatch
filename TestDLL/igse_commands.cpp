@@ -524,8 +524,16 @@ break;
 case C_IGSE_LIST:
 { // IGSE List of files
 
+	enum IGSE_LIST_LIMITTO {
+		NO_LIMIT     = 0,
+		ONLY_FILES   = 1,
+		ONLY_FOLDERS = 2
+	};
+
 	bool arg_system_time = false;
-	int arg_only_name    = false;
+	bool arg_lowercase   = false;
+	bool arg_only_name   = false;
+	int arg_limit_to     = NO_LIMIT;
 	char default_path[2] = "*";
 	String arg_path      = {default_path, 1};
 
@@ -541,6 +549,20 @@ case C_IGSE_LIST:
 
 			case NAMED_ARG_PATH :
 				arg_path = argument[i+1];
+				break;
+
+			case NAMED_ARG_LOWERCASE : 
+				arg_lowercase = String_bool(argument[i+1]);
+				break;
+
+			case NAMED_ARG_LIMITTO :
+				if (strcmpi(argument[i+1].text,"files") == 0)
+					arg_limit_to = ONLY_FILES;
+				else
+					if (strcmpi(argument[i+1].text,"folders") == 0)
+						arg_limit_to = ONLY_FOLDERS;
+					else
+						arg_limit_to = NO_LIMIT;
 				break;
 		}
 	}
@@ -570,6 +592,16 @@ case C_IGSE_LIST:
 		do {
 			if (strcmp(file_data.cFileName,".")==0  ||  strcmp(file_data.cFileName,"..")==0)
 				continue;
+
+			if (arg_limit_to==ONLY_FILES  &&  file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+				continue;
+
+			if (arg_limit_to==ONLY_FOLDERS  &&  ~file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+				continue;
+
+			if (arg_lowercase)
+				for (int i=0; file_data.cFileName[i]!='\0'; i++)
+					file_data.cFileName[i] = tolower(file_data.cFileName[i]);
 
 			StringDynamic_append(Names, "]+[\"");
 			StringDynamic_appendq(Names, file_data.cFileName);

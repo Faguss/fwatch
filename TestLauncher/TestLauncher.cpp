@@ -410,6 +410,22 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	unlink("fwatch_info.sqf");
 	unlink("fwatch\\data\\pid.db");
 	CloseHandle(mailslot);
+
+	WIN32_FIND_DATA FileInformation;
+	HANDLE hFile = FindFirstFile("fwatch\\tmp\\_exelog\\*", &FileInformation);
+	char del_path[128];
+	
+	if (hFile != INVALID_HANDLE_VALUE) {
+		do {
+			if (FileInformation.cFileName[0] != '.') {
+				sprintf(del_path, "fwatch\\tmp\\_exelog\\%s", FileInformation.cFileName);
+				DeleteFile(del_path);
+			}
+		}
+		while (FindNextFile(hFile, &FileInformation) == TRUE);
+		FindClose(hFile);
+	}
+
     return 0;
 }
 
@@ -1897,17 +1913,13 @@ void WatchProgram(ThreadArguments *arg)
 							SECURITY_ATTRIBUTES sa;
 							sa.nLength              = sizeof(sa);
 							sa.lpSecurityDescriptor = NULL;
-							sa.bInheritHandle       = TRUE;       
+							sa.bInheritHandle       = TRUE;
 
-							HANDLE logfile_stdout = CreateFile(TEXT("fwatch\\tmp\\exelog.txt"),
-								FILE_WRITE_DATA,
-								FILE_SHARE_WRITE | FILE_SHARE_READ,
-								&sa,
-								CREATE_ALWAYS,
-								FILE_ATTRIBUTE_NORMAL,
-								NULL );
+							CreateDirectory("fwatch\\tmp\\_exelog", NULL);
+							char logfilename[128];
+							sprintf(logfilename, "fwatch\\tmp\\_exelog\\%d", db_id);
 
-							HANDLE logfile_stderr = CreateFile(TEXT("fwatch\\tmp\\exelog_err.txt"),
+							HANDLE logfile_stdout = CreateFile((LPTSTR)logfilename,
 								FILE_WRITE_DATA,
 								FILE_SHARE_WRITE | FILE_SHARE_READ,
 								&sa,
@@ -1923,7 +1935,7 @@ void WatchProgram(ThreadArguments *arg)
 							si.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
 							si.wShowWindow = SW_HIDE;
 							si.hStdOutput  = logfile_stdout;
-							si.hStdError   = logfile_stderr;
+							si.hStdError   = logfile_stdout;
 							ZeroMemory(&pi, sizeof(pi));
 
 							if (CreateProcess(exe_path, params, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
@@ -2059,7 +2071,6 @@ void WatchProgram(ThreadArguments *arg)
 							}
 
 							CloseHandle(logfile_stdout);
-							CloseHandle(logfile_stderr);
 						}
 					}
 

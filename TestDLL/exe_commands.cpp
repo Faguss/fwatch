@@ -343,7 +343,7 @@ case C_RESTART_SERVER:
 
 			char *last_slash = strrchr(argument[arg_file1].text, '\\');
 			int length       = last_slash - argument[arg_file1].text + 1;
-			param.length    -= length;
+			param.length    -= (argument[arg_file1].length - length);
 
 			StringDynamic_append(param, "\" -silent ");
 

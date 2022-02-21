@@ -1616,6 +1616,7 @@ int
 strnatcasecmp(nat_char const *a, nat_char const *b) {
      return strnatcmp0(a, b, 1);
 }
+//--------------------------------------------------------------------------
 
 
 

@@ -2999,6 +2999,8 @@ case C_CLASS_READ:
 	int arg_classpath_pos = -1;
 	int arg_level         = predefined_capacity;
 	bool arg_verify       = false;
+	size_t arg_lowercase  = empty_char_index;
+	bool arg_trimdollar   = false;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
@@ -3016,7 +3018,7 @@ case C_CLASS_READ:
 			
 			case NAMED_ARG_FIND :
 				arg_find = i + 1;
-			break;
+				break;
 
 			case NAMED_ARG_WRAP : 
 				arg_wrap = argument[i+1].text;
@@ -3032,6 +3034,14 @@ case C_CLASS_READ:
 
 			case NAMED_ARG_VERIFY : 
 				arg_verify = String_bool(argument[i+1]);
+				break;
+
+			case NAMED_ARG_LOWERCASE : 
+				arg_lowercase = i + 1;
+				break;
+
+			case NAMED_ARG_TRIMDOLLAR : 
+				arg_trimdollar = String_bool(argument[i+1]);
 				break;
 		}
 	}
@@ -3100,6 +3110,26 @@ case C_CLASS_READ:
 	while ((item = String_tokenize(argument[arg_find], ",", arg_find_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  properties_to_find_size<properties_to_find_capacity) {
 		String_trim_quotes(item);
 		properties_to_find[properties_to_find_size++] = item.text;
+	}
+
+
+	// Lowercase output data
+	enum CLASS_READ_LOWERCASE {
+		CLASS_READ_LOWER_CLASS    = 0x2,
+		CLASS_READ_LOWER_PROPERTY = 0x4,
+		CLASS_READ_LOWER_VALUE    = 0x8
+	};
+
+	const char lowercaseflags[][16] = {"class", "property", "value"};
+	int lowercase_flag = 0;
+	arg_find_pos       = 0;
+
+	while ((item = String_tokenize(argument[arg_lowercase], ",", arg_find_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0) {
+		String_trim_quotes(item);
+
+		for (int i=0, j=2; i<sizeof(lowercaseflags)/sizeof(lowercaseflags[0]); i++, j*=2)
+			if (strcmpi(item.text,lowercaseflags[i]) == 0)
+				lowercase_flag |= j;
 	}
 	//---------------------------------------------------------------------------
 	
@@ -3455,20 +3485,87 @@ case C_CLASS_READ:
 								int level      = class_level - classpath_current;
 
 								if (level < classpath_capacity) {
+									if (lowercase_flag & CLASS_READ_LOWER_PROPERTY)
+										for (int z=0; property[z]!='\0'; z++)
+											property[z] = tolower(property[z]);
+
 									// Add property name
 									StringDynamic_appendf(output_property[level], "]+[\"%s\"", property);
 
 									// Add property value
 									StringDynamic_append(output_value[level], "]+[");
 
-									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"'))
+									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"' && !is_array))
 										StringDynamic_append(output_value[level], "\"");
 
+									// Convert array
+									if (is_array  &&  wrap==NODOUBLE_WRAP) {
+										size_t item_start   = word_start;
+										size_t item_started = false;
+										bool in_quote       = false;
+
+										for (size_t j=word_start; j<=i; j++) {
+											if (lowercase_flag & CLASS_READ_LOWER_VALUE)
+												text[j] = tolower(text[j]);
+
+											if (!in_quote) {
+												if (!item_started && !isspace(text[j]) && text[j]!='{' && text[j]!='}' && text[j]!=',' && text[j]!=';' && text[j]!='\0') {
+													item_start   = j;
+													item_started = true;
+												}
+												
+												if ((item_started && (isspace(text[j]) || text[j]=='{' || text[j]=='}' || text[j]==',' || text[j]==';' || i==j))) {
+													item_started   = false;					
+													bool add_quote = false;
+													
+													if (item_start != j) {
+														if (text[item_start]!='\"' && text[j-1]!='\"') {
+															StringDynamic_append(output_value[level], "\"");
+															add_quote = true;
+														}
+	
+														StringDynamic_appendl(output_value[level], text+item_start, j-item_start);
+	
+														if (add_quote) {
+															StringDynamic_append(output_value[level], "\"");
+														}
+													}
+												}
+												
+												if (text[j] == '{')
+													StringDynamic_append(output_value[level], "[");
+												else
+													if (text[j] == '}')
+														StringDynamic_append(output_value[level], "]");
+													else 
+														if (text[j]==','  ||  text[j]==';')
+															StringDynamic_append(output_value[level], ",");
+											}
+											
+											if (text[j] == '"')
+												in_quote = !in_quote;
+										}
+									} else
 									// Convert arrays (square brackets) and strings (double quotes) so that "call" command in OFP can be used
-									if (is_array || (wrap==YES_WRAP && value[0]=='\"')) {
+									if (is_array && wrap!=NODOUBLE_WRAP || (wrap==YES_WRAP && value[0]=='\"')) {
+										bool trimmed_dollar = false;
+
 										for (size_t j=word_start; j<i; j++) {
 											if (text[j] == '"')
 												in_quote = !in_quote;
+
+											if (arg_trimdollar && !trimmed_dollar) {
+												if (!isspace(text[j]) && text[j]!='$' && text[j]!='\"' && text[j]!='{')
+													trimmed_dollar = true;
+
+												if (text[j] == '$') {
+													trimmed_dollar = true;
+													continue;
+												}
+											}
+
+											if (lowercase_flag & CLASS_READ_LOWER_VALUE)
+												text[j] = tolower(text[j]);
 
 											if (text[j]=='{' && !in_quote && wrap==NO_WRAP)
 												StringDynamic_append(output_value[level], "[");
@@ -3481,10 +3578,25 @@ case C_CLASS_READ:
 													else 
 														StringDynamic_appendl(output_value[level], text+j, 1);
 										}
-									} else
+									} else {
+										if (arg_trimdollar) {
+											if (value[0] == '$')
+												value++;
+
+											if (value[0]=='\"'  &&  value[1]=='$') {
+												value++;
+												value[0] = '\"';
+											}
+										}
+
+										if (lowercase_flag & CLASS_READ_LOWER_VALUE)
+											for (size_t j=word_start; j<=i; j++)
+												text[j] = tolower(text[j]);
+											
 										StringDynamic_append(output_value[level], value);
+									}
 									
-									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"'))
+									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"' && !is_array))
 										StringDynamic_append(output_value[level], "\"");
 								}
 							}
@@ -3521,8 +3633,13 @@ case C_CLASS_READ:
 							StringDynamic *output_array = expect==CLASS_NAME ? output_class : output_inherit;
 							int level                   = class_level - classpath_current;
 
-							if (level < classpath_capacity && !classpath_done)
+							if (level < classpath_capacity && !classpath_done) {
+								if (lowercase_flag & CLASS_READ_LOWER_CLASS)
+									for (int z=word_start; text[z]!='\0'; z++)
+										text[z] = tolower(text[z]);
+
 								StringDynamic_appendf(output_array[level], "]+[\"%s\"", text+word_start);
+							}
 						}
 						
 						is_inherit = expect == CLASS_INHERIT;
@@ -3942,10 +4059,10 @@ case C_CLASS_READSQM:
 								state.value.text[z] = '\0';
 								QWrite("_setpos=[");
 
-								if (tolower(state.value.text[12]) == 'a')
+								if (tolower(state.value.text[12]) == 'a')	//setposasl
 									QWrite("2,");
 								else
-									QWrite("1,");
+									QWrite("1,");	//setpos
 
 								QWrite(height);
 								QWrite("];");
