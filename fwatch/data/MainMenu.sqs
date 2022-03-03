@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2022,2,21,1,14,28,51,301,60,FALSE]
+	GS_FWATCH_MY_VERSION = [2022,3,3,4,2,11,23,317,60,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -144,10 +144,10 @@
 		_value   = lbValue [6657, _cur]
 		_lastCur = _cur
 		
-		? _value == 2   : [(if (_data!="") then {[_data,_all_modsID] call FUNCTION_FIND} else {-1}), "local"] call FUNCTION_SHOW_MOD_INFO
-		? _value == 6   : [(call _data), "global"] call FUNCTION_SHOW_MOD_INFO
-		? _value == 201 : goto "DisplayServer"
-		? _value == 211 : goto "DisplayGameRestart"
+		? _value in [2,3] : [(if (_data!="") then {[_data,_all_modsID] call FUNCTION_FIND} else {-1}), "local"] call FUNCTION_SHOW_MOD_INFO
+		? _value == 6     : [(call _data), "global"] call FUNCTION_SHOW_MOD_INFO
+		? _value == 201   : goto "DisplayServer"
+		? _value == 211   : goto "DisplayGameRestart"
 		#SkipSelectionCheck
 	
 	
@@ -233,8 +233,7 @@
 	goto "ResetLMB"
 	
 	#OptionRightMouseClick
-	? _value == 2 : goto "ModfolderRightClickOptions"
-	? _value == 6 : goto "ModfolderRightClickOptions"
+	? _value in [2,3,6] : goto "ModfolderRightClickOptions"
 	goto "ResetLMB"
 
 
@@ -332,23 +331,25 @@
 	
 	#ModfolderRightClickOptions
 	_last_selected = _cur
+	_queue_install = _value in [2,3]
+	_queue_launch  = _value == 6
 	
 	lbClear 6657
 	lbSetCurSel [6657, -1]
 	ctrlSetText [6464, ""];
 
-	? _value == 2 : _index=lbAdd [6657, "[" + (localize "STR_SINGLE_PLAY") + "]"]; lbSetValue [6657, _index, 7]; lbSetData  [6657, _index, _name]; 
-	? _value == 6 : _index=lbAdd [6657, loadFile Format ["\:STRING REPLACE text:%1find:%2replace:",MAINMENU_STR select 11," %1"]]; lbSetValue [6657, _index, 6]; lbSetData [6657, _index, _data]
+	? _queue_install : _index=lbAdd [6657, "[" + (localize "STR_SINGLE_PLAY") + "]"]; lbSetValue [6657, _index, 7]; lbSetData  [6657, _index, _name]; 
+	? _queue_launch  : _index=lbAdd [6657, loadFile Format ["\:STRING REPLACE text:%1find:%2replace:",MAINMENU_STR select 11," %1"]]; lbSetValue [6657, _index, 6]; lbSetData [6657, _index, _data]
 	
 	_index = lbAdd [6657, MAINMENU_STR select 105]
-	? _value == 2 : if (_name in _mods) then {lbSetData [6657, _index, _name]; lbSetValue  [6657, _index, 8]; lbSetColor [6657, _index, [1,0,0,0.5]]}
-	? _value == 6 : lbSetData [6657, _index, _data]; lbSetValue [6657, _index, 10]; if ((call _data) in _missing_mods) then {lbSetColor [6657, _index, [1,0,0,0.5]]}
+	? _queue_install : lbSetData [6657, _index, _name]; lbSetValue  [6657, _index, 8]; if (_name in _mods) then {lbSetColor [6657, _index, [1,0,0,0.5]]}
+	? _queue_launch  : lbSetData [6657, _index, _data]; lbSetValue [6657, _index, 10]; if ((call _data) in _missing_mods) then {lbSetColor [6657, _index, [1,0,0,0.5]]}
 
-	_index = if (_value==6) then {call _data} else {if (_data!="") then {[_data,_all_modsID] call FUNCTION_FIND} else {-1}}
+	_index = if (_queue_launch) then {call _data} else {if (_data!="") then {[_data,_all_modsID] call FUNCTION_FIND} else {-1}}
 	? _index >= 0 : _server_website=_all_modsWEBSITE select _index; if (_server_website != "") then {lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 30], 205]}
 	;? _index >= 0 : _url=(_all_url select (_all_modsURL select _index)) select (_all_mirror select (_all_modsURL select _index)); _missing_mods_id=[_data]; _index_local=[_data, FWATCH_MODLISTID] call FUNCTION_FIND; _my_version=(if (_index_local>=0) then {(FWATCH_MODLISTCFG select _index_local) select 0} else {0}); _missing_mods_myversion=[(if (_my_version<_all_modsVER select _index) then {_my_version-0.001} else {0})]; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 29], 224]
 	
-	lbSetValue [6657, lbAdd[6657, MAINMENU_STR select 32], (if (_value==2) then {5} else {9})]
+	lbSetValue [6657, lbAdd[6657, MAINMENU_STR select 32], (if (_queue_install) then {5} else {9})]
 	goto "ResetLMB"
 	
 	
