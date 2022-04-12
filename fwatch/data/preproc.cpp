@@ -1,287 +1,290 @@
-
-/*PROPRIETARY CODE
-
-
-
-*/
+/* PROPRIETARY CODE WAS REPLACED WITH DOTS */
+#include <.................>
+#include <..........................>
+#include <.......................>
+#include <.....................>
 #include "errno.h"
 #include "windows.h"
+#include <string>
 
-/*PROPRIETARY CODE
-
-
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-		
-	
-*/
-
-
-// Remove leading and trailing whitespace
-char* Trim(char *txt)
+	// http://stackoverflow.com/a/3418285
+std::string ReplaceAll(std::string str, const std::string& from, const std::string& to) 
 {
-	while (isspace(txt[0])) 
-		txt++;
+    if (from.empty())
+        return str;
+        
+    size_t start_pos = 0;
+    
+	while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
+        str.replace(start_pos, from.length(), to);
+        start_pos += to.length();
+    }
+    
+    return str;
+}
 
-	for (int i=strlen(txt)-1; i>=0 && isspace(txt[i]); i--) 
-		txt[i]='\0';
 
-	return txt;
-};
-
-
-// Preprocessor errors description
-char errorDesc[][64]  = 
+class FilePreprocessor : public .......
 {
-	"Missing #endif after condition statement",
-	"Failed to #include file",
-	"Incorrect #inlcude syntax",
-	"Maximal number of recursions was reached",
-	"Incorrect macro argument",
-	"Incorrect parameter syntax",
-	"Missing condition statement before #endif",
-	"Unknown directive",
-	"Unexpected end of file",
-	"Too many parameters",
-	"Too few parameters",
-	"Incorrect #ifdef/#ifndef/#undef argument",
-	"Missing #endif after #else"
-};
-
-
-// Errno description
-void FERROR(int errorCode, char *errordesc)
-{
-	switch(errorCode)
+protected:
+	........ ...............(const char *filename)
 	{
-		case EPERM: sprintf(errordesc,"Operation not permitted"); break;
-		case ENOENT: sprintf(errordesc,"No such file or directory"); break;
-		case ESRCH: sprintf(errordesc,"No such process"); break;
-		case EINTR: sprintf(errordesc,"Interrupted function call"); break;
-		case EIO: sprintf(errordesc,"Input/output error"); break;
-		case ENXIO: sprintf(errordesc,"No such device or address"); break;
-		case E2BIG: sprintf(errordesc,"Argument list too long"); break;
-		case ENOEXEC: sprintf(errordesc,"Exec format error"); break;
-		case EBADF: sprintf(errordesc,"Bad file descriptor"); break;
-		case ECHILD: sprintf(errordesc,"No child processes"); break;
-		case EAGAIN: sprintf(errordesc,"Resource temporarily unavailable"); break;
-		case ENOMEM: sprintf(errordesc,"Not enough memory available for the attempted operator"); break;
-		case EACCES: sprintf(errordesc,"Permission denied"); break;
-		case EFAULT: sprintf(errordesc,"Bad address"); break;
-		case EBUSY: sprintf(errordesc,"Device or resource busy"); break;
-		case EEXIST: sprintf(errordesc,"File exists"); break;
-		case EXDEV: sprintf(errordesc,"Cross-device link. An attempt was made to move a file to a different device"); break;
-		case ENODEV: sprintf(errordesc,"No such device"); break;
-		case ENOTDIR: sprintf(errordesc,"Not a directory"); break;
-		case EISDIR: sprintf(errordesc,"Is a directory"); break;
-		case EINVAL: sprintf(errordesc,"Invalid argument"); break;
-		case ENFILE: sprintf(errordesc,"Too many open files in system"); break;
-		case EMFILE: sprintf(errordesc,"Too many open files"); break;
-		case ENOTTY: sprintf(errordesc,"Inappropriate I/O control operation"); break;
-		case EFBIG: sprintf(errordesc,"File too large"); break;
-		case ENOSPC: sprintf(errordesc,"No space left on device"); break;
-		case ESPIPE: sprintf(errordesc,"Invalid seek"); break;
-		case EROFS: sprintf(errordesc,"Read-only file system"); break;
-		case EMLINK: sprintf(errordesc,"Too many links"); break;
-		case EPIPE: sprintf(errordesc,"Broken pipe"); break;
-		case EDOM: sprintf(errordesc,"Invalid math argument"); break;
-		case ERANGE: sprintf(errordesc,"Result too large"); break;
-		case EDEADLK: sprintf(errordesc,"Command would cause a deadlock"); break;
-		case ENAMETOOLONG: sprintf(errordesc,"Filename too long"); break;
-		case ENOLCK: sprintf(errordesc,"Too many segment locks open, lock table is full"); break;
-		case ENOSYS: sprintf(errordesc,"Function not supported"); break;
-		case ENOTEMPTY: sprintf(errordesc,"Directory not empty"); break;
-		case EILSEQ: sprintf(errordesc,"Illegal sequence of bytes"); break;
+		std::string filename_adjusted, new_full_path;
+		bool found = false;
 
-		default: sprintf(errordesc,"Unknown error"); break;
-	};
-};
+		if (include_count++ > 0) {
+			filename_adjusted = ReplaceAll(filename, "*", "z");
+			filename          = filename_adjusted.c_str();
 
+			// Simulate context of an addon or mission description
+			if (addondir_size>0  ||  gamedir) {
 
+				// Check if the file exists in the selected addon folder
+				for (int i=0; i<addondir_size && !found; i++) {
+					new_full_path = addondir[i];
+					new_full_path += "\\";
+					new_full_path += filename_adjusted;
 
-
-int main (int argc, char* argv[])
-{
-	// If first argument has exe name then it's drag drop
-	// working directory is user documents - change it to the program directory
-	char *p				= "";
-	TCHAR pwd[MAX_PATH];
-
-	if (p = strstr(argv[0],"preproc.exe"))
-	{
-		int pos = p - argv[0];
-		strncpy(pwd, argv[0], pos);
-		pwd[pos-1] = '\0';
-		SetCurrentDirectory(pwd);
-	};
-
-
-	// No arguments given - show information
-	if (argc <= 1)
-	{
-		printf("preproc.exe\npreprocess given file according to OFP syntax\n\n\tUsage:\n\tpreproc [-silent] [-nolog] [-merge] inputfile [outputfile]\n\n");
-		system("pause");
-		return 0;
-	};
-
-
-	// Display current directory
-	TCHAR pwd2[MAX_PATH];
-	GetCurrentDirectory(MAX_PATH, pwd2);
-
-
-	// Parse given arguments
-	bool silent		= false;
-	bool merge		= false;
-	bool nolog		= false;
-	char *filename1 = "";
-	char *filename2 = "";
-
-	for (int i=1; i<argc; i++)
-	{  
-		if (strcmp(argv[i],"-silent") == 0) 
-			silent = true;
-		else
-			if (strcmp(argv[i],"-merge") == 0) 
-				merge = true;
-		else
-			if (strcmp(argv[i],"-nolog") == 0) 
-				nolog = true;
-		else
-			if (strcmp(filename1,"") == 0)
-				filename1 = Trim(argv[i]);
-		else
-			filename2 = Trim(argv[i]);
-	};
-
-
-	// Initialize classes
-	/*PROPRIETARY CODE
-	*/
-	int	error					= 0;
-	int error_errno				= 0;
-	char errordesc[256]			= "";
-
-
-	// Preprocess
-	if (strcmp(filename1,"") == 0) 
-		error = 1;
-	else {
-		SetCurrentDirectory(argv[0]);
-		char *lastSlash = strrchr(filename1, '\\');
-		if (lastSlash != NULL)
-			filename1 = lastSlash + 1;
-		int result = /*PROPRIETARY CODE*/
-		SetCurrentDirectory(pwd2);
-
-		if (result)
-		{		
-			if (strcmp(filename2,"") != 0) 
-			{
-				FILE *f = fopen(filename2, merge ? "a" : "w");
-
-				if (f)
-				{	
-					fprintf(f, /*PROPRIETARY CODE*/);
-
-					if (ferror(f))
-						error_errno = errno,
-						error		= 4;
-					fclose(f);
+					if (..........::.........(new_full_path.c_str())) {
+						filename = new_full_path.c_str();
+						found    = true;
+					}
 				}
-				else
-					error_errno = errno,
-					error = 3;
-			};
+
+				// Check if the file exists in the game dir root
+				if (!found && gamedir) {
+					new_full_path = gamedir;
+					new_full_path += "\\";
+					new_full_path += filename_adjusted;
+
+					if (..........::.........(new_full_path.c_str())) {
+						filename = new_full_path.c_str();
+						found    = true;
+					}
+				}
+			}
 		}
-		else
-			error = 2;
+
+		if (!found && !..........::.........(filename))
+			return NULL;
+
+		.......... ....... = new ..........();
+		......->........(filename);
+		return ......;
 	}
+
+	void .............(........ *......)
+	{
+		if (......) delete (.......... *)......;
+	}
+};
+
+
+void fwatch_error(std::string &container_main, std::string &container, std::string &input_filename) {
+	std::string error_message(strerror(errno));
+	error_message = ReplaceAll(error_message, "\"", "\"\"");
 	
+	container += "]+[false,7,";
+	container += errno;
+	container += ",\"";
+	container += error_message;
+	container += " - ";
+	container += input_filename;
+	container += "\"";
 
-	// Output results
-	if (nolog) {}
-	else
-	if (silent)
-	{
-		char codeFile[128] = "";
-		sprintf(codeFile, "fwatch\\tmp\\%d.pid", GetCurrentProcessId());
+	container_main = "false,7,";
+	container_main += errno;
+	container_main += ",\"";
+	container_main += error_message;
+	container_main += " - ";
+	container_main += input_filename;
+	container_main += "\"";
+}
 
-		FILE *f2 = fopen(codeFile, "w");
-		if (f2)
-		{
-			//fprintf(f2, "\"%s\";\n\"%s\";\n\"%s\";\n", pwd2, filename1, filename2);
-			fprintf(f2, "[%d, %d, %d, \"", error, /*PROPRIETARY CODE*/, error_errno);
 
-			// Write error description
-			switch (error)
-			{
-				case 0 : break;
-				case 1 : fprintf(f2,"Input file not specified"); break;
-				case 2 : fprintf(f2,errorDesc[/*PROPRIETARY CODE*/]); break;
-				case 3 : FERROR(error_errno,errordesc);fprintf(f2,errordesc); break;
-				case 4 : FERROR(error_errno,errordesc);fprintf(f2,errordesc); break;
-				default : fprintf(f2,"Unknown error");
-			};
-
-			fprintf(f2, "\", \"%d\", \"", /*PROPRIETARY CODE*/);
-
-			char *quote = strchr(/*PROPRIETARY CODE*/, '\"');
-
-			if (quote == NULL) 
-				fprintf(f2, /*PROPRIETARY CODE*/);
-			else
-			{
-				char tmp[2] = "";
-
-				for (unsigned int i=0;  i<strlen(/*PROPRIETARY CODE*/);  i++)
-				{
-					if (/*PROPRIETARY CODE*/ == '\"') 
-						fprintf(f2,"\"");
-
-					sprintf(tmp, "%c", /*PROPRIETARY CODE*/);
-					fprintf(f2, tmp);
-				};
-			};
-
-			fprintf(f2, "\", \"%d\"]", /*PROPRIETARY CODE*/);
-			fclose(f2);
-		};
+int main (int argc, char* argv[]) {
+	if (argc <= 1) {
+		printf("preproc.exe\npreprocess given file according to OFP syntax\n\n\tUsage:\n\tpreproc [-fwatch] [-merge] [-includepath=] <inputfilename1> ...\n\n");
+		return 1;
 	}
-	else
-	{
-		printf("Current directory:\n%s\n\n",pwd2);
 
-		if (strcmp(filename2,"") == 0) 
-			printf("Output filename not given so it's a syntax check\n");
+	bool arg_fwatch        = false;
+	bool arg_merge         = false;
+	bool arg_addon         = false;
+	const int addondir_max = 32;
+	char *arg_addondir[addondir_max];
+	char *arg_gamedir      = NULL;
+	char *arg_output       = NULL;
+	int arg_addondir_size  = 0;
+	int file_count         = 0;
+	size_t files_done      = 0;
+	std::string fwatch_output;
+	std::string fwatch_output_main;
+
+	// Process options
+	for (int i=1; i<argc; i++) {
+		if (strncmp(argv[i],"-addondir=",10) == 0) {
+			if (arg_addondir_size < addondir_max)
+				arg_addondir[arg_addondir_size++] = argv[i] + 10;
+			
+			arg_addon = true;
+			continue;
+		}
+
+		if (strncmp(argv[i],"-gamedir=",9) == 0) {
+			arg_gamedir = argv[i] + 9;
+			continue;
+		}
 		
-		switch (error)
-		{
-			case 0  : printf("No error"); break;
-			case 1  : printf("Input file not specified\n%s",filename1); break;
-			case 2  : printf("Preprocessor error %d\n%s\nLine: %d\nText: %s", /*PROPRIETARY CODE*/); break;
-			case 3  : FERROR(error_errno,errordesc); printf("Failed to create output filen%d - %s",errno,errordesc); break;
-			case 4  : FERROR(error_errno,errordesc); printf("Failed to write to file\n%d - %s",errno,errordesc); break;
-			default : printf("Unknown error");
-		};
+		if (strcmp(argv[i],"-fwatch") == 0) {
+			arg_fwatch = true;
+			arg_gamedir = argv[0];
+			continue;
+		}
 
-		printf("\n\n");
-		system("pause");
+		if (strcmp(argv[i],"-merge") == 0) {
+			arg_merge = true;
+			continue;
+		}
 
-	};
+		if (strncmp(argv[i],"-out=",5) == 0) {
+			arg_output = argv[i] + 5;
+			continue;
+		}
+		
+		file_count++;
+	}
 
 
-	return error;
+	// Do file operations
+	for (int i=1; i<argc; i++) {
+		if (strncmp(argv[i],"-addondir=",10)!=0 && strncmp(argv[i],"-gamedir=",9)!=0  && strncmp(argv[i],"-out=",5)!=0&& strcmp(argv[i],"-fwatch")!=0 && strcmp(argv[i],"-merge")!=0) {
+			FilePreprocessor preproc;
+			........ .........;
+			preproc.addondir      = arg_addondir;
+			preproc.addondir_size = arg_addondir_size;
+			preproc.gamedir       = arg_gamedir;
+			preproc.text[0]       = '\0';
+			preproc.include_count = 0;
 
+			std::string input_filename(argv[i]);
 
-	//printf("result:%d\npcount:%d\nerror:%d\ncurline:%d\ntext:%s\n",result,processed.pcount(),preproc.error,preproc.curline+1,preproc.text2);
-	//return 0;
+			if (!arg_addon) {
+				size_t last_slash = input_filename.find_last_of('\\');
+
+				// Change current directory to the input file location (so that #include works from there)
+				if (last_slash != std::string::npos) {
+					std::string input_path = input_filename.substr(0, last_slash);
+					SetCurrentDirectory(input_path.c_str());
+					input_filename = input_filename.substr(last_slash + 1);
+				}
+			}
+
+			int result = preproc........(&........., input_filename.c_str());
+
+			if (result) {
+				std::string output_filename(input_filename);
+				std::string file_extension = "";
+				size_t last_dot            = output_filename.find_last_of(".");
+
+				if (last_dot != std::string::npos) {
+					file_extension  = output_filename.substr(last_dot);
+					output_filename = output_filename.substr(0, last_dot);
+				}
+
+				output_filename += "_processed" + file_extension;
+
+				if (arg_fwatch && arg_output)
+					SetCurrentDirectory(argv[0]);
+
+				FILE *file = fopen(arg_output ? arg_output : output_filename.c_str(), arg_merge ? "ab" : "wb");
+
+				if (file) {	
+					int bytes_written = fwrite(.......(..........str(),................()), 1, ................(), file);
+
+					if (bytes_written == ................()) {
+						files_done++;
+
+						if (arg_fwatch) {
+							fwatch_output += "]+[[true,0,0,\"\",";
+							char temp[64];
+							snprintf(temp, sizeof(temp), "%d", (...............+1));
+							fwatch_output += temp;
+							fwatch_output += ",\"";
+							fwatch_output += ReplaceAll(............, "\"", "\"\"");
+							fwatch_output += "\"]";
+						}
+					} else {
+						if (arg_fwatch)
+							fwatch_error(fwatch_output_main, fwatch_output, input_filename);
+						else {
+							printf("Error writing %s - %d/%d bytes written - ", output_filename, bytes_written, ................());
+							perror("");
+						}
+					}
+
+					fclose(file);
+				} else {
+					if (arg_fwatch)
+						fwatch_error(fwatch_output_main, fwatch_output, input_filename);
+					else {
+						printf("Error opening %s - ", output_filename);
+						perror("");
+					}
+				}
+			} else {
+				char error_description_list[][64] = {
+					"Missing #endif after condition statement",
+					"Failed to #include file",
+					"Incorrect #include syntax",
+					"Maximal number of recursions was reached",
+					"Incorrect macro argument",
+					"Incorrect parameter syntax",
+					"Missing condition statement before #endif",
+					"Unknown directive",
+					"Unexpected end of file",
+					"Too many parameters",
+					"Too few parameters",
+					"Incorrect #ifdef/#ifndef/#undef argument",
+					"Missing #endif after #else"
+				};
+
+				if (arg_fwatch) {
+					fwatch_output += "]+[[false,8,";
+					char temp[64];
+					snprintf(temp, sizeof(temp), "%d", .............);
+					fwatch_output += temp;
+					fwatch_output += ",\"";
+					fwatch_output += error_description_list[.............];
+					fwatch_output += "\",";
+					snprintf(temp, sizeof(temp), "%d", (...............+1));
+					fwatch_output += temp;
+					fwatch_output += ",\"";
+					fwatch_output += ReplaceAll(............, "\"", "\"\"");
+					fwatch_output += "\"]";
+
+					fwatch_output_main = "false,8,";
+					snprintf(temp, sizeof(temp), "%d", .............);
+					fwatch_output_main += temp;
+					fwatch_output_main += ",\"";
+					fwatch_output_main += error_description_list[.............];
+					fwatch_output_main += "\"";
+				} else
+					printf("Preprocessor error %d\n%s\nLine: %d\nText: %s", .............,error_description_list[.............],...............+1,............); break;
+			}
+		}
+	}
+
+	if (arg_fwatch) {
+		if (files_done > 0)
+			fwatch_output_main = "true,0,0,\"\"";
+
+		if (arg_fwatch)
+			if (file_count > 1)
+				printf("[%s,[%s]]", fwatch_output_main.c_str(), fwatch_output.c_str());
+			else
+				printf("%s", fwatch_output.c_str()+3);
+	}
+
+	return files_done ? 0 : 2;
 };

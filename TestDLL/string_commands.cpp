@@ -791,6 +791,7 @@ case C_STRING_TOKENIZE:
 	size_t arg_text      = empty_char_index;
 	size_t arg_delimiter = empty_char_index;
 	size_t arg_add_empty = empty_char_index;
+	size_t arg_cut       = UINT_MAX;
 	bool arg_by_string   = false;
 	bool arg_skip_quotes = false;
 	int arg_options      = 0;
@@ -827,6 +828,16 @@ case C_STRING_TOKENIZE:
 
 			case NAMED_ARG_ADDEMPTY : 
 				arg_add_empty = i + 1;
+				break;
+
+			case NAMED_ARG_CUT :
+				arg_cut = strtoul(argument[i+1].text, NULL, 0);
+				break;
+
+			case NAMED_ARG_REVERSE :
+				String_bool(argument[i+1]) 
+					? arg_options |= OPTION_REVERSE 
+					: arg_options &= ~OPTION_REVERSE;
 				break;
 		}
 	}
@@ -877,6 +888,7 @@ case C_STRING_TOKENIZE:
 	// Prepare text before tokenizing by words
 	String search_source = argument[arg_text];
 	size_t skip          = 0;
+	size_t count         = 0;
 	char *occurence;
 
 	if (arg_by_string) {
@@ -900,6 +912,9 @@ case C_STRING_TOKENIZE:
 				}
 			}
 			
+			if (arg_cut!=UINT_MAX && ++count>arg_cut)
+				break;
+
 			// Replace the word with unused characters
 			for (size_t i=pos; i<(pos+argument[arg_delimiter].length); i++) 
 				search_source.text[i] = '\a';
@@ -932,6 +947,9 @@ case C_STRING_TOKENIZE:
 					}
 				}
 
+				if (arg_cut!=UINT_MAX && ++count>arg_cut)
+					break;
+
 				// Replace char with an unused char
 				search_source.text[pos] = '\a';
 			}
@@ -947,7 +965,7 @@ case C_STRING_TOKENIZE:
 	bool add_empty_end   = false;
 	size_t pch_len       = 0;
 	size_t pos           = 0;
-	size_t count         = 0;
+	count                = 0;
 
 	if (strncmpi(argument[arg_add_empty].text,"both",4)==0) {
 		add_empty_start = true;
@@ -1103,7 +1121,7 @@ case C_STRING_FIND:
 	char *arg_start      = empty_char;
 	char *arg_end        = empty_char;
 	char *arg_length     = empty_char;
-	size_t arg_limit     = -1;
+	size_t arg_limit     = UINT_MAX;
 	int arg_options      = OPTION_NONE;
 	bool arg_skip_quotes = false;
 
@@ -1233,7 +1251,7 @@ case C_STRING_FIND:
 					break;
 
 				// If within result limit
-				if (arg_limit>=0  &&  ++count>arg_limit)
+				if (arg_limit!=UINT_MAX  &&  ++count>arg_limit)
 					break;
 
 				// Check if the word is inside quotation
@@ -1277,7 +1295,7 @@ case C_STRING_SPLIT:
 	char *arg_end             = empty_char;
 	char *arg_length          = empty_char;
 	size_t arg_segment_length = 1;
-	size_t arg_limit          = -1;
+	size_t arg_limit          = UINT_MAX;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
@@ -1334,7 +1352,7 @@ case C_STRING_SPLIT:
 
 			parts++;
 
-			if (arg_limit>=0  &&  parts>=arg_limit)
+			if (arg_limit!=UINT_MAX  &&  parts>=arg_limit)
 				break;
 		}
 	}

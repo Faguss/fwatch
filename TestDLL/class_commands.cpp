@@ -3001,6 +3001,7 @@ case C_CLASS_READ:
 	bool arg_verify       = false;
 	size_t arg_lowercase  = empty_char_index;
 	bool arg_trimdollar   = false;
+	bool arg_find_require = false;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
@@ -3017,7 +3018,9 @@ case C_CLASS_READ:
 				break;
 			
 			case NAMED_ARG_FIND :
-				arg_find = i + 1;
+			case NAMED_ARG_PICK :
+				arg_find_require = argument_hash[i] == NAMED_ARG_FIND;
+				arg_find         = i + 1;
 				break;
 
 			case NAMED_ARG_WRAP : 
@@ -3109,9 +3112,10 @@ case C_CLASS_READ:
 
 	while ((item = String_tokenize(argument[arg_find], ",", arg_find_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  properties_to_find_size<properties_to_find_capacity) {
 		String_trim_quotes(item);
-		properties_to_find[properties_to_find_size++] = item.text;
-	}
 
+		if (item.length > 0)
+			properties_to_find[properties_to_find_size++] = item.text;
+	}
 
 	// Lowercase output data
 	enum CLASS_READ_LOWERCASE {
@@ -3423,17 +3427,21 @@ case C_CLASS_READ:
 						expect            = MACRO_CONTENT;
 						separator         = ' ';
 						parenthesis_level = 1;
-					} else 
-						if (!isspace(c)) {	//syntax error
-							if (arg_verify) {
-								syntax_error = true;
-								goto class_read_end_parsing;
-							} else {
-								i--;
-								separator = ' ';
-								expect    = SEMICOLON;
+					} else
+						if (expect == ENUM_BRACKET) { // ignore what's between "enum" keyword and bracket
+							if (c != '{')
+								break;
+						} else
+							if (!isspace(c)) {	//syntax error
+								if (arg_verify) {
+									syntax_error = true;
+									goto class_read_end_parsing;
+								} else {
+									i--;
+									separator = ' ';
+									expect    = SEMICOLON;
+								}
 							}
-						}
 				
 				break;
 			}
@@ -3513,6 +3521,10 @@ case C_CLASS_READ:
 													item_start   = j;
 													item_started = true;
 												}
+
+												// If encountered separator instead of value then insert empty string
+												if (!item_started && (text[j]==',' || text[j]==';'))
+													StringDynamic_append(output_value[level], "\"\"");
 												
 												if ((item_started && (isspace(text[j]) || text[j]=='{' || text[j]=='}' || text[j]==',' || text[j]==';' || i==j))) {
 													item_started   = false;					
@@ -3593,7 +3605,22 @@ case C_CLASS_READ:
 											for (size_t j=word_start; j<=i; j++)
 												text[j] = tolower(text[j]);
 											
-										StringDynamic_append(output_value[level], value);
+										// If the value is a string without quotes around then we need to double the amount of quotes
+										bool stringify = false;
+										
+										if (value[0] != '\"') {
+											for (size_t z=0; value[z]!='\0'; z++) {
+												if (value[z] == '\"') {
+													stringify = true;
+													break;
+												}
+											}
+										}
+
+										if (stringify)
+											StringDynamic_appendq(output_value[level], value);
+										else
+											StringDynamic_append(output_value[level], value);
 									}
 									
 									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"' && !is_array))
@@ -3777,9 +3804,13 @@ case C_CLASS_READ:
 		if (classpath_current < classpath_size)
 			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, ++classpath_size, argument[arg_file].text);
 		else
-			if (properties_to_find_size>0 && !property_found)
+			if (arg_find_require && properties_to_find_size>0 && !property_found) {
+				for (size_t i=0; i<argument[arg_find].length; i++)
+					if (argument[arg_find].text[i] == '\"')
+						argument[arg_find].text[i] = ' ';
+
 				QWrite_err(FWERROR_CLASS_NOVAR, 2, argument[arg_find].text, argument[arg_file].text);
-			else
+			} else
 				QWrite_err(FWERROR_NONE, 0);
 	}
 

@@ -387,7 +387,11 @@ char* String_find(String &source, String &to_find, int options) {
 	if (source.length==0 || to_find.length==0)
 		return NULL;
 	
-	for (size_t pos=0;  pos<source.length;  pos++) {
+	for (
+		size_t pos=options & OPTION_REVERSE ? source.length-to_find.length : 0;
+		options & OPTION_REVERSE ? true : pos<source.length;
+		options & OPTION_REVERSE ? pos-- : pos++
+	) {
 		size_t pos_arg1 = pos;
 		size_t pos_arg2 = 0;
 
@@ -416,6 +420,9 @@ char* String_find(String &source, String &to_find, int options) {
 				break;
 			}
 		}
+
+		if (pos==0 && options & OPTION_REVERSE)
+			break;
 	}
 
 	return NULL;
@@ -2542,11 +2549,15 @@ int SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_
 						state.separator         = ' ';
 						state.parenthesis_level = 1;
 					} else 
-						if (!isspace(c)) {	//ignore syntax error
-							state.i--;
-							state.separator = ' ';
-							state.expect    = SQM_SEMICOLON;
-						}
+						if (state.expect == SQM_ENUM_BRACKET) { // ignore what's between "enum" keyword and bracket
+							if (c != '{')
+								break;
+						} else
+							if (!isspace(c)) {	//ignore syntax error
+								state.i--;
+								state.separator = ' ';
+								state.expect    = SQM_SEMICOLON;
+							}
 				
 				break;
 			}

@@ -226,8 +226,7 @@ case C_RESTART_SERVER:
 	if (argument_hash[0] == C_EXE_WGET)
 		StringDynamic_append(param, "\\fwatch\\data");
 
-	if (argument_hash[0] != C_EXE_PREPROCESS)
-		StringDynamic_append(param, "\" ");
+	StringDynamic_append(param, "\" ");
 
 	bool error = false;
 
@@ -295,69 +294,61 @@ case C_RESTART_SERVER:
 		break;
 		
 		case C_EXE_PREPROCESS : {
-			StringDynamic buf_filename1;
-			StringDynamic buf_filename2;
-			StringDynamic_init(buf_filename1);
-			StringDynamic_init(buf_filename2);
+			String input_file  = empty_string;
+			String output_file = empty_string;
 
-			size_t arg_file1 = empty_char_index;
-			size_t arg_file2 = empty_char_index;
-			bool merge       = false;
+			StringDynamic_append(param, " -fwatch ");
 
-			// Check which parameters are files
+			// Find which arguments are files and convert paths
 			for (size_t i=2;  i<argument_num;  i++) {
+				if (strncmp(argument[i].text,"-addondir=",10) == 0) {
+					StringDynamic buf_filename;
+					StringDynamic_init(buf_filename);
+					String addondir = {argument[i].text+10, argument[i].length-10};
+					VerifyPath(addondir, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR | OPTION_SUPPRESS_ERROR);
+					StringDynamic_appendf(param, "\"-addondir=%s\" ", addondir);
+					StringDynamic_end(buf_filename);
+					continue;
+				}
+
+				if (strncmp(argument[i].text,"-gamedir=",9)==0  ||  strcmp(argument[i].text,"-fwatch")==0) {
+					continue;
+				}
+
 				if (strcmpi(argument[i].text,"-merge") == 0) {
-					merge = true;
+					StringDynamic_append(param, "-merge ");
 					continue;
 				}
 
-				if (strcmpi(argument[i].text,"-silent") == 0) 
-					continue;
+				if (strncmp(argument[i].text,"-out=",5) == 0) {
+					if (output_file.length == 0) {
+						output_file.text   = argument[i].text+5;
+						output_file.length = argument[i].length-5;
+						StringDynamic buf_filename;
+						StringDynamic_init(buf_filename);
 
-				if (arg_file1 == empty_char_index) {
-					arg_file1 = i;
+						if (VerifyPath(output_file, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR))
+							StringDynamic_appendf(param, "\"-out=%s\" ", output_file.text);
+						else {
+							QWrite("0,0]"); 
+							error = true;
+						}
+							
+						StringDynamic_end(buf_filename);
+					}
 					continue;
 				}
 
-				if (arg_file2 == empty_char_index) {
-					arg_file2 = i;
+				if (input_file.length == 0) {
+					StringDynamic buf_filename;
+					StringDynamic_init(buf_filename);
+					input_file = argument[i];
+					VerifyPath(input_file, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR | OPTION_SUPPRESS_ERROR);
+					StringDynamic_appendf(param, "\"%s\" ", input_file.text);
+					StringDynamic_end(buf_filename);
 					continue;
 				}
 			}
-
-			// Check path
-			if (argument[arg_file1].length > 0)
-				VerifyPath(argument[arg_file1], buf_filename1, OPTION_ALLOW_GAME_ROOT_DIR | OPTION_SUPPRESS_ERROR);
-
-			if (argument[arg_file2].length > 0) {
-				if (!VerifyPath(argument[arg_file2], buf_filename2, OPTION_RESTRICT_TO_MISSION_DIR)) {
-					QWrite("0,0]"); 
-					StringDynamic_end(buf_filename1);
-					StringDynamic_end(buf_filename2);
-					error = true;
-				}
-			}
-
-			// Add starting path
-			StringDynamic_appendf(param, "\\%s", argument[arg_file1].text);
-
-			char *last_slash = strrchr(argument[arg_file1].text, '\\');
-			int length       = last_slash - argument[arg_file1].text + 1;
-			param.length    -= (argument[arg_file1].length - length);
-
-			StringDynamic_append(param, "\" -silent ");
-
-			if (merge)
-				StringDynamic_append(param, "-merge "); 
-
-			// Add file to parameter list
-			StringDynamic_appendf(param, " \"%s\"", argument[arg_file1].text);
-
-			if (argument[arg_file2].length > 0)
-				StringDynamic_appendf(param, " \"%s\"", argument[arg_file2].text);
-
-			StringDynamic_end(buf_filename1);
-			StringDynamic_end(buf_filename2);
 		}
 		break;
 		

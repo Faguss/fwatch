@@ -491,3 +491,155 @@ case C_FILE_MODLIST:
 	}
 }
 break;
+
+
+
+
+
+
+case C_FILE_PBO:
+{
+	size_t arg_file = empty_char_index;
+	size_t arg_find = empty_char_index;
+	bool arg_lower  = false;
+	
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_FILE : 
+				arg_file = i + 1;
+				break;
+				
+			case NAMED_ARG_FIND : 
+				arg_find = i + 1;
+				break;
+				
+			case NAMED_ARG_LOWERCASE : 
+				arg_lower = String_bool(argument[i+1]); 
+				break;
+		}
+	}
+	
+	// File not specified
+	if (argument[arg_file].length == 0) {
+		printf("file not specified\n");
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
+		QWrite("[]]");
+		break;
+	}
+
+	// Verify and update path to the file
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
+
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+		QWrite("[]]");
+		break;
+	}	
+	
+	// Finding properties
+	const int files_to_find_capacity = 64;
+	char *files_to_find[files_to_find_capacity];
+	int files_to_find_size = 0;
+	size_t arg_find_pos = 0;
+	String item;
+
+	while ((item = String_tokenize(argument[arg_find], ",", arg_find_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  files_to_find_size<files_to_find_capacity) {
+		String_trim_quotes(item);
+		files_to_find[files_to_find_size++] = item.text;
+	}
+		
+	// Read PBO file and store information about its entries in a record
+	FILE *file = fopen(argument[arg_file].text, "rb");
+	if (file) {
+		fseek(file, 0, SEEK_END);
+		int file_size = ftell(file);
+		fseek(file, 0, SEEK_SET);
+		
+		struct PBO_single_entry {
+			unsigned long MimeType;
+			unsigned long OriginalSize;
+			unsigned long Offset;
+			unsigned long TimeStamp;
+			unsigned long Datasize;
+		} file_properties;
+		
+		enum MimeTypes {
+			MIME_DUMMY      = 0x0,
+			MIME_PROPERTIES = 0x56657273,
+			MIME_COMPRESSED = 0x43707273,
+			MIME_ENCRYPTED  = 0x456e6372
+		};
+
+		bool first_entry       = true;
+		char packed_file[128]  = "";
+		size_t packed_file_len = 0;
+	
+		QWrite_err(FWERROR_NONE, 0);
+		QWrite("[");
+
+		while (ftell(file) < file_size) {
+			char c          = fgetc(file);
+			packed_file_len = 0;
+			
+			while (c != '\0') {
+				if (arg_lower)
+					c = tolower(c);
+					
+				packed_file[packed_file_len] = c;
+				packed_file_len             += 1;
+				c = fgetc(file);
+			}
+				
+			fread(&file_properties, sizeof(file_properties), 1, file);
+
+			// Skip properties
+			if (packed_file_len == 0) {
+				if (first_entry && file_properties.MimeType==MIME_PROPERTIES && file_properties.TimeStamp==0 && file_properties.Datasize==0) {
+					bool is_value   = false;
+					packed_file_len = 0;
+					
+					while (ftell(file) < file_size) {
+						char c = fgetc(file);
+						
+						if (c != '\0') {
+							packed_file[packed_file_len] = c;
+							packed_file_len             += 1;
+						} else {
+							if (!is_value && packed_file_len==0)
+								break;
+							else {
+								is_value        = !is_value;
+								packed_file_len = 0;
+							}
+						}
+					}
+				} else {
+					break;
+				}
+			// Output filename
+			} else {
+				packed_file[packed_file_len] = '\0';
+				
+				bool found = files_to_find_size == 0;
+
+				for (int j=0; j<files_to_find_size && !found; j++)
+					if (strcmpi(packed_file,files_to_find[j]) == 0)
+						found = true;
+
+				if (found)				
+					QWritef("]+[\"%s\"", packed_file);
+			}
+			
+			first_entry = false;
+		}
+	
+		QWrite("]]");
+		fclose(file);
+	} else {
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+		QWrite("[]]");
+	}
+	
+	StringDynamic_end(buf_filename);
+}
+break;

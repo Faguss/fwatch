@@ -26,6 +26,7 @@ You may use this source code for personal entertainment purposes only. Any comme
 #include <time.h>		// Random number
 #include <io.h>			// Converting HANDLE to FILE
 #include <fcntl.h>		// Converting HANDLE to FILE
+#include <climits>
 
 extern GLOBAL_VARIABLES_TESTDLL global;
 
@@ -75,6 +76,7 @@ enum COMMAND_HASHES {
 	C_FILE_DXDLL          = 615999755u,
 	C_FILE_READ2          = 685851089u,
 	C_FILE_MODLIST        = 2709572447u,
+	C_FILE_PBO            = 4240196012u,
 	C_IGSE_WRITE          = 1567449702u,
 	C_IGSE_LIST           = 3690437211u,
 	C_IGSE_LOAD           = 3760381619u,
@@ -209,7 +211,8 @@ unsigned int commands_named_arguments[] = { // sorted
 	C_CLASS_LIST,
 	C_IGSE_NEW,
 	C_STRING_TRIM,
-	C_STRING_JOIN
+	C_STRING_JOIN,
+	C_FILE_PBO
 };
 
 unsigned int commands_memory[] = { // sorted
@@ -290,6 +293,7 @@ enum NAMED_ARGUMENTS {
 	NAMED_ARG_ACTION_SIZE         = 467552881u,
 	NAMED_ARG_ACTION_W            = 529460405u,
 	NAMED_ARG_ACTION_X            = 546238024u,
+	NAMED_ARG_REVERSE             = 558918661u,
 	NAMED_ARG_ACTION_Y            = 563015643u,
 	NAMED_ARG_SIZE                = 597743964u,
 	NAMED_ARG_CHAT_ENABLE         = 621100091u,
@@ -456,6 +460,7 @@ enum NAMED_ARGUMENTS {
 	NAMED_ARG_RADIOMENU_X         = 4144824460u,
 	NAMED_ARG_RADIOMENU_Y         = 4161602079u,
 	NAMED_ARG_MATCHWORD           = 4179106050u,
+	NAMED_ARG_PICK                = 4198624760u,
 	NAMED_ARG_RANGE               = 4208725202u,
 	NAMED_ARG_PREFIX              = 4232466889u,
 	NAMED_ARG_CHAT_COLORVEHICLE   = 4242011889u,

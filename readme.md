@@ -11,11 +11,12 @@ Binary download: https://ofp-faguss.com/fwatch/116test
 
 Project is compiled using Microsoft Visual C++ 6.0 SP6 on WinXP SP3
 
-```
-Open file TestDLL.dsw or TestLauncher.dsw
-Build >> Set Active Configuration >> Win32 Release
-Press F7
-```
+* Open file TestDLL.dsw in MSVC
+* Select option: Build >> Set Active Configuration >> Win32 Release
+* Press F7 or select: Build-->Build fwatch.dll
+* Open file TestLauncher.dsw in MSVC
+* Select option: Build >> Set Active Configuration >> Win32 Release
+* Press F7 or select: Build-->Build fwatch.exe
 
 ## Program Description
 
