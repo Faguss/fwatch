@@ -2734,7 +2734,7 @@ int SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_
 
 
 // Copy classes and properties from "merge" to "source"
-int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_dynamic, SQM_ParseState &source_state, size_t arg_setpos, String &arg_setpos_value) {
+int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_dynamic, SQM_ParseState &source_state, char *arg_setpos_line) {
 	int merge_parse_result             = 0;
 	SQM_ParseState source_state_backup = source_state;
 	bool buffer_modified               = false;
@@ -2768,75 +2768,54 @@ int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_
 				switch (source_result) {
 					case SQM_OUTPUT_PROPERTY : {
 						// Special "init" property modification
-						if (arg_setpos != SQM_SETPOS_NONE) {
-							
+						if (arg_setpos_line) {
+							char tofind[]     = "this setpos";
+							String tofind_str = {tofind, strlen(tofind)};
+							char *found       = String_find(source_state.value, tofind_str, 0);
+							size_t found_pos  = found - source_state.value.text;
+							size_t begin_pos  = 0;
+							size_t end_pos    = 0;
+															
 							// If "this setpos" already exists
-							if (strncmpi(source_state.value.text,"\"this setpos",12) == 0) {
+							if (found) {
+								int bracket_level = 0;
+								bool in_quote     = false;
 								
-								// Is it "setpos" or "setposASL"
-								size_t type = SQM_SETPOS_REL;
-
-								if (strncmpi(source_state.value.text+12,"asl",3) == 0)
-									type = SQM_SETPOS_ASL;
-
-								if (type != arg_setpos) {
-									if (type == SQM_SETPOS_REL) {
-										shift_buffer_chunk(source_dynamic.text, source_state.value_start+12, source_dynamic.length, 3, OPTION_RIGHT);
-										memcpy(source_dynamic.text+source_state.value_start+12, "ASL", 3);
-										source_dynamic.length     += 3;
-										source_state.value.length += 3;
-									} else {
-										shift_buffer_chunk(source_dynamic.text, source_state.value_start+15, source_dynamic.length, 3, OPTION_LEFT);
-										source_dynamic.length     -= 3;
-										source_state.value.length -= 3;
-									}
-
-									source_dynamic.text[source_dynamic.length] = '\0';
-								}
-
-								// Find height number and replace it
-								int level      = 0;
-								int comma      = 0;
-								char *height   = NULL;
-								bool is_number = true;
-								size_t z       = 0;
-								size_t height_start = 0;
-								
-								for (; z<source_state.value.length; z++) {
-									if (level == 1) {
-										if (height)
-											if (source_state.value.text[z]!=']' && source_state.value.text[z]!='.' && !isspace(source_state.value.text[z]) && !isdigit(source_state.value.text[z]))
-												is_number = false;
-										
-										if (source_state.value.text[z] == ',')
-											comma++;
-										else
-											if (comma==2  &&  !height  &&  !isspace(source_state.value.text[z])) {
-												height       = source_state.value.text + z;
-												height_start = z;
-											}
-									}
+								// Parse this comamnd line to find closing bracket
+								for (size_t i=found_pos; i<source_state.value.length; i++) {
+									if (source_state.value.text[i] == '\"')
+										in_quote = !in_quote;
 									
-									if (source_state.value.text[z] == '[')
-										level++;
-
-									if (source_state.value.text[z] == ']') {
-										level--;
-
-										if (level == 0)
-											break;
+									if (!in_quote) {
+										if (source_state.value.text[i] == '[') {
+											if (bracket_level == 0)
+												begin_pos = i;
+											bracket_level++;
+										}
+										
+										if (source_state.value.text[i] == ']') {
+											bracket_level--;
+											if (bracket_level == 0)
+												end_pos = i;
+										}
 									}
 								}
+							}
+							
+							// Replace this command with an updated one
+							if (begin_pos && end_pos) {									
+								merge_state.value.text   += 1;
+								merge_state.value.length -= 6;	// trim to the closing bracket
+								
+								size_t thissetpos_len = end_pos - found_pos;
 
-								char *height_end     = source_state.value.text + z;
-								size_t height_length = height_end - height;
-
-								size_t shift_amount  = arg_setpos_value.length >= height_length ? arg_setpos_value.length-height_length : height_length-arg_setpos_value.length;
-								bool shift_direction = arg_setpos_value.length >= height_length;
-
-								shift_buffer_chunk(source_dynamic.text, height_end-source_dynamic.text, source_dynamic.length, shift_amount, shift_direction);
-								memcpy(height, arg_setpos_value.text, arg_setpos_value.length);
-
+								size_t shift_amount  = merge_state.value.length >= thissetpos_len ? merge_state.value.length-thissetpos_len : thissetpos_len-merge_state.value.length;
+								bool shift_direction = merge_state.value.length >= thissetpos_len;
+							
+								char *end = source_state.value.text + end_pos;
+								shift_buffer_chunk(source_dynamic.text, end-source_dynamic.text, source_dynamic.length, shift_amount, shift_direction);								
+								memcpy(found, merge_state.value.text, merge_state.value.length);
+								
 								source_dynamic.length                     += shift_amount * (shift_direction ? 1 : -1);
 								source_dynamic.text[source_dynamic.length] = '\0';
 								buffer_modified                            = true;
@@ -2908,7 +2887,7 @@ int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_
 				switch (source_result) {
 					case SQM_OUTPUT_CLASS : {
 						// If the class already exists in the source then scan it recursively
-						if (SQM_Merge(merge, merge_state, source_dynamic, source_state, 0, empty_string))
+						if (SQM_Merge(merge, merge_state, source_dynamic, source_state, arg_setpos_line))
 							buffer_modified = true;
 					} break;
 

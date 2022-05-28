@@ -303,50 +303,177 @@ string ReplaceAll(string str, const string& from, const string& to)
 }
 
 
-string ReadStartupParams(string key_to_find)
-{
-	FILE *f = fopen("fwatch\\tmp\\schedule\\params.bin","rb");
-	string output = "";
-	
-	if (!key_to_find.empty()  &&  f) {
-		int existing_keys = 0;
-		fread(&existing_keys, sizeof(existing_keys), 1, f);
-		int *offsets = (int  *) malloc (existing_keys + 1);
-		
-		if (offsets != NULL) {
-			offsets[0] = 0;
-			fread(offsets+1, sizeof(*offsets), existing_keys, f);
-			int existing_text_buffer_size = offsets[existing_keys];
-			char *text_buffer = (char *) malloc (existing_text_buffer_size);
-			
-			if (text_buffer != NULL) {
-				fread(text_buffer, sizeof(char), existing_text_buffer_size, f);
-				char *key_name;
-				int i = 0;
-				
-				for (; i<existing_keys; i++) {
-					key_name = text_buffer + offsets[i];
-					
-					if (strcmpi(key_name, key_to_find.c_str()) == 0) {
-						output        = text_buffer + offsets[i] + strlen(key_name) + 1;
-						string tofind = "_Input=\"";
-						size_t find   = output.find_first_of(tofind);
+#define FNV_PRIME 16777619u
+#define FNV_BASIS 2166136261u
 
-						if (find != string::npos)
-							output = output.substr(find + tofind.length(), output.length() - tofind.length() - 1);
+enum OPTIONS_FNVHASH {
+	OPTION_LOWERCASE = 1
+};
 
-						break;
-					}
+//https://stackoverflow.com/questions/11413860/best-string-hashing-function-for-short-filenames
+unsigned int fnv1a_hash(unsigned int hash, const char *text, int text_length, bool lowercase) {
+    for (int i=0; i<text_length; i++)
+		hash = (hash ^ (lowercase ? tolower(text[i]) : text[i])) * FNV_PRIME;
+
+    return hash;
+}
+
+struct BinarySearchResult {
+	size_t index;
+	bool found;
+};
+
+// Search for an unsigned int in a string buffer
+BinarySearchResult binary_search_str(const char *buffer, size_t array_size, unsigned int value_to_find, size_t low, size_t high) {
+	if (array_size  &&  high>=low) {
+		size_t mid        = low + (high - low) / 2;
+		size_t *mid_value = (size_t*)(buffer + mid*sizeof(size_t));
+
+		if (*mid_value == value_to_find) {
+			BinarySearchResult out = {mid,1};
+			return out;
+		} else
+			if (*mid_value > value_to_find) {
+				if (mid > 0)
+					return binary_search_str(buffer, array_size, value_to_find, low, mid-1);
+				else {
+					// target key should be at the start of the array
+					BinarySearchResult out = {low, 0};
+					return out;
 				}
+			} else
+				if (mid < array_size-1)
+					return binary_search_str(buffer, array_size, value_to_find, mid+1, high);
+				else {
+					// target key should be at the end of the array
+					BinarySearchResult out = {mid+1, 0};
+					return out;
+				}
+	}
+	
+	BinarySearchResult out = {low,0};
+	return out;
+}
 
-				free(text_buffer);
-			}			
+string ReadStartupParams(string key_name)
+{
+	ifstream file("fwatch\\tmp\\schedule\\params.bin", ios::in | ios::binary);
+	string file_contents;
+	string output = "";
+	size_t buffer_size = 0;
+  
+	if (file) {
+		file.seekg(0, ios::end);
+		buffer_size = file.tellg();
+		file_contents.resize(buffer_size);
+		file.seekg(0, ios::beg);
+		file.read(&file_contents[0], file_contents.size());
+		file.close();
+	} else 
+		return output;
+
+	const __int64 igsedb_signature = 0x00626465736769;
+	const int igsedb_version       = 1;
+	
+	struct igsedb_header {
+		__int64 signature;
+		size_t version;
+		size_t number_of_keys;
+	} *header;
+	
+	struct igsedb_pointer {	// indicates current and the next item in the array of pointers
+		size_t start;
+		size_t end;
+	} key_pointer, value_pointer;
+	
+	const char *buffer = file_contents.c_str();
+	header             = (igsedb_header*)buffer;
+	
+	if (header->signature != igsedb_signature || header->version > igsedb_version)
+		return output;
+	
+	size_t minimal_file_size = sizeof(igsedb_header) + header->number_of_keys*sizeof(size_t)*3 + header->number_of_keys*2;
+	if (buffer_size < minimal_file_size)
+		return output;
+	
+	// Verify database
+	bool db_error = false;
+	
+	{
+		unsigned int hash_previous   = 0;
+		size_t pointer_previous      = 0;
+		size_t minimal_pointer_value = sizeof(igsedb_header) + header->number_of_keys * sizeof(size_t) * 3;
+		
+		for (size_t i=0; i<header->number_of_keys; i++) {
+			size_t hash_pos    = sizeof(igsedb_header) + i * sizeof(size_t);
+			unsigned int *hash = (unsigned int*)(buffer + hash_pos);
 			
-			free(offsets);
+			if (*hash <= hash_previous) {
+				db_error = true;
+				break;
+			}
+			
+			hash_previous = *hash;
 		}
 		
-		fclose(f);
+		for (size_t i=0;  i<header->number_of_keys*2 && !db_error;  i++) {
+			size_t pointer_pos    = sizeof(igsedb_header) + (header->number_of_keys+i) * sizeof(size_t);
+			size_t *pointer_value = (size_t*)(buffer + pointer_pos);
+			
+			if (i==0  &&  *pointer_value!=minimal_pointer_value) {
+				db_error = true;
+				break;
+			}
+				
+			if (*pointer_value < minimal_pointer_value) {
+				db_error = true;
+				break;
+			}
+			
+			if (*pointer_value > buffer_size) {
+				db_error = true;
+				break;
+			}
+			
+			if ((i>0 && buffer[*pointer_value-1]!='\0') || (i==header->number_of_keys*2-1  &&  buffer[buffer_size-1]!='\0')) {
+				db_error = true;
+				break;
+			}
+			
+			if (*pointer_value <= pointer_previous) {
+				db_error = true;
+				break;
+			}
+
+			pointer_previous = *pointer_value;
+		}
 	}
+	
+	if (db_error)
+		return output;
+	
+	// Find key
+	BinarySearchResult key_to_read = binary_search_str(buffer+sizeof(igsedb_header), header->number_of_keys, fnv1a_hash(FNV_BASIS, key_name.c_str(), key_name.length(), OPTION_LOWERCASE), 0, header->number_of_keys-1);
+	
+	if (!key_to_read.found)
+		return output;
+	
+	// Read pointer
+	size_t value_pointer_pos = sizeof(igsedb_header) + (header->number_of_keys*2 + key_to_read.index) * sizeof(size_t);
+	memcpy(&value_pointer, buffer+value_pointer_pos, sizeof(igsedb_pointer));
+	
+	if (key_to_read.index == header->number_of_keys-1)
+		value_pointer.end = buffer_size;
+		
+	// Verify pointer
+	size_t minimal_pointer_value = sizeof(igsedb_header) + header->number_of_keys * sizeof(size_t) * 3;
+	
+	if (value_pointer.start < minimal_pointer_value || value_pointer.end > buffer_size || (key_to_read.index>0 && buffer[value_pointer.start-1]!='\0')  ||  buffer[value_pointer.end-1]!='\0')
+		return output;
+
+	// Read
+	for (int i=0; i<value_pointer.end-1-value_pointer.start; i++)
+		output += (buffer + value_pointer.start)[i];
 
 	return output;
 }

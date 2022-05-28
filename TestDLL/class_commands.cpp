@@ -4459,7 +4459,7 @@ case C_CLASS_WRITE :
 			SQM_ParseState merge_state;
 			SQM_Init(merge_state);
 
-			if (SQM_Merge(argument[arg_merge], merge_state, file_contents_dynamic, source_state, 0, empty_string))
+			if (SQM_Merge(argument[arg_merge], merge_state, file_contents_dynamic, source_state, NULL))
 				save_changes = true;
 		}
 		
@@ -4541,32 +4541,22 @@ case C_CLASS_WRITE :
 				}
 			}
 
-		// Add init line with changing object's height
+		// Add init line that changes the object's height
 		if (arg_setpos != empty_char_index) {
-			size_t setpos_id    = SQM_SETPOS_NONE;
-			String setpos_value = empty_string;
-			String item         = empty_string;
-			size_t pos          = 0;
-			size_t index        = 0;
+			String item[4];
+			size_t pos = 0;
 			
-			while ((item = String_tokenize(argument[arg_setpos],",",pos,OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  index<2) {
-				if (index == 0) {
-					setpos_id = atoi(item.text);
-				} else {
-					setpos_value = item;
-				}
-
-				index++;
-			}
+			for (int i=0; i<4; i++)
+				item[i] = String_tokenize(argument[arg_setpos],",",pos,OPTION_TRIM_SQUARE_BRACKETS);
 
 			char setpos_line[setpos_size];
-			sprintf(setpos_line, "init=\"this setPos%s [getPos this select 0, getPos this select 1, %s]; \";", (setpos_id==SQM_SETPOS_ASL ? "ASL" : ""), setpos_value.text);
+			sprintf(setpos_line, "init=\"this setPos%s [%s, %s, %s]; \";", (atoi(item[0].text)==SQM_SETPOS_ASL ? "ASL" : ""), item[1].text, item[2].text, item[3].text);
 
 			String merge = {setpos_line, strlen(setpos_line)};
 			SQM_ParseState merge_state;
 			SQM_Init(merge_state);
 
-			if (SQM_Merge(merge, merge_state, file_contents_dynamic, source_state, setpos_id, setpos_value))
+			if (SQM_Merge(merge, merge_state, file_contents_dynamic, source_state, setpos_line))
 				save_changes = true;
 		}
 		
@@ -4585,7 +4575,7 @@ case C_CLASS_WRITE :
 			} else 
 				QWrite_err(FWERROR_ERRNO, errno, argument[arg_file].text);
 		} else 
-			if (!result && argument[arg_merge].length==0 && arg_setpos==SQM_SETPOS_NONE)
+			if (!result && argument[arg_merge].length==0 && arg_setpos==empty_char_index)
 				QWrite_err(FWERROR_PARAM_ACTION, 0);
 			else
 				QWrite_err(FWERROR_NONE, 0);
