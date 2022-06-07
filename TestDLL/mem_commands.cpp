@@ -2638,16 +2638,6 @@ case C_MEM_MULTI:		// reuses the same cases
 case C_MEM_GETCAM:
 { // Get camera values from the memory
 	
-	float sin              = 0;
-	float cos              = 0;
-	float dir              = 0;
-	float pitch            = 0;
-	int plr                = 1;
-	int base_plr           = 0;
-	const int base_size    = 7;
-	int base[base_size]    = {0};
-	float value[base_size] = {0};
-
 	enum {
 		COS,
 		PITCH,
@@ -2656,48 +2646,47 @@ case C_MEM_GETCAM:
 		POSY,
 		FOV,
 		SIN,
-		PLR
+		PLR,
+		MAX_VALUES
 	};
+
+	int base[MAX_VALUES]    = {0};
+	float value[MAX_VALUES] = {0};
 
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : 
-			base[0]  = 0x788434;
-			base[1]  = 0x788450;
-			base[2]  = 0x788458;
-			base[3]  = 0x78845C;
-			base[4]  = 0x788460;
-			base[5]  = 0x7884F8;
-			base[6]  = 0x78864C;
-			base_plr = 0x79DFCC;
+			base[COS]   = 0x788434;
+			base[PITCH] = 0x788450;
+			base[POSX]  = 0x788458;
+			base[POSZ]  = 0x78845C;
+			base[POSY]  = 0x788460;
+			base[FOV]   = 0x7884F8;
+			base[SIN]   = 0x78864C;
+			base[PLR]   = 0x79DFCC;
 			break;
 
 		case VER_199 : 
-			base[0]  = 0x77751C;
-			base[1]  = 0x777538;
-			base[2]  = 0x777540;
-			base[3]  = 0x777544;
-			base[4]  = 0x777548;
-			base[5]  = 0x7775E0;
-			base[6]  = 0x777614;
-			base_plr = 0x78D0C3;	// if this one fails then C4
+			base[COS]   = 0x77751C;
+			base[PITCH] = 0x777538;
+			base[POSX]  = 0x777540;
+			base[POSZ]  = 0x777544;
+			base[POSY]  = 0x777548;
+			base[FOV]   = 0x7775E0;
+			base[SIN]   = 0x777614;
+			base[PLR]   = 0x78D0C3;	// if this one fails then C4
 			break;
 	}
 
-	for (int i=0; i<base_size; i++)
+	for (int i=0; i<MAX_VALUES; i++)
 		if (base[i])
 			ReadProcessMemory(phandle, (LPVOID)base[i], &value[i], 4, &stBytes);
 
-	if (base_plr)
-		ReadProcessMemory(phandle, (LPVOID)base_plr, &plr, 1, &stBytes);
+	double result = rad2deg(acos(value[COS]));	// arccosine dir; rad to deg
+	if (value[SIN] < 0) result = 360 - result;	// format value
+	float dir = float(result);
 
-
-	double result = rad2deg(acos(cos));	// arccosine dir; rad to deg
-	if (sin < 0) 
-		result = 360 - result;			// format value
-	dir = float(result);				// from double to float
-
-	result = rad2deg(asin(pitch));
-	pitch  = float(result);
+	result       = rad2deg(asin(value[PITCH]));
+	value[PITCH] = float(result);
 
 
 	// get ext cam pos
@@ -2730,7 +2719,7 @@ case C_MEM_GETCAM:
 		dir, 
 		value[PITCH], 
 		value[FOV], 
-		getBool(!plr),
+		getBool(!value[PLR]),
 		extcam[0],
 		extcam[2],
 		extcam[1]
