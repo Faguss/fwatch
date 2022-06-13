@@ -4302,6 +4302,7 @@ case C_CLASS_WRITE :
     size_t arg_offset         = empty_char_index;	
 	size_t arg_setpos         = empty_char_index;
 	const int setpos_size     = 128;
+	int actions_specified     = 0;
 	
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch(argument_hash[i]) {
@@ -4311,6 +4312,7 @@ case C_CLASS_WRITE :
 				
 			case NAMED_ARG_MERGE : 
 				arg_merge = i + 1;
+				if (argument[i+1].length > 0) actions_specified++;
 				break;
 				
 			case NAMED_ARG_PATH :
@@ -4319,10 +4321,12 @@ case C_CLASS_WRITE :
 				
 			case NAMED_ARG_DELETECLASS : 
 				arg_deleteclass = i + 1;
+				if (argument[i+1].length > 0) actions_specified++;
 				break;
 				
 			case NAMED_ARG_DELETEPROPERTY : 
 				arg_deleteproperty = i + 1;
+				if (argument[i+1].length > 0) actions_specified++;
 				break;
 				
 			case NAMED_ARG_RENAMECLASS : 
@@ -4335,6 +4339,7 @@ case C_CLASS_WRITE :
 				
 			case NAMED_ARG_TO : 
 				arg_to = i + 1;
+				if (argument[i+1].length > 0) actions_specified++;
 				break;
 				
 			case NAMED_ARG_OFFSET :
@@ -4343,6 +4348,7 @@ case C_CLASS_WRITE :
 
 			case NAMED_ARG_SETPOS :
 				arg_setpos = i + 1;
+				if (argument[i+1].length > 0) actions_specified++;
 				break;
 		}
 	}
@@ -4350,6 +4356,16 @@ case C_CLASS_WRITE :
 	// File not specified
 	if (argument[arg_file].length == 0) {
 		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
+		QWrite("0]");
+		break;
+	}
+
+	// Check if any action arguments were specified
+	if (argument[arg_to].length>0 && (argument[arg_renameclass].length==0 || argument[arg_renameproperty].length==0))
+		actions_specified--;
+
+	if (actions_specified == 0) {
+		QWrite_err(FWERROR_PARAM_ACTION, 0);
 		QWrite("0]");
 		break;
 	}
@@ -4451,8 +4467,9 @@ case C_CLASS_WRITE :
 	
 	// If classes given in the path were found
 	if (classpath_current == classpath_size) {
-		result            = 0;
-		bool save_changes = false;
+		SQM_ParseState source_state_backup = source_state;
+		result                             = 0;
+		bool save_changes                  = false;
 		
 		// Merge classes	
 		if (argument[arg_merge].length > 0) {
@@ -4465,13 +4482,13 @@ case C_CLASS_WRITE :
 		
 		// Delete property
 		if (argument[arg_deleteproperty].length > 0) {
-			SQM_ParseState source_state_copy = source_state;
-			String file_contents             = {file_contents_dynamic.text, file_contents_dynamic.length};
+			source_state         = source_state_backup;
+			String file_contents = {file_contents_dynamic.text, file_contents_dynamic.length};
 
-			if ((result = SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_PROPERTY, argument[arg_deleteproperty]))) {
-				size_t removed_length = source_state_copy.value_end - source_state_copy.property_start;
+			if ((result = SQM_Parse(file_contents, source_state, SQM_ACTION_FIND_PROPERTY, argument[arg_deleteproperty]))) {
+				size_t removed_length = source_state.value_end - source_state.property_start;
 				
-				shift_buffer_chunk(file_contents.text, source_state_copy.value_end, file_contents.length, removed_length, OPTION_LEFT);
+				shift_buffer_chunk(file_contents.text, source_state.value_end, file_contents.length, removed_length, OPTION_LEFT);
 				
 				file_contents_dynamic.length -= removed_length;
 				save_changes                  = true;
@@ -4482,16 +4499,16 @@ case C_CLASS_WRITE :
 		}
 		
 		// Delete class
-		if (argument[arg_deleteclass].length > 0) {				
-			SQM_ParseState source_state_copy = source_state;
-			String file_contents             = {file_contents_dynamic.text, file_contents_dynamic.length};
+		if (argument[arg_deleteclass].length > 0) {
+			source_state         = source_state_backup;
+			String file_contents = {file_contents_dynamic.text, file_contents_dynamic.length};
 	
-			if ((result = SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_CLASS, argument[arg_deleteclass]))) {
-				SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_CLASS_END, empty_string);
+			if ((result = SQM_Parse(file_contents, source_state, SQM_ACTION_FIND_CLASS, argument[arg_deleteclass]))) {
+				SQM_Parse(file_contents, source_state, SQM_ACTION_FIND_CLASS_END, empty_string);
 				
-				size_t removed_length = source_state_copy.i - source_state_copy.class_start;
+				size_t removed_length = source_state.i - source_state.class_start;
 				
-				shift_buffer_chunk(file_contents.text, source_state_copy.i, file_contents.length, removed_length, OPTION_LEFT);
+				shift_buffer_chunk(file_contents.text, source_state.i, file_contents.length, removed_length, OPTION_LEFT);
 				
 				file_contents_dynamic.length -= removed_length;
 				save_changes                  = true;
@@ -4503,16 +4520,16 @@ case C_CLASS_WRITE :
 		
 		// Rename property
 		if (argument[arg_renameproperty].length>0  &&  argument[arg_to].length>0) {
-			SQM_ParseState source_state_copy = source_state;
-			String file_contents             = {file_contents_dynamic.text, file_contents_dynamic.length};
+			source_state         = source_state_backup;
+			String file_contents = {file_contents_dynamic.text, file_contents_dynamic.length};
 	
-			if ((result = SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_PROPERTY, argument[arg_renameproperty]))) {
-				size_t shift_amount  = argument[arg_to].length >= source_state_copy.property.length ? argument[arg_to].length-source_state_copy.property.length : source_state_copy.property.length-argument[arg_to].length;
-				bool shift_direction = argument[arg_to].length >= source_state_copy.property.length;
+			if ((result = SQM_Parse(file_contents, source_state, SQM_ACTION_FIND_PROPERTY, argument[arg_renameproperty]))) {
+				size_t shift_amount  = argument[arg_to].length >= source_state.property.length ? argument[arg_to].length-source_state.property.length : source_state.property.length-argument[arg_to].length;
+				bool shift_direction = argument[arg_to].length >= source_state.property.length;
 				save_changes         = true;
 				
-				shift_buffer_chunk(file_contents.text, source_state_copy.property_end, file_contents.length, shift_amount, shift_direction);
-				memcpy(source_state_copy.property.text, argument[arg_to].text, argument[arg_to].length);
+				shift_buffer_chunk(file_contents.text, source_state.property_end, file_contents.length, shift_amount, shift_direction);
+				memcpy(source_state.property.text, argument[arg_to].text, argument[arg_to].length);
 				
 				file_contents_dynamic.length += shift_amount * (shift_direction ? 1 : -1);
 			} else {
@@ -4522,17 +4539,17 @@ case C_CLASS_WRITE :
 		} else
 			// Rename class
 			if (argument[arg_renameclass].length > 0  &&  argument[arg_to].length > 0) {
-				SQM_ParseState source_state_copy = source_state;
-				String file_contents             = {file_contents_dynamic.text, file_contents_dynamic.length};
+				source_state         = source_state_backup;
+				String file_contents = {file_contents_dynamic.text, file_contents_dynamic.length};
 				
-				if ((result = SQM_Parse(file_contents, source_state_copy, SQM_ACTION_FIND_CLASS, argument[arg_renameclass]))) {
-					size_t current_name_length = source_state_copy.class_name_full_end - source_state_copy.class_name_start;
+				if ((result = SQM_Parse(file_contents, source_state, SQM_ACTION_FIND_CLASS, argument[arg_renameclass]))) {
+					size_t current_name_length = source_state.class_name_full_end - source_state.class_name_start;
 					size_t shift_amount        = argument[arg_to].length >= current_name_length ? argument[arg_to].length-current_name_length : current_name_length-argument[arg_to].length;
 					bool shift_direction       = argument[arg_to].length >= current_name_length;
 					save_changes               = true;
 					
-					shift_buffer_chunk(file_contents.text, source_state_copy.class_name_full_end, file_contents.length, shift_amount, shift_direction);
-					memcpy(source_state_copy.class_name.text, argument[arg_to].text, argument[arg_to].length);
+					shift_buffer_chunk(file_contents.text, source_state.class_name_full_end, file_contents.length, shift_amount, shift_direction);
+					memcpy(source_state.class_name.text, argument[arg_to].text, argument[arg_to].length);
 					
 					file_contents_dynamic.length += shift_amount * (shift_direction ? 1 : -1);
 				} else {
@@ -4544,20 +4561,30 @@ case C_CLASS_WRITE :
 		// Add init line that changes the object's height
 		if (arg_setpos != empty_char_index) {
 			String item[4];
-			size_t pos = 0;
+			size_t pos   = 0;
+			source_state = source_state_backup;
 			
 			for (int i=0; i<4; i++)
 				item[i] = String_tokenize(argument[arg_setpos],",",pos,OPTION_TRIM_SQUARE_BRACKETS);
 
-			char setpos_line[setpos_size];
-			sprintf(setpos_line, "init=\"this setPos%s [%s, %s, %s]; \";", (atoi(item[0].text)==SQM_SETPOS_ASL ? "ASL" : ""), item[1].text, item[2].text, item[3].text);
+			enum SQM_SETPOS {
+				SQM_SETPOS_NONE,
+				SQM_SETPOS_REL,
+				SQM_SETPOS_ASL
+			};
+			int command_type = atoi(item[0].text);
 
-			String merge = {setpos_line, strlen(setpos_line)};
-			SQM_ParseState merge_state;
-			SQM_Init(merge_state);
+			if (command_type == SQM_SETPOS_REL  ||  command_type == SQM_SETPOS_ASL) {
+				char setpos_line[setpos_size];
+				sprintf(setpos_line, "init=\"this setPos%s [%s, %s, %s]; \";", (command_type==SQM_SETPOS_ASL ? "ASL" : ""), item[1].text, item[2].text, item[3].text);
 
-			if (SQM_Merge(merge, merge_state, file_contents_dynamic, source_state, setpos_line))
-				save_changes = true;
+				String merge = {setpos_line, strlen(setpos_line)};
+				SQM_ParseState merge_state;
+				SQM_Init(merge_state);
+
+				if (SQM_Merge(merge, merge_state, file_contents_dynamic, source_state, setpos_line))
+					save_changes = true;
+			}
 		}
 		
 
@@ -4575,10 +4602,7 @@ case C_CLASS_WRITE :
 			} else 
 				QWrite_err(FWERROR_ERRNO, errno, argument[arg_file].text);
 		} else 
-			if (!result && argument[arg_merge].length==0 && arg_setpos==empty_char_index)
-				QWrite_err(FWERROR_PARAM_ACTION, 0);
-			else
-				QWrite_err(FWERROR_NONE, 0);
+			QWrite_err(FWERROR_NONE, 0);
 	} else
 		if (classpath_current < classpath_size)
 			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, classpath_size, argument[arg_file].text);

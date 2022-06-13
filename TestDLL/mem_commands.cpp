@@ -176,7 +176,8 @@ case C_MEM_GETGRAPHICS:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x7DCFB4; break;
 		case VER_199 : base=0x7CBF74; break;
-		default      : base=0;
+		case VER_201 : base=global.exe_address+0x6D6B80; break;
+		default      : base=0; break;
 	}
 
 	if (base)
@@ -186,54 +187,61 @@ case C_MEM_GETGRAPHICS:
 
 	// Resolution fullscreen, brightness, multitexturing, fov, refresh rate, gamma
 	struct EngineRecord {
-		float brightness;
+		float brightness; //+0x2C
 		int unknown[2];
-		bool nightvision;
-		bool multitexturing;
+		bool nightvision; //+0x38
+		bool multitexturing; //+0x39
+		// padding
 		int unknown2;
-		float fovLeft;
-		float fovTop;
-		float uiTopLeftX;
-		float uiTopLeftY;
-		float uiBottomRightX;
-		float uiBottomRightY;
-		int unknown3[52];
-		int resolutionX;
-		int resolutionY;
-		int pixelsize;
-		int depth;
-		int refresh;
-		int unknown4[392];
-		float gamma;
+		float fovLeft; //+0x40
+		float fovTop; //+0x44
+		float uiTopLeftX; //+0x48
+		float uiTopLeftY; //+0x4C
+		float uiBottomRightX; //+0x50
+		float uiBottomRightY; //+0x54
 	} engine;
+
+	struct EngineRecord2 {
+		int resolutionX; //+0x128
+		int resolutionY; //+0x12C
+		int pixelsize; //+0x130
+		int depth; //+0x134
+		int refresh; //+0x138
+	} engine2;
+
+	float gamma; //+0x758
 
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x789D88; break;
 		case VER_199 : base=0x778E80; break;
-		default      : base=0;
+		case VER_201 : base=global.exe_address+0x6D6A10; break;
+		default      : base=0; break;
 	}
 
 	if (base) {
 		ReadProcessMemory(phandle, (LPVOID)base,            &pointer, 4, &stBytes);
 		ReadProcessMemory(phandle, (LPVOID)(pointer+0x2C) , &engine,  sizeof(EngineRecord), &stBytes);
+		ReadProcessMemory(phandle, (LPVOID)(pointer+0x128), &engine2, sizeof(EngineRecord2), &stBytes);
+		ReadProcessMemory(phandle, (LPVOID)(pointer+0x758), &gamma,   4, &stBytes);
 	}
 
 
 	// Framerate, terrain detail, visual quality, shadows, cloudlets, terrain detail
 	struct SceneRecord {
-		float framerate;
+		float framerate; //+0x524
 		int unknown[5];
-		float visual_quality;
+		float visual_quality; //+0x53C
 		int unknown2[19]; 
-		bool object_shadows;
-		bool vehicle_shadows;
-		bool cloudlets;
-		float terrain_detail;
+		bool object_shadows; //+0x58C
+		bool vehicle_shadows; //+0x58D
+		bool cloudlets; //+0x58E
+		float terrain_detail; //+0x590
 	} scene;
 
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x7B4028; break;
 		case VER_199 : base=0x7A3128; break;
+		case VER_201 : base=global.exe_address+0x6D7018; break;
 		default      : base=0;
 	}
 
@@ -266,6 +274,7 @@ case C_MEM_GETGRAPHICS:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x7DD068; break;
 		case VER_199 : base=0x7CC028; break;
+		case VER_201 : base=global.exe_address+0x714AF0; break;
 		default      : base=0; break;
 	}
 
@@ -280,6 +289,7 @@ case C_MEM_GETGRAPHICS:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x7B3ACC; break;
 		case VER_199 : base=0x7A2C0C; break;
+		case VER_201 : base=global.exe_address+0x6D6B34; break;
 		default      : base=0;
 	}
 
@@ -290,16 +300,16 @@ case C_MEM_GETGRAPHICS:
 
 
 	QWritef("[%d,%d,%d,%s,%s,%s,%s,%s,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%d,%.6f,%.6f,%d,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f]", 
-			resolution_window[0]==0 ? resolution_window[0] : engine.resolutionX, 
-			resolution_window[1]==0 ? resolution_window[1] : engine.resolutionY, 
-			engine.refresh,
+			resolution_window[0]==0 ? resolution_window[0] : engine2.resolutionX, 
+			resolution_window[1]==0 ? resolution_window[1] : engine2.resolutionY, 
+			engine2.refresh,
 			getBool(engine.multitexturing), 
 			getBool(scene.object_shadows), 
 			getBool(scene.vehicle_shadows), 
 			getBool(scene.cloudlets), 
 			getBool(config.blood),
 			engine.brightness, 
-			engine.gamma, 
+			gamma, 
 			scene.framerate, 
 			scene.visual_quality, 
 			config.visibility, 
@@ -347,8 +357,23 @@ case C_MEM_SETGRAPHICS:
 	int base = 0;
 
 	switch(global_exe_version[global.exe_index]) {
-		case VER_196 : b1=0x789D88; b2=0x7B4028; b3=0x79F8D0; break;
-		case VER_199 : b1=0x778E80; b2=0x7A3128; b3=0x78E9C8; break;
+		case VER_196 : 
+			b1 = 0x789D88; 
+			b2 = 0x7B4028; 
+			b3 = 0x79F8D0; 
+			break;
+
+		case VER_199 : 
+			b1 = 0x778E80; 
+			b2 = 0x7A3128; 
+			b3 = 0x78E9C8; 
+			break;
+
+		case VER_201 : 
+			b1 = global.exe_address+0x6D6A10;
+			b2 = global.exe_address+0x6D7018;
+			b3 = global.exe_address+0x6D8240;
+			break;
 	}
 
 	if (!b1)
@@ -418,6 +443,7 @@ case C_MEM_SETGRAPHICS:
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD068; break;
 					case VER_199 : base=0x7CC028; break;
+					case VER_201 : base=global.exe_address+0x714AF0; break;
 					default      : base=0;
 				}
 				if (base)
@@ -429,6 +455,7 @@ case C_MEM_SETGRAPHICS:
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD06C; break;
 					case VER_199 : base=0x7CC02C; break;
+					case VER_201 : base=global.exe_address+0x714AF4; break;
 					default      : base=0;
 				}
 				if (base)
@@ -440,6 +467,7 @@ case C_MEM_SETGRAPHICS:
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD070; break;
 					case VER_199 : base=0x7CC030; break;
+					case VER_201 : base=global.exe_address+0x714AF8; break;
 					default      : base=0;
 				}
 				if (base)
@@ -450,6 +478,7 @@ case C_MEM_SETGRAPHICS:
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD074; break;
 					case VER_199 : base=0x7CC034; break;
+					case VER_201 : base=global.exe_address+0x714AFC; break;
 					default      : base=0;
 				}
 				if (base) {
@@ -468,6 +497,7 @@ case C_MEM_SETGRAPHICS:
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD078; break;
 					case VER_199 : base=0x7CC038; break;
+					case VER_201 : base=global.exe_address+0x714B00; break;
 					default      : base=0;
 				}
 				if (base)
@@ -478,6 +508,7 @@ case C_MEM_SETGRAPHICS:
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD07C; break;
 					case VER_199 : base=0x7CC03C; break;
+					case VER_201 : base=global.exe_address+0x714B04; break;
 					default      : base=0;
 				}
 
@@ -496,6 +527,7 @@ case C_MEM_SETGRAPHICS:
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD080; break;
 					case VER_199 : base=0x7CC040; break;
+					case VER_201 : base=global.exe_address+0x714B08; break;
 					default      : base=0;
 				}
 
@@ -514,6 +546,7 @@ case C_MEM_SETGRAPHICS:
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD084; break;
 					case VER_199 : base=0x7CC044; break;
+					case VER_201 : base=global.exe_address+0x714B0C; break;
 					default      : base=0;
 				}
 
@@ -532,6 +565,7 @@ case C_MEM_SETGRAPHICS:
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x7DD08C; break;
 					case VER_199 : base=0x7CC04C; break;
+					case VER_201 : base=global.exe_address+0x714B14; break;
 					default      : base=0;
 				}
 
@@ -628,6 +662,7 @@ case C_MEM_GETJOYSTICK:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x79E994; break;
 		case VER_199 : base=0x78DA8C; break;
+		case VER_201 : base=global.exe_address+0x716164; break;
 	}
 
 
@@ -656,6 +691,7 @@ case C_MEM_GETJOYSTICK:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x79E96C; break;
 		case VER_199 : base=0x78DA64; break;
+		case VER_201 : base=global.exe_address+0x71613C; break;
 	}
 
 	for (i=0; i<8; i++) {	
@@ -680,6 +716,7 @@ case C_MEM_GETJOYSTICK:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x79E95C; break;
 		case VER_199 : base=0x78DA4C; break;
+		case VER_201 : base=global.exe_address+0x71612C; break;
 	}
 
 	for (i=0; i<8; i++) {
@@ -751,8 +788,26 @@ case C_MEM_SETPLAYERANIM:
 	int	modif[3]   = {0};
 
 	switch(global_exe_version[global.exe_index]) {
-		case VER_196 : pointer[0]=0x7B4028; modif[0]=0x788; modif[1]=0x8; modif[2]=0x708; break;
-		case VER_199 : pointer[0]=0x7A3128; modif[0]=0x78C; modif[1]=0x8; modif[2]=0x718; break;
+		case VER_196 : 
+			pointer[0] = 0x7B4028; 
+			modif[0]   = 0x788; 
+			modif[1]   = 0x8; 
+			modif[2]   = 0x708; 
+			break;
+
+		case VER_199 : 
+			pointer[0] = 0x7A3128;
+			modif[0]   = 0x78C;
+			modif[1]   = 0x8;
+			modif[2]   = 0x718;
+			break;
+
+		case VER_201 : 
+			pointer[0] = global.exe_address+0x6D7018; 
+			modif[0]   = 0x788;
+			modif[1]   = 0x8;
+			modif[2]   = 0x718; 
+			break;
 	}
 
 
@@ -775,6 +830,7 @@ case C_MEM_SETPLAYERANIM:
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196 : modif[0]=0x784; break;
 				case VER_199 : pointer[0]=0x78E9C8; modif[0]=0x7A8; break;
+				case VER_201 : pointer[0]=global.exe_address+0x6D8240; modif[0]=0x7A8; break;
 			}
 
 			continue;
@@ -801,6 +857,7 @@ case C_MEM_GETCINEMABORDER:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x76D1D0; break;
 		case VER_199 : base=0x755678; break;
+		case VER_201 : base=0x14A37E7; break;
 	}
 
 	if (base)
@@ -921,6 +978,7 @@ case C_MEM_GETDAYLIGHT:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196        : base=0x7B4028; break;
 		case VER_199        : base=0x7A3128; break;
+		case VER_201        : base=global.exe_address+0x6D7018; break;
 		case VER_196_SERVER : base=0x733E88; break;
 		case VER_199_SERVER : base=0x733F20; break;
 	}
@@ -1014,6 +1072,7 @@ case C_MEM_SETPLAYERVIEW:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x7B4028; break;
 		case VER_199 : base=0x7A3128; break;
+		case VER_201 : base=global.exe_address+0x6D7018; break;
 	}
 
 	if (base) {
@@ -1129,6 +1188,16 @@ case C_MEM_SETPLAYERAIM:
 			modif[0]    = 0x8;
 			modif[1]    = 0x7C;
 			pointer2[0] = 0x7A3128;
+			modif2[0]   = 0x784;
+			modif2[1]   = 0x8;
+			modif2[2]   = 0x484;
+			break;
+
+		case VER_201 : 
+			pointer[0]  = global.exe_address+0x6D6B34;
+			modif[0]    = 0x8;
+			modif[1]    = 0x7C;
+			pointer[2]  = global.exe_address+0x6D7018;
 			modif2[0]   = 0x784;
 			modif2[1]   = 0x8;
 			modif2[2]   = 0x484;
@@ -1454,6 +1523,7 @@ case C_MEM_SETRADIOBOX:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x79F8D0; break;
 		case VER_199 : base=0x78E9C8; break;
+		case VER_201 : base=global.exe_address+0x6D8240; break;
 	}
 	
 	if (base) {
@@ -1484,6 +1554,7 @@ case C_MEM_GETSPEEDKEY:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x79E9C2; break;
 		case VER_199 : base=0x78DABA; break;
+		case VER_201 : base=global.exe_address+0x716190; break;
 	}
 		
 	// Read those four values
@@ -1567,6 +1638,7 @@ case C_MEM_SETSPEEDKEY:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x79E9C2; break;
 		case VER_199 : base=0x78DABA; break;
+		case VER_201 : base=global.exe_address+0x716190; break;
 	}
 	
 	if (base) {
@@ -1626,6 +1698,7 @@ case C_MEM_GETPLAYERHATCH:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : pointer[0]=0x7B4028; break;
 		case VER_199 : pointer[0]=0x7A3128; modif[2]+=10; break;
+		case VER_201 : pointer[0]=global.exe_address+0x6D7018; modif[2]+=10; break;
 	}
 
 
@@ -1697,6 +1770,7 @@ case C_MEM_SETPLAYERHATCH:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : pointer[0]=0x7B4028; break;
 		case VER_199 : pointer[0]=0x7A3128; modif[2]+=10; break;
+		case VER_201 : pointer[0]=global.exe_address+0x6D7018; break;
 	}
 
 	if (pointer[0]) {
@@ -1937,6 +2011,14 @@ case C_MEM_MISSIONINFO:
 			base[6] = 0x775D18;
 			break;
 
+		case VER_201 :
+			base[1] = global.exe_address+0x714BBC; break;
+			break;
+
+		case VER_201_SERVER :
+			base[1] = global.exe_address+0x60B00C; break;
+			break;
+
 		case VER_196_SERVER : 
 			base[0] = 0x75A398;
 			base[1] = 0x75A3E8;
@@ -2077,6 +2159,13 @@ case C_MEM_BULLETS:
 			offset[7] = 0x7067A0;
 			offset[8] = 0x485820;
 			offset[9] = 0x5F789B;
+			break;
+
+		case VER_201 : 
+			offset[0] = global.exe_address+0x57249C;
+			offset[3] = global.exe_address+0x34EBA6;
+			offset[4] = global.exe_address+0x351A2C;
+			offset[5] = global.exe_address+0x354206;
 			break;
 
 		case VER_196_SERVER : 
@@ -2251,8 +2340,9 @@ case C_MEM_SETWEATHER:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196        : base=0x79F8D0; break;
 		case VER_199        : base=0x78E9C8; break;
+		case VER_201        : base=global.exe_address+0x6D8240; break;
 		case VER_196_SERVER : base=0x71F738; break;
-		case VER_199_SERVER : base=0x71F788; break;
+		case VER_199_SERVER : base=0x71F788; break;		
 	}
 	
 
@@ -2278,6 +2368,7 @@ case C_MEM_SETWEATHER:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196        : base=0x7B3ACC; break;
 		case VER_199        : base=0x7A2C0C; break;
+		case VER_201        : base=global.exe_address+0x6D6B34; break;
 		case VER_196_SERVER : base=0x73392C; break;
 		case VER_199_SERVER : base=0x7339C4; break;
 		default             : base=0;
@@ -2345,6 +2436,7 @@ case C_MEM_SETWEATHER:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196        : base=0x72F8E4; break;
 		case VER_199        : base=0x72295C; break;
+		case VER_201        : base=0x10718CA0; break;
 		case VER_196_SERVER : base=0x6BE184; break;
 		case VER_199_SERVER : base=0x6BE144; break;
 		default             : base=0;
@@ -2675,6 +2767,17 @@ case C_MEM_GETCAM:
 			base[SIN]   = 0x777614;
 			base[PLR]   = 0x78D0C3;	// if this one fails then C4
 			break;
+
+		case VER_201 : 
+			base[COS]   = global.exe_address+0x6CAE4C;
+			base[PITCH] = global.exe_address+0x6CAE68;
+			base[POSX]  = global.exe_address+0x6CAE70;
+			base[POSZ]  = global.exe_address+0x6CAE74;
+			base[POSY]  = global.exe_address+0x6CAE78;
+			base[FOV]   = global.exe_address+0x6CAF10;
+			base[SIN]   = global.exe_address+0x6CAF44;
+			base[PLR]   = 0x0;
+			break;
 	}
 
 	for (int i=0; i<MAX_VALUES; i++)
@@ -2771,33 +2874,22 @@ else
 case C_MEM_GETNV:
 { // Get nightvision goggles value from the memory
 
-//[[[0x00786CA0]] + 0x8] + 0x6C6
-
-	int pointer[5]	  = {0};
-	int	modif[3]	  = {0x0, 0x8, 0x6C6};
-	int	bytes_to_read = 4;
-	int	max_loops	  = (sizeof(pointer) / sizeof(pointer[0])) - 1;
+	int base    = 0;
+	int pointer = 0;
+	bool nv     = false;
 
 	switch(global_exe_version[global.exe_index]) {
-		case VER_196 : pointer[0]=0x786CA0; break;
-		case VER_199 : pointer[0]=0x7A3128; modif[0]=0x78C; modif[2]=0x6D6; break;
+		case VER_196 : base=0x789D88; break;
+		case VER_199 : base=0x778E80; break;
+		case VER_201 : base=global.exe_address+0x6D6A10; break;
 	}
 
-
-	if (pointer[0]) {
-		for (int i=0; i<max_loops; i++) {
-			if (i == max_loops-1)		// in last iteration read just one byte
-				bytes_to_read = 1;
-
-			ReadProcessMemory(phandle, (LPVOID)pointer[i], &pointer[i+1], bytes_to_read, &stBytes);
-
-			if (i < max_loops-1) 
-				pointer[i+1] = pointer[i+1] + modif[i];
-		}
+	if (base) {
+		ReadProcessMemory(phandle, (LPVOID)base,           &pointer, 4, &stBytes);
+		ReadProcessMemory(phandle, (LPVOID)(pointer+0x38), &nv     , 1, &stBytes);
 	}
 
-
-	QWrite(getBool(pointer[max_loops]));
+	QWrite(getBool(nv));
 }
 if (argument_hash[0] != C_MEM_MULTI) 
 	break;
@@ -2813,36 +2905,30 @@ else
 case C_MEM_GETPLAYERVIEW:
 { // Get camera view type from the memory
 
-	int pointer = 0;
-	int display = 0;
-	int toggle  = 0;
-	int *ptr    = &display;
 	int	base    = 0;
+	int pointer = 0;
+	int view[2] = {0};
 
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x7B4028; break;
 		case VER_199 : base=0x7A3128; break;
+		case VER_201 : base=global.exe_address+0x6D7018; break;
 	}
-
 
 	if (base) {
 		ReadProcessMemory(phandle, (LPVOID)base,			&pointer, 4, &stBytes);
-		ReadProcessMemory(phandle, (LPVOID)(pointer+0x860), &toggle,  1, &stBytes);
-		ReadProcessMemory(phandle, (LPVOID)(pointer+0x864), &display, 1, &stBytes);
+		ReadProcessMemory(phandle, (LPVOID)(pointer+0x860), &view   , 8, &stBytes);
 	}
-
 
 	QWrite("[");
 
 	for (int i=0; i<2; i++) {
-		if (i != 0) {
+		if (i != 0)
 			QWrite(",");
-			ptr = &toggle;
-		}
 
 		QWrite("\"");
 
-		switch (*ptr) {
+		switch (view[i]) {
 			case 0: QWrite("INTERNAL"); break;
 			case 1: QWrite("GUNNER"); break;
 			case 2: QWrite("EXTERNAL"); break;
@@ -2910,6 +2996,14 @@ case C_MEM_GETPLAYERAIM:
 			modif[0]    = 0x8;
 			modif[1]    = 0x7C;
 			modif2[2]   = 0x484;
+			break;
+
+		case VER_201 : 
+			pointer[0] = global.exe_address+0x6D6B34; 
+			pointer[2] = global.exe_address+0x6D7018;
+			modif[0]   = 0x8;
+			modif[1]   = 0x7C;
+			modif2[2]  = 0x484;
 			break;
 	}
 
@@ -3002,8 +3096,21 @@ case C_MEM_GETPLAYERANIM:
 	bool restartPath = false;
 
 	switch(global_exe_version[global.exe_index]) {
-		case VER_196 : pointer[0]=0x7B4028; break;
-		case VER_199 : pointer[0]=0x7A3128; modif[0]=0x78C; modif[2]=0x718; break;
+		case VER_196 : 
+			pointer[0] = 0x7B4028; 
+			break;
+
+		case VER_199 : 
+			pointer[0] = 0x7A3128; 
+			modif[0]   = 0x78C;
+			modif[2]   = 0x718;
+			break;
+
+		case VER_201 : 
+			pointer[0] = global.exe_address+0x6D7018; 
+			modif[0]   = 0x788;
+			modif[2]   = 0x718; 
+			break;
 	}
 	
 
@@ -3020,6 +3127,7 @@ case C_MEM_GETPLAYERANIM:
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196 : modif[0]=0x784; break;
 				case VER_199 : pointer[0]=0x78E9C8; modif[0]=0x7A8; break;
+				case VER_201 : pointer[0]=global.exe_address+0x6D8240; modif[0]=0x7A8; break;
 			}
 
 			continue;
@@ -3053,6 +3161,7 @@ case C_MEM_ISDIALOG:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x79E9E0; break;
 		case VER_199 : base=0x78DAD8; break;
+		case VER_201 : base=global.exe_address+0x7161B0; break;
 	}
 
 	if (base)
@@ -3083,6 +3192,7 @@ case C_MEM_GETRADIOBOX:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x79F8D0; break;
 		case VER_199 : base=0x78E9C8; break;
+		case VER_201 : base=global.exe_address+0x6D8240; break;
 	}
 
 	if (base) {
@@ -3117,6 +3227,7 @@ case C_MEM_GETWEATHER:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196        : base=0x79F8D0; break;
 		case VER_199        : base=0x78E9C8; break;
+		case VER_201        : base=global.exe_address+0x6D8240; break;
 		case VER_196_SERVER : base=0x71F738; break;
 		case VER_199_SERVER : base=0x71F788; break;
 	}
@@ -3150,6 +3261,7 @@ case C_MEM_GETWEATHER:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196        : base=0x7DD028; break;
 		case VER_199        : base=0x7CBFE8; break;
+		case VER_201        : base=global.exe_address+0x714AB0; break;
 		case VER_196_SERVER : base=0x75A2E0; break;
 		case VER_199_SERVER : base=0x75A370; break;
 		default             : base=0;
@@ -3169,6 +3281,7 @@ case C_MEM_GETWEATHER:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196        : base=0x7B3ACC; break;
 		case VER_199        : base=0x7A2C0C; break;
+		case VER_201        : base=global.exe_address+0x6D6B34; break;
 		case VER_196_SERVER : base=0x73392C; break;
 		case VER_199_SERVER : base=0x7339C4; break;
 		default             : base=0;
@@ -3228,6 +3341,7 @@ case C_MEM_GETWEATHER:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196        : base=0x72F8E4; break;
 		case VER_199        : base=0x72295C; break;
+		case VER_201        : base=0x10718CA0; break;
 		case VER_196_SERVER : base=0x6BE184; break;
 		case VER_199_SERVER : base=0x6BE144; break;
 		default             : base=0;

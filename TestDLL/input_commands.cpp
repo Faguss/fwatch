@@ -261,6 +261,7 @@ case C_INPUT_MULTI:
 		switch(global_exe_version[global.exe_index]) {
 			case VER_196 : base=0x79E994; break;
 			case VER_199 : base=0x78DA8C; break;
+			case VER_201 : base=global.exe_address+0x716164; break;
 		}
 
 		float axisX=0, axisY=0, axisZ=0, axisR1=0, axisR2=0;
@@ -276,6 +277,7 @@ case C_INPUT_MULTI:
 		switch(global_exe_version[global.exe_index]) {
 			case VER_196 : base=0x79E96C; break;
 			case VER_199 : base=0x78DA64; break;
+			case VER_201 : base=global.exe_address+0x71613C; break;
 		}
 
 		for (i=0; i<8; i++)
@@ -288,6 +290,7 @@ case C_INPUT_MULTI:
 		switch(global_exe_version[global.exe_index]) {
 			case VER_196 : base=0x79E95C; break;
 			case VER_199 : base=0x78DA4C; break;
+			case VER_201 : base=global.exe_address+0x71612C; break;
 		}
 
 		for (i=0; i<8; i++)
@@ -333,6 +336,7 @@ case C_INPUT_MULTI:
 		switch(global_exe_version[global.exe_index]) {
 			case VER_196 : base=0x79E9C2; break;
 			case VER_199 : base=0x78DABA; break;
+			case VER_201 : base=global.exe_address+0x716190; break;
 		}
 
 		for (int i=0; i<max_loops; i++)

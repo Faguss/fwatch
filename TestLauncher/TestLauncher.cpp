@@ -891,7 +891,7 @@ void FwatchPresence(ThreadArguments *arg)
 			si.wShowWindow = SW_HIDE;
 
 			char cmdLine[MAX_PATH+64] = "";
-			sprintf(cmdLine, "\"%s\" -nolog Aspect_Ratio.sqf Aspect_Ratio.sqf ", pwd);
+			sprintf(cmdLine, "\"%s\" Aspect_Ratio.sqf -out=Aspect_Ratio.sqf ", pwd);
 
 			if (CreateProcess("fwatch\\data\\preproc.exe", cmdLine, NULL, NULL, false, 0, NULL, NULL, &si, &pi)) {
 				DWORD st;
