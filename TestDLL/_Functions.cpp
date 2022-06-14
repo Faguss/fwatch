@@ -2795,8 +2795,10 @@ int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_
 										
 										if (source_state.value.text[i] == ']') {
 											bracket_level--;
-											if (bracket_level == 0)
+											if (bracket_level == 0) {
 												end_pos = i;
+												break;
+											}
 										}
 									}
 								}

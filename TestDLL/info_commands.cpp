@@ -38,7 +38,7 @@ case C_INFO_VERSION:
 			StringDynamic_end(buffer);
 		}
 
-		QWritef("_fwatch_test_version=5;[%.2f,%s,%s,false,%d.%s%d]", 
+		QWritef("_fwatch_test_version=6;[%.2f,%s,%s,false,%d.%s%d]", 
 			SCRIPT_VERSION, 
 			getBool(global_exe_version[global.exe_index]!=VER_196 && global_exe_version[global.exe_index]!=VER_196_SERVER), 
 			getBool(global.is_server), 
