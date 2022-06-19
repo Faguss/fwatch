@@ -857,7 +857,7 @@ case C_MEM_GETCINEMABORDER:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x76D1D0; break;
 		case VER_199 : base=0x755678; break;
-		case VER_201 : base=0x14A37E7; break;
+		case VER_201 : base=global.exe_address+0x5F37E7; break;
 	}
 
 	if (base)
@@ -882,6 +882,7 @@ case C_MEM_GETRESPAWNTYPE:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196        : base=0x78337C; break;
 		case VER_199        : base=0x77246C; break;
+		case VER_201        : base=global.exe_address+0x7166E4; break;
 		case VER_196_SERVER : base=0x7031D8; break;
 		case VER_199_SERVER : base=0x703228; break;
 	}
@@ -915,6 +916,7 @@ case C_MEM_SETRESPAWNTYPE:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : base=0x78337C; break;
 		case VER_199 : base=0x77246C; break;
+		case VER_201 : base=global.exe_address+0x7166E4; break;
 	}
 	
 	if (base) {
@@ -939,6 +941,7 @@ case C_MEM_GETRESSIDE:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196        : base=0x786850; break;
 		case VER_199        : base=0x775938; break;
+		case VER_201        : base=global.exe_address+0x6FDCC0; break;
 		case VER_196_SERVER : base=0x7066A8; break;
 		case VER_199_SERVER : base=0x7066F8; break;
 	}
@@ -1393,7 +1396,15 @@ case C_MEM_SETDIFFICULTY:
 	int offset         = 0;
 	int	offsets[][4]   = {
 		{0x7DD0C8, 0x7DD0D4, 0x75A380, 0x75A38C},	//ofp
-		{0x7CC088, 0x7CC094, 0x75A410, 0x75A41C}	//cwa
+		{0x7CC088, 0x7CC094, 0x75A410, 0x75A41C},	//cwa
+
+		// 2.01
+		{
+			global.exe_address + 0x714B50,
+			global.exe_address + 0x714B5D,
+			0,
+			0
+		}
 	};
 
 
@@ -1404,8 +1415,10 @@ case C_MEM_SETDIFFICULTY:
 			break;
 		}
 
-		int i = global_exe_version[global.exe_index]!=VER_199 ? 0 : 1;	// which game
-		int j = 0;				// which difficulty
+		int i = 0;	// which game
+		if (global_exe_version[global.exe_index] == VER_199) i=1;
+		if (global_exe_version[global.exe_index] == VER_201) i=2;
+		int j = 0;	// which difficulty
 
 		if (strcmpi(argument[3].text,"veteran")==0  ||  strcmpi(argument[3].text,"false")==0) {
 			veteran = true;
@@ -1422,6 +1435,7 @@ case C_MEM_SETDIFFICULTY:
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196 : base=0x783378; break;
 				case VER_199 : base=0x772468; break;
+				case VER_201 : base=global.exe_address+0x7166E4; break;
 				default : base=0; break;
 			}
 
@@ -1434,6 +1448,7 @@ case C_MEM_SETDIFFICULTY:
 					switch(global_exe_version[global.exe_index]) {
 						case VER_196 : base=0x78337C; break;
 						case VER_199 : base=0x77246C; break;
+						case VER_201 : base=global.exe_address+0x7166E8; break;
 						default : base=0; break;
 					}
 
@@ -1831,6 +1846,7 @@ case C_MEM_GETPLAYERLADDER:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : pointer[0]=0x786CA0; break;
 		case VER_199 : pointer[0]=0x775D88; modif[2]=0x750; break;
+		case VER_201 : pointer[0]=global.exe_address+0x6FE0BC; modif[2]=0x750; break;
 	}
 
 	if (pointer[0]) {
@@ -1867,6 +1883,7 @@ case C_MEM_SETPLAYERLADDER:
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : pointer[0]=0x786CA0; break;
 		case VER_199 : pointer[0]=0x775D88; modif[2]=0x750; break;
+		case VER_201 : pointer[0]=global.exe_address+0x6FE0BC; modif[2]=0x750; break;
 	}
 
 	for (int i=0; i<max_loops; i++) {
@@ -1975,12 +1992,18 @@ break;
 case C_MEM_MISSIONINFO:
 { // Get mission name
 
-	bool add_comma      = false;
-	char buffer[256]    = "";
-	char *buffer_ptr    = buffer;
-	const int base_size = 7;
-	int base[base_size] = {0};
-	int	pointer         = 0;
+	enum MISSION_INFO_INDEX {
+		MISSION_NAME,
+		WORLD_NAME,
+		PBO_NAME,
+		BRIEFING_NAME1,
+		BRIEFING_NAME2,
+		BRIEFING_DESC,
+		CAMPAIGN_NAME,
+		MAX_MISSION_INFO
+	};
+
+	int base[MAX_MISSION_INFO] = {0};	
 
 	//0x7DD0E0				mission name
 	//0x7DD130				world name
@@ -1992,49 +2015,55 @@ case C_MEM_MISSIONINFO:
 
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : 
-			base[0] = 0x7DD0E0;
-			base[1] = 0x7DD130;
-			base[2] = 0x7DD180;
-			base[3] = 0x78324C;
-			base[4] = 0x786880;
-			base[5] = 0x786884;
-			base[6] = 0x786C30;
+			base[MISSION_NAME]   = 0x7DD0E0;
+			base[WORLD_NAME]     = 0x7DD130;
+			base[PBO_NAME]       = 0x7DD180;
+			base[BRIEFING_NAME1] = 0x78324C;
+			base[BRIEFING_NAME2] = 0x786880;
+			base[BRIEFING_DESC]  = 0x786884;
+			base[CAMPAIGN_NAME]  = 0x786C30;
 			break;
 
 		case VER_199 : 
-			base[0] = 0x7CC0A0;
-			base[1] = 0x7CC0F0;
-			base[2] = 0x7CC140;
-			base[3] = 0x77233C;
-			base[4] = 0x775968;
-			base[5] = 0x77596C;
-			base[6] = 0x775D18;
+			base[MISSION_NAME]   = 0x7CC0A0;
+			base[WORLD_NAME]     = 0x7CC0F0;
+			base[PBO_NAME]       = 0x7CC140;
+			base[BRIEFING_NAME1] = 0x77233C;
+			base[BRIEFING_NAME2] = 0x775968;
+			base[BRIEFING_DESC]  = 0x77596C;
+			base[CAMPAIGN_NAME]  = 0x775D18;
 			break;
 
 		case VER_201 :
-			base[1] = global.exe_address+0x714BBC; break;
+			base[MISSION_NAME]   = global.exe_address+0x714B6C; break;
+			base[WORLD_NAME]     = global.exe_address+0x714BBC; break;
+			base[PBO_NAME]       = global.exe_address+0x714C0C; break;
+			base[BRIEFING_NAME1] = global.exe_address+0x6D6DAC; break;
+			base[BRIEFING_NAME2] = global.exe_address+0x6FDCF0; break;
+			base[BRIEFING_DESC]  = global.exe_address+0x6FDCF4; break;
+			base[CAMPAIGN_NAME]  = global.exe_address+0x6FDC58; break;
 			break;
 
 		case VER_201_SERVER :
-			base[1] = global.exe_address+0x60B00C; break;
+			base[WORLD_NAME] = global.exe_address+0x60B00C; break;
 			break;
 
 		case VER_196_SERVER : 
-			base[0] = 0x75A398;
-			base[1] = 0x75A3E8;
-			base[2] = 0x75A438;
-			base[3] = 0x7030AC;
-			base[4] = 0x7066D8;
-			base[5] = 0x7066DC;
+			base[MISSION_NAME]   = 0x75A398;
+			base[WORLD_NAME]     = 0x75A3E8;
+			base[PBO_NAME]       = 0x75A438;
+			base[BRIEFING_NAME1] = 0x7030AC;
+			base[BRIEFING_NAME2] = 0x7066D8;
+			base[BRIEFING_DESC]  = 0x7066DC;
 			break;
 
 		case VER_199_SERVER : 
-			base[0] = 0x75A428;
-			base[1] = 0x75A478;
-			base[2] = 0x75A4C8;
-			base[3] = 0x7030FC;
-			base[4] = 0x706728;
-			base[5] = 0x70672C;
+			base[MISSION_NAME]   = 0x75A428;
+			base[WORLD_NAME]     = 0x75A478;
+			base[PBO_NAME]       = 0x75A4C8;
+			base[BRIEFING_NAME1] = 0x7030FC;
+			base[BRIEFING_NAME2] = 0x706728;
+			base[BRIEFING_DESC]  = 0x70672C;
 			break;
 	}
 
@@ -2048,26 +2077,29 @@ case C_MEM_MISSIONINFO:
 		0x8
 	};
 
-
+	bool add_comma   = false;
+	char buffer[256] = "";
+	char *buffer_ptr = buffer;
+	int	pointer      = 0;
 
 	QWrite("[");
 
 	// Read from all the addresses
-	for (int i=0; i<base_size; i++) {
+	for (int i=0; i<MAX_MISSION_INFO; i++) {
 		if (base[i]) {
 			// First two - just read string
-			if (i <= 1)
+			if (i == MISSION_NAME || i == WORLD_NAME)
 				ReadProcessMemory(phandle, (LPVOID)base[i], &buffer, 255, &stBytes);
 			else
 				// Otherwise read pointer
-				if (!global.is_server  ||  (global.is_server && i<base_size-1)) {
+				if (!global.is_server  ||  (global.is_server && i<MAX_MISSION_INFO-1)) {
 					ReadProcessMemory(phandle, (LPVOID)base[i], &pointer, 4, &stBytes);	
 
 					if (pointer != 0) 
 						ReadProcessMemory(phandle, (LPVOID)(pointer+modif[i]), &buffer, 255, &stBytes);
 
 					// if briefing 1 is available then skip briefing 2 (next value)
-					if (i == 3) {
+					if (i == BRIEFING_NAME1) {
 						if (pointer == 0)
 							continue;
 						else
@@ -2105,13 +2137,26 @@ break;
 case C_MEM_BULLETS:
 { // Get/Set bullets properties
 
-	DWORD old               = 0;
-	bool add_comma          = false;
-	const int array_size    = 10;
-	bool set[array_size]    = {0};
-	float value[array_size] = {0};
-	int offset[array_size]  = {0};
-	unsigned int valid_arguments[array_size] = {
+	enum MEM_BULLETS_INDEX {
+		GRAVACC,
+		BULLET,
+		SHELL,
+		ROCKET,
+		BOMB,
+		SMOKE,
+		FLARE,
+		FLAREDUR,
+		PIPE,
+		TIME,
+		MAX_MEM_BULLETS
+	};
+	
+	DWORD old                    = 0;
+	bool add_comma               = false;
+	bool set[MAX_MEM_BULLETS]    = {0};
+	float value[MAX_MEM_BULLETS] = {0};
+	int offset[MAX_MEM_BULLETS]  = {0};
+	unsigned int valid_arguments[MAX_MEM_BULLETS] = {
 		NAMED_ARG_GRAVACC,
 		NAMED_ARG_BULLET,
 		NAMED_ARG_SHELL,
@@ -2123,7 +2168,7 @@ case C_MEM_BULLETS:
 		NAMED_ARG_PIPEBOMB,
 		NAMED_ARG_TIMEBOMB
 	};
-	//gravity acceleration	9.8065996170043945
+	//gravity acceleration	9.8065996170043945 (0x411CE7D5)
 	//bullet lifetime		3
 	//shell  lifetime		20
 	//rocket lifetime		10
@@ -2131,74 +2176,79 @@ case C_MEM_BULLETS:
 	//smoke lifetime		60
 	//flare lifetime		17
 	//flare duration		15
-	//pipebomb lifetime		3.402823466E38 (7F7FFFFF)
+	//pipebomb lifetime		3.402823466E38 (0x7F7FFFFF)
 	//timebomb lifetime		20
 
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196 : 
-			offset[0] = 0x71D518;
-			offset[1] = 0x5F1570;
-			offset[2] = 0x5F16D2;
-			offset[3] = 0x5F1527;
-			offset[4] = 0x5F147B;
-			offset[5] = 0x5F178F;
-			offset[6] = 0x5F12AD;
-			offset[7] = 0x7137A0;
-			offset[8] = 0x5F14BF;
-			offset[9] = 0x5F1818;
+			offset[GRAVACC]  = 0x71D518;
+			offset[BULLET]   = 0x5F1570;
+			offset[SHELL]    = 0x5F16D2;
+			offset[ROCKET]   = 0x5F1527;
+			offset[BOMB]     = 0x5F147B;
+			offset[SMOKE]    = 0x5F178F;
+			offset[FLARE]    = 0x5F12AD;
+			offset[FLAREDUR] = 0x7137A0;
+			offset[PIPE]     = 0x5F14BF;
+			offset[TIME]     = 0x5F1818;
 			break;
 
 		case VER_199 : 
-			offset[0] = 0x710520;
-			offset[1] = 0x5F818C;
-			offset[2] = 0x5F7ACB;
-			offset[3] = 0x4857B3;
-			offset[4] = 0x487867;
-			offset[5] = 0x487986;
-			offset[6] = 0x5F7D5D;
-			offset[7] = 0x7067A0;
-			offset[8] = 0x485820;
-			offset[9] = 0x5F789B;
+			offset[GRAVACC]  = 0x710520;
+			offset[BULLET]   = 0x5F818C;
+			offset[SHELL]    = 0x5F7ACB;
+			offset[ROCKET]   = 0x4857B3;
+			offset[BOMB]     = 0x487867;
+			offset[SMOKE]    = 0x487986;
+			offset[FLARE]    = 0x5F7D5D;
+			offset[FLAREDUR] = 0x7067A0;
+			offset[PIPE]     = 0x485820;
+			offset[TIME]     = 0x5F789B;
 			break;
 
 		case VER_201 : 
-			offset[0] = global.exe_address+0x57249C;
-			offset[3] = global.exe_address+0x34EBA6;
-			offset[4] = global.exe_address+0x351A2C;
-			offset[5] = global.exe_address+0x354206;
+			offset[GRAVACC]  = global.exe_address+0x57249C;
+			offset[BULLET]   = global.exe_address+0x35473B;
+			offset[ROCKET]   = global.exe_address+0x34EBA6;
+			offset[BOMB]     = global.exe_address+0x351A2C;
+			offset[SMOKE]    = global.exe_address+0x354206;
+			offset[FLARE]    = global.exe_address+0x353A0E;
+			offset[FLAREDUR] = global.exe_address+0x5724D0;
+			offset[PIPE]     = global.exe_address+0x34FB2A;
+			offset[TIME]     = global.exe_address+0x3550D3;
 			break;
 
 		case VER_196_SERVER : 
-			offset[0] = 0x6ABDE8;
-			offset[1] = 0x5374B8;
-			offset[2] = 0x534F9C;
-			offset[3] = 0x533A91;
-			offset[4] = 0x5357C7;
-			offset[5] = 0x5371A1;
-			offset[6] = 0x536D09;
-			offset[7] = 0x6A66C0;
-			offset[8] = 0x5345F9;
-			offset[9] = 0x5347F7;
+			offset[GRAVACC]  = 0x6ABDE8;
+			offset[BULLET]   = 0x5374B8;
+			offset[SHELL]    = 0x534F9C;
+			offset[ROCKET]   = 0x533A91;
+			offset[BOMB]     = 0x5357C7;
+			offset[SMOKE]    = 0x5371A1;
+			offset[FLARE]    = 0x536D09;
+			offset[FLAREDUR] = 0x6A66C0;
+			offset[PIPE]     = 0x5345F9;
+			offset[TIME]     = 0x5347F7;
 			break;
 
 		case VER_199_SERVER : 
-			offset[0] = 0x6ABDA8;
-			offset[1] = 0x537671;
-			offset[2] = 0x53517D;
-			offset[3] = 0x533C4A;
-			offset[4] = 0x5359A8;
-			offset[5] = 0x53735A;
-			offset[6] = 0x536EEA;
-			offset[7] = 0x6A66C0;
-			offset[8] = 0x5347DA;
-			offset[9] = 0x5349D8;
+			offset[GRAVACC]  = 0x6ABDA8;
+			offset[BULLET]   = 0x537671;
+			offset[SHELL]    = 0x53517D;
+			offset[ROCKET]   = 0x533C4A;
+			offset[BOMB]     = 0x5359A8;
+			offset[SMOKE]    = 0x53735A;
+			offset[FLARE]    = 0x536EEA;
+			offset[FLAREDUR] = 0x6A66C0;
+			offset[PIPE]     = 0x5347DA;
+			offset[TIME]     = 0x5349D8;
 			break;
 	}
 
 
 	// If name matches then queue for change
 	for (size_t i=2; i<argument_num; i+=2)
-		for (int j=0; j<array_size; j++)
+		for (int j=0; j<MAX_MEM_BULLETS; j++)
 			if (argument_hash[i] == valid_arguments[j]) {
 				set[j]   = 1;
 				value[j] = (float)atof(argument[i+1].text);
@@ -2209,8 +2259,8 @@ case C_MEM_BULLETS:
 	// Write / Read values
 	QWrite("[");
 
-	for (i=0; i<array_size; i++) {
-		if ((i==0 || i==7)  &&  set[i])
+	for (i=0; i<MAX_MEM_BULLETS; i++) {
+		if ((i==GRAVACC || i==FLAREDUR)  &&  set[i])
 			VirtualProtectEx(phandle, (LPVOID)offset[i], 4, PAGE_EXECUTE_READWRITE, &old);
 		
 		if (set[i]) {

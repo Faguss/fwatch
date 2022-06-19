@@ -1081,6 +1081,7 @@ void RestoreMemValues(bool isMissionEditor) {
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196 : base=0x789D88; break;
 				case VER_199 : base=0x778E80; break;
+				case VER_201 : base=global.exe_address+0x6D6A10; break;
 			}
 
 			if (base) {
@@ -1097,6 +1098,7 @@ void RestoreMemValues(bool isMissionEditor) {
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196 : base=0x79F8D0; break;
 				case VER_199 : base=0x78E9C8; break;
+				case VER_201 : base=global.exe_address+0x6D8240; break;
 			}
 
 			if (i == RESTORE_VEHICLE_SHADOWS) 
@@ -1141,6 +1143,18 @@ void RestoreMemValues(bool isMissionEditor) {
 					offset[9] = 0x5F789B;
 					break;
 
+				case VER_201 : 
+					offset[0] = global.exe_address+0x57249C;
+					offset[1] = global.exe_address+0x35473B;
+					offset[3] = global.exe_address+0x34EBA6;
+					offset[4] = global.exe_address+0x351A2C;
+					offset[5] = global.exe_address+0x354206;
+					offset[6] = global.exe_address+0x353A0E;
+					offset[7] = global.exe_address+0x5724D0;
+					offset[8] = global.exe_address+0x34FB2A;
+					offset[9] = global.exe_address+0x3550D3;
+					break;
+
 				case VER_196_SERVER : 
 					offset[0] = 0x6ABDE8;
 					offset[1] = 0x5374B8;
@@ -1175,10 +1189,13 @@ void RestoreMemValues(bool isMissionEditor) {
 		if (i>=RESTORE_CADET  &&  i<RESTORE_RADAR) {
 			int	offsets[][4] = {
 				{0x7DD0C8, 0x7DD0D4, 0x75A380, 0x75A38C},	//ofp
-				{0x7CC088, 0x7CC094, 0x75A410, 0x75A41C}	//cwa
+				{0x7CC088, 0x7CC094, 0x75A410, 0x75A41C},	//cwa
+				{global.exe_address + 0x714B50, global.exe_address + 0x714B5D, 0, 0}
 			};
 
-			int j    = global_exe_version[global.exe_index]!=VER_199 ? 0 : 1;	// which game
+			int j    = 0;	// which game
+			if (global_exe_version[global.exe_index] == VER_199) j=1;
+			if (global_exe_version[global.exe_index] == VER_201) j=2;
 			int k    = 0;				// which difficulty
 			int base = RESTORE_CADET;
 
@@ -1210,6 +1227,7 @@ void RestoreMemValues(bool isMissionEditor) {
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196 : base=0x7DD07C; break;
 				case VER_199 : base=0x7CC03C; break;
+				case VER_201 : base=global.exe_address+0x714AFC; break;
 				default      : base=0;
 			}
 			if (base)
@@ -1221,6 +1239,7 @@ void RestoreMemValues(bool isMissionEditor) {
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196 : base=0x7DD080; break;
 				case VER_199 : base=0x7CC040; break;
+				case VER_201 : base=global.exe_address+0x714B08; break;
 			}
 			if (base)
 				WriteProcessMemory(phandle,(LPVOID)base, &global.restore_float[FLOAT_TRACK1], 4, &stBytes);
@@ -1231,6 +1250,7 @@ void RestoreMemValues(bool isMissionEditor) {
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196 : base=0x7DD084; break;
 				case VER_199 : base=0x7CC044; break;
+				case VER_201 : base=global.exe_address+0x714B0C; break;
 				default      : base=0;
 			}
 			if (base)
@@ -1242,6 +1262,7 @@ void RestoreMemValues(bool isMissionEditor) {
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196 : base=0x7DD08C; break;
 				case VER_199 : base=0x7CC04C; break;
+				case VER_201 : base=global.exe_address+0x714B14; break;
 			}
 			if (base)
 				WriteProcessMemory(phandle,(LPVOID)base, &global.restore_int[INT_MAX_LIGHTS], 4, &stBytes);
@@ -1252,6 +1273,7 @@ void RestoreMemValues(bool isMissionEditor) {
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196        : base=0x72F8E4; break;
 				case VER_199        : base=0x72295C; break;
+				case VER_201        : base=0x10718CA0; break;
 				case VER_196_SERVER : base=0x6BE184; break;
 				case VER_199_SERVER : base=0x6BE144; break;
 			}
@@ -1264,6 +1286,7 @@ void RestoreMemValues(bool isMissionEditor) {
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196        : base=0x72F8E4; break;
 				case VER_199        : base=0x72295C; break;
+				case VER_201        : base=0x10718CA0; break;
 				case VER_196_SERVER : base=0x6BE184; break;
 				case VER_199_SERVER : base=0x6BE144; break;
 			}
@@ -1300,6 +1323,7 @@ void RestoreMemValues(bool isMissionEditor) {
 			switch(global_exe_version[global.exe_index]) {
 				case VER_196        : base=0x7B3ACC; break;
 				case VER_199        : base=0x7A2C0C; break;
+				case VER_201        : base=global.exe_address+0x6D6B34; break;
 				case VER_196_SERVER : base=0x73392C; break;
 				case VER_199_SERVER : base=0x7339C4; break;
 			}
@@ -1318,6 +1342,7 @@ void RestoreMemValues(bool isMissionEditor) {
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x789D88; break;
 					case VER_199 : base=0x778E80; break;
+					case VER_201 : base=global.exe_address+0x6D6A10; break;
 				}
 
 				if (base) {
@@ -1335,6 +1360,7 @@ void RestoreMemValues(bool isMissionEditor) {
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x789D88; break;
 					case VER_199 : base=0x778E80; break;
+					case VER_201 : base=global.exe_address+0x6D6A10; break;
 				}
 
 				if (base) {
@@ -1352,6 +1378,7 @@ void RestoreMemValues(bool isMissionEditor) {
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x789D88; break;
 					case VER_199 : base=0x778E80; break;
+					case VER_201 : base=global.exe_address+0x6D6A10; break;
 				}
 
 				if (base) {
@@ -1369,6 +1396,7 @@ void RestoreMemValues(bool isMissionEditor) {
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x789D88; break;
 					case VER_199 : base=0x778E80; break;
+					case VER_201 : base=global.exe_address+0x6D6A10; break;
 				}
 
 				if (base) {
@@ -1386,6 +1414,7 @@ void RestoreMemValues(bool isMissionEditor) {
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x789D88; break;
 					case VER_199 : base=0x778E80; break;
+					case VER_201 : base=global.exe_address+0x6D6A10; break;
 				}
 
 				if (base) {
@@ -1403,6 +1432,7 @@ void RestoreMemValues(bool isMissionEditor) {
 				switch(global_exe_version[global.exe_index]) {
 					case VER_196 : base=0x789D88; break;
 					case VER_199 : base=0x778E80; break;
+					case VER_201 : base=global.exe_address+0x6D6A10; break;
 				}
 
 				if (base) {
