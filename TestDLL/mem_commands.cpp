@@ -885,6 +885,7 @@ case C_MEM_GETRESPAWNTYPE:
 		case VER_201        : base=global.exe_address+0x7166E4; break;
 		case VER_196_SERVER : base=0x7031D8; break;
 		case VER_199_SERVER : base=0x703228; break;
+		case VER_201_SERVER : base=global.exe_address+0x5C03D0; break;
 	}
 
 	if (base) {
@@ -944,6 +945,7 @@ case C_MEM_GETRESSIDE:
 		case VER_201        : base=global.exe_address+0x6FDCC0; break;
 		case VER_196_SERVER : base=0x7066A8; break;
 		case VER_199_SERVER : base=0x7066F8; break;
+		case VER_201_SERVER : base=global.exe_address+0x5F4140; break;
 	}
 
 	if (base) {
@@ -984,6 +986,7 @@ case C_MEM_GETDAYLIGHT:
 		case VER_201        : base=global.exe_address+0x6D7018; break;
 		case VER_196_SERVER : base=0x733E88; break;
 		case VER_199_SERVER : base=0x733F20; break;
+		case VER_201_SERVER : base=global.exe_address+0x5CD49C; break;
 	}
 
 	if (base) {
@@ -1402,8 +1405,8 @@ case C_MEM_SETDIFFICULTY:
 		{
 			global.exe_address + 0x714B50,
 			global.exe_address + 0x714B5D,
-			0,
-			0
+			global.exe_address + 0x60AFA0,
+			global.exe_address + 0x60AFAD
 		}
 	};
 
@@ -2045,7 +2048,8 @@ case C_MEM_MISSIONINFO:
 			break;
 
 		case VER_201_SERVER :
-			base[WORLD_NAME] = global.exe_address+0x60B00C; break;
+			base[MISSION_NAME]   = global.exe_address+0x60AFBC; break;
+			base[WORLD_NAME]     = global.exe_address+0x60B00C; break;
 			break;
 
 		case VER_196_SERVER : 

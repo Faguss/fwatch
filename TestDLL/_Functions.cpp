@@ -1190,7 +1190,7 @@ void RestoreMemValues(bool isMissionEditor) {
 			int	offsets[][4] = {
 				{0x7DD0C8, 0x7DD0D4, 0x75A380, 0x75A38C},	//ofp
 				{0x7CC088, 0x7CC094, 0x75A410, 0x75A41C},	//cwa
-				{global.exe_address + 0x714B50, global.exe_address + 0x714B5D, 0, 0}
+				{global.exe_address + 0x714B50, global.exe_address + 0x714B5D, global.exe_address + 0x60AFA0, global.exe_address + 0x60AFAD}	//2.01
 			};
 
 			int j    = 0;	// which game
