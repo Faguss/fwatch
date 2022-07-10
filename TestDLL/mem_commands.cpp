@@ -2047,11 +2047,6 @@ case C_MEM_MISSIONINFO:
 			base[CAMPAIGN_NAME]  = global.exe_address+0x6FDC58; break;
 			break;
 
-		case VER_201_SERVER :
-			base[MISSION_NAME]   = global.exe_address+0x60AFBC; break;
-			base[WORLD_NAME]     = global.exe_address+0x60B00C; break;
-			break;
-
 		case VER_196_SERVER : 
 			base[MISSION_NAME]   = 0x75A398;
 			base[WORLD_NAME]     = 0x75A3E8;
@@ -2068,6 +2063,15 @@ case C_MEM_MISSIONINFO:
 			base[BRIEFING_NAME1] = 0x7030FC;
 			base[BRIEFING_NAME2] = 0x706728;
 			base[BRIEFING_DESC]  = 0x70672C;
+			break;
+
+		case VER_201_SERVER :
+			base[MISSION_NAME]   = global.exe_address+0x60AFBC; break;
+			base[WORLD_NAME]     = global.exe_address+0x60B00C; break;
+			base[PBO_NAME]       = global.exe_address+0x60B05C; break;
+			base[BRIEFING_NAME1] = global.exe_address+0x5CD230; break;
+			base[BRIEFING_NAME2] = global.exe_address+0x5F4170; break;
+			base[BRIEFING_DESC]  = global.exe_address+0x5F4174; break;
 			break;
 	}
 
@@ -2247,6 +2251,18 @@ case C_MEM_BULLETS:
 			offset[PIPE]     = 0x5347DA;
 			offset[TIME]     = 0x5349D8;
 			break;
+
+		case VER_201_SERVER : 
+			offset[GRAVACC]  = global.exe_address+0x492A88;
+			offset[BULLET]   = global.exe_address+0x2E15FB;
+			offset[ROCKET]   = global.exe_address+0x2DBC88;
+			offset[BOMB]     = global.exe_address+0x2DE81C;
+			offset[SMOKE]    = global.exe_address+0x2E0F96;
+			offset[FLARE]    = global.exe_address+0x2E080E;
+			offset[FLAREDUR] = global.exe_address+0x492AC0;
+			offset[PIPE]     = global.exe_address+0x2DCA5A;
+			offset[TIME]     = global.exe_address+0x2E1F63;
+			break;
 	}
 
 
@@ -2396,7 +2412,8 @@ case C_MEM_SETWEATHER:
 		case VER_199        : base=0x78E9C8; break;
 		case VER_201        : base=global.exe_address+0x6D8240; break;
 		case VER_196_SERVER : base=0x71F738; break;
-		case VER_199_SERVER : base=0x71F788; break;		
+		case VER_199_SERVER : base=0x71F788; break;
+		case VER_201_SERVER : base=global.exe_address+0x5CE6B8; break;
 	}
 	
 
@@ -2425,6 +2442,7 @@ case C_MEM_SETWEATHER:
 		case VER_201        : base=global.exe_address+0x6D6B34; break;
 		case VER_196_SERVER : base=0x73392C; break;
 		case VER_199_SERVER : base=0x7339C4; break;
+		case VER_201_SERVER : base=global.exe_address+0x5CCFB8; break;
 		default             : base=0;
 	}
 
@@ -3284,6 +3302,7 @@ case C_MEM_GETWEATHER:
 		case VER_201        : base=global.exe_address+0x6D8240; break;
 		case VER_196_SERVER : base=0x71F738; break;
 		case VER_199_SERVER : base=0x71F788; break;
+		case VER_201_SERVER : base=global.exe_address+0x5CE6B8; break;
 	}
 	
 	// Find beginning of the weather values
@@ -3318,6 +3337,7 @@ case C_MEM_GETWEATHER:
 		case VER_201        : base=global.exe_address+0x714AB0; break;
 		case VER_196_SERVER : base=0x75A2E0; break;
 		case VER_199_SERVER : base=0x75A370; break;
+		case VER_201_SERVER : base=global.exe_address+0x60AF00; break;
 		default             : base=0;
 	}
 
@@ -3338,6 +3358,7 @@ case C_MEM_GETWEATHER:
 		case VER_201        : base=global.exe_address+0x6D6B34; break;
 		case VER_196_SERVER : base=0x73392C; break;
 		case VER_199_SERVER : base=0x7339C4; break;
+		case VER_201_SERVER : base=global.exe_address+0x5CCFB8; break;
 		default             : base=0;
 	}
 
@@ -3389,13 +3410,13 @@ case C_MEM_GETWEATHER:
 
 	
 	// Get tide and wave values
+	// there's no pointer for it in 2.01
 	float maxTide = 0;
 	float maxWave = 0;
 
 	switch(global_exe_version[global.exe_index]) {
 		case VER_196        : base=0x72F8E4; break;
 		case VER_199        : base=0x72295C; break;
-		case VER_201        : base=0x10718CA0; break;
 		case VER_196_SERVER : base=0x6BE184; break;
 		case VER_199_SERVER : base=0x6BE144; break;
 		default             : base=0;

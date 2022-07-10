@@ -1180,6 +1180,18 @@ void RestoreMemValues(bool isMissionEditor) {
 					offset[8] = 0x5347DA;
 					offset[9] = 0x5349D8;
 					break;
+
+				case VER_201_SERVER : 
+					offset[0] = global.exe_address+0x492A88;
+					offset[1] = global.exe_address+0x2E15FB;
+					offset[3] = global.exe_address+0x2DBC88;
+					offset[4] = global.exe_address+0x2DE81C;
+					offset[5] = global.exe_address+0x2E0F96;
+					offset[6] = global.exe_address+0x2E080E;
+					offset[7] = global.exe_address+0x492AC0;
+					offset[8] = global.exe_address+0x2DCA5A;
+					offset[9] = global.exe_address+0x2E1F63;
+					break;
 			}
 
 			if (offset[i-4])
@@ -1326,6 +1338,7 @@ void RestoreMemValues(bool isMissionEditor) {
 				case VER_201        : base=global.exe_address+0x6D6B34; break;
 				case VER_196_SERVER : base=0x73392C; break;
 				case VER_199_SERVER : base=0x7339C4; break;
+				case VER_201_SERVER : base=global.exe_address+0x5CCFB8; break;
 			}
 
 			if (base) {
