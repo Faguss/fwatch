@@ -1606,7 +1606,7 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 		arguments += "--no-clobber ";
 	
 	if (~options & FLAG_SILENT_MODE)
-		arguments += "--user-agent=\"Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)\" ";
+		arguments += "--user-agent=\"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0\" ";
 
 	arguments += url;
 	unlink("fwatch\\tmp\\schedule\\downloadLog.txt");
