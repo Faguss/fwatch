@@ -1014,45 +1014,127 @@ break;
 case C_MEM_GETDATE:
 { // Get mission date from the memory
 
-	enum MEM_GETDATE_INDEX {
-		INDEX_YEAR,
-		INDEX_MONTH,
-		INDEX_DAY,
-		INDEX_DAYWEEK,
-		INDEX_DAYYEAR
-	};
+	int base = 0;
 
-	int value[5] = {0};
-	int base[5]  = {0};
-
-	switch(global_exe_version[global.exe_index]) {
-		case VER_196 : 
-			base[INDEX_YEAR]    = 0x780608;
-			base[INDEX_MONTH]   = 0x7DD3FC;
-			base[INDEX_DAY]     = 0x7DD400;
-			base[INDEX_DAYWEEK] = 0x7DD408;
-			base[INDEX_DAYYEAR] = 0x7DD40C;
-			break;
-
-		case VER_199 : 
-			base[INDEX_YEAR]    = 0x76F7C8;
-			base[INDEX_MONTH]   = 0x7CC3BC;
-			base[INDEX_DAY]     = 0x7CC3C0;
-			base[INDEX_DAYWEEK] = 0x7CC3C8;
-			base[INDEX_DAYYEAR] = 0x7CC3CC;
-			break;
+	switch(global_exe_version[global.exe_index]) {	
+		case VER_196 : base=0x7DD3FC; break;
+		case VER_199 : base=0x7CC3BC; break;
+		case VER_201 : base=global.exe_address+0x6FDCDC; break;
 	}
 
-	for (int i=0, max=sizeof(base)/sizeof(base[0]);  i<max && base[0];  i++)
-		ReadProcessMemory(phandle, (LPVOID)base[i], &value[i], 4, &stBytes);
+	// 2.01 doesn't have the same data as other
+	if (global_exe_version[global.exe_index] == VER_201) {
+		struct MEM_GETDATE_RECORD_201 {
+			int year;
+			int month;
+			int day;
+			int hour;
+			int minute;
+		} date;
 
-	QWritef("[%d,%d,%d,%d,%d]", 
-		base[INDEX_YEAR] + 1900, 
-		base[INDEX_MONTH] + 1, 
-		base[INDEX_DAY], 
-		base[INDEX_DAYWEEK], 
-		base[INDEX_DAYYEAR] + 1
-	);
+		ReadProcessMemory(phandle, (LPVOID)base, &date, sizeof(date), &stBytes);
+
+		int months[] = {
+			31, 28, 31,
+			30, 31, 30,
+			31, 31, 30,
+			31, 30, 31
+		};
+
+		int day_of_the_year = 1;
+		int day             = 1;
+		int month           = 0;
+
+		if (date.year%4==0  &&  (date.year%100 != 0 || date.year%400 == 0))
+			months[1] = 29;
+
+		while (day!=date.day && month!=date.month) {
+			day++;
+			day_of_the_year++;
+
+			if (day > months[month]) {
+				day = 1;
+				month++;
+
+				if (month >= 12)
+					break;
+			}
+		}
+
+		int day_of_the_week = 5;
+		int year            = 1985;
+		day                 = 10;
+		month               = 4;
+		int direction       = 1;
+
+		if (date.year < year)
+			direction = -1;
+		else
+			if (date.month < month)
+				direction = -1;
+			else
+				if (date.day < day)
+					direction = -1;
+
+
+		while (year!=date.year && month!=date.month && day!=date.day) {
+			months[1] = year%4==0  &&  (year%100 != 0 || year%400 == 0) ? 29 : 28;
+
+			day             += direction;
+			day_of_the_week += direction;
+
+			if (day > months[month]) {
+				day = 1;
+				month++;
+
+				if (month >= 12) {
+					month = 0;
+					year++;
+				}
+			}
+
+			if (day < 1) {
+				month--;
+
+				if (month < 0) {
+					month = 11;
+					year--;
+				}
+
+				day = months[month];
+			}
+		}
+
+
+		QWritef("[%d,%d,%d,%d,%d,0]", 
+			date.year, 
+			date.month, 
+			date.day,
+			day_of_the_week,
+			day_of_the_year
+		);
+	} else {
+		struct MEM_GETDATE_RECORD {
+			int day;
+			int month;
+			int year;
+			int day_of_the_week;
+			int day_of_the_year;
+			int dst;
+		} date;
+
+		if (base)
+			ReadProcessMemory(phandle, (LPVOID)base, &date, sizeof(date), &stBytes);
+
+		QWritef("[%d,%d,%d,%d,%d,%d]", 
+			date.year + 1900, 
+			date.month + 1, 
+			date.day, 
+			date.day_of_the_week, 
+			date.day_of_the_year + 1,
+			date.dst
+		);
+	}
 }
 break;
 

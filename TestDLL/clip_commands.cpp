@@ -893,11 +893,19 @@ case C_CLIP_PASTEFILE:
 				}
 			}
 
-			QWritef("]+[[\"%s\",", relative_path);
+			// Ouput path and file name
+			QWrite("]+[[\"");
+
+			char *last_slash = strrchr(relative_path.text, '\\');
+			if (last_slash != NULL) {
+				QWritel(relative_path.text, last_slash-relative_path.text);
+				QWritef("\",\"%s\",", last_slash+1);
+			} else
+				QWritef("\",\"%s\",", relative_path);
+			
 
 			int source_type = VerifyPath(relative_path, buf_source, OPTION_SUPPRESS_ERROR | OPTION_SUPPRESS_CONVERSION);
 			bool path_valid = true;
-
 
 			// Not allowed to move files to the fwatch\tmp directory
 			if (is_game_dir  &&  dwEffect & DROPEFFECT_MOVE  &&  source_type!=PATH_DOWNLOAD_DIR  &&  destination_type==PATH_DOWNLOAD_DIR) {
@@ -905,11 +913,8 @@ case C_CLIP_PASTEFILE:
 				path_valid = false;
 			}
 
-
 			// Copy filename from the source path to the destination path
-			char *last_slash = strrchr(relative_path.text, '\\');
 			StringDynamic_append(buf_destination, last_slash!=NULL ? last_slash+1 : relative_path.text);
-
 
 			// Execute move/copy
 			if (path_valid) {

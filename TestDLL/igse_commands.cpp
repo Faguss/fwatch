@@ -228,7 +228,7 @@ case C_IGSE_WRITE:
 		break;
 	}
 
-	size_t file_size = ftell(file);
+	size_t file_size = ftell(file);	//need uint because fread/fwrite returns uint
 	if (file_size == 0xFFFFFFFF) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 		StringDynamic_end(buf_filename);
@@ -702,8 +702,8 @@ case C_IGSE_LOAD:
 { // Load lines from a text file
 
 	enum OUTPUT_TYPE {
-		OUTPUT_SQS,
-		OUTPUT_SQS_SEPARATE,
+		OUTPUT_SQS_CLUSTER,
+		OUTPUT_SQS_PARALLEL,
 		OUTPUT_EXECUTE,
 		OUTPUT_CLIP
 	};
@@ -714,11 +714,14 @@ case C_IGSE_LOAD:
 	int arg_offset_start      = 0;
 	int arg_limit_line_length = -1;
 	int arg_wait              = 0;
-	int arg_output            = OUTPUT_SQS;
+	int arg_output            = OUTPUT_SQS_PARALLEL;
 	bool arg_offset           = false;
 	bool arg_split_lines      = false;
 	bool arg_delete_file      = false;
 	bool arg_clip_append      = false;
+	bool arg_output_text      = true;
+	bool arg_output_offset    = false;
+	bool arg_output_linelen   = false;
 			
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
@@ -759,8 +762,8 @@ case C_IGSE_LOAD:
 							arg_clip_append = true;
 							arg_output      = OUTPUT_CLIP;
 						} else
-							if (strcmpi(argument[i+1].text,"separate") == 0)
-								arg_output = OUTPUT_SQS_SEPARATE;
+							if (strcmpi(argument[i+1].text,"cluster") == 0)
+								arg_output = OUTPUT_SQS_CLUSTER;
 			} break;
 
 			case NAMED_ARG_DELETE :
@@ -769,6 +772,25 @@ case C_IGSE_LOAD:
 
 			case NAMED_ARG_WAIT :
 				arg_wait = atoi(argument[i+1].text);
+				break;
+				
+			case NAMED_ARG_OUTPUT :
+				arg_output_text    = false;
+				arg_output_offset  = false;
+				arg_output_linelen = false;
+				
+				String item;
+				size_t tokenize_pos = 0;
+				while ((item = String_tokenize(argument[i+1], ",", tokenize_pos, OPTION_TRIM_SQUARE_BRACKETS)).length > 0) {
+					if (strcmpi(item.text,"text") == 0)
+						arg_output_text = true;
+					else
+						if (strcmpi(item.text,"offset") == 0)
+							arg_output_offset = true;
+						else
+							if (strcmpi(item.text,"length") == 0)
+								arg_output_linelen = true;
+				}
 				break;
 		}
 	}
@@ -878,8 +900,8 @@ case C_IGSE_LOAD:
 		break;
 	}
 
-	size_t file_size = ftell(file);
-	if (file_size == 0xFFFFFFFF) {
+	int file_size = ftell(file);
+	if (file_size == -1) {
 		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 
 		if (arg_output != OUTPUT_EXECUTE)
@@ -981,17 +1003,23 @@ case C_IGSE_LOAD:
 				
 				if (line_num >= arg_line_start) {
 					switch (arg_output) {
-						case OUTPUT_SQS_SEPARATE : {
-							if (arg_split_lines)
-								StringDynamic_appendl(sqs_lines, "]+[[\"", 5);
-							else
-								StringDynamic_appendl(sqs_lines, "]+[\"", 4);
+						case OUTPUT_SQS_PARALLEL : {
+							if (arg_output_text) {
+								if (arg_split_lines)
+									StringDynamic_appendl(sqs_lines, "]+[[\"", 5);
+								else
+									StringDynamic_appendl(sqs_lines, "]+[\"", 4);
+							}
 								
-							StringDynamic_appendf(sqs_offsets, "\"%d\"]+[", arg_offset_start + (c==EOF ? pos : pos-1));
+							if (arg_output_offset)
+								StringDynamic_appendf(sqs_offsets, "\"%d\"]+[", arg_offset_start + (c==EOF ? pos : pos-1));
 						} break;
 						
-						case OUTPUT_SQS : {
-							StringDynamic_append(sqs_lines, "]+[[\"");
+						case OUTPUT_SQS_CLUSTER : {
+							StringDynamic_append(sqs_lines, "]+[[");
+							
+							if (arg_output_text)
+								StringDynamic_append(sqs_lines, "\"");
 						} break;
 					};
 				}
@@ -1007,15 +1035,31 @@ case C_IGSE_LOAD:
 				switch (arg_output) {
 					case OUTPUT_EXECUTE      : if (c!=EOF) QWritel(&cc, 1); break;
 					case OUTPUT_CLIP         : if (c!=EOF) StringDynamic_appendl(buf_for_clip, &cc, 1); break;
-					case OUTPUT_SQS_SEPARATE : {
-						StringDynamic_append(sqs_lines, "\"");
-						StringDynamic_appendf(sqs_lengths, "%d]+[", line_length);
+					case OUTPUT_SQS_PARALLEL : {
+						if (arg_output_text)
+							StringDynamic_append(sqs_lines, "\"");
 						
-						if (arg_split_lines)
+						if (arg_output_linelen)
+							StringDynamic_appendf(sqs_lengths, "%d]+[", line_length);
+						
+						if (arg_output_text && arg_split_lines)
 							StringDynamic_append(sqs_lines, "]");
 					} break;
-					case OUTPUT_SQS : {
-						StringDynamic_appendf(sqs_lines, "\",\"%d\"]", arg_offset_start + line_start);
+					case OUTPUT_SQS_CLUSTER : {
+						if (arg_output_text)
+							StringDynamic_append(sqs_lines, "\"");
+						
+						if (arg_output_offset) {
+							if (arg_output_text) StringDynamic_append(sqs_lines, ",");
+							StringDynamic_appendf(sqs_lines, "\"%d\"", arg_offset_start + line_start);
+						}
+						
+						if (arg_output_linelen) {
+							if (arg_output_text || arg_output_offset) StringDynamic_append(sqs_lines, ",");
+							StringDynamic_appendf(sqs_lines, "%u", line_length);
+						}
+						
+						StringDynamic_append(sqs_lines, "]");
 					} break;
 				}
 			}
@@ -1038,48 +1082,60 @@ case C_IGSE_LOAD:
 				
 				if (line_num >= arg_line_start) {
 					switch(arg_output) {
-						case OUTPUT_SQS_SEPARATE : {
-							if (arg_split_lines) {
-								StringDynamic_append(sqs_lines, "]+[[\"");
-							} else
-								StringDynamic_append(sqs_lines, "]+[\"");
+						case OUTPUT_SQS_PARALLEL : {
+							if (arg_output_text) {
+								if (arg_split_lines)
+									StringDynamic_append(sqs_lines, "]+[[\"");
+								else
+									StringDynamic_append(sqs_lines, "]+[\"");
+							}
 	
-							StringDynamic_appendf(sqs_offsets, "\"%d\"]+[", arg_offset_start + pos);
+							if (arg_output_offset)
+								StringDynamic_appendf(sqs_offsets, "\"%d\"]+[", arg_offset_start + pos);
 						} break;
 						
-						case OUTPUT_SQS : {
-							StringDynamic_append(sqs_lines, "]+[[\"");
+						case OUTPUT_SQS_CLUSTER : {
+							StringDynamic_append(sqs_lines, "]+[[");
+							
+							if (arg_output_text)
+								StringDynamic_append(sqs_lines, "\"");
 						} break;
 					}
 				}
 			}
 
-			if ((c!='\r' && (arg_output==OUTPUT_SQS_SEPARATE || arg_output==OUTPUT_SQS))  ||  (arg_output!=OUTPUT_SQS_SEPARATE && arg_output!=OUTPUT_SQS)) {	
+			if ((c!='\r' && (arg_output==OUTPUT_SQS_PARALLEL || arg_output==OUTPUT_SQS_CLUSTER))  ||  (arg_output!=OUTPUT_SQS_PARALLEL && arg_output!=OUTPUT_SQS_CLUSTER)) {
 				// Save current character
 				if (line_num>=arg_line_start  &&  (arg_limit_line_length==-1 || (arg_limit_line_length!=-1 && pos-line_start<arg_limit_line_length) || arg_split_lines)) {
 					switch (arg_output) {
 						case OUTPUT_EXECUTE      : QWritel(&cc, 1); break;
 						case OUTPUT_CLIP         : StringDynamic_appendl(buf_for_clip, &cc, 1); break;
-						case OUTPUT_SQS_SEPARATE : {
-							if (c == '"')
-								StringDynamic_appendl(sqs_lines, "\"\"", 2);
-							else
-								StringDynamic_appendl(sqs_lines, &cc, 1);
+						case OUTPUT_SQS_PARALLEL : {
+							if (arg_output_text) {
+								switch(c) {
+									case '\0': break;
+									case '"' : StringDynamic_appendl(sqs_lines, "\"\"", 2); break;
+									default  : StringDynamic_appendl(sqs_lines, &cc, 1);
+								}
+							}
 								
 							line_split++;
 							
-							if (arg_split_lines) {
+							if (arg_output_text && arg_split_lines) {
 								if (line_split == arg_limit_line_length) {
 									StringDynamic_appendl(sqs_lines, "\"]+[\"", 5);
 									line_split = 0;
 								}
 							}
 						} break;
-						case OUTPUT_SQS : {
-							if (c == '"')
-								StringDynamic_appendl(sqs_lines, "\"\"", 2);
-							else
-								StringDynamic_appendl(sqs_lines, &cc, 1);							
+						case OUTPUT_SQS_CLUSTER : {
+							if (arg_output_text) {
+								switch(c) {
+									case '\0' : break;
+									case '"'  : StringDynamic_appendl(sqs_lines, "\"\"", 2); break;
+									default   : StringDynamic_appendl(sqs_lines, &cc, 1);
+								}
+							}
 						} break;
 					}						
 				}
@@ -1106,7 +1162,7 @@ case C_IGSE_LOAD:
 				} else
 					QWrite_err(FWERROR_NONE, 0);
 		
-		if (arg_output == OUTPUT_SQS_SEPARATE)
+		if (arg_output == OUTPUT_SQS_PARALLEL)
 			QWritef("[[%s],[%s],[%s]]", sqs_lines.text, sqs_offsets.text, sqs_lengths.text);
 		else
 			QWritef("[%s]", sqs_lines.text);
@@ -1420,437 +1476,334 @@ break;
 
 
 
-case C_IGSE_FIND:	//TODO: rewrite this command
+case C_IGSE_FIND:
 { // IGSE Find
 
-	int Start			 = 0;
-	int End				 = 0;
-	int start_pos        = 0;
-	int Limit			 = 0;
-	int arg_col_num      = -1;
-	int options          = OPTION_NONE;
-	size_t arg_file      = empty_char_index;
-	char *SearchFor		 = empty_char;
-	char *ReplaceWith	 = empty_char;
-	bool start_pos_set   = false;
-	bool Replace		 = false;
-	bool ignoreLeadSpace = false;
+	int arg_line_start         = 0;
+	int arg_line_end           = 0;
+	int arg_offset             = 0;
+	int arg_offset_column      = 0;
+	int arg_column_num         = 0;
+	int arg_options            = OPTION_NONE;
+	int arg_result_limit       = -1;
+	size_t arg_file            = empty_char_index;
+	size_t arg_text            = empty_char_index;
+	size_t arg_replace         = empty_char_index;
+	bool arg_column            = false;
+	bool arg_ignore_lead_space = false;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
-			case NAMED_ARG_FILE :
+			case NAMED_ARG_FILE : 
 				arg_file = i + 1;
 				break;
 
 			case NAMED_ARG_START :
-				Start = atoi(argument[i+1].text);
+				arg_line_start = atoi(argument[i+1].text);
 				break;
 
 			case NAMED_ARG_END :
-				End = atoi(argument[i+1].text);
+				arg_line_end = atoi(argument[i+1].text);
 				break;
 
-			case NAMED_ARG_OFFSET :
-				start_pos     = atoi(argument[i+1].text);
-				start_pos_set = true; 
-				break;
+			case NAMED_ARG_OFFSET : {
+				int index   = 0;
+				String item = {NULL, 0};
+				size_t pos  = 0;
+				while ((item = String_tokenize(argument[i+1], ",", pos, OPTION_TRIM_SQUARE_BRACKETS)).length > 0) {
+					switch (index) {
+						case 0 : arg_offset=atoi(item.text); break;
+						case 1 : arg_line_start=atoi(item.text); break;
+						case 2 : arg_offset_column=atoi(item.text); break;
+					}
+					index++;
+				}	
+			} break;
 
 			case NAMED_ARG_LIMIT :
-				Limit = atoi(argument[i+1].text);
+				arg_result_limit = atoi(argument[i+1].text);
 				break;
-
+				
 			case NAMED_ARG_TEXT :
-				SearchFor = argument[i+1].text;
+				arg_text = i + 1;
 				break;
 
 			case NAMED_ARG_REPLACE :
-				Replace     = true;
-				ReplaceWith = argument[i+1].text;
+				arg_replace = i + 1;
 				break;
 
 			case NAMED_ARG_COLUMN :
-				arg_col_num = atoi(argument[i+1].text);
+				arg_column     = true;
+				arg_column_num = atoi(argument[i+1].text);
 				break;
 
 			case NAMED_ARG_IGNORELEADSPACE :
-				ignoreLeadSpace = String_bool(argument[i+1]);
+				arg_ignore_lead_space = String_bool(argument[i+1]);
 				break;
 
 			case NAMED_ARG_CASESENSITIVE :
-				String_bool(argument[i+1]) ? options|=OPTION_CASESENSITIVE : options&=~OPTION_CASESENSITIVE;
+				String_bool(argument[i+1]) ? arg_options|=OPTION_CASESENSITIVE : arg_options&=~OPTION_CASESENSITIVE;
 				break;
 
 			case NAMED_ARG_MATCHWORD :
-				String_bool(argument[i+1]) ? options|=OPTION_MATCHWORD : options&=~OPTION_MATCHWORD;
+				String_bool(argument[i+1]) ? arg_options|=OPTION_MATCHWORD : arg_options&=~OPTION_MATCHWORD;
 				break;
 		}
 	}
 
-
 	// Number validation
-	if (Start < 0) 
-		Start = 0;
-
-	if (End < 0) 
-		End = 0;
-
-	if (Limit < 0) 
-		Limit = 0;
-
-	if (Start>End  &&  End>0) {
-		QWrite_err(FWERROR_PARAM_RANGE, 4, "Start", "End", Start, End);
-		QWrite("0,[],[],\"0\",0]");
+	if (arg_line_start>arg_line_end  &&  arg_line_end>0) {
+		QWrite_err(FWERROR_PARAM_RANGE, 4, "Start", "End", arg_line_start, arg_line_end);
+		QWrite("0,[],[],[\"0\",0,0]]");
 		break;
 	}
-
-
+	
 	// File not specified
 	if (argument[arg_file].length == 0) {
 		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
-		QWrite("0,[],[],\"0\",0]");
+		QWrite("0,[],[],[\"0\",0,0]]");
 		break;
 	}
-
-
+	
 	// Search target not specified
-	if (strcmpi(SearchFor,"") == 0) {
-		QWrite_err(FWERROR_PARAM_EMPTY, 1, "SearchFor");
-		QWrite("0,[],[],\"0\",0]");
+	if (argument[arg_text].length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_text");
+		QWrite("0,[],[],[\"0\",0,0]]");
 		break;
 	}
-
 
 	// Verify and update path to the file
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
-
-	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
-		QWrite("0,[],[],\"0\",0]");
-		break;
-	}
-	//-------------------------------------------------------------------------
-
-
-
-	// Open file ------------------------------------------------------------------------
-	FILE *f = fopen(argument[arg_file].text, "r");
-	if (!f) {
-		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
-		QWrite("0,[],[],\"0\",0]");
-		StringDynamic_end(buf_filename);
-		break;
-	}
-
-
-	// Set up vars and allocate buffers
-	int single_line_size = 512;
-	int rowsLen          = 20;
-	int colsLen          = 20;
-	int matches          = 0;
-	int lastPos          = 0;
-	int lastOccOff       = 0;
-	int lastOffset       = -1;
-	int CurrentROW       = 1;
-	bool isEOL           = false; 
-	bool error           = false;
-
-	char *single_line = (char*) malloc(single_line_size);
-	char *rows        = (char*) malloc(rowsLen);
-	char *cols        = (char*) malloc(colsLen);
-	char *lineNEW;
-	char *rowsNEW; 
-	char *colsNEW; 
-	char *ret;
-	char *p;
-	char tmp[128] = "";
-
-
-	// If failed to allocate
-	if (single_line==NULL  ||  rows==NULL  ||  cols==NULL) {
-		char failedBuf[20] = "";
-		int failedBufL     = 0;
-		
-		if (!single_line) {
-			strcat(failedBuf,"single_line ");
-			failedBufL += single_line_size;
-		} else
-			free(single_line); 
-
-		if (!rows) {
-			strcat(failedBuf,"rows ");
-			failedBufL += rowsLen;
-		} else
-			free(rows); 
-
-		if (!cols) {
-			strcat(failedBuf,"cols ");
-			failedBufL += colsLen;
-		} else
-			free(cols); 
-
-		QWrite_err(FWERROR_MALLOC, 2, "failedBuf", failedBufL);
-		QWrite("0,[],[],\"0\",0]");
-		StringDynamic_end(buf_filename);
-		break;
-	}
-
-	strcpy(rows, "["); 
-	strcpy(cols, "[");
-
-
-	// If this is a replace operation then allocate buffer for the whole file
-	int FileBufPos  = 0;
-	int FileBufSize = 0;
-	char *FileBuf   = empty_char;
-	bool Replaced   = false;
-
-	if (Replace) {
-		fseek(f, 0, SEEK_END);
-		FileBufSize = ftell(f);
-		FileBuf     = (char*) malloc(FileBufSize);
-
-		if (!FileBuf) {
-			QWrite_err(FWERROR_MALLOC, 2, "FileBuf", FileBufSize);
-			QWrite("0,[],[],\"0\",0]");
-			free(single_line); 
-			free(rows); 
-			free(cols); 
-			StringDynamic_end(buf_filename);
-			break;
-		}
-
-		fseek(f, 0, SEEK_SET);
-	}
-
-
-	// Start reading file from the given position
-	if (start_pos_set) {
-		CurrentROW = Start;
-		fseek(f, start_pos, SEEK_SET);
-		lastPos    = start_pos;
-		lastOccOff = start_pos;
-	}
-	//---------------------------------------------------------------------------
-
-
-	// Iterate lines ------------------------------------------------------------
-	while (!feof(f)  &&  ((CurrentROW<=End && End!=0 && !Replace) || End==0 || Replace)) {
-		ret = fgets(single_line, single_line_size, f);
-
-		if (ferror(f)) {
-			QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
-			error = 1;
-		}
-
-		if (!ret) 
-			strcpy(single_line, "");
-
-		isEOL = single_line[strlen(single_line)-1] == '\n';
-		
-
-		// If a long single_line then reallocate buffer and read again
-		if (!isEOL && !feof(f)  &&  ret!=NULL) {
-			single_line_size += 512;
-			lineNEW = (char*) realloc(single_line, single_line_size);
-
-			if (lineNEW) 
-				single_line = lineNEW; 
-			else {	
-				QWrite_err(FWERROR_REALLOC, 2, "single_line", single_line_size);
-				error = 1; 
-				break;
-			}
-
-			fseek (f, lastPos, SEEK_SET);
-			continue;
-		}
-
-
-		// If current single_line number is in range
-		if (CurrentROW>=Start  &&  ((End>0 && CurrentROW<=End) || (End==0 && CurrentROW>=Start))) {
-			char *backup_line = single_line;
-			int i             = 0;
-			int CurrentCOL    = 0;
-			int maxIterations = 0;
-			int leadSpace     = 0;
-
-			// If we want to ignore leading whitespace then count it
-			while (ignoreLeadSpace  &&  isspace(single_line[leadSpace])  &&  single_line[leadSpace]!='\0')
-				leadSpace++;
-
-			// Find all positions of the occurences in the current single_line
-			String search_source = {backup_line, strlen(backup_line)};
-			String to_find       = {SearchFor, strlen(SearchFor)};
-
-			while ((p = String_find(search_source, to_find, options))) {
-				maxIterations++;
-
-				if (maxIterations > 10)
-					break;
-
-				int pos = p - backup_line;
-
-				// If no limit regarding columns or if occurence is on the wanted column
-				if (arg_col_num==-1  ||  (arg_col_num!=-1 && arg_col_num == CurrentCOL+pos-leadSpace)) {
-					// Add column number to the return data
-					if (i == 0) {
-						colsLen += 4;
-						sprintf(tmp, "[%d", CurrentCOL + pos); 
-					} else 
-						sprintf(tmp, "]+[%d", CurrentCOL + pos);
-
-					colsLen += strlen(tmp) + 1;
-					colsNEW  = (char*) realloc (cols, colsLen);
-
-					if (colsNEW) {
-						cols = colsNEW;
-						strcat(cols, tmp); 
-					} else {
-						QWrite_err(FWERROR_REALLOC, 2, "cols" ,colsLen);
-						error = 1; 
-						break;
-					}
-
-					i++;
-					matches++;
-				}
-
-				backup_line = single_line + CurrentCOL + pos + 1;
-				CurrentCOL += pos+1;
-				lastOccOff  = lastPos + CurrentCOL;
-
-				if (Limit!=0  &&  matches>=Limit) {
-					lastOffset = lastOccOff;
-					break;
-				}
-
-				search_source.text   = backup_line;
-				search_source.length = strlen(backup_line);
-			}
-
-
-			// Add single_line number to array
-			if (i > 0) {
-				strcat(cols, "]]+[");
-				sprintf(tmp, "]+[%d", CurrentROW);
-
-				rowsLen += strlen(tmp) + 1;
-				rowsNEW  = (char*) realloc (rows, rowsLen);
-
-				if (rowsNEW) {
-					rows = rowsNEW;
-					strcat(rows, tmp); 
-				} else {
-					QWrite_err(FWERROR_REALLOC, 2, "rows", rowsLen);
-					error = 1; 
-					break;
-				}
-			}
-
-
-			// Replace occurences
-			if (Replace  &&  i>0) {
-				Replaced  = true;
-
-				char *rep = str_replace(single_line, SearchFor, ReplaceWith, options);
-				if (!rep) {
-					QWrite_err(FWERROR_STR_REPLACE, 2, ReplaceWith, strlen(single_line));
-					error = 1; 
-					break;
-				}
-
-				// If result is larger than original then reallocate buffer for the new file
-				unsigned int newLength = strlen(rep);
-				unsigned int oldLength = strlen(single_line);
-
-				//if (strlen(single_line) > l)
-				if (newLength > oldLength) {
-					FileBufSize += newLength - oldLength;
-
-					char *FileBufNEW = (char*) realloc (FileBuf, FileBufSize);
-
-					if (FileBufNEW) 
-						FileBuf = FileBufNEW;
-					else {
-						QWrite_err(FWERROR_REALLOC, 2, "FileBuf", rowsLen);
-						error = 1; 
-						break;
-					}
-				}
-
-				// Copy modified single_line to the buffer
-				memcpy(FileBuf+FileBufPos, rep, newLength+1),
-				FileBufPos += newLength;
-				free(rep);
-			}
-		}
-
-		lastPos = ftell(f);
-		CurrentROW++;
-
-		if (Limit!=0  &&  matches>=Limit) 
-			break;
-
-
-		// If this is a replace operation then copy lines to a buffer
-		if (Replace) {
-			if (!Replaced) {
-				int l = strlen(single_line);
-				memcpy(FileBuf+FileBufPos, single_line, l+1);
-				FileBufPos += l;
-			} else
-				Replaced = false;
-		}
-	}
-
-
-	// If did not stop in the middle of the single_line then point to the next single_line
-	if (lastOffset == -1) {
-		lastOffset = lastPos;
-
-		if (!feof(f))
-			CurrentROW++;
-	}
-
-	fclose(f); 
-	free(single_line);
-	//-------------------------------------------------------------------------
-
-
-
-	// If this was a replace operation then rewrite the file
-	if (Replace  &&  matches>0) {
-		f = fopen(argument[arg_file].text, "w");
-		if (f) {
-			fwrite(FileBuf, 1, strlen(FileBuf), f);
-
-			if (ferror(f)) {
-				error = 1;
-				QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
-			}
-
-			fclose(f);
-		} else {
-			error = 1;
-			QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
-		}
-	}
-
-
-	// If error
-	if (!error) {	
-		QWrite_err(FWERROR_NONE, 0);
-		QWritef("%d,%s],%s],\"%d\",%d]", matches, rows, cols, lastOffset, --CurrentROW);
-	} else
-		QWrite("0,[],[],\"0\",0]");
-
-
-	free(cols); 
-	free(rows); 
-	StringDynamic_end(buf_filename);
 	
-	if (Replace)
-		free(FileBuf);
+	if (!VerifyPath(argument[arg_file], buf_filename, arg_replace!=empty_char_index ? OPTION_RESTRICT_TO_MISSION_DIR : OPTION_ALLOW_GAME_ROOT_DIR)) {
+		QWrite("0,[],[],[\"0\",0,0]]");
+		StringDynamic_end(buf_filename);
+		break;	
+	}
+
+	// Open file
+	FILE *file = fopen(argument[arg_file].text, "rb");
+	if (!file) {
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+		QWrite("0,[],[],[\"0\",0,0]]");
+		StringDynamic_end(buf_filename);
+		break;
+	}
+
+	// Find file size
+	if (fseek(file, 0, SEEK_END) != 0) {
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+		QWrite("0,[],[],[\"0\",0,0]]");
+		StringDynamic_end(buf_filename);
+		fclose(file);
+		break;
+	}
+
+	int file_size = ftell(file);
+	if (file_size == -1) {
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+		QWrite("0,[],[],[\"0\",0,0]]");
+		StringDynamic_end(buf_filename);
+		fclose(file);
+		break;
+	}
+	
+	// If requested no results then quit
+	if (arg_result_limit == 0) {
+		QWrite_err(FWERROR_NONE, 0);
+		QWrite("0,[],[],[\"0\",0,0]]");
+		StringDynamic_end(buf_filename);
+		fclose(file);
+		break;
+	}
+
+
+	int pos                   = 0;
+	size_t matched_characters = 0;
+	int current_line          = 1;
+	int current_column        = 0;
+	int match_column          = 0;
+	int line_last_added       = 0;
+	int match_count           = 0;
+	int leading_space         = 0;
+	bool new_line             = true;
+	int c                     = -1;
+	char cc                   = '\0';
+	char cc_previous          = '\0';
+	char left_neighbour       = '\0';
+	char right_neighbour      = '\0';
+	
+	if (arg_offset>0 && arg_replace==empty_char_index) {
+		pos            = arg_offset;
+		current_line   = arg_line_start;
+		current_column = arg_offset_column;
+		fseek(file, arg_offset, SEEK_SET);
+	} else
+		fseek(file, 0, SEEK_SET);
+
+	StringDynamic file_contents_replaced;
+	StringDynamic output_line_numbers;
+	StringDynamic output_column_numbers;
+	StringDynamic_init(file_contents_replaced);
+	StringDynamic_init(output_line_numbers);
+	StringDynamic_init(output_column_numbers);
+	
+	// Allocate buffer for a new file if doing a replacement
+	if (arg_replace != empty_char_index) {
+		int new_file_size          = file_size + 1;
+		int new_file_size_replaced = new_file_size + (argument[arg_replace].length>argument[arg_text].length ? new_file_size : 0);
+		
+		int result = StringDynamic_allocate(file_contents_replaced, new_file_size_replaced);
+		if (result != 0) {
+			QWrite_err(FWERROR_MALLOC, 2, "file_contents_replaced", file_contents_replaced);
+			QWrite("0,[],[],[\"0\",0,0]]");
+			StringDynamic_end(buf_filename);
+			StringDynamic_end(file_contents_replaced);
+			break;
+		}
+	}
+	
+
+	// Go through the file
+	// unless reached line range end and it's not replacement mode
+	while (
+		(c=fgetc(file)) != EOF  &&  
+		((current_line<=arg_line_end && arg_line_end!=0 && arg_replace==empty_char_index) || arg_line_end==0 || arg_replace!=empty_char_index)
+	) {
+		if (ferror(file))
+			break;
+			
+		cc = (char)c;
+			
+		if (arg_replace != empty_char_index)
+			StringDynamic_appendl(file_contents_replaced, &cc, 1);
+		
+		// Count the amount of leading spaces
+		if (isspace(cc)) {
+			if (new_line && cc!='\0' &&  cc!='\r' &&  cc!='\n')
+				leading_space++;
+		} else
+			new_line = false;
+
+		// If current line number is in range
+		if (current_line>=arg_line_start  &&  ((arg_line_end>0 && current_line<=arg_line_end) || (arg_line_end==0 && current_line>=arg_line_start))) {
+			// If character matches
+			if (
+				arg_options & OPTION_CASESENSITIVE
+				? cc == argument[arg_text].text[matched_characters]
+				: (cc | 32) == (argument[arg_text].text[matched_characters] | 32)
+			) {
+				matched_characters++;
+				
+				// Remember where the phrase started
+				if (matched_characters == 1) {
+					left_neighbour = cc_previous;
+					match_column   = current_column;
+				}
+
+				// If matched the entire phrase
+				if (matched_characters == argument[arg_text].length) {					
+					// Get next character if necessary
+					if (arg_options & OPTION_MATCHWORD) {
+						right_neighbour = '\0';
+						
+						if (pos < file_size-1) {
+							int temp        = fgetc(file);
+							right_neighbour = (char)temp;
+							fseek(file, -1, SEEK_CUR);
+						}
+					}
+					
+					if (
+						// If matching column
+						(
+							!arg_column  
+							||  
+							(arg_column && arg_column_num == match_column-(arg_ignore_lead_space ? leading_space : 0))
+						) 
+						&&
+						// If matching the whole word then occurrence musn't be surrounded by graphic characters
+						(
+							~arg_options & OPTION_MATCHWORD 
+							|| 
+							(arg_options & OPTION_MATCHWORD && (!isalnum(left_neighbour) && left_neighbour!='_') && (!isalnum(right_neighbour) && right_neighbour!='_'))
+						)
+					) {
+						if (line_last_added != current_line) {
+							StringDynamic_appendf(output_line_numbers, "%u]+[", current_line);
+							StringDynamic_append(output_column_numbers, "]+[[");
+							line_last_added = current_line;
+						}
+						
+						StringDynamic_appendf(output_column_numbers, "%u]+[", match_column);
+						match_count++;
+						
+						if (arg_replace != empty_char_index) {
+							file_contents_replaced.length -= matched_characters;
+							StringDynamic_appends(file_contents_replaced, argument[arg_replace]);
+						}
+					}
+					
+					matched_characters = 0;
+				}
+			} else
+				matched_characters = 0;
+		}
+		
+		if (cc!='\n' && cc!='\r')
+			current_column++;
+		
+		pos++;
+		
+		// Advance counters on new line
+		if (cc == '\n') {
+			if (line_last_added == current_line)
+				StringDynamic_append(output_column_numbers, "]");
+			
+			current_line++;
+			current_column = 0;
+			leading_space  = 0;
+			new_line       = true;
+		}
+		
+		// End search if reached result limit
+		if (arg_result_limit>=0  &&  match_count>=arg_result_limit)
+			break;
+		
+		cc_previous = cc;
+	}
+	
+	if (line_last_added == current_line)
+		StringDynamic_append(output_column_numbers, "]");
+		
+	if (ferror(file))
+		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+	else {
+		// Rewrite file
+		if (arg_replace!=empty_char_index && match_count>0) {
+			if (freopen(argument[arg_file].text, "wb", file)) {
+				size_t bytes_written = fwrite(file_contents_replaced.text, 1, file_contents_replaced.length, file);
+				
+				if (bytes_written != file_contents_replaced.length)
+					QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+				else
+					QWrite_err(FWERROR_NONE, 0);
+
+				fclose(file);
+			} else
+				QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+		} else
+			QWrite_err(FWERROR_NONE, 0);
+	}
+
+	QWritef("%u,[%s],[%s],[\"%u\",%u,%u]]", match_count, output_line_numbers.text, output_column_numbers.text, pos, current_line, current_column);
+	
+	StringDynamic_end(buf_filename);
+	StringDynamic_end(file_contents_replaced);
+	StringDynamic_end(output_line_numbers);
+	StringDynamic_end(output_column_numbers);
+	fclose(file);
 }
 break;
 
