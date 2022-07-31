@@ -1734,7 +1734,7 @@ int Unpack(string file_name, string password="", int options=FLAG_NONE)
 	si.hStdInput     = NULL;
 	si.hStdOutput    = logFile;
 	si.hStdError     = logFile;
-	string arguments = WrapInQuotes(global.working_directory) + (password.empty() ? "" : " -p"+password) + " x -y -o" + destination + "\\ -bb3 -bsp1 " + "\"fwatch\\tmp\\" + file_name + "\"";
+	string arguments = WrapInQuotes(global.working_directory) + (password.empty() ? "" : " -p"+password) + " x -y -o\"" + destination + "\\\" -bb3 -bsp1 " + "\"fwatch\\tmp\\" + file_name + "\"";
 
 	if (!CreateProcess("fwatch\\data\\7z.exe", &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {		
 		int errorCode = GetLastError();
