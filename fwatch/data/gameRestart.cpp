@@ -839,7 +839,7 @@ int Download(string url, string &error_text)
 {
 	// Format arguments
 	global.downloaded_filename = PathLastItem(url);
-	string arguments           = " --tries=1 --output-file=fwatch\\tmp\\schedule\\downloadLog.txt " + url;
+	string arguments           = " --user-agent=\"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0\" --tries=1 --output-file=fwatch\\tmp\\schedule\\downloadLog.txt " + url;
 
 	remove("fwatch\\tmp\\schedule\\downloadLog.txt");
 

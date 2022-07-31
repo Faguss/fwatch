@@ -1600,13 +1600,13 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 		find = url.find(output, find);
 	}
 
-	string arguments = " --tries=1 --no-check-certificate --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ ";
+	string arguments = " --user-agent=\"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0\" --tries=1 --no-check-certificate --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ ";
 	
 	if (~options & FLAG_OVERWRITE)
 		arguments += "--no-clobber ";
 	
-	if (~options & FLAG_SILENT_MODE)
-		arguments += "--user-agent=\"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0\" ";
+	if (options & FLAG_SILENT_MODE)
+		arguments += "--header=\"ofpgsinstall: 1\" ";
 
 	arguments += url;
 	unlink("fwatch\\tmp\\schedule\\downloadLog.txt");

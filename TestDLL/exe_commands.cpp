@@ -284,7 +284,7 @@ case C_RESTART_SERVER:
 		break;
 		
 		case C_EXE_WGET : {
-			StringDynamic_appendf(param, "--directory-prefix=fwatch\\tmp --no-check-certificate ");
+			StringDynamic_appendf(param, "--directory-prefix=fwatch\\tmp --no-check-certificate --user-agent=\"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0\" ");
 
 			for (size_t i=2; i<argument_num; i++) {
 				StringDynamic_appendl(param, " ", 1);
