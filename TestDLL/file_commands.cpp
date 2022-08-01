@@ -451,7 +451,7 @@ case C_FILE_MODLIST:
 
 
 		// Check custom sounds file sizes
-		sprintf(path_to_user, "Users\\%s\\sounds\\*.*", username);
+		sprintf(path_to_user, "Users\\%s\\sound\\*.*", username);
 		hFind = FindFirstFile(path_to_user, &fd);
 
 		if (hFind != INVALID_HANDLE_VALUE) {

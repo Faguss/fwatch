@@ -54,6 +54,7 @@ unsigned long GetIP(char *host);
 void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, int *customINT);
 int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_name, int game_version);
 void ModfolderMissionsReturn(bool is_dedicated_server);
+void CustomFilesReturn();
 
 void FwatchPresence(ThreadArguments *arg);
 void ListenServer(ThreadArguments *arg);
@@ -407,6 +408,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	StringDynamic_end(command_line);
 	ModfolderMissionsReturn(GAME_CLIENT);
 	ModfolderMissionsReturn(GAME_SERVER);
+	CustomFilesReturn();
 	unlink("fwatch_info.sqf");
 	unlink("fwatch\\data\\pid.db");
 	CloseHandle(mailslot);
@@ -795,6 +797,92 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 	}
 
 	StringDynamic_end(buf_mission_list);
+}
+
+
+
+
+// Move sounds back to the sounds folder and revert to custom face
+void CustomFilesReturn() 
+{
+	char filename[64] = "fwatch\\data\\user_rename.txt";
+
+	StringDynamic buf_rename_list;
+	if (StringDynamic_readfile(buf_rename_list, filename) != 0)
+		return;
+
+	size_t word_start    = 0;
+	String file_list     = {buf_rename_list.text, buf_rename_list.length};
+	String destination   = {NULL, 0};
+	size_t file_list_pos = 0;
+
+	while ((destination = String_tokenize(file_list, "\r\n", file_list_pos, OPTION_NONE)).length > 0) {
+		char *separator  = strchr(destination.text, '?');
+		bool remove_line = false;
+
+		// Bring back face back to custom
+		if (strstr(destination.text, "UserInfo.cfg")) {
+			StringDynamic buf_userinfo;
+			if (StringDynamic_readfile(buf_userinfo, destination.text) == 0) {
+				char *face_ptr = strstr(buf_userinfo.text, "face=\"Face52\"");
+				if (face_ptr) {
+					memcpy(face_ptr, "face=\"Custom\"", 13);
+					FILE *f = fopen(destination.text, "wb");
+					if (f) {
+						fwrite(buf_userinfo.text, 1, buf_userinfo.length, f);
+						remove_line = true;
+					}
+				}
+			}
+			StringDynamic_end(buf_userinfo);
+		} else 
+		if (separator) {
+			// Move sound back to the sound folder
+			int separator_pos               = separator - destination.text;
+			char *source                    = destination.text + separator_pos + 1;
+			destination.text[separator_pos] = '\0';
+			
+			if (MoveFileEx(source, destination.text, 0))
+				remove_line = true;
+			else
+				destination.text[separator_pos] = '?';
+		} else
+			remove_line = true;
+		
+		// Restore new line character
+		if (file_list_pos < file_list.length) {
+			if (file_list.text[file_list_pos] == '\n') {
+				if (file_list_pos > 0)
+					file_list.text[file_list_pos-1] = '\r';
+					
+				file_list_pos++;
+			} else
+				file_list.text[file_list_pos-1] = '\n';
+		}
+		
+		
+		// Remove current line from the buffer
+		if (remove_line) {
+			size_t shift_amount = file_list_pos - word_start;
+
+			shift_buffer_chunk(file_list.text, file_list_pos, file_list.length, shift_amount, OPTION_LEFT);
+			
+			file_list_pos    -= shift_amount;
+			file_list.length -= shift_amount;
+		}
+
+		word_start = file_list_pos;
+	}
+
+	file_list.text[file_list.length] = '\0';
+	
+	FILE *f = fopen(filename, "wb");
+	if (f) {
+		fwrite(file_list.text, 1, file_list.length, f);
+		fclose(f);
+	}
+
+	StringDynamic_end(buf_rename_list);
 }
 // ******************************************************************************************************
 

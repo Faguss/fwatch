@@ -2378,6 +2378,7 @@ int main(int argc, char *argv[])
 	
 	// Check if custom files are below limit -------------------
 	if (!maxcustom.empty() && !username.empty()) {
+		string changelog   = "";
 		string path_to_cfg = "Users\\" + username + "\\UserInfo.cfg";
 		int face_offset    = 0;
 		char *face_ptr     = NULL;
@@ -2420,7 +2421,8 @@ int main(int argc, char *argv[])
 			
 			if (f && face_size > size_limit && face_size <= 102400) {
 				memcpy(face_ptr, "face=\"Face52\"", 13);
-				rewrite = true;
+				rewrite   = true;
+				changelog = path_to_cfg + "\n";
 			}			
 		}
 		
@@ -2440,18 +2442,39 @@ int main(int argc, char *argv[])
 		}
 		
 		// Get custom sound size
-		string path_to_sound = "Users\\" + username + "\\sounds\\*.*";
+		string path_to_sound = "Users\\" + username + "\\sound\\*.*";
 		hFind                = FindFirstFile(path_to_sound.c_str(), &fd);
-		bool rename          = false;
 		
 		if (hFind != INVALID_HANDLE_VALUE) {
 			do {
 				if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
 					continue;
 
+				// If above limit then move it out of the folder
 				if (fd.nFileSizeLow > size_limit && fd.nFileSizeLow <= 51200) {
-					rename = true;
-					break;
+					string rename_src  = "Users\\" + username + "\\sound\\" + (string)fd.cFileName;
+					string rename_base = "Users\\" + username + "\\" + (string)fd.cFileName;
+					string rename_dst  = "";
+					int tries          = 1;
+					int last_error     = 0;
+					
+					do {
+						rename_dst = rename_base + (tries>1 ? Int2Str(tries) : "");
+						if (MoveFileEx(rename_src.c_str(), rename_dst.c_str(), 0)) {
+							last_error = 0;
+							changelog += rename_src + "?" + rename_dst + "\n";
+						} else {
+							tries++;
+							last_error = GetLastError();
+							if (last_error != 183) {
+								global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << " - " << FormatError(last_error);
+								global.logfile.close();
+								return 7;
+							}
+						}
+					} while (last_error == 183);
+					
+					global.logfile << "Renamed " << rename_src << " to " << rename_dst << endl;
 				}
 			}
 			while (FindNextFile(hFind, &fd) != 0);
@@ -2459,29 +2482,12 @@ int main(int argc, char *argv[])
 			FindClose(hFind);
 		}
 		
-		if (rename) {
-			string rename_src  = "Users\\" + username + "\\sounds";
-			string rename_base = "Users\\" + username + "\\sounds_backup";
-			string rename_dst  = "";
-			int tries          = 1;
-			int last_error     = 0;
-			
-			do {
-				rename_dst = rename_base + (tries>1 ? Int2Str(tries) : "");
-				if (MoveFileEx(rename_src.c_str(), rename_dst.c_str(), 0))
-					last_error = 0;
-				else {
-					tries++;
-					last_error = GetLastError();
-					if (last_error != 183) {
-						global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << " - " << FormatError(last_error);
-						global.logfile.close();
-						return 7;
-					}
-				}
-			} while (last_error == 183);
-			
-			global.logfile << "Renamed " << rename_src << " to " << rename_dst << endl;
+		// Save to file what was renamed
+		if (!changelog.empty()) {
+			fstream out;
+			out.open("fwatch\\data\\user_rename.txt", ios::out | ios::app);
+			out << changelog;
+			out.close();
 		}
 	}
 
