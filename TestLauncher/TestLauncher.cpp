@@ -2031,7 +2031,8 @@ void WatchProgram(ThreadArguments *arg)
 								db_pid_save(info);
 
 								// Run another program monitoring the first program
-								if (hash != C_RESTART_CLIENT) {
+								// Don't monitor gameRestart.exe if everything is going to be restarted
+								if (hash != C_RESTART_CLIENT  ||  (hash==C_RESTART_CLIENT && strstr(params,"-queryserver="))) {
 									do {
 										Sleep(5);
 										GetExitCodeProcess(pi.hProcess, &info.exit_code);

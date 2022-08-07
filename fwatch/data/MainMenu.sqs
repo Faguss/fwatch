@@ -12,9 +12,10 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2022,8,1,1,23,40,54,115,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2022,8,7,0,21,51,11,286,120,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
+	? Format ["%1", count GS_SERVER_STATUS] == "scalar" : GS_SERVER_STATUS=[[],[]]; GS_SERVER_STATUS_DATE=+GS_FWATCH_MY_VERSION; GS_SERVER_STATUS_THREADS=0
 
 
 	; Won't work with older version
@@ -28,6 +29,7 @@
 	
 	; Create or close dialog
 	? "download" in _this                : goto "DownloadImageThread"
+	? "queryserver" in _this             : goto "QueryServer"
 	? MAINMENU_INPUT || ctrlVisible 6900 : exit
 	? ctrlVisible 6657                   : if (!(lbValue[6657,0] in [1,4])) then {LOADMOD_MODSELECTOR=true} else {closeDialog 0}; exit
 
@@ -115,6 +117,7 @@
 	_color_gingerbrown   = [201/255, 190/255, 98/255 , 1]
 	_color_yellowgreen   = [82/255 , 208/255, 23/255 , 1]
 	_color_sand          = [194/255, 178/255, 128/255, 1]
+	_serv_status_threads = GS_SERVER_STATUS_THREADS
 	
 	if (!_m_moved && (_mx<_x || _mx>_w || _my<_y || _my>_h)) then {loadFile Format [":mem setcursor %1 %2", _w, _y]; _m_moved=nil}
 	goto "GetModfolders"
@@ -176,6 +179,7 @@
 		? _LMBtime==0 &&  _LMB                : _LMBtime=_time
 	
 	? _install_status >= 0 : if (_time+0.1>_install_timing) then {_install_timing=_time; goto "InstallWait"}
+	? _serv_status_threads != GS_SERVER_STATUS_THREADS : _serv_status_threads=GS_SERVER_STATUS_THREADS; goto "FillListbox"
 	goto "MainLoop"
 
 
@@ -199,7 +203,7 @@
 	
 	; Master server options
 	? _value == 100 : _Label="MasterServerValidateInput"; _Input=""; _Input_Note=""; goto "INPUT"
-	? _value == 101 : titleText ["This is the current one!", "PLAIN DOWN", 0.1]; goto "ResetLMB"
+	? _value == 101 : titleText [MAINMENU_STR select 4, "PLAIN DOWN", 0.1]; goto "ResetLMB"
 	? _value == 102 : loadFile Format ["\:mem masterserver set %1", _name]; _Input=_name; goto "MasterServerSave"
 	
 	; Game schedule options
@@ -234,6 +238,7 @@
 	
 	#OptionRightMouseClick
 	? _value in [2,3,6] : goto "ModfolderRightClickOptions"
+	? _value == 201 : if (!ctrlVisible 6463) then {goto "DisplayServerStatus"} else {goto "DisplayServer"}
 	goto "ResetLMB"
 
 
@@ -705,7 +710,7 @@
 	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  read:accesscode"
 	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:version"
 	? _saved_version < GS_MY_VERSION : 	loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\schedule.bin"
-	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:urlread:serversread:hash"
+	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:urlread:serversread:hashread:serverstatusread:serverstatusdate"
 
 	while "count _all_urldates < count _all_url" do {_all_urldates set [count _all_urldates, "0"]}
 
@@ -835,6 +840,7 @@
 	_all_serverID    = _all_serverID    - ["<null>"]
 	_all_serverURL   = _all_serverURL   - ["<null>"]
 
+	? GS_SERVER_STATUS_THREADS == 0 : _now=call loadFile ":info date"; _diff=[_now,GS_SERVER_STATUS_DATE] call FLIB_DATEDIFF; if ((_diff select 0)>0 || (_diff select 1)>0 || (_diff select 2)>0 || (_diff select 3)>0 || (_diff select 4)>0) then {GS_SERVER_STATUS_DATE=_now; loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverstatusdatewrite:GS_SERVER_STATUS_DATE=%1;", GS_SERVER_STATUS_DATE]; _i=0; GS_SERVER_STATUS_THREADS=count _all_serverID; _serv_status_threads=count _all_serverID; {_server_ip=""; _server_port=""; _server_encrypted=true; call (_all_servers select _i); ["queryserver", _server_uniqueid, _server_ip, _server_port, _server_encrypted] exec "..\fwatch\data\MainMenu.sqs"; _i=_i+1} forEach _all_serverID; ctrlSetText [6450, Format ["%1 - %2", MAINMENU_STR select 2, localize "STR_LOAD_WORLD"]]}
 	[_closest_game_times, _all_servers, _all_serverNames, _all_serverID] call FUNCTION_QUICKSORTM
 
 
@@ -854,6 +860,8 @@
 
 	FUNCTION_SERVERS_TO_LISTBOX forEach _all_serverID
 	[MAINMENU_STR select 25, 215, _color_gingerbrown] call FUNCTION_LBADD
+	ctrlSetText [6450, (if (GS_SERVER_STATUS_THREADS==0) then {MAINMENU_STR select 2} else {Format ["%1 - %2", MAINMENU_STR select 2, localize "STR_LOAD_WORLD"]})]
+	? _lastCur>=0 : lbSetCurSel [6657, _lastCur]; _lastCur=-1
 	goto "ResetLMB"
 
 
@@ -889,7 +897,7 @@
 
 	_domain        = call loadFile Format ["\:STRING DOMAIN url:%1", _server_website]
 	_versionString = if (_server_version == 0) then {""} else {Format ["%1",_server_version]}
-	_too_big       = false;
+	_too_big       = false
 
 	_voice_name = if (count _server_voice > 0) then {(GS_VOICE select (_server_voice select 0)) select 0} else {""}
 
@@ -934,7 +942,10 @@
 
 	_server_game_times call FUNCTION_FORMAT_GAME_TIME
 
-	ctrlSetText [6464, ["@d M 0h:0i",_now] call FLIB_FORMATDATE]
+	_server_status_name = MAINMENU_STR select 106
+	_index = [_server_uniqueid, GS_SERVER_STATUS select 0] call FUNCTION_FIND
+	? _index >= 0 : _server_status_name=MAINMENU_STR select 107
+	ctrlSetText [6464, Format ["%1               %2", _server_status_name, ["@d M 0h:0i",_now] call FLIB_FORMATDATE]]
 
 	; Display playing times
 	[6502, !_playingNow] call FUNCTION_SHOW_RED_TEXT
@@ -949,6 +960,17 @@
 
 	? _server_uniqueid == _jump_to_server : _jump_to_server=""; goto "ServerOptions"
 	_jump_to_server = ""
+	goto "ResetLMB"
+
+
+
+	; Display detailed information about a server
+	#DisplayServerStatus
+	_index = [_server_uniqueid, GS_SERVER_STATUS select 0] call FUNCTION_FIND
+	? _index < 0 : goto "ResetLMB"
+	"ctrlShow [_x,false]" forEach _serverDialog
+	"ctrlShow [_x,true ]" forEach [6460, 6463, 6464]
+	ctrlSetText [6463, Format ["%1: %2\n%3 %4\n%5 %6\n%7 %8\n%9", localize "STR_STATUS", (((GS_SERVER_STATUS select 1) select _index) select 0) call FUNCTION_GET_SERVER_STATUS_NAME, localize "STR_DISP_SERVER_MISSION", (((GS_SERVER_STATUS select 1) select _index) select 2), localize "STR_DISP_SERVER_ISLAND", (((GS_SERVER_STATUS select 1) select _index) select 3), localize "STR_DISP_MP_PLAYERS", (((GS_SERVER_STATUS select 1) select _index) select 1), (((GS_SERVER_STATUS select 1) select _index) select 4)]]
 	goto "ResetLMB"
 
 
@@ -1271,3 +1293,49 @@
 	? !(GS_DOWNLOAD_RESULT select 0) : exit
 	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1  key:%2write:_extension={%3};_logohash={%4};", _database, _record_id, _extension, _global_hash]
 	? dialog  &&  ctrlText 6462==_record_title  &&  lbCurSel 6657==_cursel : ctrlSetText [6461, Format["..\fwatch\tmp\schedule\%1\%2.%3", _img_folder, _record_id, _extension]]
+	exit
+
+
+
+
+
+
+
+
+
+	; Get game server status from the internet, save it to database =====================================================	
+	#QueryServer
+	~(random 2)
+	_server_uniqueid  = _this select 1
+	_server_ip        = _this select 2
+	_server_port      = _this select 3
+	_server_encrypted = _this select 4
+
+	_success  = false
+	_string   = ""
+	_modifier = if (_server_encrypted) then {"e"} else {""};
+	_string   = Format ["-queryserver=true -serveruniqueid=%1 -%2connect=", _server_uniqueid, _modifier] + _server_ip;
+
+	if (_server_port != "") then {_string=_string+Format[" -%1port=",_modifier]+_server_port};
+	_ok = call loadFile ("\:RESTART CLIENT " + _string);
+	_pid = _ok select 4
+	
+		#QueryServer_Wait
+		~0.01
+		_ok = call loadFile Format ["\:RESTART CLIENT check %1", _pid]
+		? _ok select 0 : goto "QueryServer_Wait"
+
+	? (_ok select 1)!=5  &&  (_ok select 5)==0 : _string=loadFile Format ["\:IGSE LOAD mode:execute wait:100 file:..\fwatch\tmp\_exelog\%1", _pid]; _success=Format ["%1",_string]!="scalar bool array string 0xfcffffef"
+	
+	_index = [_server_uniqueid, GS_SERVER_STATUS select 0] call FUNCTION_FIND
+	
+	; add new status or update existing status
+	? _success && _index < 0 : (GS_SERVER_STATUS select 0) set [count (GS_SERVER_STATUS select 0), _server_uniqueid]; (GS_SERVER_STATUS select 1) set [count (GS_SERVER_STATUS select 1), []]; _index=count (GS_SERVER_STATUS select 0)-1
+	? _success : (GS_SERVER_STATUS select 1) set [_index, (call _string)]
+	
+	; remove status if query failed
+	? !_success && _index >= 0  : (GS_SERVER_STATUS select 0) set [_index, "null"]; (GS_SERVER_STATUS select 1) set [_index, "null"]; GS_SERVER_STATUS set [0,(GS_SERVER_STATUS select 0)-["null"]]; GS_SERVER_STATUS set [1,(GS_SERVER_STATUS select 1)-["null"]]
+	
+	loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverstatuswrite:GS_SERVER_STATUS=" + (GS_SERVER_STATUS call FLIB_FORMAT) + ";")
+	GS_SERVER_STATUS_THREADS = GS_SERVER_STATUS_THREADS - 1
+	

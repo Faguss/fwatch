@@ -9,6 +9,7 @@
 #include <vector>       // dynamic array
 #include <algorithm>	// tolower
 #include <Shlobj.h>		// opening explorer
+#include <iostream>		// cout
 
 #define USING_LOLE32 1
 
@@ -1277,7 +1278,10 @@ int main(int argc, char *argv[])
 	string update_resource    = "";
 	string username           = "";
 	string maxcustom          = "";
-
+	string ip                 = "";
+	string port               = "";
+	
+	bool query_server         = false;
 	bool self_update		  = false;
 	bool server_equalmodreq   = false;
 	DWORD game_pid            = 0;
@@ -1327,7 +1331,7 @@ int main(int argc, char *argv[])
 			}
 			
 			if (Equals(name,"-serverequalmodreq")) {
-				server_equalmodreq = Equals(value,"true");
+				server_equalmodreq = Equals(value,"true") || Equals(value,"1");
 				continue;
 			}
 			
@@ -1347,11 +1351,19 @@ int main(int argc, char *argv[])
 			}
 
 			if (Equals(name,"-selfupdate")) {
-				self_update = Equals(value,"true");
+				self_update = Equals(value,"true") || Equals(value,"1");
 				continue;
 			}
 
 			if (Equals(name,"-econnect") || Equals(name,"-eport") || Equals(name,"-epassword")) {
+				if (Equals(name,"-econnect")) {
+					ip = Decrypt(value);
+				}
+				
+				if (Equals(name,"-eport")) {
+					port = Decrypt(value);
+				}
+				
 				user_arguments     += "-" + name.substr(2) + "=" + Decrypt(value) + " ";
 				user_arguments_log += "-" + name.substr(2) + "=hidden ";
 				continue;
@@ -1419,17 +1431,114 @@ int main(int argc, char *argv[])
 				username = value;
 				continue;
 			}
+			
+			if (Equals(name,"-queryserver")) {
+				query_server = Equals(value,"true") || Equals(value,"1");
+				continue;
+			}
+			
+			if (Equals(name,"-connect")) {
+				ip = value;
+			}
+			
+			if (Equals(name,"-port")) {
+				port = value;
+			}
 		}
 		
 		user_arguments     += namevalue + " ";
 		user_arguments_log += namevalue + " ";
 	}
 	
+	// Open discord/steam url
 	if (voice_server.substr(0,19) == "https://discord.gg/" || voice_server.substr(0,20) == "https://s.team/chat/") {
 		ShellExecute(NULL, "open", voice_server.c_str(), NULL, NULL, SW_SHOWNORMAL);
 		return 0;
 	}
 
+	// Download server info
+	if (query_server) {
+		if (ip.empty() || Equals(ip,"localhost") || ip.substr(0,8)=="192.168." || ip=="127.0.0.1") {
+			return 1;
+		}
+			
+		string filename   = "fwatch\\tmp\\schedule\\queryserver" + server_uniqueid + ".txt";		
+		string url        = "--output-document=" + filename + " https://ofp-api.herokuapp.com/" + ip + ":" + (port.empty() ? "2302" : port);
+		string error_text = "";
+		int result        = Download(url, error_text);
+		
+		if (result != 0) {
+			return 2;
+		}
+
+		ifstream file(filename.c_str(), ios::in);
+		string contents;
+		
+		if (!file) {
+			return 3;
+		}
+	  
+		file.seekg(0, ios::end);
+		contents.resize(file.tellg());
+		file.seekg(0, ios::beg);
+		file.read(&contents[0], contents.size());
+		file.close();
+			
+		if (contents == "{\"error\":\"timeout\"}") {
+			return 4;
+		}
+		
+		vector<string> to_find;
+		to_find.push_back("\"gstate\":");
+		to_find.push_back("\"numplayers\":");
+		to_find.push_back("\"gametype\":");
+		to_find.push_back("\"mapname\":");
+		vector<string> output;
+		cout << "[";
+		
+		for (int i=0; i<to_find.size(); i++) {
+			string value = "";
+			size_t start = contents.find(to_find[i]);
+			
+			if (start != string::npos) {
+				start     += to_find[i].length();
+				size_t end = contents.find(",", start);
+				
+				if (end != string::npos)
+					value = contents.substr(start, end-start);
+			}
+			
+			if (i != 0)
+				cout << ",";
+			
+			if (i==0 || i==1)
+				value = ReplaceAll(value, "\"", "");
+				
+			cout << value;
+		}
+		
+		string to_find2 = "\"player\":";
+		string players  = "";
+		size_t start    = contents.find(to_find2);
+		
+		while (start != string::npos) {
+			start     += to_find2.length();
+			size_t end = contents.find(",", start);
+				
+			if (end != string::npos) {				
+				if (!players.empty())
+					players += "\\n";
+					
+				players += contents.substr(start, end-start);
+			}
+			
+			start = contents.find(to_find2, start+1);
+		}
+		
+		cout << ",\"" << ReplaceAll(players, "\"", "") << "\"]";
+		remove(filename.c_str());
+		return 0;
+	}
 
 
 

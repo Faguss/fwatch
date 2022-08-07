@@ -414,8 +414,9 @@ FUNCTION_SERVERS_TO_LISTBOX = {
 		}
 	};
 	
-	private ["_entry"];
-	_entry = lbAdd [6657, _all_serverNames select _i]; 
+	private ["_entry", "_index"];
+	_index = [_all_serverID select _i, GS_SERVER_STATUS select 0] call FUNCTION_FIND;
+	_entry = lbAdd [6657, Format ["%1%2", (if (_index>=0) then {Format ["(%1) ",((GS_SERVER_STATUS select 1) select _index) select 1]} else {""}), _all_serverNames select _i]]; 
 	lbSetData  [6657, _entry, Format ["%1",_i]];
 	lbSetValue [6657, _entry, 201]; 
 	
@@ -842,7 +843,9 @@ FUNCTION_STRINGTABLE = {
 			"zbiуrmisji",		//102
 			"narzкdzia",			//103
 			"Opcje pod prawym przyciskiem lub spacj№",		//104
-			"[Dodaj do kolejki]"	//105
+			"[Dodaj do kolejki]",	//105
+			"Brak poі№czenia",	//106
+			"Status pod prawym przyciskiem lub spacj№"		//107
 		];
 	};
 	
@@ -953,7 +956,9 @@ FUNCTION_STRINGTABLE = {
 			"миссии",		//102
 			"инструменты",			//103
 			"щелкните правой кнопкой или пробел для параметров",		//104
-			"[Добавить в Очередь]"	//105
+			"[Добавить в Очередь]",	//105
+			"Offline",	//106
+			"Right-click or space for status"	//107
 		];
 	};
 	
@@ -1064,15 +1069,17 @@ FUNCTION_STRINGTABLE = {
 			"missionpack",		//102
 			"tools",			//103
 			"Right-click or space for options",		//104
-			"[Add to Queue]"	//105
+			"[Add to Queue]",	//105
+			"Offline",	//106
+			"Right-click or space for status"	//107
 		];
 	};
 	
 	MAINMENU_STR_MODCAT = [
 		["replacement","rozszerzenie","замена"],
-		["addonpack","zbiуraddonуw","аддоны"],
+		["addon pack","zbiуr addonуw","аддоны"],
 		["supplement","uzupeіnienie","дополнение"],
-		["missionpack","zbiуrmisji","миссии"],
+		["mission pack","zbiуr misji","миссии"],
 		["tools","narzкdzia","инструменты"]
 	];
 };
@@ -1220,4 +1227,16 @@ FUNCTION_DISPLAY_LOGO = {
 			loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1  key:%2write:_extension="""";_logohash="""";", _database, _record_id];
 		}
 	}
+};
+
+
+
+FUNCTION_GET_SERVER_STATUS_NAME = {
+	private ["_output"];
+	_output = MAINMENU_STR select 106;
+	{
+		if (_this in (_x select 0)) then {_output=localize (_x select 1)}
+	} forEach
+	[[[1,2,3],"STR_SESSION_CREATE"], [[4],"STR_SESSION_EDIT"], [[6],"STR_SESSION_WAIT"], [[7,8,11,12],"STR_SESSION_SETUP"], [[9,10],"STR_SESSION_DEBRIEFING"], [[13],"STR_SESSION_BRIEFING"], [[14],"STR_SESSION_PLAY"]];
+	_output
 };
