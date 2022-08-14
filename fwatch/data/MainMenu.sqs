@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2022,8,7,0,21,51,11,286,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2022,8,14,0,12,44,8,290,120,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 	? Format ["%1", count GS_SERVER_STATUS] == "scalar" : GS_SERVER_STATUS=[[],[]]; GS_SERVER_STATUS_DATE=+GS_FWATCH_MY_VERSION; GS_SERVER_STATUS_THREADS=0
@@ -117,6 +117,7 @@
 	_color_gingerbrown   = [201/255, 190/255, 98/255 , 1]
 	_color_yellowgreen   = [82/255 , 208/255, 23/255 , 1]
 	_color_sand          = [194/255, 178/255, 128/255, 1]
+	_color_cottoncandy   = [252/255, 223/255, 255/255, 1]
 	_serv_status_threads = GS_SERVER_STATUS_THREADS
 	
 	if (!_m_moved && (_mx<_x || _mx>_w || _my<_y || _my>_h)) then {loadFile Format [":mem setcursor %1 %2", _w, _y]; _m_moved=nil}
@@ -773,11 +774,10 @@
 				_server_logo	   = ""
 				_server_uniqueid   = ""
 				_server_ip		   = ""
-				_server_game_times = []
 
 				; Read server code string from the array
 				_fileIntegrity = call _code_string
-				? Format ["%1",_fileIntegrity] != "true" || _server_uniqueid=="" || _server_ip=="" || count _server_game_times == 0 : goto "NextServerString"
+				? Format ["%1",_fileIntegrity] != "true" || _server_uniqueid=="" || _server_ip=="" : goto "NextServerString"
 
 				; Add server to the global list
 				? _server_uniqueid in _all_serverID : goto "NextServerString"
@@ -833,6 +833,7 @@
 	(MAINMENU_STR select 23) call FUNCTION_MSG_LB
 	_i = 0
 	_closest_game_times = []
+	_persistent_servers = []
 	FUNCTION_GET_CLOSEST_GAME_TIME forEach _all_servers
 
 	_all_servers     = _all_servers     - ["<null>"]
@@ -857,8 +858,11 @@
 	_nowLabel      = false
 	_todayLabel    = false
 	_upcomingLabel = false
-
 	FUNCTION_SERVERS_TO_LISTBOX forEach _all_serverID
+	
+	? count _persistent_servers > 0 : lbSetColor [6657, lbAdd [6657, "=="+(MAINMENU_STR select 108)+"=="], _color_cottoncandy]
+	{private ["_entry", "_index", "_index_status"]; _index=[_x, _all_serverID] call FUNCTION_FIND; _index_status=[_all_serverID select _index, GS_SERVER_STATUS select 0] call FUNCTION_FIND; _entry=lbAdd [6657, Format ["%1%2", (if (_index_status>=0) then {Format ["(%1) ",((GS_SERVER_STATUS select 1) select _index_status) select 1]} else {""}), _all_serverNames select _index]]; lbSetData  [6657, _entry, Format ["%1",_index]]; lbSetValue [6657, _entry, 201]} forEach _persistent_servers
+	
 	[MAINMENU_STR select 25, 215, _color_gingerbrown] call FUNCTION_LBADD
 	ctrlSetText [6450, (if (GS_SERVER_STATUS_THREADS==0) then {MAINMENU_STR select 2} else {Format ["%1 - %2", MAINMENU_STR select 2, localize "STR_LOAD_WORLD"]})]
 	? _lastCur>=0 : lbSetCurSel [6657, _lastCur]; _lastCur=-1
@@ -940,6 +944,7 @@
 	_gameTimeFormatted = []
 	_gameTimeDates     = []
 
+	? count _server_game_times == 0 : ctrlShow [6500, false]
 	_server_game_times call FUNCTION_FORMAT_GAME_TIME
 
 	_server_status_name = MAINMENU_STR select 106

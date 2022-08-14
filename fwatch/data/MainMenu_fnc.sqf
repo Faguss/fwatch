@@ -361,32 +361,37 @@ FUNCTION_FIND_URL = {
 
 FUNCTION_GET_CLOSEST_GAME_TIME = {
 	_server_uniqueid   = "";
-	_server_game_times = []; 
+	_server_game_times = [];
 	
 	call _x; 
 	
-	_playingNow        = false; 
-	_gameTimeDistance  = []; 
-	_gameTimeFormatted = []; 
+	if (count _server_game_times > 0) then {
+		_playingNow        = false; 
+		_gameTimeDistance  = []; 
+		_gameTimeFormatted = []; 
 
-	_server_game_times call FUNCTION_FORMAT_GAME_TIME;
+		_server_game_times call FUNCTION_FORMAT_GAME_TIME;
 
-	// If there are valid game times then add first one to the list of closest games
-	if (count _gameTimeDistance > 0) then {
-		_closest_game_times set [
-			count _closest_game_times, 
-			(if (_playingNow) then {0} else {_gameTimeDistance select 0})
-		]
+		// If there are valid game times then add first one to the list of closest games
+		if (count _gameTimeDistance > 0) then {
+			_closest_game_times set [
+				count _closest_game_times, 
+				(if (_playingNow) then {0} else {_gameTimeDistance select 0})
+			]
+		} else {
+			// If all game times have elapsed then remove server from the list
+			_all_servers set [_i, "<null>"];
+			//_all_servers = _all_servers - ["<null>"];
+			
+			_all_serverNames set [_i, "<null>"];
+			//_all_serverNames = _all_serverNames - ["<null>"]
+			
+			_all_serverID set [_i, "<null>"];
+			_all_serverURL set [_i, "<null>"];
+		};
 	} else {
-		// If all game times have elapsed then remove server from the list
-		_all_servers set [_i, "<null>"];
-		//_all_servers = _all_servers - ["<null>"];
-		
-		_all_serverNames set [_i, "<null>"];
-		//_all_serverNames = _all_serverNames - ["<null>"]
-		
-		_all_serverID set [_i, "<null>"];
-		_all_serverURL set [_i, "<null>"];
+		_closest_game_times set [count _closest_game_times, -1];
+		_persistent_servers set [count _persistent_servers, _server_uniqueid]
 	};
 	
 	_i = _i + 1
@@ -395,30 +400,32 @@ FUNCTION_GET_CLOSEST_GAME_TIME = {
 
 
 FUNCTION_SERVERS_TO_LISTBOX = {
-	if ((_closest_game_times select _i) == 0) then {
-		if (!_nowLabel) then {
-			_nowLabel = true;
-			lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 59], _color_fireenginered]
-		}
-	} else {
-		if (_x in _today_game_servers) then {
-			if (!_todayLabel) then {
-				_todayLabel = true;
-				lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 60], _color_sandybrown]
+	if ((_closest_game_times select _i) != -1) then {	//if not a persistent server
+		if ((_closest_game_times select _i) == 0) then {
+			if (!_nowLabel) then {
+				_nowLabel = true;
+				lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 59], _color_fireenginered]
 			}
 		} else {
-			if (!_upcomingLabel) then {
-				_upcomingLabel = true;
-				lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 61], _color_sand]
+			if (_x in _today_game_servers) then {
+				if (!_todayLabel) then {
+					_todayLabel = true;
+					lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 60], _color_sandybrown]
+				}
+			} else {
+				if (!_upcomingLabel) then {
+					_upcomingLabel = true;
+					lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 61], _color_sand]
+				}
 			}
-		}
+		};
+		
+		private ["_entry", "_index"];
+		_index = [_all_serverID select _i, GS_SERVER_STATUS select 0] call FUNCTION_FIND;
+		_entry = lbAdd [6657, Format ["%1%2", (if (_index>=0) then {Format ["(%1) ",((GS_SERVER_STATUS select 1) select _index) select 1]} else {""}), _all_serverNames select _i]]; 
+		lbSetData  [6657, _entry, Format ["%1",_i]];
+		lbSetValue [6657, _entry, 201]; 
 	};
-	
-	private ["_entry", "_index"];
-	_index = [_all_serverID select _i, GS_SERVER_STATUS select 0] call FUNCTION_FIND;
-	_entry = lbAdd [6657, Format ["%1%2", (if (_index>=0) then {Format ["(%1) ",((GS_SERVER_STATUS select 1) select _index) select 1]} else {""}), _all_serverNames select _i]]; 
-	lbSetData  [6657, _entry, Format ["%1",_i]];
-	lbSetValue [6657, _entry, 201]; 
 	
 	// After installation display that server options
 	if (_x == _jump_to_server) then {
@@ -845,7 +852,8 @@ FUNCTION_STRINGTABLE = {
 			"Opcje pod prawym przyciskiem lub spacj¹",		//104
 			"[Dodaj do kolejki]",	//105
 			"Brak po³¹czenia",	//106
-			"Status pod prawym przyciskiem lub spacj¹"		//107
+			"Status pod prawym przyciskiem lub spacj¹",		//107
+			"Ciagle",	// 108
 		];
 	};
 	
@@ -958,7 +966,8 @@ FUNCTION_STRINGTABLE = {
 			"ùåëêíèòå ïðàâîé êíîïêîé èëè ïðîáåë äëÿ ïàðàìåòðîâ",		//104
 			"[Äîáàâèòü â Î÷åðåäü]",	//105
 			"Offline",	//106
-			"Right-click or space for status"	//107
+			"Right-click or space for status",	//107
+			"Persistent"	//108
 		];
 	};
 	
@@ -1071,7 +1080,8 @@ FUNCTION_STRINGTABLE = {
 			"Right-click or space for options",		//104
 			"[Add to Queue]",	//105
 			"Offline",	//106
-			"Right-click or space for status"	//107
+			"Right-click or space for status",	//107
+			"Persistent"	//108
 		];
 	};
 	
@@ -1234,9 +1244,24 @@ FUNCTION_DISPLAY_LOGO = {
 FUNCTION_GET_SERVER_STATUS_NAME = {
 	private ["_output"];
 	_output = MAINMENU_STR select 106;
-	{
-		if (_this in (_x select 0)) then {_output=localize (_x select 1)}
-	} forEach
-	[[[1,2,3],"STR_SESSION_CREATE"], [[4],"STR_SESSION_EDIT"], [[6],"STR_SESSION_WAIT"], [[7,8,11,12],"STR_SESSION_SETUP"], [[9,10],"STR_SESSION_DEBRIEFING"], [[13],"STR_SESSION_BRIEFING"], [[14],"STR_SESSION_PLAY"]];
+	if (_this >= 1 && _this <= 14) then {
+		_output = localize ([
+			"",
+			"STR_SESSION_CREATE",
+			"STR_SESSION_CREATE",
+			"STR_SESSION_CREATE",
+			"STR_SESSION_EDIT",
+			"STR_SESSION_WAIT",
+			"STR_SESSION_WAIT",
+			"STR_SESSION_SETUP",
+			"STR_SESSION_SETUP",
+			"STR_SESSION_DEBRIEFING",
+			"STR_SESSION_DEBRIEFING",
+			"STR_SESSION_SETUP",
+			"STR_SESSION_SETUP",
+			"STR_SESSION_BRIEFING",
+			"STR_SESSION_PLAY"
+		] select _this);
+	};
 	_output
 };
