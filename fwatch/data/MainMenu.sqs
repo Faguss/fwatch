@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2022,8,14,0,12,44,8,290,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2022,8,18,4,2,44,24,897,120,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 	? Format ["%1", count GS_SERVER_STATUS] == "scalar" : GS_SERVER_STATUS=[[],[]]; GS_SERVER_STATUS_DATE=+GS_FWATCH_MY_VERSION; GS_SERVER_STATUS_THREADS=0
@@ -150,7 +150,7 @@
 		
 		? _value in [2,3] : [(if (_data!="") then {[_data,_all_modsID] call FUNCTION_FIND} else {-1}), "local"] call FUNCTION_SHOW_MOD_INFO
 		? _value == 6     : [(call _data), "global"] call FUNCTION_SHOW_MOD_INFO
-		? _value == 201   : goto "DisplayServer"
+		? _value == 201   : if (ctrlVisible 6463) then {goto "DisplayServerStatus"} else {goto "DisplayServer"}
 		? _value == 211   : goto "DisplayGameRestart"
 		#SkipSelectionCheck
 	
@@ -180,7 +180,7 @@
 		? _LMBtime==0 &&  _LMB                : _LMBtime=_time
 	
 	? _install_status >= 0 : if (_time+0.1>_install_timing) then {_install_timing=_time; goto "InstallWait"}
-	? _serv_status_threads != GS_SERVER_STATUS_THREADS : _serv_status_threads=GS_SERVER_STATUS_THREADS; goto "FillListbox"
+	? _serv_status_threads != GS_SERVER_STATUS_THREADS : _serv_status_threads=GS_SERVER_STATUS_THREADS; ctrlSetText [6450, (if (GS_SERVER_STATUS_THREADS==0) then {MAINMENU_STR select 2} else {localize "STR_LOAD_WORLD"})]; _index=lbValue [6657, (lbSize 6657)-1]; if (!(_index in [207,212])) then {goto "FillListbox"}
 	goto "MainLoop"
 
 
@@ -841,7 +841,7 @@
 	_all_serverID    = _all_serverID    - ["<null>"]
 	_all_serverURL   = _all_serverURL   - ["<null>"]
 
-	? GS_SERVER_STATUS_THREADS == 0 : _now=call loadFile ":info date"; _diff=[_now,GS_SERVER_STATUS_DATE] call FLIB_DATEDIFF; if ((_diff select 0)>0 || (_diff select 1)>0 || (_diff select 2)>0 || (_diff select 3)>0 || (_diff select 4)>0) then {GS_SERVER_STATUS_DATE=_now; loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverstatusdatewrite:GS_SERVER_STATUS_DATE=%1;", GS_SERVER_STATUS_DATE]; _i=0; GS_SERVER_STATUS_THREADS=count _all_serverID; _serv_status_threads=count _all_serverID; {_server_ip=""; _server_port=""; _server_encrypted=true; call (_all_servers select _i); ["queryserver", _server_uniqueid, _server_ip, _server_port, _server_encrypted] exec "..\fwatch\data\MainMenu.sqs"; _i=_i+1} forEach _all_serverID; ctrlSetText [6450, Format ["%1 - %2", MAINMENU_STR select 2, localize "STR_LOAD_WORLD"]]}
+	? GS_SERVER_STATUS_THREADS == 0 : _now=call loadFile ":info date"; _diff=[_now,GS_SERVER_STATUS_DATE] call FLIB_DATEDIFF; if ((_diff select 0)>0 || (_diff select 1)>0 || (_diff select 2)>0 || (_diff select 3)>0 || (_diff select 4)>0) then {GS_SERVER_STATUS_DATE=_now; loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverstatusdatewrite:GS_SERVER_STATUS_DATE=%1;", GS_SERVER_STATUS_DATE]; _i=0; GS_SERVER_STATUS_THREADS=count _all_serverID; _serv_status_threads=count _all_serverID; {_server_ip=""; _server_port=""; _server_encrypted=true; call (_all_servers select _i); ["queryserver", _server_uniqueid, _server_ip, _server_port, _server_encrypted] exec "..\fwatch\data\MainMenu.sqs"; _i=_i+1} forEach _all_serverID; ctrlSetText [6450, localize "STR_LOAD_WORLD"]}
 	[_closest_game_times, _all_servers, _all_serverNames, _all_serverID] call FUNCTION_QUICKSORTM
 
 
@@ -864,7 +864,6 @@
 	{private ["_entry", "_index", "_index_status"]; _index=[_x, _all_serverID] call FUNCTION_FIND; _index_status=[_all_serverID select _index, GS_SERVER_STATUS select 0] call FUNCTION_FIND; _entry=lbAdd [6657, Format ["%1%2", (if (_index_status>=0) then {Format ["(%1) ",((GS_SERVER_STATUS select 1) select _index_status) select 1]} else {""}), _all_serverNames select _index]]; lbSetData  [6657, _entry, Format ["%1",_index]]; lbSetValue [6657, _entry, 201]} forEach _persistent_servers
 	
 	[MAINMENU_STR select 25, 215, _color_gingerbrown] call FUNCTION_LBADD
-	ctrlSetText [6450, (if (GS_SERVER_STATUS_THREADS==0) then {MAINMENU_STR select 2} else {Format ["%1 - %2", MAINMENU_STR select 2, localize "STR_LOAD_WORLD"]})]
 	? _lastCur>=0 : lbSetCurSel [6657, _lastCur]; _lastCur=-1
 	goto "ResetLMB"
 
@@ -971,10 +970,12 @@
 
 	; Display detailed information about a server
 	#DisplayServerStatus
-	_index = [_server_uniqueid, GS_SERVER_STATUS select 0] call FUNCTION_FIND
-	? _index < 0 : goto "ResetLMB"
+	_server_uniqueid = ""
+	call (_all_servers select (call _data))
 	"ctrlShow [_x,false]" forEach _serverDialog
 	"ctrlShow [_x,true ]" forEach [6460, 6463, 6464]
+	_index = [_server_uniqueid, GS_SERVER_STATUS select 0] call FUNCTION_FIND
+	? _index < 0 : ctrlSetText [6463, Format ["%1: %2", localize "STR_STATUS", MAINMENU_STR select 106]]; goto "ResetLMB"
 	ctrlSetText [6463, Format ["%1: %2\n%3 %4\n%5 %6\n%7 %8\n%9", localize "STR_STATUS", (((GS_SERVER_STATUS select 1) select _index) select 0) call FUNCTION_GET_SERVER_STATUS_NAME, localize "STR_DISP_SERVER_MISSION", (((GS_SERVER_STATUS select 1) select _index) select 2), localize "STR_DISP_SERVER_ISLAND", (((GS_SERVER_STATUS select 1) select _index) select 3), localize "STR_DISP_MP_PLAYERS", (((GS_SERVER_STATUS select 1) select _index) select 1), (((GS_SERVER_STATUS select 1) select _index) select 4)]]
 	goto "ResetLMB"
 

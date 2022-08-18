@@ -853,7 +853,7 @@ FUNCTION_STRINGTABLE = {
 			"[Dodaj do kolejki]",	//105
 			"Brak po³¹czenia",	//106
 			"Status pod prawym przyciskiem lub spacj¹",		//107
-			"Ciagle",	// 108
+			"Sta³e",	// 108
 		];
 	};
 	
