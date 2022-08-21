@@ -745,118 +745,118 @@ FUNCTION_STRINGTABLE = {
 	
 	if (CURRENT_LANGUAGE == "Polish") then {
 		MAINMENU_STR = [
-			"Interfejs niedostêpny. SprawdŸ swój bin\resource.cpp.",	//0
-			"Plik bin\resource.cpp jest przestarza³y. Œci¹gnij now¹ wersjê OFP Aspect Ratio",	//1
-			"ROZK£AD ROZGRYWEK",	//2
-			"SERWER PRZEGL¥DARKI GIER",	//3
+			"Interfejs niedostêpny. SprawdŸ swój bin\resource.cpp.",		//0
+			"Plik bin\resource.cpp jest przestarza³y. Œci¹gnij now¹ wersjê OFP Aspect Ratio",		//1
+			"ROZK£AD ROZGRYWEK",		//2
+			"SERWER PRZEGL¥DARKI GIER",		//3
 			"Jest ju¿ w³¹czony!",		//4
-			"Napisz has³a do prywatnych serwerów",	//5
+			"Napisz has³a do prywatnych serwerów",		//5
 			"[Uruchom bez modów]",		//6
-			"[Dodaj nowy]",				//7
-			"Nie ma nic do zapisania!",	//8
-			"Jest ju¿ na liœcie!", //9
-			"[Proszê czekaæ]",	//10
-			"[Œci¹gnij %1]",	//11
-			"[Otwórz zaproszenie na %1]",	//12
-			"Nie uda³o siê utworzyæ fwatch\tmp\schedule\n%1\n\nUruchom grê jako administrator",	//13
-			"[Sprawdzanie aktualizacji]",	//14
-			"Nie uda³o siê pobraæ",			//15
-			"[Pobieranie planu]",	//16
-			"[Przetwarzanie danych]",	//17
+			"[Dodaj nowy]",		//7
+			"Nie ma nic do zapisania!",		//8
+			"Jest ju¿ na liœcie!",		//9
+			"[Proszê czekaæ]",		//10
+			"[Œci¹gnij %1]",		//11
+			"[Otwórz zaproszenie na %1]",		//12
+			"Nie uda³o siê utworzyæ fwatch\tmp\schedule\n%1\n\nUruchom grê jako administrator",		//13
+			"[Sprawdzanie aktualizacji]",		//14
+			"Nie uda³o siê pobraæ",		//15
+			"[Pobieranie planu]",		//16
+			"[Przetwarzanie danych]",		//17
 			"Niepoprawne dane",		//18
 			"[Brak serwerów]",		//19
-			"Niepoprawna wersja planu",	//20
-			"[Œci¹ganie loga %1]",	//21
-			"Nie uda³o siê pobraæ loga\n%1",	//22
-			"[Uk³adanie serwerów]",	//23
-			"[Odwo³aj zaplanowane pod³¹czenie]",	//24
-			"[Poka¿ prywatne gry]",	//25
-			"[Do³¹cz o czasie]",	//26
-			"[Do³¹cz]",	//27
-			"[Œci¹gnij wymagane mody %1]",	//28
+			"Niepoprawna wersja planu",		//20
+			"[Œci¹ganie loga %1]",		//21
+			"Nie uda³o siê pobraæ loga\n%1",		//22
+			"[Uk³adanie serwerów]",		//23
+			"[Odwo³aj zaplanowane pod³¹czenie]",		//24
+			"[Poka¿ prywatne gry]",		//25
+			"[Do³¹cz o czasie]",		//26
+			"[Do³¹cz]",		//27
+			"[Œci¹gnij wymagane mody %1]",		//28
 			"[Poka¿ zmiany w modach]",		//29
 			"[WejdŸ na stronê serwera]",		//30
-			"[Dodatkowe opcje uruchamiania]",	//31
-			"[Cofnij]",	//32
-			"[Uruchom %1]",	//33
-			"[Bez]",	//34
-			"",	//35
-			"[Przerwij]",	//36
-			"Ju¿ masz folder %1. Czy wolisz:\n\n- zainstalowaæ now¹ kopiê (bezpieczna opcja; nazwa obecnego modu zostanie zmieniona)\n\nLUB\n\n- Oznaczyæ obecny mod jako wersjê %2 (szybsza opcja; dane moda bêd¹ podlegaæ aktualizacjom)",	//37
-			"[Œci¹gnij now¹ kopiê]",	//38
+			"[Dodatkowe opcje uruchamiania]",		//31
+			"[Cofnij]",		//32
+			"[Uruchom %1]",		//33
+			"[Bez]",		//34
+			"",		//35
+			"[Przerwij]",		//36
+			"Ju¿ masz folder %1. Czy wolisz:\n\n- zainstalowaæ now¹ kopiê (bezpieczna opcja; nazwa obecnego modu zostanie zmieniona)\n\nLUB\n\n- Oznaczyæ obecny mod jako wersjê %2 (szybsza opcja; dane moda bêd¹ podlegaæ aktualizacjom)",		//37
+			"[Œci¹gnij now¹ kopiê]",		//38
 			"[Oznacz aktualn¹]",		//39
-			"Nie uda³o siê uruchomiæ fwatch\data\addonInstaller.exe\n%1",	//40
-			"Nie uda³o siê utworzyæ pliku\n%1",	//41
+			"Nie uda³o siê uruchomiæ fwatch\data\addonInstaller.exe\n%1",		//40
+			"Nie uda³o siê utworzyæ pliku\n%1",		//41
 			"[Uruchom ponownie po skoñczeniu: %1]",		//42
-			"TAK",	//43
-			"NIE",	//44
-			"\n\n\nFwatch nie widzi instalatora.\nZignoruj ten komunikat jeœli widaæ postêp instalacji.\n\nW innym przypadku sprawdŸ w menedrze¿e zadañ czy jest addonInstaller.exe; przerwij instalacjê; zobacz fwatch\data\addonInstallerLog.txt",	//45
-			"Serwer wymaga dok³adnie tych samych modów wiêc argument -mod zostanie pominiêty",	//46
-			"Gra zostanie uruchomiona o\n%1\n\ni pod³aczy siê automatycznie do\n%2",	//47
-			"[Aktualizuj %1]",	//48
-			"Jest dostpêpna aktualizacja %1. Musisz uaktualniæ.\n\n\n       Nowa wersja:\n           %2\n\n       Twoja wersja:\n           %3\n\n\nDwuklik na opcjê ¿eby zacz¹æ proces. Instalator zamknie grê, œci¹gnie now¹ wersjê, zamieni dane i uruchomi grê ponownie.", //49
-			"%1 do %2",	//50
-			"Co niedzielê",		//51		
-			"Co poniedzia³ek",		//52	
-			"Co wtorek",	//53		
-			"Co œrodê",	//54	
-			"Co czwartek",	//55
+			"TAK",		//43
+			"NIE",		//44
+			"\n\n\nFwatch nie widzi instalatora.\nZignoruj ten komunikat jeœli widaæ postêp instalacji.\n\nW innym przypadku sprawdŸ w menedrze¿e zadañ czy jest addonInstaller.exe; przerwij instalacjê; zobacz fwatch\data\addonInstallerLog.txt",		//45
+			"Serwer wymaga dok³adnie tych samych modów wiêc argument -mod zostanie pominiêty",		//46
+			"Gra zostanie uruchomiona o\n%1\n\ni pod³aczy siê automatycznie do\n%2",		//47
+			"[Aktualizuj %1]",		//48
+			"Jest dostpêpna aktualizacja %1. Musisz uaktualniæ.\n\n\n       Nowa wersja:\n           %2\n\n       Twoja wersja:\n           %3\n\n\nDwuklik na opcjê ¿eby zacz¹æ proces. Instalator zamknie grê, œci¹gnie now¹ wersjê, zamieni dane i uruchomi grê ponownie.",		//49
+			"%1 do %2",		//50
+			"Co niedzielê",		//51
+			"Co poniedzia³ek",		//52
+			"Co wtorek",		//53
+			"Co œrodê",		//54
+			"Co czwartek",		//55
 			"Co pi¹tek",		//56
-			"Co sobotê",	//57	
-			"Codziennie",	//58
-			"==Teraz==",	//59
-			"==Dzisiaj==",	//60
-			"==Wkrótce==",	//61
-			"niedozwolone",	//62
-			"B£¥D:\n",	//63
-			"[Kontynuuj]",	//64
-			"Wersja:",	//65
-			"Mody:",	//66
-			"W³asne pliki:",	//67
-			"Rozk³ad:",	//68
+			"Co sobotê",		//57
+			"Codziennie",		//58
+			"==Teraz==",		//59
+			"==Dzisiaj==",		//60
+			"==Wkrótce==",		//61
+			"niedozwolone",		//62
+			"B£¥D:\n",		//63
+			"[Kontynuuj]",		//64
+			"Wersja:",		//65
+			"Mody:",		//66
+			"W³asne pliki:",		//67
+			"Rozk³ad:",		//68
 			"Rozmowy:",		//69
-			"Jêzyki:",	//70
-			"Po³o¿enie:",	//71
+			"Jêzyki:",		//70
+			"Po³o¿enie:",		//71
 			"Strona:",		//72
 			"Uwagi:",		//73
-			"Wpisz tekst:",	//74
-			"Œci¹gnij wersjê:\n           %1\n\nTwoja wersja:\n           %2",	//75
-			"Nie mo¿esz zaktualizowaæ %1 bo jest w³¹czony.\n\nCzy chcia³byœ uruchomiæ grê bez modów?",	//76
-			"Nie mo¿esz zaktualizowaæ %1 bo s¹ w³¹czone.\n\nCzy chcia³byœ uruchomiæ grê bez modów?",	//77
-			"Plan rozgrywek",	//78
-			"Serwer przegl¹darki gier",	//79		
-			"nowej wersji testowej Fwatch 1.16",	//80
+			"Wpisz tekst:",		//74
+			"Œci¹gnij wersjê:\n           %1\n\nTwoja wersja:\n           %2",		//75
+			"Nie mo¿esz zaktualizowaæ %1 bo jest w³¹czony.\n\nCzy chcia³byœ uruchomiæ grê bez modów?",		//76
+			"Nie mo¿esz zaktualizowaæ %1 bo s¹ w³¹czone.\n\nCzy chcia³byœ uruchomiæ grê bez modów?",		//77
+			"Plan rozgrywek",		//78
+			"Serwer przegl¹darki gier",		//79
+			"nowej wersji testowej Fwatch 1.16",		//80
 			"nowej wersji Resource.cpp",		//81
-			"[Œci¹gnij mody]",				//82
+			"[Œci¹gnij mody]",		//82
 			"Dostêpne aktualizacje",		//83
-			"Pobierz nowy mod",				//84
-			"[Zamknij Okno]",				//85
-			"Jest dostpêpna aktualizacja nowej wersji testowej Fwatch 1.16",				//86
+			"Pobierz nowy mod",		//84
+			"[Zamknij Okno]",		//85
+			"Jest dostpêpna aktualizacja nowej wersji testowej Fwatch 1.16",		//86
 			"Dostpêpne aktualizacje modów: %1",		//87
 			"[Do³¹cz po skoñczeniu: %1]",		//88
-			"[Poka¿ prywatne mody]",			//89
-			"Napisz has³a do prywatnych modów",	//90
+			"[Poka¿ prywatne mody]",		//89
+			"Napisz has³a do prywatnych modów",		//90
 			"[Wyszukaj]",		//91
-			"Wpisz nazwê moda lub kategorii (rozszerzenie; zbióraddonów; uzupe³nienie; zbiórmisji; narzêdzia)",	//92
-			"Typ:",			//93
+			"Wpisz nazwê moda lub kategorii (rozszerzenie; zbióraddonów; uzupe³nienie; zbiórmisji; narzêdzia)",		//92
+			"Typ:",		//93
 			"Do pobrania:",		//94
 			"Doda³:",		//95
 			"Opis:",		//96
-			"wymusza oryginaln¹ nazwê",	//97
-			"niezgodny z gr¹ sieciow¹",	//98
+			"wymusza oryginaln¹ nazwê",		//97
+			"niezgodny z gr¹ sieciow¹",		//98
 			"rozszerzenie",		//99
 			"zbiór addonów",		//100
 			"uzupe³nienie",		//101
 			"zbiórmisji",		//102
-			"narzêdzia",			//103
+			"narzêdzia",		//103
 			"Opcje pod prawym przyciskiem lub spacj¹",		//104
-			"[Dodaj do kolejki]",	//105
-			"Brak po³¹czenia",	//106
+			"[Dodaj do kolejki]",		//105
+			"Brak po³¹czenia",		//106
 			"Status pod prawym przyciskiem lub spacj¹",		//107
-			"Sta³e",	// 108
+			"Sta³e"		//108
 		];
 	};
-	
+
 	if (CURRENT_LANGUAGE == "Russian") then {
 		MAINMENU_STR = [
 			"Îøèáêà ïğè ñîçäàíèè äèàëîãîâîãî îêíà. Ïğîâåğüòå bin\resource.cpp",		//0
@@ -936,152 +936,152 @@ FUNCTION_STRINGTABLE = {
 			"Ââåäèòå òåêñò:",		//74
 			"Çàãğóæåíà âåğñèÿ:\n           %1\n\nÂàøà âåğñèÿ:\n           %2",		//75
 			"Íåâîçìîæíî îáíîâèòü %1, ïîêà îí âêëş÷åí.\n\nÏåğåçàïóñòèòü èãğó?",		//76
-			"Íåâîçìîæíî îáíîâèòü %2, ïîêà îíè âêëş÷åíû.\n\nÏåğåçàïóñòèòü èãğó?",	//77
+			"Íåâîçìîæíî îáíîâèòü %2, ïîêà îíè âêëş÷åíû.\n\nÏåğåçàïóñòèòü èãğó?",		//77
 			"Ğàñïèñàíèå Èãğ",		//78
-			"Ìàñòåğ Ñåğâåğ",	//79		
-			"íîâàÿ òåñòîâàÿ âåğñèÿ Fwatch 1.16",	//80
+			"Ìàñòåğ Ñåğâåğ",		//79
+			"íîâàÿ òåñòîâàÿ âåğñèÿ Fwatch 1.16",		//80
 			"íîâàÿ âåğñèÿ Resource.cpp",		//81
 			"[Ñêà÷àòü ìîäû]",		//82
-			"Îáíîâèòü",				//83
+			"Îáíîâèòü",		//83
 			"Äîáàâèòü Íîâûé",		//84
 			"[Çàêğûòü Îêíî]",		//85
-			"Äîñòóïíà íîâàÿ òåñòîâàÿ âåğñèÿ Fwatch 1.16",				//86
-			"Îáíîâèòü ìîäû: %1",	//87
+			"Äîñòóïíà íîâàÿ òåñòîâàÿ âåğñèÿ Fwatch 1.16",		//86
+			"Îáíîâèòü ìîäû: %1",		//87
 			"[Ïîäêëş÷èòüñÿ ïîñëå îêîí÷àíèÿ: %1]",		//88
-			"[Ïîêàçàòü ÷àñòíûå ìîäû]",			//89
-			"Ââåäèòå ïàğîëü, ÷òîáû ïğîñìîòğåòü ìîäû",	//90
+			"[Ïîêàçàòü ÷àñòíûå ìîäû]",		//89
+			"Ââåäèòå ïàğîëü, ÷òîáû ïğîñìîòğåòü ìîäû",		//90
 			"[Íàéòè]",		//91
 			"Ââåäèòå íàçâàíèå ìîäà èëè íàçâàíèå êàòåãîğèè (çàìåíà; àääîíû; äîïîëíåíèå; ìèññèè; èíñòğóìåíòû)",		//92
-			"Òèï:",			//93
+			"Òèï:",		//93
 			"Ñêà÷àòü:",		//94
 			"Äîáàâëåí:",		//95
 			"Îïèñàíèå:",		//96
-			"Îñòàâèòü îğèãèíàëíîå íàçâàíèå",	//97
-			"íåñîâìåñòèìî ñ ñåòåâîé èãğîé",	//98
+			"Îñòàâèòü îğèãèíàëíîå íàçâàíèå",		//97
+			"íåñîâìåñòèìî ñ ñåòåâîé èãğîé",		//98
 			"çàìåíà",		//99
 			"àääîíû",		//100
 			"äîïîëíåíèå",		//101
 			"ìèññèè",		//102
-			"èíñòğóìåíòû",			//103
-			"ùåëêíèòå ïğàâîé êíîïêîé èëè ïğîáåë äëÿ ïàğàìåòğîâ",		//104
-			"[Äîáàâèòü â Î÷åğåäü]",	//105
-			"Offline",	//106
-			"Right-click or space for status",	//107
-			"Persistent"	//108
+			"èíñòğóìåíòû",		//103
+			"Ïğàâîé êíîïêîé èëè ïğîáåë äëÿ ïàğàìåòğîâ",		//104
+			"[Äîáàâèòü â Î÷åğåäü]",		//105
+			"Íå â ñåòè",		//106
+			"Ïğàâîé êíîïêîé èëè ïğîáåë äëÿ ñòàòóñà",		//107
+			"Ïîñòîÿííûå"		//108
 		];
 	};
-	
+
 	if (Format["%1", count MAINMENU_STR] == "scalar") then {
 		MAINMENU_STR = [
-			"Failed to create dialog. Verify your bin\resource.cpp.",	//0
-			"File bin\resource.cpp is outdated. Download new OFP Aspect Ratio pack version",	//1
-			"GAME SCHEDULE",	//2
-			"MASTER SERVER",	//3
+			"Failed to create dialog. Verify your bin\resource.cpp.",		//0
+			"File bin\resource.cpp is outdated. Download new OFP Aspect Ratio pack version",		//1
+			"GAME SCHEDULE",		//2
+			"MASTER SERVER",		//3
 			"This is the current one!",		//4
-			"Type in password(s) to show private game(s)",	//5
+			"Type in password(s) to show private game(s)",		//5
 			"[Start Without Mods]",		//6
-			"[Add New]",				//7
-			"There's nothing to save!",	//8
-			"It's already on the list!", //9
-			"[Please wait]",	//10
-			"[Download %1]",	//11
-			"[Open %1 Invite]",	//12
-			"Failed to create directory fwatch\tmp\schedule\n%1\n\nSet the game to run as admin",	//13
-			"[Checking for updates]",	//14
-			"Download Failed",			//15
-			"[Downloading schedule]",	//16
-			"[Reading data]",	//17
+			"[Add New]",		//7
+			"There's nothing to save!",		//8
+			"It's already on the list!",		//9
+			"[Please wait]",		//10
+			"[Download %1]",		//11
+			"[Open %1 Invite]",		//12
+			"Failed to create directory fwatch\tmp\schedule\n%1\n\nSet the game to run as admin",		//13
+			"[Checking for updates]",		//14
+			"Download Failed",		//15
+			"[Downloading schedule]",		//16
+			"[Reading data]",		//17
 			"Invalid Data",		//18
 			"[No servers]",		//19
-			"Incorrect schedule version",	//20
-			"[Downloading logo %1]",	//21
-			"Failed to download logo\n%1",	//22
-			"[Sorting game times]",	//23
-			"[Cancel Auto Connect]",	//24
-			"[Show Private Servers]",	//25
-			"[Auto-Connect on Time]",	//26
-			"[Connect]",	//27
-			"[Download Mods %1]",	//28
+			"Incorrect schedule version",		//20
+			"[Downloading logo %1]",		//21
+			"Failed to download logo\n%1",		//22
+			"[Sorting game times]",		//23
+			"[Cancel Auto Connect]",		//24
+			"[Show Private Servers]",		//25
+			"[Auto-Connect on Time]",		//26
+			"[Connect]",		//27
+			"[Download Mods %1]",		//28
 			"[View Changelog]",		//29
 			"[Visit Website]",		//30
-			"[Extra Startup Parameters]",	//31
-			"[Back]",	//32
-			"[With %1]",	//33
-			"[Without]",	//34
-			"",	//35
-			"[Abort]",	//36
-			"You already have %1 modfolder. Would you like to:\n\n- Install a new copy (safer option; current one will be renamed)\n\nOR\n\n- Tag the existing one as version %2 (faster option; mod will be a subject to future modifications)",	//37
-			"[Download New]",	//38
+			"[Extra Startup Parameters]",		//31
+			"[Back]",		//32
+			"[With %1]",		//33
+			"[Without]",		//34
+			"",		//35
+			"[Abort]",		//36
+			"You already have %1 modfolder. Would you like to:\n\n- Install a new copy (safer option; current one will be renamed)\n\nOR\n\n- Tag the existing one as version %2 (faster option; mod will be a subject to future modifications)",		//37
+			"[Download New]",		//38
 			"[Assign ID]",		//39
-			"Failed to launch fwatch\data\addonInstaller.exe\n%1",	//40
-			"Failed to generate a file\n%1",	//41
+			"Failed to launch fwatch\data\addonInstaller.exe\n%1",		//40
+			"Failed to generate a file\n%1",		//41
 			"[Restart when done: %1]",		//42
-			"ON",	//43
-			"OFF",	//44
-			"\n\n\nFwatch can't detect installator.\nIf the progress is still going then ignore this message.\n\nOtherwise open Task Manager and check if addonInstaller.exe is running; abort installation; see addonInstallerLog.txt",	//45
-			"Server requires exact mods so the -mod parameter will be ignored",	//46
-			"Game will be restarted at\n%1\n\nin order to connect to\n%2",	//47
-			"[Update %1]",	//48
-			"There is a %1 available. You must update in order to continue.\n\n\n       New version:\n           %2\n\n       Your version:\n           %3\n\n\nDouble-click on the option to start the process. Update program will close the game, download the patch, replace files and then start the game again.", //49
-			"%1 to %2",	//50
-			"Every Sunday",		//51		
-			"Every Monday",		//52	
-			"Every Tuesday",	//53		
-			"Every Wednesday",	//54	
-			"Every Thursday",	//55
+			"ON",		//43
+			"OFF",		//44
+			"\n\n\nFwatch can't detect installator.\nIf the progress is still going then ignore this message.\n\nOtherwise open Task Manager and check if addonInstaller.exe is running; abort installation; see addonInstallerLog.txt",		//45
+			"Server requires exact mods so the -mod parameter will be ignored",		//46
+			"Game will be restarted at\n%1\n\nin order to connect to\n%2",		//47
+			"[Update %1]",		//48
+			"There is a %1 available. You must update in order to continue.\n\n\n       New version:\n           %2\n\n       Your version:\n           %3\n\n\nDouble-click on the option to start the process. Update program will close the game, download the patch, replace files and then start the game again.",		//49
+			"%1 to %2",		//50
+			"Every Sunday",		//51
+			"Every Monday",		//52
+			"Every Tuesday",		//53
+			"Every Wednesday",		//54
+			"Every Thursday",		//55
 			"Every Friday",		//56
-			"Every Saturday",	//57	
-			"Daily",	//58
-			"==Now==",	//59
-			"==Today==",	//60
-			"==Upcoming==",	//61
-			"none allowed",	//62
-			"ERROR:\n",	//63
-			"[Continue]",	//64
-			"Version:",	//65
-			"Modfolders:",	//66
-			"Custom File:",	//67
-			"Game time:",	//68
+			"Every Saturday",		//57
+			"Daily",		//58
+			"==Now==",		//59
+			"==Today==",		//60
+			"==Upcoming==",		//61
+			"none allowed",		//62
+			"ERROR:\n",		//63
+			"[Continue]",		//64
+			"Version:",		//65
+			"Modfolders:",		//66
+			"Custom File:",		//67
+			"Game time:",		//68
 			"VOIP:",		//69
-			"Languages:",	//70
-			"Location:",	//71
+			"Languages:",		//70
+			"Location:",		//71
 			"Website:",		//72
 			"Message:",		//73
-			"Enter Text:",	//74
-			"Downloaded version:\n           %1\n\nYour version:\n           %2",	//75
-			"You cannot update %1 while you have it loaded.\n\nWould you like to restart the game?",	//76
-			"You cannot update %1 while you have them loaded.\n\nWould you like to restart the game?",	//77
-			"Game Schedule",	//78
-			"Master Server",	//79		
-			"new test version of Fwatch 1.16",	//80
+			"Enter Text:",		//74
+			"Downloaded version:\n           %1\n\nYour version:\n           %2",		//75
+			"You cannot update %1 while you have it loaded.\n\nWould you like to restart the game?",		//76
+			"You cannot update %1 while you have them loaded.\n\nWould you like to restart the game?",		//77
+			"Game Schedule",		//78
+			"Master Server",		//79
+			"new test version of Fwatch 1.16",		//80
 			"new Resource.cpp version",		//81
-			"[Download Mods]",				//82
-			"Available Updates",			//83
-			"Install New",					//84
-			"[Close Window]",				//85
-			"There is a new test version of Fwatch 1.16 available",				//86
-			"Available mod updates: %1",	//87
+			"[Download Mods]",		//82
+			"Available Updates",		//83
+			"Install New",		//84
+			"[Close Window]",		//85
+			"There is a new test version of Fwatch 1.16 available",		//86
+			"Available mod updates: %1",		//87
 			"[Connect when done: %1]",		//88
-			"[Show Private Mods]",			//89
-			"Type in password(s) to show private mod(s)",	//90
+			"[Show Private Mods]",		//89
+			"Type in password(s) to show private mod(s)",		//90
 			"[Search]",		//91
 			"Type mod or category name (replacement; addonpack; supplement; missionpack; tools)",		//92
-			"Type:",			//93
+			"Type:",		//93
 			"Download:",		//94
 			"Added by:",		//95
 			"Description:",		//96
-			"force original name",	//97
-			"multiplayer incompatible",	//98
+			"force original name",		//97
+			"multiplayer incompatible",		//98
 			"replacement",		//99
 			"addonpack",		//100
 			"supplement",		//101
 			"missionpack",		//102
-			"tools",			//103
+			"tools",		//103
 			"Right-click or space for options",		//104
-			"[Add to Queue]",	//105
-			"Offline",	//106
-			"Right-click or space for status",	//107
-			"Persistent"	//108
+			"[Add to Queue]",		//105
+			"Offline",		//106
+			"Right-click or space for status",		//107
+			"Persistent"		//108
 		];
 	};
 	
