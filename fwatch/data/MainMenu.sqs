@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2022,8,21,0,20,20,45,906,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2022,9,17,6,1,19,18,323,120,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 	? Format ["%1", count GS_SERVER_STATUS] == "scalar" : GS_SERVER_STATUS=[[],[]]; GS_SERVER_STATUS_DATE=+GS_FWATCH_MY_VERSION; GS_SERVER_STATUS_THREADS=0
@@ -759,6 +759,16 @@
 			_all_serverID    = _all_serverID    - ["<null>"]
 			_all_serverURL   = _all_serverURL   - [_i]
 			
+			; Remove previous mods under this url
+			_j=0; {if (_i==(_all_modsURL select _j)) then {_all_modsID set [_j, "<null>"]; _all_modsNAME set [_j, "<null>"]; _all_modsFORCENAME set [_j, "<null>"]; _all_modsSIZE set [_j, "<null>"]; _all_modsSIZEARRAY set [_j, "<null>"]; _all_modsVER set [_j, "<null>"]}; _j=_j+1} forEach _all_modsURL
+			_all_modsID        = _all_modsID        - ["<null>"]
+			_all_modsNAME      = _all_modsNAME      - ["<null>"]
+			_all_modsFORCENAME = _all_modsFORCENAME - ["<null>"]
+			_all_modsSIZE      = _all_modsSIZE      - ["<null>"]
+			_all_modsSIZEARRAY = _all_modsSIZEARRAY - ["<null>"]
+			_all_modsVER       = _all_modsVER       - ["<null>"]
+			_all_modsURL       = _all_modsURL       - [_i]
+			
 			; Add urls from the downloaded file to the global list
 			"if ([_x,_all_url] call FUNCTION_FIND_URL<0) then {_all_url set [count _all_url, _x]}" forEach GS_OTHER_URL
 			
@@ -800,14 +810,14 @@
 			_all_modsVER       set [count _all_modsVER,       GS_MODS_VER select _j]
 			_all_modsSIZEARRAY set [count _all_modsSIZEARRAY, GS_MODS_SIZEARRAY select _j]
 			
-			_index_local = [_all_modsID select _j, FWATCH_MODLISTID] call FUNCTION_FIND
+			_index_local = [GS_MODS_ID select _j, FWATCH_MODLISTID] call FUNCTION_FIND
 			? _index_local < 0 : goto "DownloadSchedule_ForEachModSkip"
-			? ((FWATCH_MODLISTCFG select _index_local) select 3) in [(_all_modsFORCENAME select _j)] && (_all_modsNAME select _j)==((FWATCH_MODLISTCFG select _index_local) select 2) : goto "DownloadSchedule_ForEachModSkip"
+			? ((FWATCH_MODLISTCFG select _index_local) select 3) in [(GS_MODS_FORCENAME select _j)] && (GS_MODS_NAME select _j)==((FWATCH_MODLISTCFG select _index_local) select 2) : goto "DownloadSchedule_ForEachModSkip"
 			
 				; Rewrite id file
-				(FWATCH_MODLISTCFG select _index_local) set [2, _all_modsNAME select _j]
-				(FWATCH_MODLISTCFG select _index_local) set [3, _all_modsFORCENAME select _j]
-				loadFile Format ["\:EXE ADDONINSTALL  -assignidpath=%1 -assignname=%2 -assignid=%3;%4 -assignkeepname=%5", FWATCH_MODLIST select _index_local, _all_modsNAME select _j, FWATCH_MODLISTID select _index_local, (FWATCH_MODLISTCFG select _index_local) select 0, _all_modsFORCENAME select _j]
+				(FWATCH_MODLISTCFG select _index_local) set [2, GS_MODS_NAME select _j]
+				(FWATCH_MODLISTCFG select _index_local) set [3, GS_MODS_FORCENAME select _j]
+				loadFile Format ["\:EXE ADDONINSTALL  -assignidpath=%1 -assignname=%2 -assignid=%3;%4 -assignkeepname=%5", FWATCH_MODLIST select _index_local, GS_MODS_NAME select _j, FWATCH_MODLISTID select _index_local, (FWATCH_MODLISTCFG select _index_local) select 0, GS_MODS_FORCENAME select _j]
 				
 			#DownloadSchedule_ForEachModSkip
 			? _j < count GS_MODS_ID-1 : _j=_j+1; goto "DownloadSchedule_ForEachMod"
