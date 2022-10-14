@@ -715,7 +715,7 @@ void QWrite_joystick(int customJoyID) {
 			case JOYERR_PARMS         : QWrite("The specified joystick identifier is invalid."); break;
 		};
 
-		QWritef("[\",%d]", joyID);
+		QWritef("\",%d]", joyID);
 		return;
 	}
 
@@ -782,7 +782,7 @@ void QWrite_joystick(int customJoyID) {
 	int Buttons[32] = {0};
 
 	maxButtons = joyCaps.wNumButtons;
-	QWritef("%s],%d,[", maxButtons);
+	QWritef("],%d,[", maxButtons);
 
 	add_comma = false;
 	int buts  = joy.dwButtons;
