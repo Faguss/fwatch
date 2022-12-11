@@ -479,10 +479,7 @@ double rad2deg(double num) {
 	num *= 180 / 3.14159265;
 
 	// if error then return zero
-	char tmp[32] = "";
-	sprintf(tmp, "%f", num);
-
-	if (strstr(tmp,"#IN")) 
+	if (_isnan(num))
 		num = 0;
 
 	return num;
@@ -499,10 +496,7 @@ double deg2rad(double num) {
 	num *= 3.14159265 / 180;
 
 	// if error then return zero
-	char tmp[32] = "";
-	sprintf(tmp, "%f", num);
-
-	if (strstr(tmp,"#IN")) 
+	if (_isnan(num))
 		num = 0;
 
 	return num;

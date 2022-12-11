@@ -3212,11 +3212,11 @@ case C_MEM_GETPLAYERAIM:
 	result = rad2deg(asin(g_off));
 	g_off  = float(result*-1);
 
-	if (g_pit != g_pit) 
-		g_pit = 0;
-
-	if (g_pit2 != g_pit2) 
-		g_pit2 = 0;
+	if (_isnan(m_pit)) m_pit = 0;
+	if (_isnan(g_vlH)) g_vlH = 0;
+	if (_isnan(g_vlV)) g_vlV = 0;
+	if (_isnan(g_pit)) g_pit = 0;
+	if (_isnan(g_pit2)) g_pit2 = 0;
 
 	QWritef("[%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f]", m_dir, g_off, m_pit, g_pit, g_vlH, g_vlV, g_pit2);
 }

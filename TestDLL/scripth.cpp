@@ -27,6 +27,7 @@ You may use this source code for personal entertainment purposes only. Any comme
 #include <io.h>			// Converting HANDLE to FILE
 #include <fcntl.h>		// Converting HANDLE to FILE
 #include <climits>
+#include <float.h>		// _is_nan
 
 extern GLOBAL_VARIABLES_TESTDLL global;
 

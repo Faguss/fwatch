@@ -1463,7 +1463,7 @@ int main(int argc, char *argv[])
 		}
 			
 		string filename   = "fwatch\\tmp\\schedule\\queryserver" + server_uniqueid + ".txt";		
-		string url        = "--output-document=" + filename + " https://ofp-api.herokuapp.com/" + ip + ":" + (port.empty() ? "2302" : port);
+		string url        = "--output-document=" + filename + " https://ofp-api.ofpisnotdead.com/" + ip + ":" + (port.empty() ? "2302" : port);
 		string error_text = "";
 		int result        = Download(url, error_text);
 		

@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2022,10,14,5,19,11,12,285,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2022,12,11,0,0,30,55,592,60,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 	? Format ["%1", count GS_SERVER_STATUS] == "scalar" : GS_SERVER_STATUS=[[],[]]; GS_SERVER_STATUS_DATE=+GS_FWATCH_MY_VERSION; GS_SERVER_STATUS_THREADS=0
@@ -30,6 +30,7 @@
 	; Create or close dialog
 	? "download" in _this                : goto "DownloadImageThread"
 	? "queryserver" in _this             : goto "QueryServer"
+	? "queryserver_animate" in _this     : goto "QueryServer_Animate"
 	? MAINMENU_INPUT || ctrlVisible 6900 : exit
 	? ctrlVisible 6657                   : if (!(lbValue[6657,0] in [1,4])) then {LOADMOD_MODSELECTOR=true} else {closeDialog 0}; exit
 
@@ -180,7 +181,7 @@
 		? _LMBtime==0 &&  _LMB                : _LMBtime=_time
 	
 	? _install_status >= 0 : if (_time+0.1>_install_timing) then {_install_timing=_time; goto "InstallWait"}
-	? _serv_status_threads != GS_SERVER_STATUS_THREADS : _serv_status_threads=GS_SERVER_STATUS_THREADS; ctrlSetText [6450, (if (GS_SERVER_STATUS_THREADS==0) then {MAINMENU_STR select 2} else {localize "STR_LOAD_WORLD"})]; _index=lbValue [6657, (lbSize 6657)-1]; if (!(_index in [207,212])) then {goto "FillListbox"}
+	? _serv_status_threads != GS_SERVER_STATUS_THREADS : _serv_status_threads=GS_SERVER_STATUS_THREADS; _index=lbValue [6657, (lbSize 6657)-1]; if (!(_index in [207,212])) then {goto "FillListbox"}
 	goto "MainLoop"
 
 
@@ -851,7 +852,7 @@
 	_all_serverID    = _all_serverID    - ["<null>"]
 	_all_serverURL   = _all_serverURL   - ["<null>"]
 
-	? GS_SERVER_STATUS_THREADS == 0 : _now=call loadFile ":info date"; _diff=[_now,GS_SERVER_STATUS_DATE] call FLIB_DATEDIFF; if ((_diff select 0)>0 || (_diff select 1)>0 || (_diff select 2)>0 || (_diff select 3)>0 || (_diff select 4)>0) then {GS_SERVER_STATUS_DATE=_now; loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverstatusdatewrite:GS_SERVER_STATUS_DATE=%1;", GS_SERVER_STATUS_DATE]; _i=0; GS_SERVER_STATUS_THREADS=count _all_serverID; _serv_status_threads=count _all_serverID; {_server_ip=""; _server_port=""; _server_encrypted=true; call (_all_servers select _i); ["queryserver", _server_uniqueid, _server_ip, _server_port, _server_encrypted] exec "..\fwatch\data\MainMenu.sqs"; _i=_i+1} forEach _all_serverID; ctrlSetText [6450, localize "STR_LOAD_WORLD"]}
+	? GS_SERVER_STATUS_THREADS == 0 : _now=call loadFile ":info date"; _diff=[_now,GS_SERVER_STATUS_DATE] call FLIB_DATEDIFF; if ((_diff select 0)>0 || (_diff select 1)>0 || (_diff select 2)>0 || (_diff select 3)>0 || (_diff select 4)>0) then {GS_SERVER_STATUS_DATE=_now; loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverstatusdatewrite:GS_SERVER_STATUS_DATE=%1;", GS_SERVER_STATUS_DATE]; _i=0; GS_SERVER_STATUS_THREADS=count _all_serverID; _serv_status_threads=count _all_serverID; {_server_ip=""; _server_port=""; _server_encrypted=true; call (_all_servers select _i); ["queryserver", _server_uniqueid, _server_ip, _server_port, _server_encrypted] exec "..\fwatch\data\MainMenu.sqs"; _i=_i+1} forEach _all_serverID; ["queryserver_animate"] exec "..\fwatch\data\MainMenu.sqs"}
 	[_closest_game_times, _all_servers, _all_serverNames, _all_serverID] call FUNCTION_QUICKSORTM
 
 
@@ -1354,4 +1355,16 @@
 	
 	loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverstatuswrite:GS_SERVER_STATUS=" + (GS_SERVER_STATUS call FLIB_FORMAT) + ";")
 	GS_SERVER_STATUS_THREADS = GS_SERVER_STATUS_THREADS - 1
+	exit
 	
+	#QueryServer_Animate
+	_base = loadFile Format ["\:STRING REPLACECHAR text:%1find:.replace:", localize "STR_LOAD_WORLD"]
+	_dots = ""
+	
+	#QueryServer_Loop
+	? GS_SERVER_STATUS_THREADS == 0 : ctrlSetText [6450, MAINMENU_STR select 2]; exit
+	ctrlSetText [6450, _base + _dots]
+	~0.2
+	_dots = _dots + "."
+	? _dots == "...." : _dots=""
+	goto "QueryServer_Loop"
