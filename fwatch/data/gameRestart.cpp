@@ -1693,11 +1693,13 @@ int main(int argc, char *argv[])
 	bool got_handle       = false;
 	bool dedicated_server = false;
 	game_info game;
+	int game_version      = VER_196;
 	
 	for (int i=0; i<exe_num; i++)
 		if (!game_exe.empty()) {		// if executable name is known then match corresponding window name
 			if (Equals(exe_name_list[i],game_exe)) {
-				game_window = window_name_list[i];
+				game_window  = window_name_list[i];
+				game_version = exe_version_list[i];
 				dedicated_server = i>=7;
 				break;
 			}
@@ -1705,9 +1707,10 @@ int main(int argc, char *argv[])
 			game = find_game_instance(game_pid, window_name_list[i]);
 			
 			if (game.pid != 0) {
-				game_exe    = exe_name_list[i];
-				game_window = window_name_list[i];
-				got_handle  = true;
+				game_exe     = exe_name_list[i];
+				game_window  = window_name_list[i];
+				game_version = exe_version_list[i];
+				got_handle   = true;
 				break;
 			}
 		}
@@ -1717,8 +1720,9 @@ int main(int argc, char *argv[])
 	if (game_window.empty())
 		for (int i=0; i<exe_num-3; i++)
 			if (GetFileAttributes(exe_name_list[i].c_str()) != INVALID_FILE_ATTRIBUTES) {
-				game_exe    = exe_name_list[i];
-				game_window = window_name_list[i];
+				game_exe     = exe_name_list[i];
+				game_window  = window_name_list[i];
+				game_version = exe_version_list[i];
 				break;
 			}
 
@@ -1966,7 +1970,7 @@ int main(int argc, char *argv[])
 
 
 	
-	// Game schedule options -----------------------------------
+	// Game schedule options -----------------------------------	
 	if (required_mods[ID].size() > 0) {
 		vector<string> mods[ARRAY_SIZE];
 		vector<bool> force_name;
@@ -2054,8 +2058,7 @@ int main(int argc, char *argv[])
 						if (rename(mods[NAME][j].c_str(), required_mods[NAME][i].c_str()) == 0) {
 							global.logfile << "Renamed " << mods[NAME][j] << " to " << required_mods[NAME][i] << endl;
 							mods[NAME][j] = required_mods[NAME][i];
-						}
-						else {
+						} else {
 							global.logfile << "Failed to rename " << mods[NAME][j] << " to " << required_mods[NAME][i] << " - " << FormatError(GetLastError());
 							global.logfile.close();
 							return 7;
@@ -2479,6 +2482,125 @@ int main(int argc, char *argv[])
 		    Sleep(500);
 		}
 	}
+
+
+
+
+
+	
+	// Check for face textures in modfolders -------------------
+	vector<string> mod_list;
+	vector<string> arguments_split;
+	Tokenize(user_arguments, " ", arguments_split);
+	string player_name = "";
+	
+	// Get list of selected mods
+	for (int i=0; i<arguments_split.size(); i++) {
+		string namevalue = arguments_split[i];
+		size_t separator = namevalue.find_first_of('=');
+		
+		if (separator != string::npos) {
+			string name  = namevalue.substr(0,separator);
+			string value = namevalue.substr(separator+1);
+			
+			if (Equals(name,"-mod")) {
+				vector<string> temp_array;
+				Tokenize(value, ";", temp_array);
+				
+				for (int i=0; i<temp_array.size(); i++)
+					mod_list.push_back(temp_array[i]);
+			}
+			
+			if (Equals(name,"-name")) {
+				player_name = value;
+			}
+		}
+	}
+	
+	// Before launching the game do the face texture replacement
+	if (mod_list.size() > 0) {
+		string mod_face;
+		string user_face;
+		string user_face_backup;
+		string changelog;
+
+		enum FACE_TYPES {
+			NONE,
+			PAA,
+			JPG
+		};
+
+		int face_type = NONE;
+		string face_extensions[] = {"paa", "jpg"};
+		int face_extensions_length = sizeof(face_extensions) / sizeof(face_extensions[0]);
+
+		// Find mod with custom face file starting from the last
+		for (int i=mod_list.size()-1; i>=0 && face_type==NONE; i--) {
+			for (int j=0; j<face_extensions_length; j++) {
+				mod_face = mod_list[i] + "\\face." + face_extensions[j];
+
+				if (GetFileAttributes(mod_face.c_str()) != 0xFFFFFFFF) {
+					face_type = j + 1;
+
+					// Need player name from the registry
+					if (player_name.length() == 0) {
+						HKEY key_handle = 0;
+						char value[1024] = "";
+						DWORD value_size = sizeof(value);
+						LONG result      = RegOpenKeyEx(HKEY_CURRENT_USER, game_version==VER_199 ? "SOFTWARE\\Bohemia Interactive Studio\\ColdWarAssault" : "SOFTWARE\\Codemasters\\Operation Flashpoint", 0, KEY_READ, &key_handle);
+
+						if (result == ERROR_SUCCESS) {
+							DWORD data_type = REG_SZ;
+
+							if (RegQueryValueEx(key_handle, "Player Name", 0, &data_type, (BYTE*)value, &value_size) == ERROR_SUCCESS)
+								player_name = (string)value;
+						}
+
+						RegCloseKey(key_handle);
+
+						if (player_name.length() == 0)
+							break;
+					}
+
+					// Check if backup already exists
+					bool already_exists = false;
+					for (int k=0; k<face_extensions_length && !already_exists; k++) {
+						user_face = "Users\\" + player_name + "\\face." + face_extensions[k] + "backup";
+
+						if (GetFileAttributes(user_face.c_str()) != 0xFFFFFFFF)
+							already_exists = true;
+					}
+
+					if (already_exists)
+						break;
+
+					// Backup current face
+					for (int k=0; k<face_extensions_length; k++) {
+						user_face        = "Users\\" + player_name + "\\face." + face_extensions[k];
+						user_face_backup = user_face + "backup";
+
+						if (MoveFileEx(user_face.c_str(), user_face_backup.c_str(), 0)) {
+							changelog += user_face + "?" + user_face_backup + "\n";
+						}
+					}
+
+					// Move the face from mod
+					user_face = "Users\\" + player_name + "\\face." + face_extensions[j];
+
+					fstream out;
+					out.open("fwatch\\data\\user_rename.txt", ios::out | ios::app);
+
+					if (MoveFileEx(mod_face.c_str(), user_face.c_str(), 0))
+						out << mod_face << "?" << user_face << "\n";
+
+					out << changelog;
+					out.close();
+					break;
+				}
+			}
+		}
+	}
+	
 
 
 

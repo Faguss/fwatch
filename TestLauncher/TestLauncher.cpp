@@ -179,7 +179,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	// Handle exe arguments
 	// Remove the ones meant for Fwatch and pass the rest to the game
 	StringDynamic command_line;
+	StringDynamic mod_list;
+	StringDynamic player_name;
 	StringDynamic_init(command_line);
+	StringDynamic_init(mod_list);
+	StringDynamic_init(player_name);
 
 	String lpCmdLine_String    = {lpCmdLine, strlen(lpCmdLine)};
 	String word                = {NULL, 0};
@@ -239,6 +243,17 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			}
 
 			copy_param = false;
+		}
+
+		if (strncmp(word.text,"-mod=",5) == 0) {
+			if (mod_list.length > 0) 
+				StringDynamic_append(mod_list, ";");
+
+			StringDynamic_appendl(mod_list, word.text+5, word.length-5);
+		}
+
+		if (strncmp(word.text,"-name=",6) == 0) {
+			StringDynamic_appendl(player_name, word.text+6, word.length-6);
 		}
 
 		if (fi)
@@ -337,6 +352,145 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		_beginthread((void(*)(void*))ListenServer, 0, &client_arg);
 
 	if (launch_client) {
+		// Before launching the game do the face texture replacement
+		if (mod_list.length > 0) {
+			const int capacity = 64;
+			String mod_names[capacity];
+			String source     = {mod_list.text, mod_list.length};
+			size_t source_pos = 0;
+			int length        = 0;
+
+			while ((word = String_tokenize(source, ";", source_pos, OPTION_NONE)).length > 0)
+				if (length < capacity)
+					mod_names[length++] = word;
+
+			StringDynamic mod_face;
+			StringDynamic user_face;
+			StringDynamic user_face_backup;
+			StringDynamic changelog;
+			StringDynamic_init(mod_face);
+			StringDynamic_init(user_face);
+			StringDynamic_init(user_face_backup);
+			StringDynamic_init(changelog);
+
+			enum FACE_TYPES {
+				NONE,
+				PAA,
+				JPG
+			};
+
+			int face_type = NONE;
+			const int face_extensions_length = 2;
+			char face_extensions[face_extensions_length][4] = {"paa", "jpg"};
+
+			// Find mod with custom face file starting from the last
+			for (int i=length-1; i>=0 && face_type==NONE; i--) {
+				for (int j=0; j<face_extensions_length; j++) {
+					mod_face.length = 0;
+					StringDynamic_appends(mod_face, mod_names[i]);
+					StringDynamic_append(mod_face, "\\face.");
+					StringDynamic_append(mod_face, face_extensions[j]);
+
+					if (GetFileAttributes(mod_face.text) != 0xFFFFFFFF) {
+						face_type = j + 1;
+
+						// Need player name from the registry
+						if (player_name.length == 0) {
+							int game_exe_index = 0;
+
+							// CWA or OFP?
+							for (; game_exe_index<global_exe_num; game_exe_index++) {
+								if (custom_exe!=-1 && custom_exe!=game_exe_index)
+									continue;
+
+								if (GetFileAttributes(global_exe_name[game_exe_index]) != 0xFFFFFFFF)
+									break;
+							}
+
+							HKEY key_handle = 0;
+							char value[1024] = "";
+							DWORD value_size = sizeof(value);
+							LONG result      = RegOpenKeyEx(HKEY_CURRENT_USER, global_exe_version[game_exe_index]==VER_199 ? "SOFTWARE\\Bohemia Interactive Studio\\ColdWarAssault" : "SOFTWARE\\Codemasters\\Operation Flashpoint", 0, KEY_READ, &key_handle);
+
+							if (result == ERROR_SUCCESS) {
+								DWORD data_type = REG_SZ;
+
+								if (RegQueryValueEx(key_handle, "Player Name", 0, &data_type, (BYTE*)value, &value_size) == ERROR_SUCCESS)
+									StringDynamic_append(player_name, value);
+							}
+
+							RegCloseKey(key_handle);
+
+							if (player_name.length == 0)
+								break;
+						}
+
+						// Check if backup already exists
+						bool already_exists = false;
+						for (int k=0; k<face_extensions_length && !already_exists; k++) {
+							user_face.length = 0;
+							StringDynamic_append(user_face, "Users\\");
+							StringDynamic_appendsd(user_face, player_name);
+							StringDynamic_append(user_face, "\\face.");
+							StringDynamic_append(user_face, face_extensions[k]);
+							StringDynamic_append(user_face, "backup");
+
+							if (GetFileAttributes(user_face.text) != 0xFFFFFFFF)
+								already_exists = true;
+						}
+
+						if (already_exists)
+							break;
+
+						// Backup current face
+						for (k=0; k<face_extensions_length; k++) {
+							user_face.length = 0;
+							StringDynamic_append(user_face, "Users\\");
+							StringDynamic_appendsd(user_face, player_name);
+							StringDynamic_append(user_face, "\\face.");
+							StringDynamic_append(user_face, face_extensions[k]);
+
+							user_face_backup.length = 0;
+							StringDynamic_appendl(user_face_backup, user_face.text, user_face.length);
+							StringDynamic_append(user_face_backup, "backup");
+
+							if (MoveFileEx(user_face.text, user_face_backup.text, 0)) {
+								StringDynamic_appendsd(changelog, user_face);
+								StringDynamic_append(changelog, "?");
+								StringDynamic_appendsd(changelog, user_face_backup);
+								StringDynamic_append(changelog, "\n");
+							}
+						}
+
+						// Move the face from mod
+						user_face.length = 0;
+						StringDynamic_append(user_face, "Users\\");
+						StringDynamic_appendsd(user_face, player_name);
+						StringDynamic_append(user_face, "\\face.");
+						StringDynamic_append(user_face, face_extensions[j]);
+
+						FILE *filelog = fopen("fwatch\\data\\user_rename.txt","a");
+
+						if (MoveFileEx(mod_face.text, user_face.text, 0))
+							fprintf(filelog, "%s?%s\n", mod_face.text, user_face.text);
+
+						fwrite(changelog.text, 1, changelog.length, filelog);
+						fclose(filelog);
+						break;
+					}
+				}
+			}
+
+			StringDynamic_end(mod_face);
+			StringDynamic_end(user_face);
+			StringDynamic_end(user_face_backup);
+			StringDynamic_end(changelog);
+		}
+
+		StringDynamic_end(mod_list);
+		StringDynamic_end(player_name);
+		
+
 		PROCESS_INFORMATION pi;
 		STARTUPINFO si; 
 		memset(&si, 0, sizeof(si));
@@ -755,8 +909,9 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 					// Check if the file still  exists
 					WIN32_FILE_ATTRIBUTE_DATA fad;
 
-					if (GetFileAttributesExW(source_w, GetFileExInfoStandard, &fad) == -1)
+					if (!GetFileAttributesExW(source_w, GetFileExInfoStandard, &fad) && GetLastError() == ERROR_FILE_NOT_FOUND)
 						remove_line = true;
+						
 				}
 			}
 		} else
@@ -1048,12 +1203,12 @@ void FwatchPresence(ThreadArguments *arg)
  
 					if (hSnap != INVALID_HANDLE_VALUE) {
 						MODULEENTRY32 xModule;
-						memset (&xModule, 0, sizeof(xModule));
+						memset(&xModule, 0, sizeof(xModule));
 						xModule.dwSize = sizeof(xModule);
 
 						// First process module must match game executable name
 						if (Module32First(hSnap, &xModule)) {							
-							for (int i=0; i<global_exe_num && game_pid==0; i++)
+							for (int i=0; i<global_exe_num && game_pid==0; i++) {
 								if ((!arg->is_dedicated_server && !strstr(global_exe_name[i],"_server.exe") || arg->is_dedicated_server && strstr(global_exe_name[i],"_server.exe")) && lstrcmpi(xModule.szModule, (LPCTSTR)global_exe_name[i]) == 0) {
 									game_pid = pid;
 
@@ -1075,6 +1230,7 @@ void FwatchPresence(ThreadArguments *arg)
 										} while(Module32Next(hSnap, &xModule));
 									}
 								}
+							}
 						}
 
 						CloseHandle(hSnap);
@@ -1191,13 +1347,13 @@ void FwatchPresence(ThreadArguments *arg)
 
 
 			// Change master servers
-			switch(global_exe_version[game_exe_index]) {
-				case VER_196 : master_server1_address=0x76EBC0; master_server2_address=0x775F58; break;
-				case VER_199 : master_server1_address=0x756530; master_server2_address=0x75D7F0; break;
-				case VER_201 : master_server1_address=game_exe_address+0x6C9298; master_server2_address=game_exe_address+0x6C9560; break;
-			}
-
 			if (!arg->is_dedicated_server) {
+				switch(global_exe_version[game_exe_index]) {
+					case VER_196 : master_server1_address=0x76EBC0; master_server2_address=0x775F58; break;
+					case VER_199 : master_server1_address=0x756530; master_server2_address=0x75D7F0; break;
+					case VER_201 : master_server1_address=game_exe_address+0x6C9298; master_server2_address=game_exe_address+0x6C9560; break;
+				}
+
 				if (master_server1_address!=0  &&  arg->is_custom_master1)
 					WriteProcessMemory(phandle, (LPVOID)master_server1_address, global.master_server1, 64, &stBytes);
 
@@ -1314,8 +1470,10 @@ void FwatchPresence(ThreadArguments *arg)
 			}
 
 			// Refresh master servers (user can change them in the main menu)
-			ReadProcessMemory(phandle, (LPVOID)master_server1_address, &global.master_server1, 64, &stBytes);
-			ReadProcessMemory(phandle, (LPVOID)master_server2_address, &global.master_server2, 19, &stBytes);
+			if (!arg->is_dedicated_server) {
+				ReadProcessMemory(phandle, (LPVOID)master_server1_address, &global.master_server1, 64, &stBytes);
+				ReadProcessMemory(phandle, (LPVOID)master_server2_address, &global.master_server2, 19, &stBytes);
+			}
 
 			// Check for game scripting error
 			if (global.error_log_enabled) {
