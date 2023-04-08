@@ -19,54 +19,52 @@ FUNCTION_FIND = {
 
 
 FUNCTION_MODS2STRING = {
-	private ["_string", "_i", "_array", "_separator", "_mod_name", "_mod_version", "_index2", "_my_version"];
-	_array     = _this select 0;
+	private ["_string", "_i", "_mods", "_separator", "_mod_id", "_mod_name", "_mod_version", "_index2", "_my_version"];
+	_mods      = _this select 0;
 	_separator = _this select 1;
 	_string    = ""; 
 	_i         = 0;
 
 	{
-		_index = [_x, _all_modsID] call FUNCTION_FIND;
-		if (_index >= 0) then {
-			_mod_name    = _all_modsNAME select _index;
-			_mod_size    = _all_modsSIZE select _index;
-			_mod_version = _all_modsVER select _index;
-			_verTXT      = Format ["%1", _mod_version];
+		_mod_id      = _x select 0;
+		_mod_name    = _x select 1;
+		_mod_size    = _x select 4;
+		_mod_version = _x select 2;
+		_verTXT      = Format ["%1", _mod_version];
+		
+		if (_separator != ";") then {
+			// Show version difference
+			_index = [_mod_id, FWATCH_MODLISTID] call FUNCTION_FIND;
+			if (_index >= 0) then {
+				_my_version = (FWATCH_MODLISTCFG select _index) select 0;
 
-			if (_separator != ";") then {
-				// Show version difference
-				_index2 = [_x, FWATCH_MODLISTID] call FUNCTION_FIND;
-				if (_index2 >= 0) then {
-					_my_version = (FWATCH_MODLISTCFG select _index2) select 0;
+				if (_my_version < _mod_version) then {
+					_verTXT = Format [MAINMENU_STR select 50, _my_version, _mod_version]
+				} else {
+					_mod_size = "";
+					_index   = -1;
+				}
+			};
+			
+			_string = Format ["%1%2", _string, _mod_name];
+			
+			// Don't display version if it's 1 unless there's an update
+			if (_mod_version != 1  ||  _index >= 0) then {
+				_string = Format ["%1 %2", _string, _verTXT]
+			};
 
-					if (_my_version < _mod_version) then {
-						_verTXT = Format [MAINMENU_STR select 50, _my_version, _mod_version]
-					} else {
-						_mod_size = "";
-						_index2   = -1;
-					}
-				};
-				
-				_string = Format["%1%2", _string, _mod_name];
-				
-				// Don't display version if it's 1 unless there's an update
-				if (_mod_version != 1  ||  _index2 >= 0) then {
-					_string = Format ["%1 %2", _string, _verTXT]
-				};
-
-				if (_mod_size != "") then {
-					_string = Format ["%1 - %2", _string, _mod_size]
-				};
-				
-				_string = Format ["%1%2", _string, _separator]
-			} else {
-				_string = Format["%1%2%3", _string, _mod_name, (if (_i < count _array-1) then {_separator} else {""})]
-			}
+			if (_mod_size != "") then {
+				_string = Format ["%1 - %2", _string, _mod_size]
+			};
+			
+			_string = Format ["%1%2", _string, _separator]
+		} else {
+			_string = Format["%1%2%3", _string, _mod_name, (if (_i < count _mods-1) then {_separator} else {""})]
 		};
 
 		_i = _i + 1
 	} 
-	forEach _array; 
+	forEach _mods; 
 
 	_string
 };
@@ -113,372 +111,156 @@ FUNCTION_SHOW_RED_TEXT = {
 FUNCTION_IS_MOD_MISSING = {
 	private ["_index", "_add_to_missing", "_assign", "_my_version", "_mod_name", "_mod_sizearray", "_index2", "_index3", "_j"];
 
-	// _x is unique id of the missing mod. I need to find its index in the mod database so I can get name and version
-	_index = [_x, _all_modsID] call FUNCTION_FIND;
-	if (_index >= 0) then {
-		_add_to_missing = true;
-		_assign         = false;
-		_my_version     = 0;
-		_mod_name       = _all_modsNAME select _index;
-		_mod_sizearray  = [0,0,0];
+	// _x is an array with arrays containing [id,name,ver,forcename,size,size array]
+	
+	_add_to_missing = true;
+	_assign         = false;
+	_my_version     = 0;
+	_mod_name       = _x select 1;
+	_mod_sizearray  = [0,0,0];
 
-		// Look for the mod id in the user's mod list
-		_index2 = [_x, FWATCH_MODLISTID] call FUNCTION_FIND;
-		if (_index2 >= 0) then {
-			_mod_name       = FWATCH_MODLIST select _index2;
-			_my_version     = (FWATCH_MODLISTCFG select _index2) select 0;
-			_add_to_missing = _my_version < (_all_modsVER select _index);				// If user has older version
-		} else {
-			_index3 = [_mod_name,FWATCH_MODLIST] call FUNCTION_FIND;
-			if (_index3 >= 0) then {
-				_assign = (FWATCH_MODLISTID select _index3) == "";		// If modfolder exists but not tagged
-			}
-		};
-		
-		if (_add_to_missing) then {
-			_missing_mods           set [count _missing_mods          , _index     ];
-			_missing_mods_id        set [count _missing_mods_id       , _x         ];
-			_missing_mods_name      set [count _missing_mods_name     , _mod_name  ];
-			_missing_mods_assign    set [count _missing_mods_assign   , _assign    ];
-			_missing_mods_myversion set [count _missing_mods_myversion, _my_version];
+	// Look for the mod id in the user's mod list
+	_index2 = [_x select 0, FWATCH_MODLISTID] call FUNCTION_FIND;
+	if (_index2 >= 0) then {
+		_mod_name       = FWATCH_MODLIST select _index2;
+		_my_version     = (FWATCH_MODLISTCFG select _index2) select 0;
+		_add_to_missing = _my_version < (_x select 2);				// If user has older version
+	} else {
+		_index3 = [_mod_name,FWATCH_MODLIST] call FUNCTION_FIND;
+		if (_index3 >= 0) then {
+			_assign = (FWATCH_MODLISTID select _index3) == "";		// If modfolder exists but not tagged
+		}
+	};
+	
+	if (_add_to_missing) then {
+		_missing_mods_id        set [count _missing_mods_id       , _x select 0];
+		_missing_mods_name      set [count _missing_mods_name     , _mod_name  ];
+		_missing_mods_assign    set [count _missing_mods_assign   , _assign    ];
+		_missing_mods_version   set [count _missing_mods_version  , _x select 2];
+		_missing_mods_myversion set [count _missing_mods_myversion, _my_version];
+		_missing_mods_forcename set [count _missing_mods_forcename, _x select 3];
 
-			_j = -1; 
-			while "_j=_j+1; _j<count _missing_mods_sizearray" do {
-				_missing_mods_sizearray set [_j, (_missing_mods_sizearray select _j)+((_all_modsSIZEARRAY select _index) select _j)]
-			}
+		_j = -1; 
+		while "_j=_j+1; _j<count _missing_mods_sizearray" do {
+			_missing_mods_sizearray set [_j, (_missing_mods_sizearray select _j)+((_x select 5) select _j)]
 		}
 	}
 };
 
 
 
-FUNCTION_QUICKSORTM = {
-	private ["_array", "_arrays", "_currentARR", "_hi", "_i", "_j", "_k", "_lo", "_mid", "_temp"];
-
-	if (Format ["%1",QUICKSORT_RECURRENCE] == "scalar bool array string 0xfcffffef") then {
-		QUICKSORT_RECURRENCE = 1;
-		_arrays              = _this;
-		_array               = _arrays select 0;
-		_lo                  = 0;
-		_hi                  = count _array -1;
-		_i                   = _lo;
-		_j                   = _hi;
+FUNCTION_ADD_MOD_TO_LISTBOX = {
+	_id = lbAdd [6657, _x]; 
+	lbSetData [6657, _id, FWATCH_MODLISTID select _i]; 
+	lbSetValue [6657, _id, 2]; 
+	
+	if (_x in _launch_queue) then {
+		lbSetValue [6657, _id, 3];
+		lbSetColor [6657, _id, _color_red];
 	} else {
-		QUICKSORT_RECURRENCE = QUICKSORT_RECURRENCE + 1;	
-		_arrays              = _this select 0;
-		_array               = _arrays select 0;
-		_lo                  = _this select 1;
-		_hi                  = _this select 2;
-		_i                   = _lo;
-		_j                   = _hi;
-	};
-
-	_mid = (_lo + _hi) / 2;
-	_mid = _mid - (_mid mod 1);
-	_mid = _array select _mid;
-		
-	while "_i <= _j" do {
-		while "(_array select _i) < _mid" do {_i=_i+1};
-		while "(_array select _j) > _mid" do {_j=_j-1};
-			
-		if (_i <= _j) then {
-			_k = 0;
-			while "_k < count _arrays" do {
-				_currentARR = _arrays select _k;
-				_temp       = _currentARR select _i;
-				_currentARR set [_i, (_currentARR select _j)];
-				_currentARR set [_j, _temp];
-				_arrays set [_k, _currentARR];
-				_k = _k + 1;
-			};
-			
-			_i = _i + 1;
-			_j = _j - 1;
-		};
-	};
-
-	if (_lo < _j) then {[_arrays, _lo, _j] call FUNCTION_QUICKSORTM};
-	if (_i < _hi) then {[_arrays, _i, _hi] call FUNCTION_QUICKSORTM};
-		
-	QUICKSORT_RECURRENCE = QUICKSORT_RECURRENCE - 1;
-	if (QUICKSORT_RECURRENCE == 0) then {QUICKSORT_RECURRENCE=nil};
-};
-
-
-
-FUNCTION_FORMAT_GAME_TIME = {
-	private ["_i", "_eventType", "_length", "_eventChecked","_eventBegan","_startTime","_difference","_endTime","_DiffToStart","_DiffToEnd","_formatPattern"];
-	
-	_now          = call loadFile ":info date";
-	_i            = -1;
-	_eventChecked = [];	// hold "daily" and "weekly" events here so they don't get double-checked
-
-	while "_i=_i+1; _i < count _this" do {
-		_eventType = (_this select _i) select 0;
-		_startTime = (_this select _i) select 1;
-		_length    = (_this select _i) select 2;
-		
-		/*
-		event types:
-		0 - single
-		1 - weekly
-		2 - daily
-		*/
-		
-		_eventBegan  = false;
-		if (_eventType==2  &&  _i in _eventChecked) then {_eventBegan=true};
-		
-		// localize time
-		["minutes", (_now select 8) - (_startTime select 8), _startTime] call FLIB_MODIFYDATE;
-		_startTime set [8, _now select 8];
-		
-		// if it's a recurrent event
-		if (_eventType>0  &&  !(_i in _eventChecked)) then {
-			_DiffToStart = [_startTime,_now,"subtract"] call FLIB_DATEDIFF;
-			
-			// have we passed event start date?
-			if ("_x<0" count _DiffToStart > 0) then {
-				_eventBegan = true;
-				
-				// if so then find nearest occurence
-				_difference = 
-				if (_eventType == 1) then {
-					if ((_startTime select 3) >= (_now select 3)) then {
-						(_startTime select 3) - (_now select 3)
-					} else {
-						7 - (_now select 3) + (_startTime select 3)
-					}
-				};
-			
-				_startTime set [0, _now select 0];
-				_startTime set [1, _now select 1];
-				_startTime set [2, _now select 2];
-			
-				["day", _difference, _startTime] call FLIB_MODIFYDATE
-			};
-		};
-		
-		
-		// Find when game will end
-		_endTime =+ _startTime;
-		["minutes", _length, _endTime] call FLIB_MODIFYDATE;
-		
-		
-		// What's the difference between now and game time range
-		_DiffToStart = [_startTime,_now,"subtract"] call FLIB_DATEDIFF;
-		_DiffToEnd   = [_endTime,  _now,"subtract"] call FLIB_DATEDIFF;
-
-		// if the event has not ended
-		if ("_x<0" count _DiffToEnd == 0) then {
-			// if the event has started
-			if ("_x<0" count _DiffToStart > 0) then {_playingNow=true};
-			
-			// Format date description
-			_formatPattern = "@d MM 0h:0i";
-			
-			if (_eventBegan && _eventType>0) then {
-				_formatPattern = Format ["@~%1~ 0h:0i", (if (_eventType==1) then {MAINMENU_STR select (51 + (_startTime select 3))} else {MAINMENU_STR select 58})];
-			};
-			
-			// add event info to arrays
-			_gameTimeDistance set [
-				count _gameTimeDistance, 
-				[_startTime, _now, "fraction"] call FLIB_DATEDIFFDAY
-			];
-			
-			_gameTimeFormatted set [
-				count _gameTimeFormatted, 
-				Format ["%1 - %2", [_formatPattern,_startTime] call FLIB_FORMATDATE, ["@0h:0i",_endTime] call FLIB_FORMATDATE]
-			];
-			
-			_gameTimeDates set [
-				count _gameTimeDates,
-				//["Y,m,d, ,h,i,s,l", _startTime] call FLIB_FORMATDATE
-				_startTime
-			];
-			
-			// if it's happening today
-			if (([_startTime, _now, "ignorehour"] call FLIB_DATEDIFFDAY) < 1) then {
-				_today_game_servers set [
-					count _today_game_servers,
-					_server_uniqueid
-				]
-			};
-		} else {
-			if (!(_i in _eventChecked)  &&  _eventType!=0) then {
-				_eventChecked set [count _eventChecked, _i];
-				
-				// If this is a weekly event then try again next week
-				// If this is a daily event then try again tomorrow
-				["day", (if (_eventType==1) then {7} else {1}), _startTime] call FLIB_MODIFYDATE;
-				
-				_i = _i - 1
-			};
-		};
-	};
-	
-	// If there's more than one valid game time then sort them
-	if (count _gameTimeDistance > 1) then {
-		[_gameTimeDistance, _gameTimeFormatted, _gameTimeDates] call FUNCTION_QUICKSORTM		
-	}
-};
-
-
-
-FUNCTION_FIND_URL = {
-	private ["_i", "_break", "_cut", "_results", "_array", "_find", "_array_item"];
-	
-	_i     = 0;
-	_break = false; 
-
-	while "!_break" do {
-		if (_i >= count (_this select 1)) then {
-			_i     = -1; 
-			_break = true
-		} else {
-			// remove http://www.
-			_array = call loadFile Format ["\:STRING DOMAIN url:%1", _this select 0];
-			_find  = call loadFile Format ["\:STRING FIND text:%1find:%2", _this select 0, _array select 3];
-			_cut   = loadFile Format ["\:STRING CUT start:%1  text:%2", _find select 0, _this select 0];
-			
-			// is domain inside other
-			_array_item = (_this select 1) select _i;
-			if (_array_item in [_array_item]) then {} else {_array_item = ((_this select 1) select _i) select 0};
-			_results = call loadFile Format ["\:STRING FIND text:%1find:%2", _array_item, _cut];
-			
-			if (count _results > 0) then {
-				_break = true
-			} else {
-				_i = _i + 1
-			}
+		if ([_x,FWATCH_CURRMOD] call FUNCTION_FIND>=0) then {
+			lbSetColor [6657, _id, _color_pink]
 		}
 	};
-
-	_i
+	
+	_i = _i + 1;
 };
 
 
 
-FUNCTION_GET_CLOSEST_GAME_TIME = {
-	_server_uniqueid   = "";
-	_server_game_times = [];
+FUNCTION_ADD_DOWNLOADABLE_MOD_TO_LISTBOX = {
+	private ["_entry", "_to_add", "_positions"];
 	
-	call _x; 
-	
-	if (count _server_game_times > 0) then {
-		_playingNow        = false; 
-		_gameTimeDistance  = []; 
-		_gameTimeFormatted = []; 
-
-		_server_game_times call FUNCTION_FORMAT_GAME_TIME;
-
-		// If there are valid game times then add first one to the list of closest games
-		if (count _gameTimeDistance > 0) then {
-			_closest_game_times set [
-				count _closest_game_times, 
-				(if (_playingNow) then {0} else {_gameTimeDistance select 0})
-			]
-		} else {
-			// If all game times have elapsed then remove server from the list
-			_all_servers set [_i, "<null>"];
-			//_all_servers = _all_servers - ["<null>"];
-			
-			_all_serverNames set [_i, "<null>"];
-			//_all_serverNames = _all_serverNames - ["<null>"]
-			
-			_all_serverID set [_i, "<null>"];
-			_all_serverURL set [_i, "<null>"];
-		};
+	if (count _x == 1) then {
+		// label
+		if ((_x select 0) == "update")  then {lbSetColor [6657, lbAdd [6657, "==="+(MAINMENU_STR select 83)+"==="], _color_fireenginered]};
+		if ((_x select 0) == "missing") then {lbSetColor [6657, lbAdd [6657, "==="+(MAINMENU_STR select 84)+"==="], _color_sandybrown]};
 	} else {
-		_closest_game_times set [count _closest_game_times, -1];
-		_persistent_servers set [count _persistent_servers, _server_uniqueid]
-	};
-	
-	_i = _i + 1
-};
-
-
-
-FUNCTION_SERVERS_TO_LISTBOX = {
-	if ((_closest_game_times select _i) != -1) then {	//if not a persistent server
-		if ((_closest_game_times select _i) == 0) then {
-			if (!_nowLabel) then {
-				_nowLabel = true;
-				lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 59], _color_fireenginered]
-			}
+		_to_add = true;
+		
+		if (_mod_search_category >= 0) then {
+			_to_add = (_x select 2) == _mod_search_category;
 		} else {
-			if (_x in _today_game_servers) then {
-				if (!_todayLabel) then {
-					_todayLabel = true;
-					lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 60], _color_sandybrown]
-				}
-			} else {
-				if (!_upcomingLabel) then {
-					_upcomingLabel = true;
-					lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 61], _color_sand]
-				}
+			if (_mod_search_phrase != "") then {
+				_to_add = count (call loadFile Format ["\:STRING FIND text:%1find:%2", _x select 0, _mod_search_phrase]) > 0;
 			}
 		};
 		
-		private ["_entry", "_index"];
-		_index = [_all_serverID select _i, GS_SERVER_STATUS select 0] call FUNCTION_FIND;
-		_entry = lbAdd [6657, Format ["%1%2", (if (_index>=0) then {Format ["(%1) ",((GS_SERVER_STATUS select 1) select _index) select 1]} else {""}), _all_serverNames select _i]]; 
-		lbSetData  [6657, _entry, Format ["%1",_i]];
-		lbSetValue [6657, _entry, 201]; 
+		if (_to_add) then {
+			_entry = lbAdd [6657, _x select 0]; //name
+			lbSetData  [6657, _entry, _x select 1];	//public id
+			lbSetValue [6657, _entry, 6];
+
+			if ((_x select 1) in _missing_mods_id) then {lbSetColor [6657,_entry,[1,0,0,0.5]]};
+		}
 	};
+};
+
+
+
+FUNCTION_ADD_SERVER_TO_LISTBOX = {
+	private ["_entry"];
 	
-	// After installation display that server options
-	if (_x == _jump_to_server) then {
-		_data = Format ["%1",_i];
-		goto "DisplayServer"
+	if (count _x == 1) then {
+		// label
+		if ((_x select 0) == "now")        then {lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 59], _color_fireenginered]};
+		if ((_x select 0) == "today")      then {lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 60], _color_sandybrown]};
+		if ((_x select 0) == "future")     then {lbSetColor [6657, lbAdd [6657, MAINMENU_STR select 61], _color_sand]};
+		if ((_x select 0) == "persistent") then {lbSetColor [6657, lbAdd [6657, "=="+(MAINMENU_STR select 108)+"=="], _color_cottoncandy]};
+	} else {
+		// server
+		_entry = lbAdd [6657, _x select 0]; //name
+		lbSetData  [6657, _entry, _x select 1];	//public id
+		lbSetValue [6657, _entry, 201];		
+
+		// After installation display server options
+		if (( _x select 1) == _jump_to_server) then {
+			_data = _x select 1;
+			goto "DisplayServer"
+		};
 	};
-	
-	_i = _i + 1
 };
 
 
 
 FUNCTION_GET_EXECUTE_PARAMS = {
-	private ["_string", "_string2", "_ok", "_Input", "_add_param_name", "_modifier"];
-	_string  = "";
-	_string2 = "";
+	private ["_params", "_params_modid", "_ok", "_Input", "_add_param_name", "_modifier"];
+	_params = "";
 	
 	if (_server_uniqueid != "mod") then {
 		_modifier = if (_server_encrypted) then {"e"} else {""};
-
-		_string = Format ["-serveruniqueid=%1 -%2connect=", _server_uniqueid, _modifier] + _server_ip;
+		_params   = Format ["-serveruniqueid=%1 -%2connect=", _server_uniqueid, _modifier] + _server_ip;
 		
-		if (_server_port != "") then {_string=_string+Format[" -%1port=",_modifier]+_server_port};
-		if (_server_password != "") then {_string=_string+Format[" -%1password=",_modifier]+_server_password};
-		if (_server_equalModReq) then {_string=_string+" -serverequalmodreq=true"};
-		if (_run_voice_program) then {_string=_string+Format[" -%1voice=",_modifier]+(_server_voice select 1)};
-		if (_server_maxcustombytes != "") then {_string=_string+Format[" -maxcustom=%1 ""-plrname=%2""",_server_maxcustombytes, FWATCH_USERNAME]};
+		if (_server_port != "")           then {_params=_params+Format[" -%1port=",_modifier]+_server_port};
+		if (_server_password != "")       then {_params=_params+Format[" -%1password=",_modifier]+_server_password};
+		if (_server_equalModReq)          then {_params=_params+" -serverequalmodreq=true"};
+		if (_run_voice_program)           then {_params=_params+Format[" -%1voice=",_modifier]+(_server_voice select 1)};
+		if (_server_maxcustombytes != "") then {_params=_params+Format[" -maxcustom=%1 ""-plrname=%2""",_server_maxcustombytes, FWATCH_USERNAME]};
 		
 		_add_param_name = true;
-		_string2 = "";
+        _params_modid   = "";
 
 		{
 			if (_add_param_name) then {
 				_add_param_name = false;
-				_string         = _string  + " -mod=";
-				_string2        = _string2 + " -modid=";
+				_params         = _params        + " -mod=";
+				_params_modid   = _params_modid  + " -modid=";
 			} else {
-				_string         = _string  + ";";
-				_string2        = _string2 + ";";
+				_params         = _params       + ";";
+				_params_modid   = _params_modid + ";";
 			};
 			
-			_index = [_x, _all_modsID] call FUNCTION_FIND;
-			if (_index >= 0) then {				
-				_string  = _string  + (_all_modsNAME select _index);
-				_string2 = _string2 + _x;
-			}
+			_params       = _params       + (_x select 1); //mod name
+			_params_modid = _params_modid + (_x select 0); //mod id
 		}
 		forEach _server_modfolders;
+        
+        _params = _params + _params_modid;
 	} else {
-		_string = "-mod=" + (_missing_mods_name select 0);
+		_params = "-mod=" + (_missing_mods_name select 0);
 	};
 	
-	_string + _string2
+	_params
 };
 
 
@@ -494,7 +276,7 @@ FUNCTION_WRITE_INSTALL = {
 		_names = _names + (if (_i>0) then {","} else {""}) + (_missing_mods_name select _i);
 		_i = _i + 1;
 	} 
-	forEach _missing_mods;
+	forEach _missing_mods_id;
 	
 	_ids + " " + _names
 };
@@ -503,7 +285,8 @@ FUNCTION_WRITE_INSTALL = {
 
 FUNCTION_BUILD_QUERY_STRING = {
 	private ["_output", "_i", "_mod", "_ver"];
-	_output = (if (_server_uniqueid=="mod") then {_access_code_mod} else {_access_code}) call FUNCTION_FORMAT_PASSWORD_STRING;
+	_output = ([_access_code, "password"] call FUNCTION_FORMAT_PASSWORD_STRING);
+	_output = _output + ([_access_code_mod, "password_mods"] call FUNCTION_FORMAT_PASSWORD_STRING);
 	
 	if ((_this select 0) == "modcheck") then {
 		_mod = "";
@@ -541,16 +324,18 @@ FUNCTION_BUILD_QUERY_STRING = {
 		_mod    = "";
 		_ver    = "";
 		_output = _output + " --post-data=";
-		_i      = 0;
 		
 		{
 			if (_x != "") then {
 				_mod = _mod + (if (_mod=="") then {""} else {","}) + _x;
-				_ver = _ver + (if (_ver=="") then {""} else {","}) + Format["%1",(FWATCH_MODLISTCFG select _i) select 0];
 			};
-			_i = _i + 1
-		} 
-		forEach FWATCH_MODLISTID;
+		} forEach FWATCH_MODLISTID;
+		
+		{
+			if ((_x select 0)!=0) then {
+				_ver = _ver + (if (_ver=="") then {""} else {","}) + Format["%1",_x select 0];
+			};
+		} forEach FWATCH_MODLISTCFG;
 		
 		_output = _output + "&mod=" + _mod + "&ver=" + _ver;
 	};
@@ -631,61 +416,69 @@ FUNCTION_REFRESH_MODLIST = {
 
 
 FUNCTION_DOWNLOAD_INFO = {
-	_title = _this select 0;
-	_text  = _this select 1;
+	if (!_silent_mode) then {
+		_title = _this select 0;
+		_text  = _this select 1;
 
-	lbSetValue [6657, lbAdd [6657,"["+_title+"]"], 0];
-	lbSetCurSel [6657, (lbSize 6657)-1];
+		lbSetValue [6657, lbAdd [6657,"["+_title+"]"], 0];
+		lbSetCurSel [6657, (lbSize 6657)-1];
 
-	"ctrlShow [_x,false]" forEach _serverDialog;
-	"ctrlShow [_x,true ]" forEach [6460, 6463];
-	
-	if (_text != "compareversion") then {
-		ctrlSetText [6463, _text];
-	} else {
-		ctrlSetText [6463, Format [MAINMENU_STR select 75, GS_VERSION, GS_MY_VERSION]];
-	};
-	
-	lbSetValue [6657, lbAdd [6657,MAINMENU_STR select 64], 223];
+		"ctrlShow [_x,false]" forEach _info_window;
+		"ctrlShow [_x,true ]" forEach [6460, 6463];
+		
+		if (_text != "compareversion") then {
+			ctrlSetText [6463, _text];
+		} else {
+			ctrlSetText [6463, Format [MAINMENU_STR select 75, GS_VERSION, GS_MY_VERSION]];
+		};
+		
+		lbSetValue [6657, lbAdd [6657,MAINMENU_STR select 64], 223];
+	}
 };
 
 
 
 FUNCTION_READ_DOWNLOADED_FILE = {
-	private ["_error", "_fileContent","_fileIntegrity","_error_message","_file_name"];
-	_error         = !(GS_DOWNLOAD_RESULT select 0);
-	_error_message = MAINMENU_STR select 15;
-	_file_name     = "downloadLog.txt";
-
-	if (GS_DOWNLOAD_RESULT select 0) then {
-		_fileContent   = loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\schedule.sqf";
-		_fileIntegrity = call _fileContent;
-
-		if (Format ["%1",_fileIntegrity] != "true") then {
-			_error = true;
-			
-			if (_fileContent != "") then {
-				_error_message = MAINMENU_STR select 18;
-				_file_name     = "schedule.sqf";
-			};
-		};
-	};
+	private ["_continue", "_downloaded_file", "_error","_error_title","_error_message","_file_to_display","_ok"];
 	
+	_continue        = _this select 0;
+	_downloaded_file = _this select 1;
+	_error           = !(GS_DOWNLOAD_RESULT select 0);
+	_error_title     = MAINMENU_STR select 15;
+	_error_message   = "";
+	_file_to_display = "downloadLog.txt";
+
+	// Read file if download succeeded
+	if (GS_DOWNLOAD_RESULT select 0) then {
+		_ok = call loadFile "\:IGSE DB file:..\fwatch\tmp\schedule\dl_schedule.db read:general";
+
+		// If reading failed
+		if (!(_ok select 0) || (count (_ok select 5) > 0)) then {
+			_error           = true;
+			_error_title     = MAINMENU_STR select 18;
+			_error_message   = if (!(_ok select 0)) then {_ok select 3} else {"Missing general key"};
+			_file_to_display = "";
+		};
+	};	
+	
+	// Display error
 	if (_error) then {
 		if ((GS_DOWNLOAD_RESULT select 1) == 5) then {
 			if ((GS_DOWNLOAD_RESULT select 2) in [5,186]) then {
 				GS_DOWNLOAD_RESULT set [3, (GS_DOWNLOAD_RESULT select 3)+"\n\nCheck if firewall or antivirus aren't blocking\n\nGo to fwatch.exe properties and set it to run as an administrator"];
 			};
 			
-			[_error_message, GS_DOWNLOAD_RESULT select 3] call FUNCTION_DOWNLOAD_INFO;
+			[_error_title, GS_DOWNLOAD_RESULT select 3] call FUNCTION_DOWNLOAD_INFO;
 			goto "ResetLMB";
 		} else {
+			// Download from the next mirror
 			if (_mirror<count (_all_url select _i)-1) then {
-				lbSetValue [6657, lbAdd [6657,"["+_error_message+"]"], 0];
+				if (!_silent_mode) then {lbSetValue [6657, lbAdd [6657,"["+_error_title+"]"], 0]};
 				_mirror = _mirror + 1;
-				goto _this;
+				goto _continue;
 			} else {
-				[_error_message,(GS_DOWNLOAD_RESULT select 3)+"\n\n"+(loadFile Format ["\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\%1",_file_name])] call FUNCTION_DOWNLOAD_INFO;
+				// No more mirrors
+				[_error_title,(GS_DOWNLOAD_RESULT select 3)+"\n\n"+(loadFile Format ["\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\%1",_file_to_display])] call FUNCTION_DOWNLOAD_INFO;
 				goto "ResetLMB";
 			};		
 		};
@@ -717,12 +510,12 @@ FUNCTION_VOICE_URL_FIND = {
 FUNCTION_BUILD_PREVIEW_LINK = {
 	private ["_url", "_id_list", "_ver_list", "_id_string", "_ver_string", "_i", "_positions"];
 	
-	_url          = _this select 0;
-	_id_list      = _this select 1;
-	_ver_list     = _this select 2;
-	_id_string    = "";
-	_ver_string   = "";
-	_i            = -1;
+	_url        = _this select 0;
+	_id_list    = _this select 1;
+	_ver_list   = _this select 2;
+	_id_string  = "";
+	_ver_string = "";
+	_i          = -1;
 	
 	_positions = call loadFile ("\:STRING FIND find:/text:"+_url);
 	if (count _positions > 0) then {
@@ -837,7 +630,7 @@ FUNCTION_STRINGTABLE = {
 			"[Poka¿ prywatne mody]",		//89
 			"Napisz has³a do prywatnych modów",		//90
 			"[Wyszukaj]",		//91
-			"Wpisz nazwê moda lub kategorii (rozszerzenie; zbióraddonów; uzupe³nienie; zbiórmisji; narzêdzia)",		//92
+			"Wpisz nazwê moda lub kategorii (rozszerzenie; zbiór addonów; uzupe³nienie; zbiór misji; narzêdzia)",		//92
 			"Typ:",		//93
 			"Do pobrania:",		//94
 			"Doda³:",		//95
@@ -1065,7 +858,7 @@ FUNCTION_STRINGTABLE = {
 			"[Show Private Mods]",		//89
 			"Type in password(s) to show private mod(s)",		//90
 			"[Search]",		//91
-			"Type mod or category name (replacement; addonpack; supplement; missionpack; tools)",		//92
+			"Type mod or category name (replacement; addon pack; supplement; mission pack; tools)",		//92
 			"Type:",		//93
 			"Download:",		//94
 			"Added by:",		//95
@@ -1101,14 +894,14 @@ FUNCTION_FORMAT_PASSWORD_STRING = {
 	_output = "";
 	_values = "";
 	_i      = -1;
-	_array  = call loadFile Format ["\:STRING TOKENIZE  text:%1delimiter: ", _this];
+	_array  = call loadFile Format ["\:STRING TOKENIZE  text:%1delimiter: ", _this select 0];
 	
 	while "_i=_i+1; _i<count _array" do {
 		_values = _values + (if (_i==0) then {""} else {","}) + (_array select _i);
 	};
 	
 	if (_values != "") then {
-		_output = _output + "&password=" + _values;
+		_output = _output + "&"+(_this select 1)+"=" + _values;
 	};
 	
 	_output
@@ -1128,68 +921,83 @@ FUNCTION_LBADD = {
 
 
 FUNCTION_SHOW_MOD_INFO = {
-	private ["_index", "_type", "_description"];
-	_index = _this select 0;
-	_type  = _this select 1;
+	private ["_ok", "_mod_id", "_source", "_description", "_index_local"];
+	_mod_id          = _this select 0;
+	_source          = _this select 1;
+	_mod_name        = "";
+	_mod_type        = 0;
+	_mod_version     = 0;
+	_mod_forcename   = false;
+	_mod_size        = "";
+	_mod_sizearray   = [0,0,0];
+	_mod_is_mp       = true;
+	_mod_addedby     = "";
+	_mod_description = "";
+	_mod_website     = "";
+	_mod_logo        = "";
+	_mod_logohash    = "";
+	_ok              = [false,0,0,"",[],[]];
 	
-	if (_index >= 0) then {
-		"ctrlShow [_x,false]" forEach _serverDialog;
+	if (_mod_id != "") then {
+		_ok = call loadFile Format ["\:IGSE DB file:..\fwatch\tmp\schedule\dl_mods.db read:%1", _mod_id];
+	};
+	
+	if ((_ok select 0) && count (_ok select 5)==0) then {
+		"ctrlShow [_x,false]" forEach _info_window;
 		"ctrlShow [_x,true ]" forEach [6460, 6461, 6462];
 	
-		ctrlSetText [6462, _all_modsNAME select _index];
+		ctrlSetText [6462, _mod_name];
 		
-		_description = MAINMENU_STR select (99 + (_all_modsTYPE select _index));
-		if (_all_modsFORCENAME select _index) then {_description=Format["%1\n%2",_description, MAINMENU_STR select 97]};
-		if (!(_all_modsISMP select _index)) then {_description=Format["%1\n%2",_description, MAINMENU_STR select 98]};
+		_description = MAINMENU_STR select (99 + _mod_type);
+		if (_mod_forcename) then {_description=Format["%1\n%2",_description, MAINMENU_STR select 97]};
+		if (!_mod_is_mp) then {_description=Format["%1\n%2",_description, MAINMENU_STR select 98]};
 		
 		[6480, _description] call FUNCTION_CTRLSETTEXT;
 		ctrlSetText [6480, MAINMENU_STR select 93];
 		
-		[6530, _all_modsADDEDBY select _index] call FUNCTION_CTRLSETTEXT;
+		[6530, _mod_addedby] call FUNCTION_CTRLSETTEXT;
 		ctrlSetText [6530, MAINMENU_STR select 95];
 		
-		[6550, _all_modsDESCRIPTION select _index] call FUNCTION_CTRLSETTEXT;
+		[6550, _mod_description] call FUNCTION_CTRLSETTEXT;
 		ctrlSetText [6550, MAINMENU_STR select 96];
 		
-		if ((_all_modsDESCRIPTION select _index) != "") then {
-			[6540, (call loadFile Format ["\:STRING DOMAIN url:%1", (_all_modsWEBSITE select _index)]) select 3] call FUNCTION_CTRLSETTEXT
-		};
+		[6540, (call loadFile Format ["\:STRING DOMAIN url:%1", _mod_website]) select 3] call FUNCTION_CTRLSETTEXT;
 		
 		ctrlShow [6464, true];
 		ctrlSetText [6464, MAINMENU_STR select 104];
 			
-		_index_local = [_all_modsID select _index, FWATCH_MODLISTID] call FUNCTION_FIND;
+		_index_local = [_mod_id, FWATCH_MODLISTID] call FUNCTION_FIND;
 		
 		// Showing info for users mods
-		if (_type == "local") then {
+		if (_source == "local") then {
 			if (_index_local >= 0) then {
 				[6470, Format["%1",(FWATCH_MODLISTCFG select _index_local) select 0]] call FUNCTION_CTRLSETTEXT;
 				
-				if (((FWATCH_MODLISTCFG select _index_local) select 0) < (_all_modsVER select _index)) then {
+				if (((FWATCH_MODLISTCFG select _index_local) select 0) < _mod_version) then {
 					[6472, true] call FUNCTION_SHOW_RED_TEXT;
-					[6490, _all_modsSIZE select _index] call FUNCTION_CTRLSETTEXT;
+					[6490, _mod_size] call FUNCTION_CTRLSETTEXT;
 					ctrlSetText [6490, MAINMENU_STR select 94];
 				}
 			};
 		// Showing info for mods from the db
 		} else {
-			_description = Format ["%1",_all_modsVER select _index];
+			_description = Format ["%1",_mod_version];
 			
 			if (_index_local >= 0) then {
-				if (((FWATCH_MODLISTCFG select _index_local) select 0) != (_all_modsVER select _index)) then {
-					_description = Format ["%1 --> %2", (FWATCH_MODLISTCFG select _index_local) select 0, _all_modsVER select _index];
+				if (((FWATCH_MODLISTCFG select _index_local) select 0) != _mod_version) then {
+					_description = Format ["%1 --> %2", (FWATCH_MODLISTCFG select _index_local) select 0, _mod_version];
 				}
 			};
 			
 			[6470, _description] call FUNCTION_CTRLSETTEXT;
-			[6490, _all_modsSIZE select _index] call FUNCTION_CTRLSETTEXT;
+			[6490, _mod_size] call FUNCTION_CTRLSETTEXT;
 			ctrlSetText [6490, MAINMENU_STR select 94];
 		};
 		
 		// Logo
-		["logo_mod", "schedulemodlogo.bin", _all_modsLOGO select _index, _all_modsID select _index, _all_modsLOGOHASH select _index, _all_modsNAME select _index, lbCurSel 6657] call FUNCTION_DISPLAY_LOGO;
+		["logo_mod", "schedulemodlogo.bin", _mod_logo, _mod_id, _mod_logohash, _mod_name, lbCurSel 6657] call FUNCTION_DISPLAY_LOGO;
 	} else {
-		"ctrlShow [_x,false]" forEach _serverDialog;
+		"ctrlShow [_x,false]" forEach _info_window;
 	}
 };
 

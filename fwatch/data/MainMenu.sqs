@@ -12,25 +12,21 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2023,3,18,6,18,22,50,842,60,FALSE]
+	GS_FWATCH_MY_VERSION = [2023,4,8,6,14,6,39,519,120,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
-	? Format ["%1", count GS_SERVER_STATUS] == "scalar" : GS_SERVER_STATUS=[[],[]]; GS_SERVER_STATUS_DATE=+GS_FWATCH_MY_VERSION; GS_SERVER_STATUS_THREADS=0
-
 
 	; Won't work with older version
-	_version = call loadFile ":info version"
-	? _version < 1.16 : titleText ["Requires Fwatch 1.16. Please update your version.","PLAIN DOWN",1]; exit
+	_fwatch_version = call loadFile ":info version"
+	? _fwatch_version < 1.16 : titleText ["Requires Fwatch 1.16. Please update your version.","PLAIN DOWN",1]; exit
 
 	_fwatch_test_version = 0
-	_ext = call loadFile ":info version extended"
-	IS_CWA = _ext select 1
+	_fwatch_version      = call loadFile ":info version extended"
+	IS_CWA               = _fwatch_version select 1
+	_my_game_version     = _fwatch_version select 4
 	? _fwatch_test_version < 3 : titleText ["New test version of Fwatch 1.16 required.\n\nPlease update your version.\n\nofp-faguss.com/fwatch/116test","PLAIN",1.5]; exit
 	
-	; Create or close dialog
 	? "download" in _this                : goto "DownloadImageThread"
-	? "queryserver" in _this             : goto "QueryServer"
-	? "queryserver_animate" in _this     : goto "QueryServer_Animate"
 	? MAINMENU_INPUT || ctrlVisible 6900 : exit
 	? ctrlVisible 6657                   : if (!(lbValue[6657,0] in [1,4])) then {LOADMOD_MODSELECTOR=true} else {closeDialog 0}; exit
 
@@ -42,31 +38,26 @@
 	@Format ["%1",count FWATCH_INPUT_MULTI] != "scalar"
 	
 	; Remove invalid databases
-	{_ok=call loadFile Format ["\:IGSE DB  ""file:..\fwatch\tmp\schedule\%1"" verify:1",_x]; if ((_ok select 1) in [280,282,283,284,285,286,287,288,289]) then {loadFile Format ["\:IGSE NEW  ""file:..\fwatch\tmp\schedule\%1""  mode:delete",_x]}} forEach ["mods.bin", "schedule.bin", "params.bin", "schedulelogo.bin"]
+	{_ok=call loadFile Format ["\:IGSE DB  ""file:..\fwatch\tmp\schedule\%1"" verify:1",_x]; if ((_ok select 1) in [280,282,283,284,285,286,287,288,289]) then {loadFile Format ["\:IGSE NEW  ""file:..\fwatch\tmp\schedule\%1""  mode:delete",_x]}} forEach ["schedule.bin", "params.bin", "schedulelogo.bin"]
 	
 	_silent_mode = "silent" in _this
 	_ok          = if (!_silent_mode) then {createDialog "MAINMENU_MODSLIST"} else {true}
 	? !_ok : titleText [MAINMENU_STR select 0,"PLAIN DOWN",1]; exit
 
-	
-
-	; hide server details
-	_serverDialog = [6460, 6461, 6462, 6463,   6470, 6471, 6472,   6480, 6481, 6482,   6490, 6491, 6492,   6500, 6501, 6502,  6510, 6511,   6520, 6521,   6530, 6531,   6540, 6541,   6550,6551,  6464]
-	"ctrlShow [_x,false]" forEach _serverDialog
+	; Hide info window
+	_info_window = [6460, 6461, 6462, 6463,   6470, 6471, 6472,   6480, 6481, 6482,   6490, 6491, 6492,   6500, 6501, 6502,  6510, 6511,   6520, 6521,   6530, 6531,   6540, 6541,   6550,6551,  6464]
+	"ctrlShow [_x,false]" forEach _info_window
 	ctrlEnable [6463, false]
 	ctrlSetText [6450, MAINMENU_STR select 2]
 	ctrlSetText [6451, MAINMENU_STR select 3]
 	
-	_my_cpp_version = 0
+	; Check resource.cpp version
+	_my_cpp_version       = 0
 	_required_cpp_version = 0.5
 	? ctrlVisible 6465 : if (ctrlText 6465 != "") then {_my_cpp_version=call (ctrlText 6465)}
 	? !_silent_mode && _my_cpp_version != _required_cpp_version : if (count (call loadFile ":mem modlist") == 0) then {goto "DisplayUpdateInformation"} else {titleText [MAINMENU_STR select 1,"PLAIN DOWN",1]}
-
-
-
 	
-	; Set variables -----------------------------------------------------------------------------------------------------
-	; to switch sections
+	; Set variables for switching sections
 	LOADMOD_MODSELECTOR  = false
 	LOADMOD_MASTERSERVER = false
 	LOADMOD_SCHEDULE     = false
@@ -74,16 +65,16 @@
 	? _silent_mode : goto "InitLocalVars"
 	
 	; Listbox position
-	_x = (_this select 0)
-	_y = (_this select 1)
-	_w = _x + (_this select 2)
-	_h = _y + (_this select 3)
+	_x         = (_this select 0)
+	_y         = (_this select 1)
+	_w         = _x + (_this select 2)
+	_h         = _y + (_this select 3)
 	_tolerance = 0.05
-	_mx = (FWATCH_INPUT_MULTI select 3) select 2
-	_my = (FWATCH_INPUT_MULTI select 3) select 3
-	_m_moved = false
+	_mx        = (FWATCH_INPUT_MULTI select 3) select 2
+	_my        = (FWATCH_INPUT_MULTI select 3) select 3
+	_m_moved   = false
 
-	; Extra instructions from the resource.cpp
+	; Execute additional instructions from the resource.cpp
 	? count _this <= 4 : goto "SkipResourceInstructions"
 	
 		_i = 4
@@ -104,14 +95,15 @@
 	#InitLocalVars
 	_cur                 = -1
 	_lastCur             = -1
-	_mods                = []
+	_launch_queue        = []
 	_pressed             = ""
-	_myVersion           = (call loadFile ":info version extended") select 4
 	_install_status      = -1
 	_install_timing      = 0
 	_install_hanged      = false
 	_jump_to_server      = ""
 	_timeout             = 0
+	_color_red           = [1,0,0,0.5]
+	_color_pink          = [1,0.8,0.9,0.5]
 	_color_fireenginered = [246/255, 40/255 , 23/255 , 1]
 	_color_coral         = [255/255, 127/255, 80/255 , 1]
 	_color_sandybrown    = [238/255, 154/255, 77/255 , 1]
@@ -119,10 +111,22 @@
 	_color_yellowgreen   = [82/255 , 208/255, 23/255 , 1]
 	_color_sand          = [194/255, 178/255, 128/255, 1]
 	_color_cottoncandy   = [252/255, 223/255, 255/255, 1]
-	_serv_status_threads = GS_SERVER_STATUS_THREADS
-	
+	_mod_name            = ""
+	_mod_type            = 0
+	_mod_version         = 0
+	_mod_forcename       = false
+	_mod_size            = ""
+	_mod_sizearray       = [0,0,0]
+	_mod_is_mp           = true
+	_mod_addedby         = ""
+	_mod_description     = ""
+	_mod_website         = ""
+	_mod_logo            = ""
+	_mod_logohash        = ""
+    _server_uniqueid     = "mod"
+    
 	if (!_m_moved && (_mx<_x || _mx>_w || _my<_y || _my>_h)) then {loadFile Format [":mem setcursor %1 %2", _w, _y]; _m_moved=nil}
-	goto "GetModfolders"
+	goto "ModLauncher_Display"
 	
 
 	
@@ -136,8 +140,8 @@
 	#MainLoop
 	~0.03
 	? !ctrlVisible 6657    : exit
-	? LOADMOD_MODSELECTOR  : LOADMOD_MODSELECTOR =false; "ctrlShow [_x,false]" forEach _serverDialog; _lastCur=-1; goto "GetModfolders"
-	? LOADMOD_MASTERSERVER : LOADMOD_MASTERSERVER=false; "ctrlShow [_x,false]" forEach _serverDialog; _lastCur=1 ; goto "MasterServer"
+	? LOADMOD_MODSELECTOR  : LOADMOD_MODSELECTOR =false; "ctrlShow [_x,false]" forEach _info_window; _lastCur=-1; goto "ModLauncher_Display"
+	? LOADMOD_MASTERSERVER : LOADMOD_MASTERSERVER=false; "ctrlShow [_x,false]" forEach _info_window; _lastCur=1 ; goto "MasterServer"
 	? LOADMOD_SCHEDULE     : LOADMOD_SCHEDULE    =false; goto "Schedule"
 	
 	; If selection changed in the listbox
@@ -149,17 +153,14 @@
 		_value   = lbValue [6657, _cur]
 		_lastCur = _cur
 		
-		? _value in [2,3] : [(if (_data!="") then {[_data,_all_modsID] call FUNCTION_FIND} else {-1}), "local"] call FUNCTION_SHOW_MOD_INFO
-		? _value == 6     : [(call _data), "global"] call FUNCTION_SHOW_MOD_INFO
+		? _value in [2,3] : [_data, "local"] call FUNCTION_SHOW_MOD_INFO
+		? _value == 6     : [_data, "global"] call FUNCTION_SHOW_MOD_INFO
 		? _value == 201   : if (ctrlVisible 6463) then {goto "DisplayServerStatus"} else {goto "DisplayServer"}
 		? _value == 211   : goto "DisplayGameRestart"
 		#SkipSelectionCheck
 	
-	
-	; Check cursor pos
 	_mx = (FWATCH_INPUT_MULTI select 3) select 2
 	_my = (FWATCH_INPUT_MULTI select 3) select 3
-	;if (_mx<_x-_tolerance || _mx>_w+_tolerance || _my<_y-_tolerance || _my>_h+_tolerance) then {_timeout=_timeout+1; if (_timeout>3) then {closeDialog 0; exit}} else {_timeout=0}
 	
 	; Read input to check double-click
 	_keys  = FWATCH_INPUT_MULTI select 0
@@ -181,42 +182,41 @@
 		? _LMBtime==0 &&  _LMB                : _LMBtime=_time
 	
 	? _install_status >= 0 : if (_time+0.1>_install_timing) then {_install_timing=_time; goto "InstallWait"}
-	? _serv_status_threads != GS_SERVER_STATUS_THREADS : _serv_status_threads=GS_SERVER_STATUS_THREADS; _index=lbValue [6657, (lbSize 6657)-1]; if (!(_index in [207,212])) then {goto "FillListbox"}
 	goto "MainLoop"
 
 
 	
 	
-	; User double-clicked record in the listbox -------------------------------------------------------------------------
+	; User double-clicked on the listbox row ----------------------------------------------------------------------------
 	#Option
 	_lastCur = -1
 	
 	; Modfolders options
-	? _value == 1 : loadFile ":restart client"; closeDialog 0; exit
-	? _value == 2 : goto "AddModfolder"
-	? _value == 3 : if (_shift) then {goto "RemoveModfolder"} else {goto "RestartGame"}
-	? _value == 4 : goto "DownloadMods"
-	? _value == 5 : goto "GetModfolders" 
-	? _value == 6 : goto "DownloadMods_QueueForInstall"
-	? _value == 7 : _name=_data; goto "AddModfolder"
-	? _value == 8 : _name=_data; if (_name in _mods) then {_mods=_mods-[_name]; lbSetColor [6657,_cur,[1,1,1, 0.65]]} else {_mods=_mods+[_name]; lbSetColor [6657, _cur, [1,0,0,0.5]]}; goto "DisplayModfolder"
-	? _value == 9 : goto "DownloadMods_ShowOptions"
+	? _value == 1  : loadFile ":restart client"; closeDialog 0; exit
+	? _value == 2  : goto "ModLauncher_AddToQueue"
+	? _value == 3  : if (_shift) then {goto "ModLauncher_RemoveFromQueue"} else {goto "ModLauncher_RestartGame"}
+	? _value == 4  : _mode="mods"; _server_uniqueid="mod"; goto "DownloadDatabase"
+	? _value == 5  : goto "ModLauncher_Display" 
+	? _value == 6  : goto "DownloadMods_QueueForInstall"
+	? _value == 7  : _name=_data; goto "ModLauncher_AddToQueue"
+	? _value == 8  : _name=_data; if (_name in _launch_queue) then {_launch_queue=_launch_queue-[_name]; lbSetColor [6657,_cur,[1,1,1, 0.65]]} else {_launch_queue=_launch_queue+[_name]; lbSetColor [6657, _cur, _color_red]}; goto "ModLauncher_ShowQueue"
+	? _value == 9  : goto "DownloadMods_ShowOptions"
 	? _value == 10 : _shift=true; goto "DownloadMods_QueueForInstall"
 	
 	; Master server options
-	? _value == 100 : _Label="MasterServerValidateInput"; _Input=""; _Input_Note=""; goto "INPUT"
+	? _value == 100 : _Label="MasterServer_ValidateInput"; _Input=""; _Input_Note=""; goto "INPUT"
 	? _value == 101 : titleText [MAINMENU_STR select 4, "PLAIN DOWN", 0.1]; goto "ResetLMB"
-	? _value == 102 : loadFile Format ["\:mem masterserver set %1", _name]; _Input=_name; goto "MasterServerSave"
+	? _value == 102 : loadFile Format ["\:mem masterserver set %1", _name]; _Input=_name; goto "MasterServer_SaveFile"
 	
 	; Game schedule options
 	? _value == 201 : goto "ServerOptions"
 	? _value == 204 : goto "DownloadModfolders"
-	? _value == 205 : loadFile Format ["\:EXE WEBSITE %1", _server_website]
+	? _value == 205 : loadFile Format ["\:EXE WEBSITE %1", (if (_server_uniqueid=="mod") then {_mod_website} else {_server_website})]
 	? _value == 206 : goto "EditStartupParameters"
-	? _value == 207 : goto "FillListBox"
-	? _value == 208 : if (_install_hanged) then {loadFile ":IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  remove:savestate"; loadFile ":IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\install_progress.sqf"; _install_status=-1; _install_hanged=false; if (_server_uniqueid=="mod") then {goto "GetModfolders"} else {goto "Schedule"}} else {loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:abort"]}
+	? _value == 207 : goto "Schedule_List_Servers"
+	? _value == 208 : if (_install_hanged) then {loadFile ":IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  remove:savestate"; loadFile ":IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\install_progress.sqf"; _install_status=-1; _install_hanged=false; if (_server_uniqueid=="mod") then {goto "ModLauncher_Display"} else {goto "Schedule"}} else {loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:abort"]}
 	? _value == 209 : loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:restart"]
-	? _value == 210 : _jump_to_server=_server_uniqueid; _install_status=-1; loadFile ":IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  remove:savestate"; loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\install_progress.sqf"; call FUNCTION_REFRESH_MODLIST; if (_server_uniqueid=="mod") then {goto "GetModfolders"} else {goto "Schedule"}
+	? _value == 210 : _jump_to_server=_server_uniqueid; _install_status=-1; loadFile ":IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  remove:savestate"; loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\install_progress.sqf"; call FUNCTION_REFRESH_MODLIST; if (_server_uniqueid=="mod") then {goto "ModLauncher_Display"} else {goto "Schedule"}
 	? _value == 211 : goto "CancelGameRestart"
 	? _value == 212 : goto "ServerOptions"
 	? _value == 213 : goto "AssignID_ForThisMod"
@@ -229,18 +229,18 @@
 	? _value == 220 : _action="auto"; goto "Voice"
 	? _value == 221 : _action="connect"; goto "Voice"
 	? _value == 222 : if ((GS_VOICE select (_server_voice select 0)) select 1) then {loadFile Format ["\:RESTART CLIENT -evoice=%1", _server_voice select 1]} else {loadFile Format ["\:EXE WEBSITE %1", (GS_VOICE select (_server_voice select 0)) select 2]}
-	? _value == 223 : lbDelete [6657, (lbSize 6657)-1]; "ctrlShow [_x,false]" forEach _serverDialog; if (_server_uniqueid!="mod") then {goto "SkipURL"} else {goto "DownloadMods_SkipURL"}
+	? _value == 223 : lbDelete [6657, (lbSize 6657)-1]; "ctrlShow [_x,false]" forEach _info_window; if (_server_uniqueid!="mod") then {goto "SkipURL"} else {goto "DownloadMods_SkipURL"}
 	? _value == 224 : loadFile ("\:EXE WEBSITE "+([_url,_missing_mods_id,_missing_mods_myversion] call FUNCTION_BUILD_PREVIEW_LINK))
-	? _value == 225 : loadFile ("\:EXE WEBSITE "+([_url,_server_modfolders,[]] call FUNCTION_BUILD_PREVIEW_LINK))
-	? _value == 226 : _ok=call loadFile Format ["\:RESTART CLIENT -updateresource=%1",(call loadFile ":info version extended") select 4]; if (!(_ok select 0)) then {titleText [_ok select 3, "PLAIN DOWN", 1.5]} else {closeDialog 0; exit}
+	? _value == 225 : loadFile ("\:EXE WEBSITE "+([_url,(call "_array=[]; {_array set [count _array, _x select 0]} foreach _server_modfolders; _array"),[]] call FUNCTION_BUILD_PREVIEW_LINK))
+	? _value == 226 : _ok=call loadFile Format ["\:RESTART CLIENT -updateresource=%1",_my_game_version]; if (!(_ok select 0)) then {titleText [_ok select 3, "PLAIN DOWN", 1.5]} else {closeDialog 0; exit}
 	? _value == 227 : closeDialog 0; exit
 	? _value == 228 : _Input= _access_code_mod; _Label="SaveModAccessCode"; _Input_Note=MAINMENU_STR select 90; goto "INPUT"
 	? _value == 229 : _Input= _mod_search_phrase; _Label="SaveModSearchPhrase"; _Input_Note=MAINMENU_STR select 92; goto "INPUT"
 	goto "ResetLMB"
 	
 	#OptionRightMouseClick
-	? _value in [2,3,6] : goto "ModfolderRightClickOptions"
-	? _value == 201 : if (!ctrlVisible 6463) then {goto "DisplayServerStatus"} else {goto "DisplayServer"}
+	? _value in [2,3,6] : goto "ModLauncher_ShowOptions"
+	? _value == 201     : if (!ctrlVisible 6463) then {goto "DisplayServerStatus"} else {goto "DisplayServer"}
 	goto "ResetLMB"
 
 
@@ -249,8 +249,8 @@
 	
 	
 	
-	; MOD SELECTOR feature ==============================================================================================
-	#GetModfolders
+	; Mod launcher feature ==============================================================================================
+	#ModLauncher_Display
 	buttonSetAction [6450, "LOADMOD_SCHEDULE=true"]
 	buttonSetAction [6451, "LOADMOD_MASTERSERVER=true"]
 
@@ -265,311 +265,111 @@
 	FWATCH_CURRMOD     = call loadFile ":mem modlist"
 	call FUNCTION_REFRESH_MODLIST
 	
-	; load mod info
-	_all_url             = []
-	_all_mirror          = []
-	_all_modsID          = []
-	_all_modsURL         = []
-	_all_modsNAME        = []
-	_all_modsTYPE        = []
-	_all_modsFORCENAME   = []
-	_all_modsISMP        = []
-	_all_modsADDEDBY     = []
-	_all_modsDESCRIPTION = []
-	_all_modsSIZE        = []
-	_all_modsVER         = []
-	_all_modsWEBSITE     = []
-	_all_modsLOGO        = []
-	_all_modsLOGOHASH    = []
-	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  read:modsread:url"
-	
-	? _silent_mode : goto "DownloadMods"
+	? _silent_mode : _mode="mods"; goto "DownloadDatabase"
 
-	; Put directories to the listbox
-	#ListModfolders
 	"ctrlShow [_x, false] " forEach [6301, 6311]
 	"ctrlSetText [_x,""""]" forEach [6300, 6301]
-	"ctrlShow [_x,false]" forEach _serverDialog
+	"ctrlShow [_x,false]"   forEach _info_window
 
 	lbClear 6657
 	lbSetCurSel [6657,-1]
 	? count FWATCH_CURRMOD > 0 : [MAINMENU_STR select 6, 1, _color_gingerbrown] call FUNCTION_LBADD
 	[MAINMENU_STR select 82, 4, _color_gingerbrown] call FUNCTION_LBADD
 
-	_id = 0;
-	_i = 0
-	"_id=lbAdd [6657, _x]; lbSetData [6657, _id, FWATCH_MODLISTID select _i]; lbSetValue [6657, _id, 2]; if (_x in _mods) then {lbSetColor [6657, _id, [1,0,0,0.5]]; lbSetValue [6657, _id, 3]} else {if([_x,FWATCH_CURRMOD] call FUNCTION_FIND>=0) then {lbSetColor [6657,_id,[1,0.8,0.9,0.5]]}}; _i=_i+1" forEach FWATCH_MODLIST
+	_i=0; FUNCTION_ADD_MOD_TO_LISTBOX forEach FWATCH_MODLIST
 	
 	? Format ["%1",_last_selected]!="scalar bool array string 0xfcffffef" : lbSetCurSel [6657, _last_selected+9]; lbSetCurSel [6657, _last_selected]; _last_selected=nil
 	goto "ResetLMB"
 
 
-	; Add to the list
-	#AddModfolder
-	_mods = _mods + [_name]
-	? !_shift : goto "RestartGame"
+	#ModLauncher_AddToQueue
+	_launch_queue = _launch_queue + [_name]
+	? !_shift : goto "ModLauncher_RestartGame"
 	lbSetValue [6657, _cur, 3]
-	lbSetColor [6657, _cur, [1,0,0,0.5]]
-	goto "DisplayModfolder"
+	lbSetColor [6657, _cur, _color_red]
+	goto "ModLauncher_ShowQueue"
 	
-	; Remove from the list
-	#RemoveModfolder
-	_mods = _mods - [_name]
+	#ModLauncher_RemoveFromQueue
+	_launch_queue = _launch_queue - [_name]
 	lbSetValue [6657, _cur, 2]
-	if ([_name,FWATCH_CURRMOD] call FUNCTION_FIND>=0) then {lbSetColor [6657,_cur,[1,0.8,0.9,0.5]]} else {lbSetColor [6657,_cur,[1,1,1, 0.65]]}
-	goto "DisplayModfolder"
+	if ([_name,FWATCH_CURRMOD] call FUNCTION_FIND>=0) then {lbSetColor [6657,_cur,_color_pink]} else {lbSetColor [6657,_cur,[1,1,1, 0.65]]}
+	goto "ModLauncher_ShowQueue"
 	
-	; Show argument list
-	#DisplayModfolder
+	#ModLauncher_ShowQueue
 	_i      = 0
 	_string = "-mod="
-	"_string=_string+_x; if (_i<count _mods-1) then {_string=_string+"";""}; _i=_i+1" forEach _mods
+	"_string=_string+_x; if (_i<count _launch_queue-1) then {_string=_string+"";""}; _i=_i+1" forEach _launch_queue
 	titleText [_string, "PLAIN DOWN", 0.1]
 	goto "ResetLMB"
 
-	; Restart game
-	#RestartGame
+	#ModLauncher_RestartGame
 	_i       = 0
 	_modLine = ""
-	"_modLine=_modLine+_x; if (_i<count _mods-1) then {_modLine=_modLine+"";""}; _i=_i+1" forEach _mods
+	"_modLine=_modLine+_x; if (_i<count _launch_queue-1) then {_modLine=_modLine+"";""}; _i=_i+1" forEach _launch_queue
 	loadFile Format ["\:RESTART CLIENT -mod=%1", _modLine]
 	closeDialog 0
 	exit
 	
-	#ModfolderRightClickOptions
+	; User pressed right-click on a mod - display additional options
+	#ModLauncher_ShowOptions
 	_last_selected = _cur
 	_queue_install = _value in [2,3]
 	_queue_launch  = _value == 6
 	
 	lbClear 6657
 	lbSetCurSel [6657, -1]
-	ctrlSetText [6464, ""];
+	ctrlSetText [6464, ""]
 
-	? _queue_install : _index=lbAdd [6657, "[" + (localize "STR_SINGLE_PLAY") + "]"]; lbSetValue [6657, _index, 7]; lbSetData  [6657, _index, _name]; 
+	? _queue_install : _index=lbAdd [6657, "[" + (localize "STR_SINGLE_PLAY") + "]"]; lbSetValue [6657, _index, 7]; lbSetData  [6657, _index, _name]
 	? _queue_launch  : _index=lbAdd [6657, loadFile Format ["\:STRING REPLACE text:%1find:%2replace:",MAINMENU_STR select 11," %1"]]; lbSetValue [6657, _index, 6]; lbSetData [6657, _index, _data]
 	
 	_index = lbAdd [6657, MAINMENU_STR select 105]
-	? _queue_install : lbSetData [6657, _index, _name]; lbSetValue  [6657, _index, 8]; if (_name in _mods) then {lbSetColor [6657, _index, [1,0,0,0.5]]}
-	? _queue_launch  : lbSetData [6657, _index, _data]; lbSetValue [6657, _index, 10]; if ((call _data) in _missing_mods) then {lbSetColor [6657, _index, [1,0,0,0.5]]}
-
-	_index = if (_queue_launch) then {call _data} else {if (_data!="") then {[_data,_all_modsID] call FUNCTION_FIND} else {-1}}
-	? _index >= 0 : _server_website=_all_modsWEBSITE select _index; if (_server_website != "") then {lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 30], 205]}
-	;? _index >= 0 : _url=(_all_url select (_all_modsURL select _index)) select (_all_mirror select (_all_modsURL select _index)); _missing_mods_id=[_data]; _index_local=[_data, FWATCH_MODLISTID] call FUNCTION_FIND; _my_version=(if (_index_local>=0) then {(FWATCH_MODLISTCFG select _index_local) select 0} else {0}); _missing_mods_myversion=[(if (_my_version<_all_modsVER select _index) then {_my_version-0.001} else {0})]; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 29], 224]
+	? _queue_install     : lbSetData [6657, _index, _name]; lbSetValue  [6657, _index, 8]; if (_name in _launch_queue) then {lbSetColor [6657, _index, _color_red]}
+	? _queue_launch      : lbSetData [6657, _index, _data]; lbSetValue [6657, _index, 10]; if (_data in _missing_mods_id) then {lbSetColor [6657, _index, _color_red]}
+	? _mod_website != "" : lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 30], 205]
 	
 	lbSetValue [6657, lbAdd[6657, MAINMENU_STR select 32], (if (_queue_install) then {5} else {9})]
 	goto "ResetLMB"
 	
 	
-	; Download new mods
-	#DownloadMods
-	? !_silent_mode : lbClear 6657
-	? !_silent_mode : lbSetCurSel [6657,-1]
-	~0.01
+	; Show list of downloadable mods
+	#DownloadMods_List
+	_mod_search_phrase = ""
+    _server_uniqueid   = "mod"
+	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  read:modsearch"
 	
-		; Read save state
-		_pid                = -1
-		_install_status     = -1
-		_server_name        = ""
-		_server_uniqueid    = "mod"
-		_server_equalModReq = false
-		_auto_restart       = false
-		_voice_name         = ""
-		_run_voice_program  = false
-		_playingNow         = false
-		_access_code_mod    = ""
-		_mod_search_phrase  = ""
-		_progress           = ""
-		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  read:accesscodemodread:modsearch"
-		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:savestate"
-		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
-		? _install_status >= 0 : if (_silent_mode) then {_progress=call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"; titleText [_progress, "PLAIN", 0.1]; exit} else {goto "InstallDisplay"}
-	
-	; Silent mode - download only once per game launch
-	? !_silent_mode : goto "SkipSilent"
-	_start_time_old = ""
-	_start_time_new = (call loadFile ":info starttime") select 4
-	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  read:starttime"
-	? Format ["%1",_start_time_old] == Format ["%1",_start_time_new] : goto "SilentModeSkipDownload"
-	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:starttimewrite:_start_time_old=%1", _start_time_new]
-	#SkipSilent
-	
-	_all_url  	         = +GS_DEFAULT_URL
-	_all_mirror          = []
-	_all_modsID          = []
-	_all_modsURL         = []
-	_all_modsNAME        = []
-	_all_modsTYPE        = []
-	_all_modsFORCENAME   = []
-	_all_modsISMP        = []
-	_all_modsADDEDBY     = []
-	_all_modsDESCRIPTION = []
-	_all_modsSIZE        = []
-	_all_modsSIZEARRAY   = []
-	_all_modsVER         = []
-	_all_modsWEBSITE     = []
-	_all_modsLOGO        = []
-	_all_modsLOGOHASH    = []
-	_update_available    = false
-	_saved_version       = 0
-					     
-	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:version"
-	? _saved_version < GS_MY_VERSION : 	loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\schedule.bin"
-	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:url"
-
-	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule"]
-	? !(_ok select 0) : titleText [Format[MAINMENU_STR select 13,_ok select 3],"PLAIN",1]; closeDialog 0; exit
-	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule  mode:check"]
-	? !(_ok select 0) : titleText [Format[MAINMENU_STR select 13,_ok select 3],"PLAIN",1]; closeDialog 0; exit
-	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule\logo_mod"]
-		
-	? Format ["%1",GS_DOWNLOAD_MODSLIST] == "scalar bool array string 0xfcffffef" : GS_DOWNLOAD_MODSLIST=true
-	? !GS_DOWNLOAD_MODSLIST : call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  read:urlread:mods"; if (count _all_modsID>0) then {_i=count _all_url; goto "DownloadMods_SkipURL"}
-	? !_silent_mode : (MAINMENU_STR select 10) call FUNCTION_MSG_LB
-	
-	_i          = 0
-	_done_url   = []
-	_mirror     = 0
-
-		#DownloadMods_ForEachURL
-		_url = (_all_url select _i) select _mirror
-		_all_mirror set [_i, _mirror]
-		? [_url,_done_url] call FUNCTION_FIND_URL >= 0 : goto "DownloadMods_SkipURL"
-
-		? !_silent_mode : ((call loadFile Format ["\:STRING DOMAIN url:%1", _url]) select 3) call FUNCTION_MSG_LB
-		? !_silent_mode : (MAINMENU_STR select 14) call FUNCTION_MSG_LB
-
-		; Download info about all mods
-		GS_DOWNLOAD_RESULT = []		
-		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 "+_url+"?mod=all&mode=mods&ver=0"+(["allusermods"] call FUNCTION_BUILD_QUERY_STRING)), "schedule\schedule.sqf", "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
-		@count GS_DOWNLOAD_RESULT != 0
-			
-			"DownloadMods_ForEachURL" call FUNCTION_READ_DOWNLOADED_FILE
-			
-			if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="scalar") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0}
-			? !_update_available && GS_VERSION != GS_MY_VERSION : [MAINMENU_STR select 20,""] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
-
-			; Add mods to the global list
-			_k = 0
-			"_all_modsURL set [count _all_modsURL, _i]; _all_modsID set [count _all_modsID,_x]; _all_modsNAME set [count _all_modsNAME,GS_MODS_NAME select _k]; _all_modsTYPE set [count _all_modsTYPE,GS_MODS_TYPE select _k]; _all_modsFORCENAME set [count _all_modsFORCENAME,GS_MODS_FORCENAME select _k]; _all_modsISMP set [count _all_modsISMP,GS_MODS_ISMP select _k]; _all_modsADDEDBY set [count _all_modsADDEDBY,GS_MODS_ADDEDBY select _k]; _all_modsDESCRIPTION set [count _all_modsDESCRIPTION,GS_MODS_DESCRIPTION select _k]; _all_modsSIZE set [count _all_modsSIZE,GS_MODS_SIZE select _k]; _all_modsVER set [count _all_modsVER,GS_MODS_VER select _k]; _all_modsSIZEARRAY set [count _all_modsSIZEARRAY,GS_MODS_SIZEARRAY select _k]; _all_modsWEBSITE set [count _all_modsWEBSITE,GS_MODS_WEBSITE select _k]; _all_modsLOGO set [count _all_modsLOGO,GS_MODS_LOGO select _k]; _all_modsLOGOHASH set [count _all_modsLOGOHASH,GS_MODS_LOGOHASH select _k]; _k=_k+1" forEach GS_MODS_ID
-
-		#DownloadMods_SkipURL
-		? _i < count _all_url-1 : _i=_i+1; _mirror=0; goto "DownloadMods_ForEachURL"
-		
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modswrite:_all_modsID=" + (_all_modsID call FLIB_FORMAT) + ";_all_modsURL=" + (_all_modsURL call FLIB_FORMAT) + ";")
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modsappend:_all_modsNAME=" + (_all_modsNAME call FLIB_FORMAT) + ";_all_modsTYPE=" + (_all_modsTYPE call FLIB_FORMAT) + ";")
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modsappend:_all_modsFORCENAME=" + (_all_modsFORCENAME call FLIB_FORMAT) + ";_all_modsISMP=" + (_all_modsISMP call FLIB_FORMAT) + ";")
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modsappend:_all_modsADDEDBY=" + (_all_modsADDEDBY call FLIB_FORMAT) + ";")
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modsappend:_all_modsDESCRIPTION=" + (_all_modsDESCRIPTION call FLIB_FORMAT) + ";")
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modsappend:_all_modsSIZE=" + (_all_modsSIZE call FLIB_FORMAT) + ";")
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modsappend:_all_modsSIZEARRAY=" + (_all_modsSIZEARRAY call FLIB_FORMAT) + ";")
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modsappend:_all_modsVER=" + (_all_modsVER call FLIB_FORMAT) + ";")
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modsappend:_all_modsWEBSITE=" + (_all_modsWEBSITE call FLIB_FORMAT) + ";")
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modsappend:_all_modsLOGO=" + (_all_modsLOGO call FLIB_FORMAT) + ";")
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:modsappend:_all_modsLOGOHASH=" + (_all_modsLOGOHASH call FLIB_FORMAT) + ";")
-	? GS_DOWNLOAD_MODSLIST : loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\mods.bin  key:urlwrite:_all_url=" + (_all_url call FLIB_FORMAT) + ";_all_mirror=" + (_all_mirror call FLIB_FORMAT) + Format[";_update_available=%1;GS_FWATCH_LAST_UPDATE=%2",_update_available,GS_FWATCH_LAST_UPDATE])
-	GS_DOWNLOAD_MODSLIST = false
-	
-	#SilentModeSkipDownload
-	? _update_available : if (_silent_mode) then {titleText [MAINMENU_STR select 86,"PLAIN DOWN",1]; exit} else {goto "DisplayUpdateInformation"}
-	
-	; Verify modfolders
-	_missing_mods               = []
 	_missing_mods_id            = []
 	_missing_mods_name          = []
 	_missing_mods_assign        = []
+	_missing_mods_version       = []
 	_missing_mods_myversion     = []
+	_missing_mods_forcename     = []
 	_missing_mods_sizearray     = [0,0,0]
 	_missing_mods_size          = ""
-	
-	#VerifyModfolders
-	_mods_that_user_doesnt_have = []
-	_mods_that_user_has         = []
-	
-		_i = 0
-		? count _all_modsID == 0 : goto "DownloadMods_CheckForMissingMods_Skip" 
-		#DownloadMods_CheckForMissingMods
-		~(if (_silent_mode) then {0.01} else {0})
-		_add_to_missing = true
-		_assign         = false
-		_mod_name       = _all_modsNAME select _i
-
-		_index_local = [_all_modsID select _i, FWATCH_MODLISTID] call FUNCTION_FIND
-		? _index_local >= 0 : _mod_name=FWATCH_MODLIST select _index_local; _add_to_missing=((FWATCH_MODLISTCFG select _index_local) select 0) < (_all_modsVER select _i); if (_add_to_missing) then {_mods_that_user_has set [count _mods_that_user_has, _i]}
-		? _add_to_missing   : _mods_that_user_doesnt_have set [count _mods_that_user_doesnt_have, _i]; goto "DownloadMods_CheckForMissingMods_Skip"
-		? ((FWATCH_MODLISTCFG select _index_local) select 3) in [(_all_modsFORCENAME select _i)] && (_all_modsNAME select _i)==((FWATCH_MODLISTCFG select _index_local) select 2) : goto "DownloadMods_CheckForMissingMods_Skip"
-		
-			; Rewrite id file
-			(FWATCH_MODLISTCFG select _index_local) set [2, _all_modsNAME select _i]
-			(FWATCH_MODLISTCFG select _index_local) set [3, _all_modsFORCENAME select _i]
-			loadFile Format ["\:EXE ADDONINSTALL  -assignidpath=%1 -assignname=%2 -assignid=%3;%4 -assignkeepname=%5", _mod_name, _all_modsNAME select _i, FWATCH_MODLISTID select _index_local, (FWATCH_MODLISTCFG select _index_local) select 0, _all_modsFORCENAME select _i]
-
-		#DownloadMods_CheckForMissingMods_Skip
-		? _i < count _all_modsID-1 : _i=_i+1; goto "DownloadMods_CheckForMissingMods"
 
 	#DownloadMods_ShowOptions
-	? _silent_mode : if (count _mods_that_user_has>0) then {titleText [Format [MAINMENU_STR select 87, count _mods_that_user_has], "PLAIN DOWN", 0.2]}; exit
 	lbClear 6657
 	lbSetCurSel [6657, -1]
 	[MAINMENU_STR select 32, 5, _color_gingerbrown] call FUNCTION_LBADD
 	[MAINMENU_STR select 91, 229, _color_gingerbrown] call FUNCTION_LBADD
 	[MAINMENU_STR select 89, 228, _color_gingerbrown] call FUNCTION_LBADD
 	"ctrlShow [_x,false]" forEach [6460, 6463]
-	"ctrlShow [_x,false]" forEach _serverDialog
-	? Format ["%1",_last_selected]!="scalar bool array string 0xfcffffef" : goto "DownloadMods_SkipSectionDistribution"
+	"ctrlShow [_x,false]" forEach _info_window
 	
-	_search_result = []
-	_array_ptr     = _mods_that_user_doesnt_have
-	? _mod_search_phrase == "" : goto "DownloadMods_SkipSearch"
+	_mod_search_category = -1
+	_i=0; {if (_mod_search_phrase in _x) then {_mod_search_category=_i}; _i=_i+1} forEach MAINMENU_STR_MODCAT
 	
-		; filter by category
-		_search_for_category = -1
-		_array_ptr           = _search_result
-		
-		_i=0; {if (_mod_search_phrase in _x) then {_search_for_category=_i}; _i=_i+1} forEach MAINMENU_STR_MODCAT
-		? _search_for_category >=0 : {if ((_all_modsTYPE select _x) == _search_for_category) then {_search_result set [count _search_result, _x]}; _i=_i+1} forEach _mods_that_user_doesnt_have; goto "DownloadMods_SkipSearch"
-		
-		; search for phrase
-		_i=0
-		{_positions=call loadFile Format ["\:STRING FIND text:%1find:%2",_all_modsNAME select _x, _mod_search_phrase]; if (count _positions > 0) then {_search_result set [count _search_result, _x]}; _i=_i+1} forEach _mods_that_user_doesnt_have
-
-	#DownloadMods_SkipSearch
-	_i = 0
-
-	#DownloadMods_SkipSectionDistribution
-	_mods_that_user_doesnt_have_after_search = []
-	_mods_that_user_has_after_search         = []
-	{if (_x in _mods_that_user_has) then {_mods_that_user_has_after_search set [count _mods_that_user_has_after_search, _x]} else {_mods_that_user_doesnt_have_after_search set [count _mods_that_user_doesnt_have_after_search, _x]}} forEach _array_ptr
-
-	? count _mods_that_user_has_after_search > 0 : ["==="+(MAINMENU_STR select 83)+"===", -1, _color_fireenginered] call FUNCTION_LBADD
-	"_index=lbAdd [6657,_all_modsNAME select _x]; lbSetValue [6657, _index, 6]; lbSetData [6657, _index, Format[""%1"",_x]]; if (_x in _missing_mods) then {lbSetColor [6657,_index,[1,0,0,0.5]]}" forEach _mods_that_user_has_after_search
-
-	? count _mods_that_user_doesnt_have_after_search > 0 : ["==="+(MAINMENU_STR select 84)+"===", -1, _color_sandybrown] call FUNCTION_LBADD
-	"_index=lbAdd [6657,_all_modsNAME select _x]; lbSetValue [6657, _index, 6]; lbSetData [6657, _index, Format[""%1"",_x]]; if (_x in _missing_mods) then {lbSetColor [6657,_index,[1,0,0,0.5]]}" forEach _mods_that_user_doesnt_have_after_search
-	
+	FUNCTION_ADD_DOWNLOADABLE_MOD_TO_LISTBOX forEach GS_MODS
 	? Format ["%1",_last_selected]!="scalar bool array string 0xfcffffef" : lbSetCurSel [6657, _last_selected+9]; lbSetCurSel [6657, _last_selected]; _last_selected=nil
 	goto "ResetLMB"
 	
 	#DownloadMods_QueueForInstall
-	if ((call _data) in _missing_mods) then {lbSetColor [6657,_cur,[1,1,1, 0.65]]; _index=[call _data,_missing_mods] call FUNCTION_FIND; _missing_mods set [_index, objNull]; _missing_mods_id set [_index, objNull]; _missing_mods_name set [_index, objNull]; _missing_mods_assign set [_index, objNull]; _missing_mods_myversion set [_index, objNull]; _missing_mods_sizearray set [_index, objNull]; _missing_mods=_missing_mods-[objNull]; _missing_mods_id=_missing_mods_id-[objNull]; _missing_mods_name=_missing_mods_name-[objNull]; _missing_mods_assign=_missing_mods_assign-[objNull]; _missing_mods_myversion=_missing_mods_myversion-[objNull]; _missing_mods_sizearray=_missing_mods_sizearray-[objNull]} else {FUNCTION_IS_MOD_MISSING forEach [_all_modsID select (call _data)]; lbSetColor [6657, _cur, [1,0,0,0.5]]}
-	_url = (_all_url select (_all_modsURL select (call _data))) select (_all_mirror select (_all_modsURL select (call _data)))
+	if (_data in _missing_mods_id) then {lbSetColor [6657,_cur,[1,1,1, 0.65]]; _index=[_data,_missing_mods_id] call FUNCTION_FIND; _missing_mods_id set [_index, objNull]; _missing_mods_name set [_index, objNull]; _missing_mods_assign set [_index, objNull]; _missing_mods_version set [_index, objNull]; _missing_mods_myversion set [_index, objNull]; _missing_mods_forcename set [_index, objNull]; _missing_mods_sizearray set [_index, objNull]; _missing_mods_id=_missing_mods_id-[objNull]; _missing_mods_name=_missing_mods_name-[objNull]; _missing_mods_assign=_missing_mods_assign-[objNull]; _missing_mods_version=_missing_mods_version-[objNull]; _missing_mods_myversion=_missing_mods_myversion-[objNull]; _missing_mods_forcename=_missing_mods_forcename-[objNull]; _missing_mods_sizearray=_missing_mods_sizearray-[objNull]} else {FUNCTION_IS_MOD_MISSING forEach [[_data,_mod_name,_mod_version,_mod_forcename,_mod_size,_mod_sizearray]]; lbSetColor [6657, _cur, _color_red]}
 	? !_shift : goto "DownloadModfolders"
 	titleText ["\n" + ([_missing_mods_name, ", "] call FUNCTION_ARRAY2STRING), "PLAIN DOWN", 0.25]
 	goto "ResetLMB"
 	;===================================================================================================================
 
-	
-	
-	
-	
-	
-	
-	
-	
-	; DOWNLOAD feature ==================================================================================================
-	#DownloadMenu
-	titleText ["To be implemented in the future", "PLAIN DOWN", 0.75]
-	goto "ResetLMB"
-	;===================================================================================================================
 
 
 
@@ -598,12 +398,12 @@
 	lbSetCurSel [6657, -1]
 	lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 7], 100]
 	lbSetValue  [6657, lbAdd [6657, (">"+_current)], 101]
-	lbSetColor  [6657, 1, [1,0.8,0.9,0.5]]
+	lbSetColor  [6657, 1, _color_pink]
 
 	; Load local server list
 	_servers = []
 	_exist   = call loadFile "\:IGSE NEW  file:..\fwatch\idb\MasterServers.sqf  mode:check"
-	? (_exist select 0) : goto "MasterServerRead"
+	? (_exist select 0) : goto "MasterServer_Display"
 	
 	_ok = call loadFile "\:IGSE NEW  file:..\fwatch\idb\MasterServers.sqf"
 	? !(_ok select 0) : titleText [_ok select 3, "PLAIN DOWN", 1.5]; goto "ResetLMB"
@@ -612,7 +412,7 @@
 
 	
 	; Display from file
-	#MasterServerRead
+	#MasterServer_Display
 	_servers = call loadFile "..\fwatch\idb\MasterServers.sqf"
 	_save    = true
 	"if (_x==_current) then {_save=false} else {lbSetValue [6657, lbAdd [6657, _x], 102]}" forEach _servers
@@ -620,11 +420,11 @@
 	
 	if (loadFile Format ["\:STRING TRIM  left:1  right:1  text:%1", _current] == "") then {goto "ResetLMB"}
 	_Input = _current
-	goto "MasterServerSave"
+	goto "MasterServer_SaveFile"
 
 	
 	; Check user input
-	#MasterServerValidateInput
+	#MasterServer_ValidateInput
 	_Input = loadFile Format ["\:STRING TRIM  left:1  right:1  text:%1", _Input]
 	? _Input == "" : titleText [MAINMENU_STR select 8, "PLAIN DOWN", 0.5]; goto "MasterServer"
 	
@@ -633,7 +433,7 @@
 
 	
 	; Save to file
-	#MasterServerSave
+	#MasterServer_SaveFile
 	_index = [_Input, _servers] call FUNCTION_FIND
 	? _index >= 0 : _servers set [_index, objNull]; _servers=_servers-[objNull]
 	_servers = [_Input] + _servers;
@@ -656,208 +456,11 @@
 	#Schedule
 	;buttonSetAction [6450, "closeDialog 0"]
 	buttonSetAction [6451, "LOADMOD_MASTERSERVER=true"]
-	GS_DOWNLOAD_MODSLIST = true
-
-	lbClear 6657
-	lbSetCurSel [6657, -1]
-	(MAINMENU_STR select 10) call FUNCTION_MSG_LB
-	"ctrlShow [_x,false]" forEach _serverDialog
-	ctrlSetText [6463, ""]
-
-		; Read save state
-		_pid                = -1
-		_install_status     = -1
-		_server_name        = ""
-		_server_uniqueid    = ""
-		_server_equalModReq = false
-		_auto_restart       = false
-		_gamerestart_pid    = 0
-		_gamerestart_name   = ""
-		_gamerestart_time   = ""
-		_voice_name         = ""
-		_run_voice_program  = false
-		_progress           = ""
-		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:savestate"
-		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
-		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\restart_info.sqf"
-		? _install_status >= 0 : goto "InstallDisplay"
-
-	_all_url  		    = +GS_DEFAULT_URL
-	_all_mirror         = []
-	_all_urldates       = []
-	_all_servers        = []
-	_all_serverNames    = []
-	_all_serverURL      = []
-	_all_serverID       = []
-	_all_modsID         = []
-	_all_modsURL        = []
-	_all_modsNAME       = []
-	_all_modsFORCENAME  = []
-	_all_modsSIZE       = []
-	_all_modsSIZEARRAY  = []
-	_all_modsVER        = []
-	_closest_game_times = []
-	_today_game_servers = []
-	_access_code        = ""
-	_update_available   = false
-	_saved_modhash      = ""
-	_saved_version      = 0
-
-	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule"]
-	? !(_ok select 0) : titleText [Format[MAINMENU_STR select 13,_ok select 3],"PLAIN",1]; closeDialog 0; exit
-	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule  mode:check"]
-	? !(_ok select 0) : titleText [Format[MAINMENU_STR select 13,_ok select 3],"PLAIN",1]; closeDialog 0; exit
-	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule\logo_server"]
-
-	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  read:accesscode"
-	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:version"
-	? _saved_version < GS_MY_VERSION : 	loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\schedule.bin"
-	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:urlread:serversread:hashread:serverstatusread:serverstatusdate"
-
-	while "count _all_urldates < count _all_url" do {_all_urldates set [count _all_urldates, "0"]}
-
-	#DownloadSchedule
-	_i          = 0
-	_done_url   = []
-	_downloaded = 0
-	_mirror     = 0
-
-		#ForEachURL
-		_url = (_all_url select _i) select _mirror
-		_all_mirror set [_i, _mirror]
-		? [_url,_done_url] call FUNCTION_FIND_URL >= 0 : goto "SkipURL"
-
-		((call loadFile Format ["\:STRING DOMAIN url:%1", _url]) select 3) call FUNCTION_MSG_LB
-		(MAINMENU_STR select 14) call FUNCTION_MSG_LB
-
-		; Download timestamp and compare it against local timestamp
-		GS_DOWNLOAD_RESULT = []
-		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 "+_url+"?server=current&mode=lastmodified"+([""] call FUNCTION_BUILD_QUERY_STRING)), "schedule\schedule.sqf", "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
-		@count GS_DOWNLOAD_RESULT != 0
-		
-		"ForEachURL" call FUNCTION_READ_DOWNLOADED_FILE
-		if (GS_LAST_MODIFIED==(_all_urldates select _i) && _saved_modhash==FWATCH_MODLISTHASH) then {goto "SkipURL"}
-
-		; Download full info
-		(MAINMENU_STR select 16) call FUNCTION_MSG_LB
-
-		GS_DOWNLOAD_RESULT = []
-		[("--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 "+_url+Format["?server=current&language=%1",CURRENT_LANGUAGE]+(["modcheck",GS_MODS_ID,GS_MODS_VER] call FUNCTION_BUILD_QUERY_STRING)), "schedule\schedule.sqf", "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
-		@count GS_DOWNLOAD_RESULT != 0
-		
-		_done_url set [count _done_url, _url]
-		(MAINMENU_STR select 17) call FUNCTION_MSG_LB
-
-			"ForEachURL" call FUNCTION_READ_DOWNLOADED_FILE
-			
-			_downloaded = _downloaded + 1
-			_all_urldates set [_i, GS_LAST_MODIFIED]
-
-			; Remove previous servers under this url
-			_j=0; {if (_i==(_all_serverURL select _j)) then {_all_servers set [_j, "<null>"]; _all_serverNames set [_j, "<null>"]; _all_serverID set [_j, "<null>"]}; _j=_j+1} forEach _all_serverURL
-			_all_servers     = _all_servers     - ["<null>"]
-			_all_serverNames = _all_serverNames - ["<null>"]
-			_all_serverID    = _all_serverID    - ["<null>"]
-			_all_serverURL   = _all_serverURL   - [_i]
-			
-			; Remove previous mods under this url
-			_j=0; {if (_i==(_all_modsURL select _j)) then {_all_modsID set [_j, "<null>"]; _all_modsNAME set [_j, "<null>"]; _all_modsFORCENAME set [_j, "<null>"]; _all_modsSIZE set [_j, "<null>"]; _all_modsSIZEARRAY set [_j, "<null>"]; _all_modsVER set [_j, "<null>"]}; _j=_j+1} forEach _all_modsURL
-			_all_modsID        = _all_modsID        - ["<null>"]
-			_all_modsNAME      = _all_modsNAME      - ["<null>"]
-			_all_modsFORCENAME = _all_modsFORCENAME - ["<null>"]
-			_all_modsSIZE      = _all_modsSIZE      - ["<null>"]
-			_all_modsSIZEARRAY = _all_modsSIZEARRAY - ["<null>"]
-			_all_modsVER       = _all_modsVER       - ["<null>"]
-			_all_modsURL       = _all_modsURL       - [_i]
-			
-			; Add urls from the downloaded file to the global list
-			"if ([_x,_all_url] call FUNCTION_FIND_URL<0) then {_all_url set [count _all_url, _x]}" forEach GS_OTHER_URL
-			
-				; Examine servers
-				_j = 0
-				if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="scalar") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0; if (_update_available) then {_i=count _all_url; goto "SkipURL"}}
-				? GS_VERSION != GS_MY_VERSION : [MAINMENU_STR select 20,""] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
-				? count GS_SERVERS == 0       : (MAINMENU_STR select 19) call FUNCTION_MSG_LB; goto "SkipURL"
-
-				#ForEachServerString
-				_code_string   	   = GS_SERVERS select _j
-				_server_name       = ""
-				_server_logo	   = ""
-				_server_uniqueid   = ""
-				_server_ip		   = ""
-
-				; Read server code string from the array
-				_fileIntegrity = call _code_string
-				? Format ["%1",_fileIntegrity] != "true" || _server_uniqueid=="" || _server_ip=="" : goto "NextServerString"
-
-				; Add server to the global list
-				? _server_uniqueid in _all_serverID : goto "NextServerString"
-				_all_servers     set [count _all_servers    , _code_string     ]
-				_all_serverNames set [count _all_serverNames, (if (_server_name!="") then {_server_name} else {_server_uniqueid})]
-				_all_serverID    set [count _all_serverID   , _server_uniqueid ]
-				_all_serverURL   set [count _all_serverURL  , _i               ]
-
-				#NextServerString
-				? _j < count GS_SERVERS-1 : _j=_j+1; goto "ForEachServerString"
-
-			; Add mods to the global list
-			_j = 0
-			#DownloadSchedule_ForEachMod
-			_all_modsURL       set [count _all_modsURL,       _i]
-			_all_modsID        set [count _all_modsID,        GS_MODS_ID select _j]
-			_all_modsNAME      set [count _all_modsNAME,      GS_MODS_NAME select _j]
-			_all_modsFORCENAME set [count _all_modsFORCENAME, GS_MODS_FORCENAME select _j]
-			_all_modsSIZE      set [count _all_modsSIZE,      GS_MODS_SIZE select _j]
-			_all_modsVER       set [count _all_modsVER,       GS_MODS_VER select _j]
-			_all_modsSIZEARRAY set [count _all_modsSIZEARRAY, GS_MODS_SIZEARRAY select _j]
-			
-			_index_local = [GS_MODS_ID select _j, FWATCH_MODLISTID] call FUNCTION_FIND
-			? _index_local < 0 : goto "DownloadSchedule_ForEachModSkip"
-			? ((FWATCH_MODLISTCFG select _index_local) select 3) in [(GS_MODS_FORCENAME select _j)] && (GS_MODS_NAME select _j)==((FWATCH_MODLISTCFG select _index_local) select 2) : goto "DownloadSchedule_ForEachModSkip"
-			
-				; Rewrite id file
-				(FWATCH_MODLISTCFG select _index_local) set [2, GS_MODS_NAME select _j]
-				(FWATCH_MODLISTCFG select _index_local) set [3, GS_MODS_FORCENAME select _j]
-				loadFile Format ["\:EXE ADDONINSTALL  -assignidpath=%1 -assignname=%2 -assignid=%3;%4 -assignkeepname=%5", FWATCH_MODLIST select _index_local, GS_MODS_NAME select _j, FWATCH_MODLISTID select _index_local, (FWATCH_MODLISTCFG select _index_local) select 0, GS_MODS_FORCENAME select _j]
-				
-			#DownloadSchedule_ForEachModSkip
-			? _j < count GS_MODS_ID-1 : _j=_j+1; goto "DownloadSchedule_ForEachMod"
-
-		#SkipURL
-		? _i < count _all_url-1 : _i=_i+1; _mirror=0; goto "ForEachURL"
-
-		; Save global list
-		? _downloaded == 0 : goto "SkipDownload"
-		"[Saving data]" call FUNCTION_MSG_LB
-		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverswrite:_all_servers=" + (_all_servers call FLIB_FORMAT))
-		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serversappend:;_all_serverNames=" + (_all_serverNames call FLIB_FORMAT) + ";_all_serverID=" + (_all_serverID call FLIB_FORMAT))
-		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serversappend:;_all_modsID=" + (_all_modsID call FLIB_FORMAT) + ";_all_serverURL=" + (_all_serverURL call FLIB_FORMAT) + ";_all_modsURL=" + (_all_modsURL call FLIB_FORMAT))
-		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serversappend:;_all_modsNAME=" + (_all_modsNAME call FLIB_FORMAT) + ";_all_modsFORCENAME=" + (_all_modsFORCENAME call FLIB_FORMAT) + ";_all_modsSIZE=" + (_all_modsSIZE call FLIB_FORMAT) + ";_all_modsSIZEARRAY=" + (_all_modsSIZEARRAY call FLIB_FORMAT) + ";_all_modsVER=" + (_all_modsVER call FLIB_FORMAT))
-		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlwrite:_all_url=" + (_all_url call FLIB_FORMAT) + ";_all_mirror=" + (_all_mirror call FLIB_FORMAT) + ";_all_urldates=" + (_all_urldates call FLIB_FORMAT) + Format[";_update_available=%1;GS_FWATCH_LAST_UPDATE=%2",_update_available,GS_FWATCH_LAST_UPDATE])
-		loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlappend:;GS_VOICE=" + (GS_VOICE call FLIB_FORMAT))
-		loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:hashwrite:_saved_modhash=""%1""", FWATCH_MODLISTHASH]
-		loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:versionwrite:_saved_version=%1", GS_MY_VERSION]
-
+	_mode = "schedule"
+	goto "DownloadDatabase"
 
 	; Display list of servers in a listbox
-	#SkipDownload
-	(MAINMENU_STR select 23) call FUNCTION_MSG_LB
-	_i = 0
-	_closest_game_times = []
-	_persistent_servers = []
-	FUNCTION_GET_CLOSEST_GAME_TIME forEach _all_servers
-
-	_all_servers     = _all_servers     - ["<null>"]
-	_all_serverNames = _all_serverNames - ["<null>"]
-	_all_serverID    = _all_serverID    - ["<null>"]
-	_all_serverURL   = _all_serverURL   - ["<null>"]
-
-	? GS_SERVER_STATUS_THREADS == 0 : _now=call loadFile ":info date"; _diff=[_now,GS_SERVER_STATUS_DATE] call FLIB_DATEDIFF; if ((_diff select 0)>0 || (_diff select 1)>0 || (_diff select 2)>0 || (_diff select 3)>0 || (_diff select 4)>0) then {GS_SERVER_STATUS_DATE=_now; loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverstatusdatewrite:GS_SERVER_STATUS_DATE=%1;", GS_SERVER_STATUS_DATE]; _i=0; GS_SERVER_STATUS_THREADS=count _all_serverID; _serv_status_threads=count _all_serverID; {_server_ip=""; _server_port=""; _server_encrypted=true; call (_all_servers select _i); ["queryserver", _server_uniqueid, _server_ip, _server_port, _server_encrypted] exec "..\fwatch\data\MainMenu.sqs"; _i=_i+1} forEach _all_serverID; ["queryserver_animate"] exec "..\fwatch\data\MainMenu.sqs"}
-	[_closest_game_times, _all_servers, _all_serverNames, _all_serverID] call FUNCTION_QUICKSORTM
-
-
-	#FillListbox
-	~0.1
+	#Schedule_List_Servers
 	lbClear 6657
 	lbSetCurSel [6657, -1]
 	ctrlSetText [6463, ""]
@@ -865,14 +468,7 @@
 	? _gamerestart_pid > 0 : _ok=call loadFile Format ["\:RESTART CLIENT check %1", _gamerestart_pid]; if (_ok select 0) then {lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 24], 211]} else {_gamerestart_pid=0}
 	? _update_available    : goto "DisplayUpdateInformation"
 	
-	_i             = 0
-	_nowLabel      = false
-	_todayLabel    = false
-	_upcomingLabel = false
-	FUNCTION_SERVERS_TO_LISTBOX forEach _all_serverID
-	
-	? count _persistent_servers > 0 : lbSetColor [6657, lbAdd [6657, "=="+(MAINMENU_STR select 108)+"=="], _color_cottoncandy]
-	{private ["_entry", "_index", "_index_status"]; _index=[_x, _all_serverID] call FUNCTION_FIND; _index_status=[_all_serverID select _index, GS_SERVER_STATUS select 0] call FUNCTION_FIND; _entry=lbAdd [6657, Format ["%1%2", (if (_index_status>=0) then {Format ["(%1) ",((GS_SERVER_STATUS select 1) select _index_status) select 1]} else {""}), _all_serverNames select _index]]; lbSetData  [6657, _entry, Format ["%1",_index]]; lbSetValue [6657, _entry, 201]} forEach _persistent_servers
+	FUNCTION_ADD_SERVER_TO_LISTBOX forEach GS_SERVERS
 	
 	[MAINMENU_STR select 25, 215, _color_gingerbrown] call FUNCTION_LBADD
 	? _lastCur>=0 : lbSetCurSel [6657, _lastCur]; _lastCur=-1
@@ -901,13 +497,13 @@
 	_server_maxcustomfilesize = []
 	_server_maxcustombytes    = ""
 	_server_encrypted         = true
+	_server_status            = []
+	_today_game_time          = []
 	
 	_i=-1; while "_i=_i+1; _i<9" do {ctrlSetText [(6470+10*_i), MAINMENU_STR select (65+_i)]}
 	_i=-1; while "_i=_i+1; _i<4" do {ctrlSetText [(6472+10*_i), MAINMENU_STR select (65+_i)]}
 
-	call (_all_servers select (call _data))
-	_mirror = _all_mirror select (_all_serverURL select (call _data))
-	_url    = (_all_url select (_all_serverURL select (call _data))) select _mirror
+	_ok = call loadFile Format ["\:IGSE DB file:..\fwatch\tmp\schedule\dl_schedule.db read:%1", _data]
 
 	_domain        = call loadFile Format ["\:STRING DOMAIN url:%1", _server_website]
 	_versionString = if (_server_version == 0) then {""} else {Format ["%1",_server_version]}
@@ -915,7 +511,7 @@
 
 	_voice_name = if (count _server_voice > 0) then {(GS_VOICE select (_server_voice select 0)) select 0} else {""}
 
-	"ctrlShow [_x,true]" forEach _serverDialog
+	"ctrlShow [_x,true]" forEach _info_window
 	ctrlShow [6463, false]
 
 	["logo_server", "scheduleserverlogo.bin", _server_logo, _server_uniqueid, _server_logohash, _server_name, lbCurSel 6657] call FUNCTION_DISPLAY_LOGO
@@ -931,47 +527,40 @@
 	[6550, _server_message                                     ] call FUNCTION_CTRLSETTEXT
 	
 	; Verify game version
-	[6472, _server_version != _myVersion] call FUNCTION_SHOW_RED_TEXT
+	[6472, _server_version != _my_game_version] call FUNCTION_SHOW_RED_TEXT
 
 	; Verify modfolders
-	_missing_mods           = []
 	_missing_mods_id        = []
 	_missing_mods_name      = []
 	_missing_mods_assign    = []
+	_missing_mods_version   = []
 	_missing_mods_myversion = []
+	_missing_mods_forcename = []
 	_missing_mods_sizearray = [0,0,0]
 	_missing_mods_size      = ""
 	FUNCTION_IS_MOD_MISSING forEach _server_modfolders
 
-	[6482, count _missing_mods > 0] call FUNCTION_SHOW_RED_TEXT
+	[6482, count _missing_mods_id > 0] call FUNCTION_SHOW_RED_TEXT
 	[6492, _too_big] call FUNCTION_SHOW_RED_TEXT
 
 	; Verify game times
-	_i 				   = 0
-	_playingNow 	   = false
-	_now			   = call loadFile ":info date"
-	_gameTimeDistance  = []
-	_gameTimeFormatted = []
-	_gameTimeDates     = []
+	_i 			= 0
+	_playingNow = _server_uniqueid in GS_PLAYING_NOW
 
-	? count _server_game_times == 0 : ctrlShow [6500, false]
-	_server_game_times call FUNCTION_FORMAT_GAME_TIME
-
-	_server_status_name = MAINMENU_STR select 106
-	_index = [_server_uniqueid, GS_SERVER_STATUS select 0] call FUNCTION_FIND
-	? _index >= 0 : _server_status_name=MAINMENU_STR select 107
+	_server_status_name = if (count _server_status > 0) then {MAINMENU_STR select 107} else {MAINMENU_STR select 106}
 	ctrlSetText [6464, Format ["%1               %2", _server_status_name, ["@d M 0h:0i",_now] call FLIB_FORMATDATE]]
 
 	; Display playing times
+	? count _server_game_times == 0 : ctrlShow [6500, false]
 	[6502, !_playingNow] call FUNCTION_SHOW_RED_TEXT
 	ctrlSetText [6501, ""]
-	"ctrlSetText [6501, (ctrlText 6501) + _x + ""\n""]" forEach _gameTimeFormatted
+	"ctrlSetText [6501, (ctrlText 6501) + _x + ""\n""]" forEach _server_game_times
 
 		; Estimate download size
 		_roundToTenths = "private [""_fraction""];_this=_this-(_this mod 0.001); _fraction=(_this mod 0.01);_this=_this-_fraction;if (_fraction>0.004999) then {_this=_this+0.01};_fraction=(_this mod 0.1);_this=_this-_fraction;if (_fraction>0.049999) then {_this=_this+0.1};_this"
 		_index         = 0
 		while "_index<count _missing_mods_sizearray  &&  (_missing_mods_sizearray select _index)==0" do "_index=_index+1"
-		? count _missing_mods > 0 : _missing_mods_size=_missing_mods_sizearray select _index; if (_index<2) then {_missing_mods_size=_missing_mods_size+(_missing_mods_sizearray select (_index+1))/1024}; _missing_mods_size=Format ["%1 %2", _missing_mods_size call _roundToTenths, ["GB","MB","KB"] select _index]
+		? count _missing_mods_id > 0 : _missing_mods_size=_missing_mods_sizearray select _index; if (_index<2) then {_missing_mods_size=_missing_mods_size+(_missing_mods_sizearray select (_index+1))/1024}; _missing_mods_size=Format ["%1 %2", _missing_mods_size call _roundToTenths, ["GB","MB","KB"] select _index]
 
 	? _server_uniqueid == _jump_to_server : _jump_to_server=""; goto "ServerOptions"
 	_jump_to_server = ""
@@ -981,13 +570,13 @@
 
 	; Display detailed information about a server
 	#DisplayServerStatus
-	_server_uniqueid = ""
-	call (_all_servers select (call _data))
-	"ctrlShow [_x,false]" forEach _serverDialog
+	"ctrlShow [_x,false]" forEach _info_window
 	"ctrlShow [_x,true ]" forEach [6460, 6463, 6464]
-	_index = [_server_uniqueid, GS_SERVER_STATUS select 0] call FUNCTION_FIND
-	? _index < 0 : ctrlSetText [6463, Format ["%1: %2", localize "STR_STATUS", MAINMENU_STR select 106]]; goto "ResetLMB"
-	ctrlSetText [6463, Format ["%1: %2\n%3 %4\n%5 %6\n%7 %8\n%9", localize "STR_STATUS", (((GS_SERVER_STATUS select 1) select _index) select 0) call FUNCTION_GET_SERVER_STATUS_NAME, localize "STR_DISP_SERVER_MISSION", (((GS_SERVER_STATUS select 1) select _index) select 2), localize "STR_DISP_SERVER_ISLAND", (((GS_SERVER_STATUS select 1) select _index) select 3), localize "STR_DISP_MP_PLAYERS", (((GS_SERVER_STATUS select 1) select _index) select 1), (((GS_SERVER_STATUS select 1) select _index) select 4)]]
+	
+	? _data != _server_uniqueid : _server_status=[]; call loadFile Format ["\:IGSE DB file:..\fwatch\tmp\schedule\downloaded.db read:%1", _data]
+	? count _server_status == 0 : ctrlSetText [6463, Format ["%1: %2", localize "STR_STATUS", MAINMENU_STR select 106]]; goto "ResetLMB"
+	
+	ctrlSetText [6463, Format ["%1: %2\n%3 %4\n%5 %6\n%7 %8\n\n%9", localize "STR_STATUS", (_server_status select 0) call FUNCTION_GET_SERVER_STATUS_NAME, localize "STR_DISP_SERVER_MISSION", (_server_status select 2), localize "STR_DISP_SERVER_ISLAND", (_server_status select 3), localize "STR_DISP_MP_PLAYERS", (_server_status select 1), (_server_status select 4)]]
 	goto "ResetLMB"
 
 
@@ -1000,12 +589,12 @@
 	
 	lbClear 6657
 	lbSetCurSel [6657, -1]
-	? _server_version in [0,_myVersion]  &&  count _missing_mods==0 : if (_server_uniqueid in _today_game_servers && !_playingNow && _gamerestart_pid==0) then {[MAINMENU_STR select 26, 220, _color_yellowgreen] call FUNCTION_LBADD}; [MAINMENU_STR select 27, 221, _color_yellowgreen] call FUNCTION_LBADD
-	? count _missing_mods > 0                                       : [Format [MAINMENU_STR select 28, _missing_mods_size], 204, _color_fireenginered] call FUNCTION_LBADD; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 29], 224]
-	? _voice_name != ""                                             : lbSetValue [6657, lbAdd [6657, Format [_voice_format,_voice_name]], 222]
-	? count _missing_mods==0 && count _server_modfolders > 0        : lbSetValue [6657, lbAdd [6657, Format [MAINMENU_STR select 29, _missing_mods_size]], 225]
-	? _server_website != ""                                         : lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 30], 205]
-	? _server_version == _myVersion                                 : lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 31], 206]
+	? _server_version in [0,_my_game_version] && count _missing_mods_id==0 : comment "autoconnect;connect"; if (_server_uniqueid in GS_PLAYING_TODAY && !_playingNow && _gamerestart_pid==0) then {[MAINMENU_STR select 26, 220, _color_yellowgreen] call FUNCTION_LBADD}; [MAINMENU_STR select 27, 221, _color_yellowgreen] call FUNCTION_LBADD
+	? count _missing_mods_id > 0                                           : comment "download;changelog"; [Format [MAINMENU_STR select 28, _missing_mods_size], 204, _color_fireenginered] call FUNCTION_LBADD; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 29], 224]
+	? _voice_name != ""                                                    : comment "voip"; lbSetValue [6657, lbAdd [6657, Format [_voice_format,_voice_name]], 222]
+	? count _missing_mods_id==0 && count _server_modfolders > 0            : comment "changelog"; lbSetValue [6657, lbAdd [6657, Format [MAINMENU_STR select 29, _missing_mods_size]], 225]
+	? _server_website != ""                                                : comment "website"; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 30], 205]
+	? _server_version == _my_game_version                                  : comment "parameters"; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 31], 206]
 	
 	lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 32], 207]
 	~0.1
@@ -1033,7 +622,7 @@
 
 	; Download mods that the server requires
 	#DownloadModfolders
-	"ctrlShow [_x,false]" forEach _serverDialog
+	"ctrlShow [_x,false]" forEach _info_window
 	"ctrlShow [_x,true ]" forEach [6460, 6463]	
 
 	; check if mods we want to install are loaded
@@ -1056,7 +645,7 @@
 	; if we can assign id to a mod instead of downloading then ask for it
 	#AssignID
 	? !(_missing_mods_assign select _i) : goto "AssignID_NextMod"
-	ctrlSetText [6463, Format [MAINMENU_STR select 37, _all_modsNAME select (_missing_mods select _i), _all_modsVER select (_missing_mods select _i)]]
+	ctrlSetText [6463, Format [MAINMENU_STR select 37, _missing_mods_name select _i, _missing_mods_version select _i]]
 	lbClear 6657
 	lbSetCurSel [6657, -1]
 	lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 38], 214]
@@ -1065,7 +654,7 @@
 	goto "ResetLMB"
 
 	#AssignID_ForThisMod
-	_ok = call loadFile Format ["\:EXE ADDONINSTALL  -assignidpath=%1 -assignname=%1 -assignid=%2;%3 -assignkeepname=%4", _all_modsNAME select (_missing_mods select _i), _missing_mods_id select _i, _all_modsVER select (_missing_mods select _i), _all_modsFORCENAME select (_missing_mods select _i)]
+	_ok = call loadFile Format ["\:EXE ADDONINSTALL  -assignidpath=%1 -assignname=%1 -assignid=%2;%3 -assignkeepname=%4", _missing_mods_name select _i, _missing_mods_id select _i, _missing_mods_version select _i, _missing_mods_forcename select _i]
 	? !(_ok select 0) : titleText [Format [MAINMENU_STR select 40,_ok select 3], "PLAIN DOWN", 1.5]; goto "ServerOptions"
 	_pid = _ok select 4
 	
@@ -1074,21 +663,25 @@
 		_ok = call loadFile Format ["\:EXE ADDONINSTALL check %1", _pid]
 		? _ok select 0 : goto "AssignID_ForThisMod_Wait"
 		
-	_missing_mods           set [_i, "<null>"]
 	_missing_mods_id        set [_i, "<null>"]
 	_missing_mods_name      set [_i, "<null>"]
 	_missing_mods_assign    set [_i, "<null>"]
+	_missing_mods_version   set [_i, "<null>"]
 	_missing_mods_myversion set [_i, "<null>"]
+	_missing_mods_forcename set [_i, "<null>"]
+	_missing_mods_sizearray set [_i, "<null>"]
 
 	#AssignID_NextMod
-	? _i < count _missing_mods-1 : _i=_i+1; goto "AssignID"
-	_missing_mods           = _missing_mods           - ["<null>"]
+	? _i < count _missing_mods_id-1 : _i=_i+1; goto "AssignID"
 	_missing_mods_id        = _missing_mods_id        - ["<null>"]
 	_missing_mods_name      = _missing_mods_name      - ["<null>"]
 	_missing_mods_assign    = _missing_mods_assign    - ["<null>"]
+	_missing_mods_version   = _missing_mods_version   - ["<null>"]
 	_missing_mods_myversion = _missing_mods_myversion - ["<null>"]
+	_missing_mods_forcename = _missing_mods_forcename - ["<null>"]
+	_missing_mods_sizearray = _missing_mods_sizearray - ["<null>"]
 	~0.1
-	? count _missing_mods == 0 : _value=210; goto "Option"
+	? count _missing_mods_id == 0 : _value=210; goto "Option"
 
 
 	; Prepare info for the installer
@@ -1100,7 +693,7 @@
 	_run_voice_program = false
 	? _voice_name != "" : _run_voice_program=!(GS_VOICE select (_server_voice select 0) select 1)
 	
-	_result = loadFile ("\:EXE ADDONINSTALL  "+(call FUNCTION_GET_EXECUTE_PARAMS)+Format[" -gameversion=%1 -language=%2 -downloadscript=fwatch\tmp\schedule\installurl.txt ", _myVersion,CURRENT_LANGUAGE]+(call FUNCTION_WRITE_INSTALL))
+	_result = loadFile ("\:EXE ADDONINSTALL  "+(call FUNCTION_GET_EXECUTE_PARAMS)+Format[" -gameversion=%1 -language=%2 -downloadscript=fwatch\tmp\schedule\installurl.txt ", _my_game_version,CURRENT_LANGUAGE]+(call FUNCTION_WRITE_INSTALL))
 	_ok     = call _result
 	? !(_ok select 0) : titleText [Format [MAINMENU_STR select 40,_ok select 3], "PLAIN DOWN", 1.5]; goto "Schedule"
 	
@@ -1113,7 +706,7 @@
 	_result = call loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:savestatewrite:_pid=%1;_server_name=""%2"";_server_equalModReq=%3;_server_uniqueid=""%4"";_voice_name=""%5""", _pid,(if (_server_name!="") then {_server_name} else {_server_uniqueid}),_server_equalModReq,_server_uniqueid,_voice_name]
 
 		#InstallDisplay
-		"ctrlShow [_x,false]" forEach _serverDialog
+		"ctrlShow [_x,false]" forEach _info_window
 		"ctrlShow [_x,true ]" forEach [6460, 6463]
 
 		lbClear 6657
@@ -1121,7 +714,7 @@
 		lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 36], 208]
 		lbSetValue  [6657, lbAdd [6657, Format [MAINMENU_STR select (if (_server_uniqueid=="mod") then {42} else {88}), (if (_auto_restart) then {MAINMENU_STR select 43} else {MAINMENU_STR select 44})]], 209]
 
-		? _auto_restart && _voice_name!=""         : if (!(GS_VOICE select (_server_voice select 0) select 1)) then {lbSetValue  [6657, lbAdd [6657, Format ["[%1: %2]", _voice_name, (if (_run_voice_program) then {MAINMENU_STR select 43} else {MAINMENU_STR select 44})]], 219]}
+		? _auto_restart && _voice_name!=""         : if (!(GS_VOICE select (_server_voice select 0) select 1)) then {lbSetValue [6657, lbAdd [6657, Format ["[%1: %2]", _voice_name, (if (_run_voice_program) then {MAINMENU_STR select 43} else {MAINMENU_STR select 44})]], 219]}
 		? _auto_restart && _server_uniqueid!="mod" : lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 31], 206]
 
 		lbSetValue  [6657, lbAdd [6657, ""], -1]
@@ -1166,8 +759,8 @@
 
 	; Schedule connection to the server
 	#ScheduleGameRestart
-	_ok = call loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\restart_info.sqf  open:recreate  text:_gamerestart_name=""%1"";_gamerestart_time=""%2"";", (if (_server_name!="") then {_server_name} else {_server_uniqueid}), ["0h:0i",_gameTimeDates select 0] call FLIB_FORMATDATE]
-	_ok = call loadFile (Format ["\:RESTART CLIENT -servertime=%1 ", _gameTimeDates select 0] + (call FUNCTION_GET_EXECUTE_PARAMS))
+	_ok = call loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\restart_info.sqf  open:recreate  text:_gamerestart_name=""%1"";_gamerestart_time=""%2"";", (if (_server_name!="") then {_server_name} else {_server_uniqueid}), ["0h:0i",_today_game_time] call FLIB_FORMATDATE]
+	_ok = call loadFile (Format ["\:RESTART CLIENT -servertime=%1 ", _today_game_time] + (call FUNCTION_GET_EXECUTE_PARAMS))
 	? !(_ok select 0) : titleText [_ok select 3, "PLAIN DOWN", 2]; goto "ResetLMB"
 	~1
 	call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\restart_info.sqf"
@@ -1175,7 +768,7 @@
 
 	; Display information about scheduled game restart
 	#DisplayGameRestart
-	"ctrlShow [_x,false]" forEach _serverDialog
+	"ctrlShow [_x,false]" forEach _info_window
 	"ctrlShow [_x,true ]" forEach [6460, 6463]
 	ctrlSetText [6463, Format [MAINMENU_STR select 47, _gamerestart_time, _gamerestart_name]]
 	goto "MainLoop"
@@ -1184,7 +777,7 @@
 	loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\RestartInstruction.txt  text:abort"]
 	~2
 	call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\restart_info.sqf"
-	? _gamerestart_pid == 0 : "ctrlShow [_x,false]" forEach _serverDialog; goto "FillListbox"
+	? _gamerestart_pid == 0 : "ctrlShow [_x,false]" forEach _info_window; goto "Schedule_List_Servers"
 	goto "ResetLMB"
 
 
@@ -1194,9 +787,6 @@
 	;_Input       = loadFile Format ["\:STRING TRIM  left:1  right:1  text:%1", _Input]
 	_access_code = _Input
 	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  key:accesscodewrite:_access_code=""%1""", _Input]
-	_all_urldates = []
-	{_all_urldates set [count _all_urldates, ""]} forEach _all_url
-	loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:urlappend:;_all_urldates=" + (_all_urldates call FLIB_FORMAT))
 	@!(ctrlVisible 6901)
 	goto "Schedule"
 
@@ -1206,7 +796,6 @@
 	#SaveModAccessCode
 	;_Input               = loadFile Format ["\:STRING TRIM  left:1  right:1  text:%1", _Input]
 	_access_code_mod     = _Input
-	GS_DOWNLOAD_MODSLIST = true
 	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  key:accesscodemodwrite:_access_code_mod=""%1""", _Input]
 	@!(ctrlVisible 6901)
 	goto "DownloadMods"
@@ -1219,7 +808,7 @@
 	_mod_search_phrase = _Input
 	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  key:modsearchwrite:_mod_search_phrase=""%1""", _Input]
 	@!(ctrlVisible 6901)
-	goto "VerifyModfolders"
+	goto "DownloadMods_ShowOptions"
 
 
 	; Display information about patch
@@ -1237,7 +826,7 @@
 	[Format [MAINMENU_STR select 48, _update_name], _option_value, _color_fireenginered] call FUNCTION_LBADD
 	lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 85], 227]
 	
-	"ctrlShow [_x,false]" forEach _serverDialog
+	"ctrlShow [_x,false]" forEach _info_window
 	"ctrlShow [_x,true ]" forEach [6460, 6463]
 	ctrlSetText [6463, Format [MAINMENU_STR select 49, _name, _new, _old]]
 	goto "ResetLMB"
@@ -1320,51 +909,155 @@
 
 
 
-	; Get game server status from the internet, save it to database =====================================================	
-	#QueryServer
-	~(random 2)
-	_server_uniqueid  = _this select 1
-	_server_ip        = _this select 2
-	_server_port      = _this select 3
-	_server_encrypted = _this select 4
+	; Download game schedule database with serverds/mods ================================================================	
+	#DownloadDatabase
+	? _silent_mode : goto "DownloadDatabase_SkipDisplay"
+	lbClear 6657
+	lbSetCurSel [6657, -1]
+	(MAINMENU_STR select 10) call FUNCTION_MSG_LB
+	"ctrlShow [_x,false]" forEach _info_window
+	ctrlSetText [6463, ""]
+	#DownloadDatabase_SkipDisplay
 
-	_success  = false
-	_string   = ""
-	_modifier = if (_server_encrypted) then {"e"} else {""};
-	_string   = Format ["-queryserver=true -serveruniqueid=%1 -%2connect=", _server_uniqueid, _modifier] + _server_ip;
+		; Read save state
+		_pid                = -1
+		_install_status     = -1
+		_server_name        = ""
+		_server_uniqueid    = ""
+		_server_equalModReq = false
+		_auto_restart       = false
+		_gamerestart_pid    = 0
+		_gamerestart_name   = ""
+		_gamerestart_time   = ""
+		_voice_name         = ""
+		_run_voice_program  = false
+		_progress           = ""
+		_playingNow         = false
+		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:savestate"
+		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
+		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\restart_info.sqf"
+		? _install_status >= 0 : if (_silent_mode) then {_progress=call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"; titleText [_progress, "PLAIN", 0.1]; exit} else {goto "InstallDisplay"}
+	
+	; Silent mode - download only once per game launch
+	_now = call loadFile ":info date"
+	? !_silent_mode : goto "DownloadDatabase_SkipSilentCheck"
+	_last_silent_mode = []
+	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:silentmode"
+	? count _last_silent_mode > 0 : if ([_last_silent_mode,_now,"fraction"] call FLIB_DATEDIFFDAY < 0.0014) then {goto "SilentMode_Display"}
+	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:silentmodewrite:_last_silent_mode=%1;", _now]
+	#DownloadDatabase_SkipSilentCheck
+	
+	_url              = ""
+	_access_code      = ""
+	_access_code_mod  = ""
+	_update_available = false
+	_saved_modhash    = ""
+	_saved_version    = 0
 
-	if (_server_port != "") then {_string=_string+Format[" -%1port=",_modifier]+_server_port};
-	_ok = call loadFile ("\:RESTART CLIENT " + _string);
-	_pid = _ok select 4
-	
-		#QueryServer_Wait
-		~0.01
-		_ok = call loadFile Format ["\:RESTART CLIENT check %1", _pid]
-		? _ok select 0 : goto "QueryServer_Wait"
+	; Create folder
+	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule"]
+	? !(_ok select 0) : titleText [Format[MAINMENU_STR select 13,_ok select 3],"PLAIN",1]; closeDialog 0; exit
+	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule  mode:check"]
+	? !(_ok select 0) : titleText [Format[MAINMENU_STR select 13,_ok select 3],"PLAIN",1]; closeDialog 0; exit
+	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule\logo_server"]
+	_ok = call loadFile Format ["\:IGSE NEW  directory:true  file:..\fwatch\tmp\schedule\logo_mod"]
 
-	? (_ok select 1)!=5  &&  (_ok select 5)==0 : _string=loadFile Format ["\:IGSE LOAD mode:execute wait:100 file:..\fwatch\tmp\_exelog\%1", _pid]; _success=Format ["%1",_string]!="scalar bool array string 0xfcffffef"
+	; Read saved data
+	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  read:accesscoderead:accesscodemod"
+	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:version"
+	? _saved_version < GS_MY_VERSION : 	loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\schedule.bin"
+	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:generalread:hash"
+
+	_i          = 0
+	_downloaded = 0
+	_mirror     = 0
+
+		#DownloadDatabase_ForEachURL
+		_url = (GS_DEFAULT_URL select _i) select _mirror
+		? !_silent_mode : ((call loadFile Format ["\:STRING DOMAIN url:%1", _url]) select 3) call FUNCTION_MSG_LB
+		
+		; Download timestamp and compare it against local timestamp
+		? _mode == "schedule" : goto "DownloadDatabase_Full"
+		
+		_last_modified = "";
+		call loadFile Format ["\:IGSE DB file:..\fwatch\tmp\schedule\dl_%1.db read:timestamp", _mode]
+		? _last_modified == "" : goto "DownloadDatabase_Full"
+
+		? !_silent_mode : (MAINMENU_STR select 14) call FUNCTION_MSG_LB
+		GS_DOWNLOAD_RESULT = []
+		[Format ["--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 https://ofp-faguss.com/schedule/sqf2.php?mode=mods_v2_last_modified",_mode,CURRENT_LANGUAGE,_now select 8], Format["schedule\dl_%1.sqf",_mode], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+		@count GS_DOWNLOAD_RESULT != 0
+		? !(GS_DOWNLOAD_RESULT select 0) : if (_mirror < count (GS_DEFAULT_URL select _i)-1) then {_mirror=_mirror+1; goto "DownloadDatabase_ForEachURL"} else {goto "DownloadDatabase_Done"}
+		_result = call loadFile Format["..\fwatch\tmp\schedule\dl_%1.sqf",_mode]
+		? Format ["%1",_result] != "true" : goto "DownloadDatabase_Full"
+
+		if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="scalar") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0; if (_update_available) then {goto "DownloadDatabase_Done"}}
+		? GS_VERSION != GS_MY_VERSION : [MAINMENU_STR select 20,""] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
+		
+		if (GS_LAST_MODIFIED==_last_modified && _saved_modhash==FWATCH_MODLISTHASH) then {goto "DownloadDatabase_Done"}
+		
+		; Download full info
+		#DownloadDatabase_Full
+		? _mode=="schedule" && Format["%1",GS_SCHEDULE_DOWNLOAD_TIME]!="scalar bool array string 0xfcffffef" : if (time<GS_SCHEDULE_DOWNLOAD_TIME) then {goto "DownloadDatabase_Read"}
+		
+		? !_silent_mode : (MAINMENU_STR select 16) call FUNCTION_MSG_LB
+		GS_DOWNLOAD_RESULT = []
+		[Format ["--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 https://ofp-faguss.com/schedule/sqf2.php?mode=%1_v2&server=current&language=%2&timeoffset=%3",_mode,CURRENT_LANGUAGE,_now select 8]+(["allusermods"] call FUNCTION_BUILD_QUERY_STRING), Format["schedule\dl_%1.db",_mode], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+		@count GS_DOWNLOAD_RESULT != 0
+		? !(GS_DOWNLOAD_RESULT select 0) : if (_mirror < count (GS_DEFAULT_URL select _i)-1) then {_mirror=_mirror+1; goto "DownloadDatabase_ForEachURL"} else {goto "DownloadDatabase_Done"}
+		? _mode == "schedule" : GS_SCHEDULE_DOWNLOAD_TIME=time+10
+
+		? !_silent_mode : (MAINMENU_STR select 17) call FUNCTION_MSG_LB
+		
+		#DownloadDatabase_Read
+		["DownloadDatabase_ForEachURL", "schedule\schedule.db"] call FUNCTION_READ_DOWNLOADED_FILE
+
+		if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="scalar") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0; if (_update_available) then {goto "DownloadDatabase_Done"}}
+		? GS_VERSION != GS_MY_VERSION : [MAINMENU_STR select 20,""] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
+
+		; Save info
+		loadFile (Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:generalwrite:_update_available=%1;GS_FWATCH_LAST_UPDATE=%2;_url=""%3"";GS_VOICE=",_update_available,GS_FWATCH_LAST_UPDATE,_url] + (GS_VOICE call FLIB_FORMAT))
+		loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:versionwrite:_saved_version=%1", GS_MY_VERSION]
+		? _mode=="mods" : loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:hashwrite:_saved_modhash=""%1""", FWATCH_MODLISTHASH]
+		goto "DownloadDatabase_Done"
 	
-	_index = [_server_uniqueid, GS_SERVER_STATUS select 0] call FUNCTION_FIND
+		#DownloadDatabase_ForEachURL_Skip
+		? _i < count GS_DEFAULT_URL-1 : _i=_i+1; _mirror=0; goto "DownloadDatabase_ForEachURL"
+		
+	#DownloadDatabase_Done
+	? _update_available : if (_silent_mode) then {titleText [MAINMENU_STR select 86,"PLAIN DOWN",1]; exit} else {goto "DisplayUpdateInformation"}
+	? _silent_mode : goto "SilentMode_Display"
 	
-	; add new status or update existing status
-	? _success && _index < 0 : (GS_SERVER_STATUS select 0) set [count (GS_SERVER_STATUS select 0), _server_uniqueid]; (GS_SERVER_STATUS select 1) set [count (GS_SERVER_STATUS select 1), []]; _index=count (GS_SERVER_STATUS select 0)-1
-	? _success : (GS_SERVER_STATUS select 1) set [_index, (call _string)]
+	_ok = call loadFile Format ["\:IGSE DB file:..\fwatch\tmp\schedule\dl_%1.db read:generalread:listbox", _mode]
+	? !(_ok select 0) : [MAINMENU_STR select 18,_ok select 3] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
 	
-	; remove status if query failed
-	? !_success && _index >= 0  : (GS_SERVER_STATUS select 0) set [_index, "null"]; (GS_SERVER_STATUS select 1) set [_index, "null"]; GS_SERVER_STATUS set [0,(GS_SERVER_STATUS select 0)-["null"]]; GS_SERVER_STATUS set [1,(GS_SERVER_STATUS select 1)-["null"]]
+	; Update mods __gs_id files if necessary
+	_j = 0
+	? count GS_MODS_TO_VERIFY == 0 : goto "VerifyModfolders_Next"
 	
-	loadFile ("\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:serverstatuswrite:GS_SERVER_STATUS=" + (GS_SERVER_STATUS call FLIB_FORMAT) + ";")
-	GS_SERVER_STATUS_THREADS = GS_SERVER_STATUS_THREADS - 1
+	#VerifyModfolders
+	_index_local = [(GS_MODS_TO_VERIFY select _j) select 0, FWATCH_MODLISTID] call FUNCTION_FIND
+	? _index_local < 0 : goto "VerifyModfolders_Next"
+	; oldforcename in [newforcename] and newname==oldname
+	? ((FWATCH_MODLISTCFG select _index_local) select 3) in [(GS_MODS_TO_VERIFY select _j) select 2] && ((GS_MODS_TO_VERIFY select _j) select 1)==((FWATCH_MODLISTCFG select _index_local) select 2) : goto "VerifyModfolders_Next"
+	
+	; Rewrite id file
+	(FWATCH_MODLISTCFG select _index_local) set [2, (GS_MODS_TO_VERIFY select _j) select 1]
+	(FWATCH_MODLISTCFG select _index_local) set [3, (GS_MODS_TO_VERIFY select _j) select 2]
+	loadFile Format ["\:EXE ADDONINSTALL  -assignidpath=%1 -assignname=%2 -assignid=%3;%4 -assignkeepname=%5", FWATCH_MODLIST select _index_local, (GS_MODS_TO_VERIFY select _j) select 1, FWATCH_MODLISTID select _index_local, (FWATCH_MODLISTCFG select _index_local) select 0, (GS_MODS_TO_VERIFY select _j) select 2]
+	#VerifyModfolders_Next
+	? _j < count GS_MODS_TO_VERIFY-1 : _j=_j+1; goto "VerifyModfolders"
+	GS_MODS_TO_VERIFY = nil
+	
+	? _mode == "schedule" : goto "Schedule_List_Servers"
+	? _mode == "mods" : goto "DownloadMods_List"
 	exit
 	
-	#QueryServer_Animate
-	_base = loadFile Format ["\:STRING REPLACECHAR text:%1find:.replace:", localize "STR_LOAD_WORLD"]
-	_dots = ""
+	#SilentMode_Display
+	_player_count     = 0
+	_mod_update_count = 0
+	call loadFile Format ["\:IGSE DB file:..\fwatch\tmp\schedule\dl_%1.db read:modupdatecountread:playercount", _mode]
 	
-	#QueryServer_Loop
-	? GS_SERVER_STATUS_THREADS == 0 : ctrlSetText [6450, MAINMENU_STR select 2]; exit
-	ctrlSetText [6450, _base + _dots]
-	~0.2
-	_dots = _dots + "."
-	? _dots == "...." : _dots=""
-	goto "QueryServer_Loop"
+	? _mode == "mods" : if (_mod_update_count>0) then {titleText [Format [MAINMENU_STR select 87, _mod_update_count], "PLAIN DOWN", 0.2]}; _mode="schedule"; goto "DownloadDatabase_SkipSilentCheck"
+	? _mode == "schedule" : if (_player_count>0) then {cutText [Format ["\n%1 %2", localize "STR_DISP_MP_PLAYERS", _player_count], "PLAIN DOWN", 0.2]}
+	
