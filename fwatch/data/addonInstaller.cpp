@@ -30,7 +30,7 @@ struct GLOBAL_VARIABLES
 	int command_line_num;
 	int installation_steps_current;
 	int installation_steps_max;
-	int saved_alias_array_size;
+	size_t saved_alias_array_size;
 	int download_iterator;
 	time_t current_mod_version_date;
 	float installer_version;
@@ -72,7 +72,7 @@ struct GLOBAL_VARIABLES
 	0,
 	0,
 	0,
-	0.6,
+	0.6f,
 	0,
 	"",
 	"",
@@ -230,7 +230,39 @@ enum MISSIONSQM_PLAYERCOUNT
 
 
 // String operations -------------------------------------------------------------------------------------
+
+	// https://stackoverflow.com/questions/6691555/converting-narrow-string-to-wide-string
+wstring string2wide(const string& input)
+{
+    if (input.empty())
+		return wstring();
+
+	size_t output_length = MultiByteToWideChar(CP_UTF8, 0, input.c_str(), (int)input.length(), 0, 0);
+	wstring output(output_length, L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, input.c_str(), (int)input.length(), &output[0], (int)input.length());
 	
+	return output;
+}
+
+	// https://mariusbancila.ro/blog/2008/10/20/writing-utf-8-files-in-c/
+string wide2string(const wchar_t* input, int input_length)
+{
+	int output_length = WideCharToMultiByte(CP_UTF8, 0, input, input_length, NULL, 0, NULL, NULL);
+      
+	if (output_length == 0) 
+		return "";
+ 
+	string output(output_length, ' ');
+	WideCharToMultiByte(CP_UTF8, 0, input, input_length, const_cast< char* >(output.c_str()), output_length, NULL, NULL); 
+ 
+	return output;
+}
+ 
+string wide2string(const wstring& input)
+{
+   return wide2string(input.c_str(), (int)input.size());
+}
+
 string Trim(string s)
 {
 	s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
@@ -240,7 +272,7 @@ string Trim(string s)
 
 string WrapInQuotes(string text)
 {
-	for (int i=0; i<text.length(); i++)
+	for (size_t i=0; i<text.length(); i++)
 		if (text.substr(i,1) == " ") {
 			text = "\"" + text + "\"";
 			break;
@@ -285,10 +317,10 @@ string MaskNewName(string path, string mask)
 	if (path.empty())
 		return "";
 		
-	int    x = 0;
+	size_t x  = 0;
 	string R = "";
 	
-	for (int m=0; m<mask.length(); m++) {
+	for (size_t m=0; m<mask.length(); m++) {
 		char ch       = mask[m];
 		bool q_exists = x<path.length();
 		char q        = q_exists          ? path[x]   : ' ';
@@ -308,12 +340,9 @@ string MaskNewName(string path, string mask)
 				R += path[x++];
         } else if (ch == '*') {
             if (z == '.') {
-                int i = path.length()-1;
-                for (;  i>=0;  i--) 
-					if (path[i] == '.') 
-						break;
+                size_t i = path.find_last_of('.');
 						
-                if (i < 0) {
+				if (i == string::npos) {
                     R += path.substr(x, path.length()) + '.';
                     i  = path.length();
                 } else {
@@ -327,12 +356,9 @@ string MaskNewName(string path, string mask)
 				m++;
 				x  = path.length();
             } else {
-                int i = path.length()-1;
-                for (;  i>=0;  i--) 
-					if (path[i] == z) 
-						break;
+                size_t i = path.find_last_of(z);
 						
-                if (i < 0) {
+				if (i == string::npos) {
 					R += path.substr(x, path.length()) + z;
 					x = path.length();
 					m++;
@@ -377,7 +403,7 @@ string PathNoLastItem(string path, int options=FLAG_NONE)
 }
 
 	// Windows error message
-string FormatError(int error)
+string FormatError(DWORD error)
 {
 	if (error == 0) 
 		return "\n";
@@ -393,12 +419,12 @@ string FormatError(int error)
 	0,
 	NULL);
 
-	string ret = "   - " + (string)(char*)errorText + "\n";
+	string ret = Trim("   - " + (string)(char*)errorText + "\n");
 
 	if (errorText != NULL)
 		LocalFree(errorText);
 
-	return Trim(ret);
+	return ret;
 }
 
 void Tokenize(string text, string delimiter, vector<string> &container)
@@ -407,12 +433,14 @@ void Tokenize(string text, string delimiter, vector<string> &container)
 	bool inQuote      = false;
 	char custom_delim = ' ';
 	bool use_unQuote  = true;
+	size_t word_start = 0;
+	bool word_started = false;
 	
 	// Split line into parts
-	for (int pos=0, begin=-1;  pos<=text.length();  pos++) {
+	for (size_t pos=0;  pos<=text.length();  pos++) {
 		bool isToken = pos == text.length();
 		
-		for (int i=0;  !isToken && i<delimiter.length();  i++)
+		for (size_t i=0;  !isToken && i<delimiter.length();  i++)
 			if (text.substr(pos,1) == delimiter.substr(i,1))
 				isToken = true;
 				
@@ -420,13 +448,15 @@ void Tokenize(string text, string delimiter, vector<string> &container)
 			inQuote = !inQuote;
 			
 		// Mark beginning of the word
-		if (!isToken  &&  begin<0)
-			begin = pos;
+		if (!isToken  &&  !word_started) {
+			word_start   = pos;
+			word_started = true;
+		}
 
 		// Mark end of the word
-		if (isToken  &&  begin>=0  &&  !inQuote) {
-			container.push_back(UnQuote(text.substr(begin, pos-begin)));
-			begin = -1;
+		if (isToken  &&  word_started  &&  !inQuote) {
+			container.push_back(UnQuote(text.substr(word_start, pos-word_start)));
+			word_started = false;
 		}
 	}
 }
@@ -450,12 +480,12 @@ string ReplaceAll(string str, const string& from, const string& to)
 	// https://stackoverflow.com/questions/11635/case-insensitive-string-comparison-in-c#315463
 bool Equals(const string& a, const string& b) 
 {
-    unsigned int sz = a.size();
+    size_t sz = a.size();
 
     if (b.size() != sz)
         return false;
 
-    for (unsigned int i = 0; i < sz; ++i)
+    for (size_t i=0; i<sz; ++i)
         if (tolower(a[i]) != tolower(b[i]))
             return false;
 
@@ -468,7 +498,7 @@ bool VerifyPath(string path)
 	Tokenize(path, "\\/", directories);
 
 	// Path cannot go back to the parent directory
-	for (int i=0; i<directories.size(); i++)
+	for (size_t i=0; i<directories.size(); i++)
 		if (directories[i] == "..")
 			return false;
 
@@ -476,6 +506,13 @@ bool VerifyPath(string path)
 }
 
 string Int2Str(int num)
+{
+    ostringstream text;
+    text << num;
+    return text.str();
+}
+
+string UInt2Str(size_t num)
 {
     ostringstream text;
     text << num;
@@ -504,43 +541,11 @@ bool IsModName(string filename)
 	if (Equals(filename,global.current_mod))
 		return true;
 		
-	for(int i=0; i<global.current_mod_alias.size(); i++)
+	for (size_t i=0; i<global.current_mod_alias.size(); i++)
 		if (Equals(filename,global.current_mod_alias[i]))
 			return true;
 			
 	return false;
-}
-
-	// https://stackoverflow.com/questions/6691555/converting-narrow-string-to-wide-string
-wstring string2wide(const string& input)
-{
-    if (input.empty())
-		return wstring();
-
-	size_t output_length = MultiByteToWideChar(CP_UTF8, 0, input.c_str(), (int)input.length(), 0, 0);
-	wstring output(output_length, L'\0');
-	MultiByteToWideChar(CP_UTF8, 0, input.c_str(), (int)input.length(), &output[0], (int)input.length());
-	
-	return output;
-}
-
-	// https://mariusbancila.ro/blog/2008/10/20/writing-utf-8-files-in-c/
-string wide2string(const wchar_t* input, int input_length)
-{
-	int output_length = WideCharToMultiByte(CP_UTF8, 0, input, input_length, NULL, 0, NULL, NULL);
-      
-	if (output_length == 0) 
-		return "";
- 
-	string output(output_length, ' ');
-	WideCharToMultiByte(CP_UTF8, 0, input, input_length, const_cast< char* >(output.c_str()), output_length, NULL, NULL); 
- 
-	return output;
-}
- 
-string wide2string(const wstring& input)
-{
-   return wide2string(input.c_str(), (int)input.size());
 }
 
 string GetTextBetween(string &buffer, string start, string end, size_t &offset, bool reverse=false)
@@ -602,7 +607,7 @@ string lowercase(const string &input)
 {
 	string output = input;
 	
-	for (int i=0; i<output.length(); i++)
+	for (size_t i=0; i<output.length(); i++)
 		output[i] = tolower(output[i]);
 		
 	return output;
@@ -886,7 +891,7 @@ int ParseWgetLog(string &error)
 					if (Tokens.size() > 2)
 						time_remaining = Tokens[2];
 				} else {
-					int i = letter_k + 3;
+					size_t i = letter_k + 3;
 					while(i<line.length() && !isdigit(line[i]))
 						i++;
 						
@@ -903,8 +908,8 @@ int ParseWgetLog(string &error)
 				size_t begin = line.find(filename_messages[i][0]);
 				
 				if (begin != string::npos) {
-					int len      = filename_messages[i][0].length();
-					size_t end   = line.find(filename_messages[i][1], begin+len);
+					size_t len = filename_messages[i][0].length();
+					size_t end = line.find(filename_messages[i][1], begin+len);
 					
 					if (end != string::npos) {
 						global.downloaded_filename = line.substr(begin+len,  end-(begin+len));
@@ -1059,7 +1064,7 @@ int ParsePBOLog(string &message, string &exename, string &file_name)
 	return 0;
 }
 
-int CreateFileList(string source, string destination, vector<string> &sources, vector<string> &destinations, vector<bool> &dirs, int options, vector<string> &empty_dirs, int &buffer_size, int &recursion)
+int CreateFileList(string source, string destination, vector<string> &sources, vector<string> &destinations, vector<bool> &dirs, int options, vector<string> &empty_dirs, size_t &buffer_size, int &recursion)
 {
 	WIN32_FIND_DATAW fd;
 	HANDLE hFind        = INVALID_HANDLE_VALUE;
@@ -1068,7 +1073,7 @@ int CreateFileList(string source, string destination, vector<string> &sources, v
 	int result          = 0;
 
 	if (hFind == INVALID_HANDLE_VALUE) {
-		int error_code = GetLastError();
+		DWORD error_code = GetLastError();
 		
 		if (options & FLAG_ALLOW_ERROR && error_code==ERROR_FILE_NOT_FOUND  ||  error_code==ERROR_PATH_NOT_FOUND)
 			return ERROR_NONE;
@@ -1080,6 +1085,9 @@ int CreateFileList(string source, string destination, vector<string> &sources, v
 	string base_source      = PathNoLastItem(source);
 	string base_destination = PathNoLastItem(destination);
 	string new_name         = PathLastItem(destination);
+	string face1            = global.current_mod_new_name + "\\face.jpg";
+	string face2            = global.current_mod_new_name + "\\face.paa";
+	string id_file          = global.current_mod_new_name + "\\__gs_id";
 
 	if (new_name.empty())
 		new_name = PathLastItem(source);
@@ -1094,13 +1102,13 @@ int CreateFileList(string source, string destination, vector<string> &sources, v
 		string file_name       = wide2string(fd.cFileName);
 		string new_source      = base_source      + file_name;
 		string new_destination = base_destination + (is_destination_wildcard ? MaskNewName(file_name,new_name) : new_name);
-		bool is_dir            = fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+		bool is_dir            = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) > 0;
 		DWORD attributes       = GetFileAttributes(new_destination.c_str());
 
-		if ((is_dir  &&  is_source_wildcard  &&  ~options & FLAG_MATCH_DIRS)  ||  (!is_dir  &&  options & FLAG_MATCH_DIRS_ONLY))
+		if ((is_dir  &&  is_source_wildcard  &&  ~options & FLAG_MATCH_DIRS)  ||  (!is_dir  &&  options & FLAG_MATCH_DIRS_ONLY)  ||  Equals(new_source,face1)  ||  Equals(new_source,face2)  ||  Equals(new_source,id_file))
 			continue;
 
-		// move modfolder to the game dir when using wildcards
+		// Move modfolder to the game dir when using wildcards
 		if (is_dir  &&  options & FLAG_MATCH_DIRS  &&  recursion==0  &&  Equals(destination,global.current_mod_new_name+"\\")  &&  IsModName(file_name)) {
 			new_destination = global.current_mod_new_name;
 			attributes      = GetFileAttributes(new_destination.c_str());
@@ -1114,11 +1122,11 @@ int CreateFileList(string source, string destination, vector<string> &sources, v
 
 
 		// Check if destination directory already exists
-		if (is_dir  &&  (attributes != INVALID_FILE_ATTRIBUTES  &&  attributes & FILE_ATTRIBUTE_DIRECTORY  ||  ~options & FLAG_MOVE_FILES)  &&  buffer_size==0) {
-			if (!~options & FLAG_MOVE_FILES)
-				CreateDirectory(new_destination.c_str(), NULL);
-			else
+		if (is_dir  &&  ((attributes != INVALID_FILE_ATTRIBUTES  &&  attributes & FILE_ATTRIBUTE_DIRECTORY)  ||  ~options & FLAG_MOVE_FILES)  &&  buffer_size==0) {
+			if (options & FLAG_MOVE_FILES)
 				empty_dirs.push_back(new_source);
+			else
+				CreateDirectory(new_destination.c_str(), NULL);
 
 			// If dir already exists then move its contents
 			new_source      += "\\*";
@@ -1148,19 +1156,20 @@ string GetMissionDestinationFromSQM(string path)
 	if (text_buffer.empty())
 		return "Addons";
 		
-	int expect       = SQM_PROPERTY;
-	int word_start   = -1;
-	int class_level  = 0;
-	int array_level  = 0;
-	int player_count = 0;
-	bool is_array    = false;
-	bool in_quote    = false;
-	bool in_mission  = false;
-	bool is_wizard   = false;
-	char separator   = ' ';
-	string property  = "";
+	int expect        = SQM_PROPERTY;
+	int class_level   = 0;
+	int array_level   = 0;
+	int player_count  = 0;
+	size_t word_start = -1;
+	bool word_started = false;
+	bool is_array     = false;
+	bool in_quote     = false;
+	bool in_mission   = false;
+	bool is_wizard    = false;
+	char separator    = ' ';
+	string property   = "";
 	
-	for (int i=0; i<text_buffer.size(); i++) {
+	for (size_t i=0; i<text_buffer.size(); i++) {
 		char c = text_buffer[i];
 		
 		switch (expect) {
@@ -1187,10 +1196,12 @@ string GetMissionDestinationFromSQM(string path)
 				}
 				
 				if (isalnum(c) || c=='_' || c=='[' || c==']') {
-					if (word_start == -1)
+					if (!word_started) {
+						word_started = true;
 						word_start = i;
+					}
 				} else
-					if (word_start >= 0) {
+					if (word_started) {
 						property    = text_buffer.substr(word_start, i-word_start);
 	
 						if (property == "class") {
@@ -1204,7 +1215,7 @@ string GetMissionDestinationFromSQM(string path)
 								player_count++;
 						}
 
-						word_start = -1;
+						word_started = false;
 					}
 				
 				if (separator == ' ')
@@ -1235,9 +1246,11 @@ string GetMissionDestinationFromSQM(string path)
 				if (!in_quote && c=='}')
 					array_level--;
 
-				if (word_start == -1) {
-					if (!isspace(c))
+				if (!word_started) {
+					if (!isspace(c)) {
+						word_started = true;
 						word_start = i;
+					}
 				} else {
 					if (!in_quote && array_level==0 && (c==';' || c=='\r' || c=='\n')) {
 						string word = text_buffer.substr(word_start, i-word_start);
@@ -1246,7 +1259,7 @@ string GetMissionDestinationFromSQM(string path)
 						if (!is_wizard && Equals(property,"position[]") && word.find("wizvar_")!=string::npos)
 							is_wizard = true;
 				
-						word_start = -1;
+						word_started = false;
 						expect     = SQM_PROPERTY;
 					}
 				}
@@ -1256,14 +1269,16 @@ string GetMissionDestinationFromSQM(string path)
 			
 			case SQM_CLASS_NAME : {
 				if (isalnum(c) || c=='_') {
-					if (word_start == -1)
+					if (!word_started) {
 						word_start = i;
+						word_started = true;
+					}
 				} else
-					if (word_start >= 0) {
+					if (word_started) {
 						if (text_buffer.substr(word_start, i-word_start) == "Mission")
 							in_mission = true;
 
-						word_start = -1;
+						word_started = false;
 						expect     = SQM_CLASS_BRACKET;
 					}
 				
@@ -1425,7 +1440,7 @@ DIRECTORY_INFO ScanDirectory(string path)
 		} while(FindNextFileW(hFile, &FileInformation) == TRUE);
 		
 		// Files come after directories
-		for(int i=0; i<files.size(); i++) {
+		for (size_t i=0; i<files.size(); i++) {
 			output.file_list.push_back(files[i]);
 			output.attributes_list.push_back(0);
 			output.is_mod_list.push_back(false);
@@ -1434,7 +1449,7 @@ DIRECTORY_INFO ScanDirectory(string path)
 		
 		FindClose(hFile);
 	} else {
-		int error_code    = GetLastError();
+		DWORD error_code  = GetLastError();
 		output.error_code = ErrorMessage(STR_ERROR_FILE_LIST, "%STR% " + path + " - " + Int2Str(error_code) + " " + FormatError(error_code));
 	}
 
@@ -1448,7 +1463,7 @@ DIRECTORY_INFO ScanDirectory(string path)
 // File writing ------------------------------------------------------------------------------------------
 
 	// Delete file or directory with its contents  http://stackoverflow.com/a/10836193
-int DeleteDirectory(const wstring &refcstrRootDirectory, bool bDeleteSubdirectories=true)
+DWORD DeleteDirectory(const wstring &refcstrRootDirectory, bool bDeleteSubdirectories=true)
 {
 	bool             bSubdirectory = false;       // Flag, indicating whether subdirectories have been found
 	HANDLE           hFile;                       // Handle to directory
@@ -1542,8 +1557,8 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 			outer_quote = true;
 		}
 
-		find   += output.length();	// skip to value
-		int end = find;
+		find      += output.length();	// skip to value
+		size_t end = find;
 		
 		while(end<url.length() && (!isspace(url[end]) || in_quote)) {	// skip to the end of value
 			if (url[end]=='"')
@@ -1577,7 +1592,7 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 				find++;
 				
 			bool in_quote = false;
-			int end       = find;
+			size_t end    = find;
 	
 			while(end<url.length()  &&  (!isspace(url[end]) || in_quote)) {	// skip to the end of value
 				if (url[end] == '"')
@@ -1623,7 +1638,7 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 	si.wShowWindow = SW_SHOW;
 	
 	if (!CreateProcess("fwatch\\data\\wget.exe", &arguments[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi)) {
-		int errorCode = GetLastError();
+		DWORD errorCode = GetLastError();
 		return ErrorMessage(STR_ERROR_EXE, "%STR% wget.exe - " + Int2Str(errorCode) + " " + FormatError(errorCode));
 	} else
 		if (~options & FLAG_SILENT_MODE)
@@ -1737,7 +1752,7 @@ int Unpack(string file_name, string password="", int options=FLAG_NONE)
 	string arguments = WrapInQuotes(global.working_directory) + (password.empty() ? "" : " -p"+password) + " x -y -o\"" + destination + "\\\" -bb3 -bsp1 " + "\"fwatch\\tmp\\" + file_name + "\"";
 
 	if (!CreateProcess("fwatch\\data\\7z.exe", &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {		
-		int errorCode = GetLastError();
+		DWORD errorCode = GetLastError();
 		return ErrorMessage(STR_ERROR_EXE, "%STR% 7z.exe - " + Int2Str(errorCode) + " " + FormatError(errorCode));
 	} else
 		global.logfile << "Extracting " << file_name << endl;
@@ -1794,12 +1809,12 @@ int MakeDir(string path)
 	string build_path = "";
 	int result        = 0;
 
-	for (int i=0; i<directories.size(); i++) {
+	for (size_t i=0; i<directories.size(); i++) {
 		build_path += (build_path!="" ? "\\" : "") + directories[i];
 		result      = CreateDirectory(build_path.c_str(), NULL);
 
 		if (!result) {
-			int error_code = GetLastError();
+			DWORD error_code = GetLastError();
 
 			if (error_code != ERROR_ALREADY_EXISTS)
 				return ErrorMessage(STR_MDIR_ERROR, "%STR% " + build_path + " " + Int2Str(error_code) + " " + FormatError(error_code));
@@ -1827,8 +1842,8 @@ int MoveFiles(string source, string destination, string new_name, int options)
 	vector<string> destination_list;
 	vector<bool>   is_dir_list;
 	vector<string> empty_dirs;
-	int buffer_size = 0;
-	int recursion   = -1;
+	size_t buffer_size = 0;
+	int recursion      = -1;
 
 	int result = CreateFileList(source, destination+new_name, source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
 
@@ -1849,7 +1864,7 @@ int MoveFiles(string source, string destination, string new_name, int options)
 	wstring destination_wide;
 
 	// For each file in the list
-	for (int i=0;  i<source_list.size(); i++) {
+	for (size_t i=0;  i<source_list.size(); i++) {
 		if (Abort())
 			return ERROR_USER_ABORTED;
 
@@ -1874,7 +1889,7 @@ int MoveFiles(string source, string destination, string new_name, int options)
 			success = CopyFileW(source_wide.c_str(), destination_wide.c_str(), FailIfExists);
 
 	    if (!success) {
-			int error_code = GetLastError();
+			DWORD error_code = GetLastError();
 			
 	    	if (~options & FLAG_OVERWRITE  &&  error_code==ERROR_ALREADY_EXISTS)
 	    		global.logfile << "  - file already exists";
@@ -1892,9 +1907,13 @@ int MoveFiles(string source, string destination, string new_name, int options)
 	}
 
 	// Remove empty directories
-	if (options & FLAG_MOVE_FILES)
-		for (int i=empty_dirs.size()-1; i>=0; i--)
+	if (options & FLAG_MOVE_FILES  &&  empty_dirs.size() > 0) {
+		size_t i = empty_dirs.size();
+		do {
+			i--;
 			RemoveDirectory(empty_dirs[i].c_str());
+		} while (i > 0);
+	}
 
 	return result;
 }
@@ -1953,7 +1972,7 @@ int ExtractPBO(string source, string destination="", string file_to_unpack="", b
 	arguments += WrapInQuotes(source) + " " + destination_temp;
 
 	if (!CreateProcess(&executable[0], &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {
-		int errorCode = GetLastError();
+		DWORD errorCode = GetLastError();
 		return ErrorMessage(STR_ERROR_EXE, "%STR% " + exename + " - " + Int2Str(errorCode) + " " + FormatError(errorCode));	
 	} else 
 		if (!silent) {
@@ -2076,7 +2095,7 @@ int CreateTimestampList(string path, int path_cut, vector<string> &namelist, vec
 	HANDLE hFind      = FindFirstFileW(wildcardW.c_str(), &fd);
 
 	if (hFind == INVALID_HANDLE_VALUE) {
-		int error_code = GetLastError();
+		DWORD error_code = GetLastError();
 		
 		if (error_code==ERROR_FILE_NOT_FOUND  ||  error_code==ERROR_PATH_NOT_FOUND)
 			return 0;
@@ -2146,7 +2165,7 @@ int RequestExecution(string path_to_dir, string file_name)
 		
 		if (!CreateProcess(&executable[0], &arguments[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi)) {
 			MoveFileEx("Aspect_Ratio.backup", "Aspect_Ratio.hpp", MOVEFILE_REPLACE_EXISTING);
-			int errorCode = GetLastError();
+			DWORD errorCode = GetLastError();
 			global.logfile << "Failed to launch " << file_name << " - " << errorCode << " " << FormatError(errorCode);
 			return errorCode;
 		}
@@ -2376,11 +2395,11 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 			if (dir.number_of_files==0  &&  dir.number_of_dirs==1  &&  Equals(file_with_path,"fwatch\\tmp\\_extracted"))
 				options |= FLAG_DONT_IGNORE;
 			
-			for (int i=0; i<dir.file_list.size(); i++) {
+			for (size_t i=0; i<dir.file_list.size(); i++) {
 				string file_inside       = wide2string(dir.file_list[i]);
 				string path_to_this_file = file + "\\" + file_inside;
 				int result               = ERROR_NONE;
-				bool is_dir              = dir.attributes_list[i] & FILE_ATTRIBUTE_DIRECTORY;
+				bool is_dir              = (dir.attributes_list[i] & FILE_ATTRIBUTE_DIRECTORY);
 				
 				// Files that are next to the wanted modfolder are moved without looking at them
 				if (dir.number_of_wanted_mods>0  &&  (!is_dir || is_dir && dir.mod_sub_id_list[i]!=DIR_MISSIONS && dir.mod_sub_id_list[i]!=DIR_MPMISSIONS && !dir.is_mod_list[i] && _wcsicmp(dir.file_list[i].c_str(),L"Res")!=0 && _wcsicmp(dir.file_list[i].c_str(),L"ResAddons")!=0)) {
@@ -2418,7 +2437,7 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 					keywords.push_back("addons");
 					key_exists.resize(keywords.size());
 					
-					for (int j=0; j<keywords.size(); j++)
+					for (size_t j=0; j<keywords.size(); j++)
 						key_exists[j] = file_inside.find(keywords[j]) != string::npos;
 					
 					if (((key_exists[KEY_DEMO] || key_exists[KEY_EDITOR] || key_exists[KEY_TEMPLATE]) && key_exists[KEY_MISSION]) || key_exists[KEY_USER])
@@ -2451,7 +2470,8 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 			EXT_7Z,
 			EXT_ACE,
 			EXT_EXE,
-			EXT_CAB
+			EXT_CAB,
+			EXT_INVALID
 		};
 		
 		string valid_extensions[] = {
@@ -2463,10 +2483,10 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 			"exe",
 			"cab"
 		};
-		int number_of_extensions = sizeof(valid_extensions) / sizeof(valid_extensions[0]);
-		int extension_index      = -1;
+		size_t number_of_extensions = sizeof(valid_extensions) / sizeof(valid_extensions[0]);
+		size_t extension_index      = EXT_INVALID;
 		
-		for (int i=0; i<number_of_extensions && extension_index<0; i++)
+		for (size_t i=0; i<number_of_extensions && extension_index==EXT_INVALID; i++)
 			if (file_extension == valid_extensions[i])
 				extension_index = i;
 		
@@ -2538,11 +2558,11 @@ void EndModVersion()
 		
 	// Remove downloaded files
 	if (!global.test_mode) {
-		for (int i=0; i<global.downloads.size(); i++) {
+		for (size_t i=0; i<global.downloads.size(); i++) {
 			string filename = "fwatch\\tmp\\" + global.downloads[i];
 
 			if (!DeleteFile(filename.c_str())) {
-				int errorCode   = GetLastError();
+				DWORD errorCode = GetLastError();
 				string errorMSG = FormatError(errorCode);
 				global.logfile << "Failed to delete " << filename << " - " << errorCode << " " << errorMSG << endl;
 			}
@@ -3127,18 +3147,20 @@ int main(int argc, char *argv[])
 	
 	
 	// Parse installation script and store instructions in vectors
-	int word_begin            = -1; //number of column where a phrase begins
-	int word_count            = 1;  //number of found phrases in the current line
-	int word_line_num         = 1;	//line count for the entire script
-	int word_line_num_local   = 1;  //line count for single version of the mod
-	int command_id            = -1;
-	int last_command_line_num = -1;
-	int last_url_list_id      = -1;
-	int url_arg_key           = -1;
-	bool in_quote             = false;
-	bool remove_quotes        = true;
-	bool url_block            = false;
-	bool url_line             = false;
+	size_t word_begin          = 0;  //number of column where a phrase begins
+	int word_count             = 1;  //number of found phrases in the current line
+	int word_line_num          = 1;	 //line count for the entire script
+	int word_line_num_local    = 1;  //line count for single version of the mod
+	int command_id             = -1;
+	int last_command_line_num  = -1;
+	size_t last_url_list_id    = 0;
+	int url_arg_key            = -1;
+	bool in_quote              = false;
+	bool remove_quotes         = true;
+	bool url_block             = false;
+	bool url_line              = false;
+	bool word_started          = false;
+	bool last_url_list_started = false;
 	
 	// Table storing commands from the script
 	struct {
@@ -3146,9 +3168,9 @@ int main(int argc, char *argv[])
 		vector<bool> ctrl_flow;		//is it a control flow command
 		vector<int> line_num;		//position in the text file
 		vector<int> switches;		//bit mask
-		vector<int> arg_start;		//arguments starting index in the other table
+		vector<size_t> arg_start;   //arguments starting index in the other table
 		vector<int> arg_num;		//number of arguments passed to this command
-		vector<int> url_start;		//urls starting index in the other table
+		vector<size_t> url_start;   //urls starting index in the other table
 		vector<int> url_num;		//number of urls passed to this command
 		vector<string> password;	//password switch passed to this command
 		vector<string> arguments;	//table storing arguments associated with commands (not parallel)
@@ -3157,14 +3179,14 @@ int main(int argc, char *argv[])
 
 	// Table storing download urls associated with the commands	
 	struct {
-		vector<int> arg_start;		//arguments starting index in the other table
+		vector<size_t> arg_start;   //arguments starting index in the other table
 		vector<int> arg_num;		//number of arguments passed to this url
 		vector<int> line_num;		//position in the text file
 		vector<string> link;		//actual url
 		vector<string> arguments;	//table storing url arguments associated with the urls (not parallel)
 	} current_script_command_urls;
 	
-	for (int i=0; i<=script_file_content.length(); i++) {
+	for (size_t i=0; i<=script_file_content.length(); i++) {
 		bool end_of_word = i==script_file_content.length() || isspace(script_file_content[i]);
 		
 		// When quote
@@ -3172,7 +3194,7 @@ int main(int argc, char *argv[])
 			in_quote = !in_quote;
 		
 		// If beginning of an url block
-		if (script_file_content[i] == '{' && word_begin<0) {
+		if (script_file_content[i] == '{' && !word_started) {
 			url_block = true;
 	
 			// if bracket is the first thing in the line then it's auto installation
@@ -3182,9 +3204,11 @@ int main(int argc, char *argv[])
 				current_script_command.ctrl_flow.push_back(false);
 				current_script_command.line_num.push_back(word_line_num_local);
 				current_script_command.switches.push_back(SWITCH_NONE);
-				current_script_command.arg_start.push_back(current_script_command.arguments.size());
-				current_script_command.arg_num.push_back(0);
-				current_script_command.url_start.push_back(current_script_command_urls.link.size());
+				size_t temp = current_script_command.arguments.size();  //dealing with std::_Vbase
+				current_script_command.arg_start.push_back(temp);
+				current_script_command.arg_num.push_back(0);				
+				temp = current_script_command_urls.link.size();
+				current_script_command.url_start.push_back(temp);				
 				current_script_command.url_num.push_back(0);
 				current_script_command.password.push_back("");
 				current_script_command.timestamp.push_back("");
@@ -3203,7 +3227,7 @@ int main(int argc, char *argv[])
 			end_of_word = true;
 			
 			// If there's space between last word and the closing bracket
-			if (word_begin == -1) {	
+			if (!word_started) {	
 				url_block = false;
 				url_line  = false;
 				word_count++;
@@ -3212,8 +3236,9 @@ int main(int argc, char *argv[])
 		}
 		
 		// Remember beginning of the word
-		if (!end_of_word && word_begin<0) {
-			word_begin = i;
+		if (!end_of_word && !word_started) {
+			word_begin   = i;
+			word_started = true;
 			
 			// If custom delimeter - jump to the end of the argument
 			if (script_file_content.substr(word_begin,2) == ">>") {
@@ -3226,7 +3251,7 @@ int main(int argc, char *argv[])
 		}
 		
 		// When hit end of the word
-		if (end_of_word && word_begin>=0 && !in_quote) {
+		if (end_of_word && word_started && !in_quote) {
 			string word = script_file_content.substr(word_begin, i-word_begin);
 
 			if (remove_quotes)
@@ -3253,9 +3278,11 @@ int main(int argc, char *argv[])
 					current_script_command.ctrl_flow.push_back(false);
 					current_script_command.line_num.push_back(word_line_num_local);
 					current_script_command.switches.push_back(SWITCH_NONE);
-					current_script_command.arg_start.push_back(current_script_command.arguments.size());
+					size_t temp = current_script_command.arguments.size();  //dealing with std::_Vbase
+					current_script_command.arg_start.push_back(temp);
 					current_script_command.arg_num.push_back(0);
-					current_script_command.url_start.push_back(current_script_command_urls.link.size());
+					temp = current_script_command_urls.link.size();
+					current_script_command.url_start.push_back(temp);
 					current_script_command.url_num.push_back(0);
 					current_script_command.password.push_back("");
 					current_script_command.timestamp.push_back("");
@@ -3267,9 +3294,11 @@ int main(int argc, char *argv[])
 					
 					// If command is an URL then add it to the url database
 					if (IsURL(word)) {
-						url_line         = true;
-						last_url_list_id = current_script_command_urls.link.size();
-						current_script_command_urls.arg_start.push_back(current_script_command_urls.arguments.size());
+						url_line              = true;
+						last_url_list_id      = current_script_command_urls.link.size();
+						last_url_list_started = true;
+						size_t temp           = current_script_command_urls.arguments.size(); //dealing with std::_Vbase
+						current_script_command_urls.arg_start.push_back(temp);
 						current_script_command_urls.arg_num.push_back(0);
 						current_script_command_urls.line_num.push_back(word_line_num);
 						current_script_command_urls.link.push_back(word);
@@ -3301,7 +3330,7 @@ int main(int argc, char *argv[])
 				for (int switch_index=1, switch_enum=1 ; switch_index<number_of_switches && !is_switch; switch_enum*=2, switch_index++)				
 					if (Equals(switch_name, command_switches_names[switch_index])) {
 						is_switch = true;
-						int last  = current_script_command.switches.size() - 1;
+						size_t last = current_script_command.switches.size() - 1;
 						current_script_command.switches[last] |= switch_enum;
 						
 						if (switch_enum == SWITCH_PASSWORD)
@@ -3314,9 +3343,12 @@ int main(int argc, char *argv[])
 				// Add word to the URL database or the arguments database
 				if (!is_switch) {
 					if (url_line) {
-						if (last_url_list_id == -1) {
+						if (!last_url_list_started) {
 							last_url_list_id = word_line_num;
-							current_script_command_urls.arg_start.push_back(current_script_command_urls.arguments.size());
+							last_url_list_started = true;
+							size_t temp           = current_script_command_urls.arguments.size();
+
+							current_script_command_urls.arg_start.push_back(temp); //dealing with std::_Vbase
 							current_script_command_urls.arg_num.push_back(0);
 							current_script_command_urls.line_num.push_back(word_line_num);
 							current_script_command_urls.link.push_back(word);
@@ -3338,13 +3370,13 @@ int main(int argc, char *argv[])
 				url_line  = false;
 			}
 
-			word_begin = -1;
+			word_started = false;
 			word_count++;
 		}
 		
 		// When new line
 		if (!in_quote && (script_file_content[i]=='\n' || script_file_content[i]=='\0')) {
-			int last = current_script_command.id.size() - 1;
+			size_t last = current_script_command.id.size() - 1;
 			
 			// Maintain minimal number of arguments
 			while (!url_block && command_id!=-1 && current_script_command.arg_num[last] < command_minimal_arg[current_script_command.id[last]]) {
@@ -3352,9 +3384,9 @@ int main(int argc, char *argv[])
 				current_script_command.arg_num[last]++;
 			}
 			
-			word_count       = 1;
-			url_line         = false;
-			last_url_list_id = -1;
+			word_count            = 1;
+			url_line              = false;
+			last_url_list_started = false;
 			word_line_num++;
 			word_line_num_local++;
 		}
@@ -3371,7 +3403,7 @@ int main(int argc, char *argv[])
 
 	// Pretend to Install
 	// Figure out how many steps this installation script has so we can later display progress for the user
-	for (int i=0;  i<current_script_command.id.size(); i++) {
+	for (size_t i=0;  i<current_script_command.id.size(); i++) {
 		if (
 			// if modfolder wasn't formally started OR skipping this mod
 			((global.current_mod.empty() || global.skip_modfolder)  &&  current_script_command.id[i]!=COMMAND_BEGIN_MOD  &&  current_script_command.id[i]!=COMMAND_INSTALL_VERSION)
@@ -3417,7 +3449,7 @@ int main(int argc, char *argv[])
 		// If wrong version
 		if (global.script_version==0  ||  global.installer_version < global.script_version) {
 			global.logfile << "Version mismatch. Script version: " << global.script_version << "  Program version: " << global.installer_version << "\n\n--------------\n\n";
-			WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR_WRONG_VERSION] + "\\n" + Int2Str(global.script_version) + " vs " + Float2Str(global.installer_version)));
+			WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR_WRONG_VERSION] + "\\n" + Float2Str(global.script_version) + " vs " + Float2Str(global.installer_version)));
 			global.logfile.close();
 			return ERROR_WRONG_SCRIPT;
 		}
@@ -3427,7 +3459,7 @@ int main(int argc, char *argv[])
 	
 
 	// Install for Real
-	for (int i=0;  i<current_script_command.id.size(); i++) {
+	for (size_t i=0;  i<current_script_command.id.size(); i++) {
 		if (Abort())
 			return ERROR_USER_ABORTED;
 
@@ -3517,11 +3549,11 @@ int main(int argc, char *argv[])
 							if (is_href)
 								left_quote = find+5;
 							else
-								for(int j=find; j>=0 && left_quote==string::npos; j--)
+								for (size_t j=find; j>=0 && left_quote==string::npos; j--)
 									if (token_file_buffer[j]=='\"' || token_file_buffer[j]=='\'')
 										left_quote = j;
 									
-							for(int k=find+(is_href ? 6 : 0); k<token_file_buffer.length() && right_quote==string::npos; k++)
+							for (size_t k=find+(is_href ? 6u : 0u); k<token_file_buffer.length() && right_quote==string::npos; k++)
 								if (token_file_buffer[k]=='\"' || token_file_buffer[k]=='\'')
 									right_quote = k;
 							
@@ -3532,7 +3564,7 @@ int main(int argc, char *argv[])
 								
 								// if relative address
 								if (found_url[0] == '/') {
-									int offset         = 0;
+									size_t offset      = 0;
 									size_t doubleslash = original_url.find("//");
 									
 									if (doubleslash != string::npos)
@@ -3566,7 +3598,7 @@ int main(int argc, char *argv[])
 										string name  = "";
 										string value = "";
 										
-										for (int j=0; j<attributes.size(); j++) {
+										for (size_t j=0; j<attributes.size(); j++) {
 											if (attributes[j].substr(0,5) == "name=")
 												name = ReplaceAll(attributes[j].substr(5), "\"", "");
 												
@@ -3659,14 +3691,14 @@ int main(int argc, char *argv[])
 					vector<string> aliases;
 					Tokenize(current_script_command.arguments[first + 3], " ", aliases);
 					
-					for (int j=0; j<aliases.size(); j++)
+					for (size_t j=0; j<aliases.size(); j++)
 						global.current_mod_alias.push_back(aliases[j]);
 						
 					global.saved_alias_array_size = global.current_mod_alias.size();
 					
 					
 					// Find to which folder we should install the mod
-					for (int j=0;  j<global.mod_id.size(); j++)
+					for (size_t j=0;  j<global.mod_id.size(); j++)
 						if (Equals(global.current_mod_id,global.mod_id[j]))
 							global.current_mod_new_name = global.mod_name[j];
 				
@@ -3745,7 +3777,7 @@ int main(int argc, char *argv[])
 					if (current_script_command.arg_num[i] == 0)
 						global.current_mod_alias.clear();
 					else 
-						for(int j=current_script_command.arg_start[i]; j<current_script_command.arg_start[i]+current_script_command.arg_num[i]; j++)
+						for (size_t j=current_script_command.arg_start[i]; j<current_script_command.arg_start[i]+current_script_command.arg_num[i]; j++)
 							global.current_mod_alias.push_back(current_script_command.arguments[j]);
 					break;
 				}
@@ -3770,7 +3802,7 @@ int main(int argc, char *argv[])
 						
 						// If not an archive but there are still backup links then go back to download
 						if (!global.last_download_attempt && command_result==ERROR_WRONG_ARCHIVE) {
-							file = "fwatch\\tmp\\" + file;
+							file       = "fwatch\\tmp\\" + file;
 							int result = DeleteFile(file.c_str());
 							file       = "<dl>";
 							global.downloads.pop_back();
@@ -3778,8 +3810,8 @@ int main(int argc, char *argv[])
 							goto Download_Phase;
 						}
 					} else {
-						int error_code = GetLastError();
-						command_result = ErrorMessage(STR_AUTO_READ_ATTRI, "%STR% " + file + " - " + Int2Str(error_code) + " " + FormatError(error_code));
+						DWORD error_code = GetLastError();
+						command_result   = ErrorMessage(STR_AUTO_READ_ATTRI, "%STR% " + file + " - " + Int2Str(error_code) + " " + FormatError(error_code));
 					}
 					
 					break;
@@ -3958,8 +3990,8 @@ int main(int argc, char *argv[])
 					vector<string> destination_list;
 					vector<bool>   is_dir_list;
 					vector<string> empty_dirs;
-					int buffer_size = 1;
-					int recursion   = -1;
+					size_t buffer_size = 1;
+					int recursion      = -1;
 				
 					command_result = CreateFileList(*file_name, PathNoLastItem(*file_name), source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
 				
@@ -3969,33 +4001,33 @@ int main(int argc, char *argv[])
 				
 					// Allocate buffer for the file list
 					char *file_list;
-					int base_path_len = global.working_directory.length() + 1;
-					int buffer_pos    = 0;
+					size_t base_path_len = global.working_directory.length() + 1;
+					size_t buffer_pos    = 0;
 					wstring temp;
 					
 					if (trash) {
 						file_list = new char[buffer_size*2];
 				
 						if (!file_list) {
-							command_result = ErrorMessage(STR_ERROR_BUFFER, "%STR% " + Int2Str(buffer_size));
+							command_result = ErrorMessage(STR_ERROR_BUFFER, "%STR% " + UInt2Str(buffer_size));
 							break;
 						}
 					}
 				
 				  
 					// For each file in the list
-					for (int j=0; j<destination_list.size(); j++) {
+					for (size_t j=0; j<destination_list.size(); j++) {
 						if (Abort()) {
 							command_result = ERROR_USER_ABORTED;
 							goto End_command_execution;
 						}
 						
 						if (trash) {
-							temp            = string2wide(destination_list[j]);
-							int name_length = (temp.length()+1) * 2;
+							temp               = string2wide(destination_list[j]);
+							size_t name_length = (temp.length()+1) * 2;
 							global.logfile << "Trashing " << destination_list[j].substr(base_path_len) << endl;
 							memcpy(file_list+buffer_pos, temp.c_str(), name_length);
-							buffer_pos     += name_length;
+							buffer_pos += name_length;
 						} else {
 							global.logfile << "Deleting  " << destination_list[j].substr(base_path_len);
 							int error_code = 0;
@@ -4007,7 +4039,7 @@ int main(int argc, char *argv[])
 									error_code = GetLastError();
 
 							if (error_code != 0) {
-								command_result = ErrorMessage(STR_DELETE_PERMANENT_ERROR, "%STR% " + source_list[i] + "  - " + Int2Str(error_code) + " " + FormatError(error_code));
+								command_result = ErrorMessage(STR_DELETE_PERMANENT_ERROR, "%STR% " + source_list[i] + "  - " + UInt2Str(error_code) + " " + FormatError(error_code));
 								break;
 							}
 								
@@ -4095,8 +4127,8 @@ int main(int argc, char *argv[])
 					vector<string> destination_list;
 					vector<bool>   is_dir_list;
 					vector<string> empty_dirs;
-					int buffer_size = 0;
-					int recursion   = -1;
+					size_t buffer_size = 0;
+					int recursion      = -1;
 
 					command_result = CreateFileList(*source, relative_path+*destination, source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
 
@@ -4108,7 +4140,7 @@ int main(int argc, char *argv[])
 
 
 					// For each file on the list
-					for (int j=0;  j<source_list.size(); j++) {
+					for (size_t j=0;  j<source_list.size(); j++) {
 						if (Abort()) {
 							command_result = ERROR_USER_ABORTED;
 							break;
@@ -4123,9 +4155,9 @@ int main(int argc, char *argv[])
 						int result       = MoveFileExW(source_wide.c_str(), destination_wide.c_str(), 0);
 
 					    if (!result) {
-							int error_code = GetLastError();
+							DWORD error_code = GetLastError();
 							global.logfile << endl;
-							command_result = ErrorMessage(STR_MOVE_RENAME_ERROR, "%STR% " + source_list[j] + " " + global.lang[STR_MOVE_RENAME_TO_ERROR] + " " + destination_list[j] + " - " + Int2Str(error_code) + " " + FormatError(error_code));
+							command_result = ErrorMessage(STR_MOVE_RENAME_ERROR, "%STR% " + source_list[j] + " " + global.lang[STR_MOVE_RENAME_TO_ERROR] + " " + destination_list[j] + " - " + UInt2Str(error_code) + " " + FormatError(error_code));
 							break;
 					    }
 					    
@@ -4228,8 +4260,8 @@ int main(int argc, char *argv[])
 						global.logfile << "Moving " << source << "  to  " << destination << endl;
 						
 						if (!result) {
-							int error_code = GetLastError();
-							command_result = ErrorMessage(STR_MOVE_ERROR, "%STR% " + source + " " + global.lang[STR_MOVE_TO_ERROR] + " " + destination + " - " + Int2Str(error_code) + " " + FormatError(error_code));
+							DWORD error_code = GetLastError();
+							command_result   = ErrorMessage(STR_MOVE_ERROR, "%STR% " + source + " " + global.lang[STR_MOVE_TO_ERROR] + " " + destination + " - " + Int2Str(error_code) + " " + FormatError(error_code));
 						} else {
 							global.downloaded_filename = *file_name;
 							global.downloads.push_back(global.downloaded_filename);
@@ -4318,7 +4350,7 @@ int main(int argc, char *argv[])
 						if (!pbo_name_backup.empty())
 							MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
 						
-						int error_code = GetLastError();
+						DWORD error_code = GetLastError();
 						command_result = ErrorMessage(STR_ERROR_EXE, "%STR% " + exename + " - " + Int2Str(error_code) + " " + FormatError(error_code));
 					} else
 						global.logfile << "Creating a PBO file out of " << *file_name << endl;

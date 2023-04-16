@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2023,4,8,6,14,6,39,519,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2023,4,16,0,23,53,43,81,120,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -573,7 +573,7 @@
 	"ctrlShow [_x,false]" forEach _info_window
 	"ctrlShow [_x,true ]" forEach [6460, 6463, 6464]
 	
-	? _data != _server_uniqueid : _server_status=[]; call loadFile Format ["\:IGSE DB file:..\fwatch\tmp\schedule\downloaded.db read:%1", _data]
+	? _data != _server_uniqueid : _server_status=[]; call loadFile Format ["\:IGSE DB file:..\fwatch\tmp\schedule\dl_schedule.db read:%1", _data]
 	? count _server_status == 0 : ctrlSetText [6463, Format ["%1: %2", localize "STR_STATUS", MAINMENU_STR select 106]]; goto "ResetLMB"
 	
 	ctrlSetText [6463, Format ["%1: %2\n%3 %4\n%5 %6\n%7 %8\n\n%9", localize "STR_STATUS", (_server_status select 0) call FUNCTION_GET_SERVER_STATUS_NAME, localize "STR_DISP_SERVER_MISSION", (_server_status select 2), localize "STR_DISP_SERVER_ISLAND", (_server_status select 3), localize "STR_DISP_MP_PLAYERS", (_server_status select 1), (_server_status select 4)]]
@@ -985,7 +985,7 @@
 
 		? !_silent_mode : (MAINMENU_STR select 14) call FUNCTION_MSG_LB
 		GS_DOWNLOAD_RESULT = []
-		[Format ["--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 https://ofp-faguss.com/schedule/sqf2.php?mode=mods_v2_last_modified",_mode,CURRENT_LANGUAGE,_now select 8], Format["schedule\dl_%1.sqf",_mode], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+		[Format ["--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 https://ofp-faguss.com/schedule/sqf.php?mode=mods_v2_last_modified",_mode,CURRENT_LANGUAGE,_now select 8], Format["schedule\dl_%1.sqf",_mode], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
 		? !(GS_DOWNLOAD_RESULT select 0) : if (_mirror < count (GS_DEFAULT_URL select _i)-1) then {_mirror=_mirror+1; goto "DownloadDatabase_ForEachURL"} else {goto "DownloadDatabase_Done"}
 		_result = call loadFile Format["..\fwatch\tmp\schedule\dl_%1.sqf",_mode]
@@ -1002,7 +1002,7 @@
 		
 		? !_silent_mode : (MAINMENU_STR select 16) call FUNCTION_MSG_LB
 		GS_DOWNLOAD_RESULT = []
-		[Format ["--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 https://ofp-faguss.com/schedule/sqf2.php?mode=%1_v2&server=current&language=%2&timeoffset=%3",_mode,CURRENT_LANGUAGE,_now select 8]+(["allusermods"] call FUNCTION_BUILD_QUERY_STRING), Format["schedule\dl_%1.db",_mode], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+		[Format ["--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 https://ofp-faguss.com/schedule/sqf.php?mode=%1_v2&server=current&language=%2&timeoffset=%3",_mode,CURRENT_LANGUAGE,_now select 8]+(["allusermods"] call FUNCTION_BUILD_QUERY_STRING), Format["schedule\dl_%1.db",_mode], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
 		? !(GS_DOWNLOAD_RESULT select 0) : if (_mirror < count (GS_DEFAULT_URL select _i)-1) then {_mirror=_mirror+1; goto "DownloadDatabase_ForEachURL"} else {goto "DownloadDatabase_Done"}
 		? _mode == "schedule" : GS_SCHEDULE_DOWNLOAD_TIME=time+10
