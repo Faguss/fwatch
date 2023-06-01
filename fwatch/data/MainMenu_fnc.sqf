@@ -168,6 +168,67 @@ FUNCTION_ADD_MOD_TO_LISTBOX = {
 
 
 
+FUNCTION_ADD_MOD_FOR_SHORTCUT_TO_LISTBOX = {
+	_id = lbAdd [6657, _x]; 
+	lbSetData [6657, _id, FWATCH_MODLISTID select _i]; 
+	lbSetValue [6657, _id, 12]; 
+	
+	if (_x in _launch_queue) then {
+		lbSetValue [6657, _id, 13];
+		lbSetColor [6657, _id, _color_red];
+	};
+	
+	_i = _i + 1;
+};
+
+
+
+FUNCTION_DISPLAY_MOD_QUEUE = {
+	_i      = 0;
+	_string = "-mod=";
+	"_string=_string+_x; if (_i<count _this-1) then {_string=_string+"";""}; _i=_i+1" forEach _this;
+	titleText [_string, "PLAIN DOWN", 0.1];
+};
+
+
+
+FUNCTION_MOD_SHORTCUTS = {
+	private ["_index", "_output","_i","_folder"];
+	_output_type = _this select 0;
+	_data_index  = _this select 1;
+	
+	_output = "";
+	if (_output_type == "launch") then {
+		_output = [];
+	};
+
+	_i = 0;
+	{
+		_folder = 
+		if ((_x select 0) == "id") then {
+			_index = [(_x select 1),FWATCH_MODLISTID] call FUNCTION_FIND;
+			if (_index >= 0) then {
+				(FWATCH_MODLIST select _index)
+			} else {
+				""
+			}
+		} else {
+			_x select 1
+		};
+		
+		if (_folder != "") then {
+			if (_output_type == "launch") then {
+				_output set [count _output, _folder];
+			} else {
+				_output = _output + _folder + "\n";
+			}
+		}
+	} forEach (_mod_shortcuts_data select _data_index);
+	
+	_output
+};
+
+
 FUNCTION_ADD_DOWNLOADABLE_MOD_TO_LISTBOX = {
 	private ["_entry", "_to_add", "_positions"];
 	
@@ -630,7 +691,7 @@ FUNCTION_STRINGTABLE = {
 			"[Pokaї prywatne mody]",		//89
 			"Napisz hasіa do prywatnych modуw",		//90
 			"[Wyszukaj]",		//91
-			"Wpisz nazwк moda lub kategorii (rozszerzenie; zbiуr addonуw; uzupeіnienie; zbiуr misji; narzкdzia)",		//92
+			"Wpisz nazwк moda lub kategorii (rozszerzenie; zbiуraddonуw; uzupeіnienie; zbiуrmisji; narzкdzia)",		//92
 			"Typ:",		//93
 			"Do pobrania:",		//94
 			"Dodaі:",		//95
@@ -646,7 +707,10 @@ FUNCTION_STRINGTABLE = {
 			"[Dodaj do kolejki]",		//105
 			"Brak poі№czenia",		//106
 			"Status pod prawym przyciskiem lub spacj№",		//107
-			"Staіe"		//108
+			"Staіe",		//108
+			"[Utwуrz Skrуt]",		//109
+			"Nazwa skrуtu",		//110
+			"Wybierz mody dla skrуtu"		//111
 		];
 	};
 
@@ -760,7 +824,10 @@ FUNCTION_STRINGTABLE = {
 			"[Добавить в Очередь]",		//105
 			"Не в сети",		//106
 			"Правой кнопкой или пробел для статуса",		//107
-			"Постоянные"		//108
+			"Постоянные",		//108
+			"[Создать Ярлык]",		//109
+			"сокращенное имя",		//110
+			"выбрать моды для ярлыка"		//111
 		];
 	};
 
@@ -858,7 +925,7 @@ FUNCTION_STRINGTABLE = {
 			"[Show Private Mods]",		//89
 			"Type in password(s) to show private mod(s)",		//90
 			"[Search]",		//91
-			"Type mod or category name (replacement; addon pack; supplement; mission pack; tools)",		//92
+			"Type mod or category name (replacement; addonpack; supplement; missionpack; tools)",		//92
 			"Type:",		//93
 			"Download:",		//94
 			"Added by:",		//95
@@ -874,7 +941,10 @@ FUNCTION_STRINGTABLE = {
 			"[Add to Queue]",		//105
 			"Offline",		//106
 			"Right-click or space for status",		//107
-			"Persistent"		//108
+			"Persistent",		//108
+			"[Create Shortcut]",		//109
+			"Shortcut name",		//110
+			"Select mods for the shortcut"		//111
 		];
 	};
 	
@@ -915,7 +985,8 @@ FUNCTION_LBADD = {
 		_entry = lbAdd [6657, _this select 0];
 		lbSetValue [6657, _entry, _this select 1];
 		lbSetColor [6657, _entry, _this select 2];
-	}
+	};
+	_entry
 };
 
 
