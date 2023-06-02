@@ -173,7 +173,7 @@ FUNCTION_ADD_MOD_FOR_SHORTCUT_TO_LISTBOX = {
 	lbSetData [6657, _id, FWATCH_MODLISTID select _i]; 
 	lbSetValue [6657, _id, 12]; 
 	
-	if (_x in _launch_queue) then {
+	if (_x in _mods_for_new_shortcut) then {
 		lbSetValue [6657, _id, 13];
 		lbSetColor [6657, _id, _color_red];
 	};
@@ -200,6 +200,8 @@ FUNCTION_MOD_SHORTCUTS = {
 	_output = "";
 	if (_output_type == "launch") then {
 		_output = [];
+	} else {
+		_output = Format ["%1:\n\n", _mod_shortcuts_names select _data_index];
 	};
 
 	_i = 0;
@@ -220,7 +222,7 @@ FUNCTION_MOD_SHORTCUTS = {
 			if (_output_type == "launch") then {
 				_output set [count _output, _folder];
 			} else {
-				_output = _output + _folder + "\n";
+				_output = _output + " " + _folder + "\n";
 			}
 		}
 	} forEach (_mod_shortcuts_data select _data_index);

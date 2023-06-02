@@ -373,7 +373,8 @@ case C_IGSE_WRITE:
 				}
 				
 				if (arg_edit_mode == IGSE_WRITE_COPY) {
-					buffer_shift_amount    = line_len + (carriage_return ? 2 : 1);
+					bool last_line         = (line_start_pos + line_len) == file_size;
+					buffer_shift_amount    = line_len + (carriage_return || last_line ? 2 : 1);
 					buffer_shift_direction = OPTION_RIGHT;
 
 					shift_buffer_chunk(buffer, line_start_pos, file_size, buffer_shift_amount, buffer_shift_direction);

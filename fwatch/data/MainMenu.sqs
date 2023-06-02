@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2023,6,1,4,22,53,52,159,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2023,6,2,5,21,15,1,904,120,FALSE]
 	GS_MY_VERSION        = 0.6
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -126,6 +126,7 @@
     _server_uniqueid     = "mod"
 	_mod_shortcuts_names = []
 	_mod_shortcuts_data  = []
+	_current_shortcut_id = -1
     
 	if (!_m_moved && (_mx<_x || _mx>_w || _my<_y || _my>_h)) then {loadFile Format [":mem setcursor %1 %2", _w, _y]; _m_moved=nil}
 	goto "ModLauncher_Display"
@@ -155,11 +156,11 @@
 		_value   = lbValue [6657, _cur]
 		_lastCur = _cur
 		
-		? _value in [2,3] : [_data, "local"] call FUNCTION_SHOW_MOD_INFO
-		? _value == 6     : [_data, "global"] call FUNCTION_SHOW_MOD_INFO
-		? _value == 15    : goto "ModLauncher_PreviewShortcut"
-		? _value == 201   : if (ctrlVisible 6463) then {goto "DisplayServerStatus"} else {goto "DisplayServer"}
-		? _value == 211   : goto "DisplayGameRestart"
+		? _value in [2,3,12,13] : [_data, "local"] call FUNCTION_SHOW_MOD_INFO
+		? _value == 6           : [_data, "global"] call FUNCTION_SHOW_MOD_INFO
+		? _value == 15          : goto "ModLauncher_Shortcut_Preview"
+		? _value == 201         : if (ctrlVisible 6463) then {goto "DisplayServerStatus"} else {goto "DisplayServer"}
+		? _value == 211         : goto "DisplayGameRestart"
 		#SkipSelectionCheck
 	
 	_mx = (FWATCH_INPUT_MULTI select 3) select 2
@@ -205,13 +206,14 @@
 	? _value == 8  : _name=_data; if (_name in _launch_queue) then {_launch_queue=_launch_queue-[_name]; lbSetColor [6657,_cur,[1,1,1, 0.65]]} else {_launch_queue=_launch_queue+[_name]; lbSetColor [6657, _cur, _color_red]}; goto "ModLauncher_ShowQueue"
 	? _value == 9  : goto "DownloadMods_ShowOptions"
 	? _value == 10 : _shift=true; goto "DownloadMods_QueueForInstall"
-	? _value == 11 : _Label="ModLauncher_NewShortcut"; _Input=""; _Input_Note=MAINMENU_STR select 110; goto "INPUT"
+	? _value == 11 : _Label="ModLauncher_Shortcut_Create"; _Input=""; _Input_Note=MAINMENU_STR select 110; _current_shortcut_id=-1; goto "INPUT"
 	? _value == 12 : _mods_for_new_shortcut=_mods_for_new_shortcut+[_name]; lbSetValue [6657, _cur, 13]; lbSetColor [6657, _cur, _color_red]; _mods_for_new_shortcut call FUNCTION_DISPLAY_MOD_QUEUE
 	? _value == 13 : _mods_for_new_shortcut=_mods_for_new_shortcut-[_name]; lbSetValue [6657, _cur, 12]; lbSetColor [6657,_cur,[1,1,1, 0.65]]; _mods_for_new_shortcut call FUNCTION_DISPLAY_MOD_QUEUE
-	? _value == 14 : goto "ModLauncher_SaveShortcut"
+	? _value == 14 : goto "ModLauncher_Shortcut_Save"
 	? _value == 15 : goto "ModLauncher_Shortcut_Launch"
 	? _value == 16 : goto "ModLauncher_Shortcut_Launch"
 	? _value == 17 : goto "ModLauncher_Shortcut_Delete"
+	? _value == 18 : _Label="ModLauncher_Shortcut_Edit"; _Input=_mod_shortcuts_names select _current_shortcut_id; _Input_Note=MAINMENU_STR select 110; goto "INPUT"
 	
 	; Master server options
 	? _value == 100 : _Label="MasterServer_ValidateInput"; _Input=""; _Input_Note=""; goto "INPUT"
@@ -382,7 +384,7 @@
 	goto "ResetLMB"
 	
 	
-	#ModLauncher_NewShortcut
+	#ModLauncher_Shortcut_Create
 	? _Input == "" : titleText [MAINMENU_STR select 8, "PLAIN DOWN", 0.5]; goto "ModLauncher_Display"
 	if ([_Input,_mod_shortcuts_names] call FUNCTION_FIND >= 0) then  {titleText [MAINMENU_STR select 9, "PLAIN DOWN", 0.5]; goto "ModLauncher_Display"}
 	_mods_for_new_shortcut = []
@@ -390,27 +392,47 @@
 	@ctrlVisible 6657
 	lbClear 6657
 	lbSetCurSel [6657,-1]
+	"ctrlShow [_x,false]" forEach _info_window
 	["["+(localize "STR_REPLY_DONE")+"]", 14, _color_gingerbrown] call FUNCTION_LBADD
 	
 	_i=0; FUNCTION_ADD_MOD_FOR_SHORTCUT_TO_LISTBOX forEach FWATCH_MODLIST
 	titleText [MAINMENU_STR select 111, "PLAIN DOWN", 0.1]
 	goto "ResetLMB"
 	
-	#ModLauncher_SaveShortcut
+	
+	#ModLauncher_Shortcut_Edit
+	? _Input == "" : titleText [MAINMENU_STR select 8, "PLAIN DOWN", 0.5]; goto "ResetLMB"
+	if ([_Input,_mod_shortcuts_names-[_mod_shortcuts_names select _current_shortcut_id]] call FUNCTION_FIND >= 0) then {titleText [MAINMENU_STR select 9, "PLAIN DOWN", 0.5]; goto "ResetLMB"}
+	_mods_for_new_shortcut = ["launch",_current_shortcut_id] call FUNCTION_MOD_SHORTCUTS
+	
+	@ctrlVisible 6657
+	lbClear 6657
+	lbSetCurSel [6657,-1]
+	"ctrlShow [_x,false]" forEach _info_window
+	["["+(localize "STR_REPLY_DONE")+"]", 14, _color_gingerbrown] call FUNCTION_LBADD
+	
+	_i=0; FUNCTION_ADD_MOD_FOR_SHORTCUT_TO_LISTBOX forEach FWATCH_MODLIST
+	titleText [MAINMENU_STR select 111, "PLAIN DOWN", 0.1]
+	goto "ResetLMB"
+	
+	
+	#ModLauncher_Shortcut_Save
 	? count _mods_for_new_shortcut == 0 : goto "ModLauncher_Display"
 	_new_shortcut = []
-	_i = 0
-	#ModLauncher_SaveShortcut_ForEachMod
-	_index = [_mods_for_new_shortcut select _i,FWATCH_MODLIST] call FUNCTION_FIND
-	_new_shortcut set [count _new_shortcut, (if (((FWATCH_MODLISTID select _index) != "")) then {["id",FWATCH_MODLISTID select _index]} else {["name",FWATCH_MODLIST select _index]})]
-	? _i < count _mods_for_new_shortcut-1 : _i=_i+1; goto "ModLauncher_SaveShortcut_ForEachMod"
 	
-	_mod_shortcuts_names set [count _mod_shortcuts_names, _Input]
-	_mod_shortcuts_data set [count _mod_shortcuts_data, _new_shortcut]
+		_i = 0
+		#ModLauncher_SaveShortcut_ForEachMod
+		_index = [_mods_for_new_shortcut select _i,FWATCH_MODLIST] call FUNCTION_FIND
+		_new_shortcut set [count _new_shortcut, (if (((FWATCH_MODLISTID select _index) != "")) then {["id",FWATCH_MODLISTID select _index]} else {["name",FWATCH_MODLIST select _index]})]
+		? _i < count _mods_for_new_shortcut-1 : _i=_i+1; goto "ModLauncher_SaveShortcut_ForEachMod"
+	
+	_mod_shortcuts_names set [(if (_current_shortcut_id == -1) then {count _mod_shortcuts_names} else {_current_shortcut_id}), _Input]
+	_mod_shortcuts_data set [(if (_current_shortcut_id == -1) then {count _mod_shortcuts_data} else {_current_shortcut_id}), _new_shortcut]
 	loadFile ("\:IGSE DB  file:..\fwatch\idb\modshortcuts.bin key:allwrite:_mod_shortcuts_names=" + (_mod_shortcuts_names call FLIB_FORMAT) + ";_mod_shortcuts_data=" + (_mod_shortcuts_data call FLIB_FORMAT) + ";")
 	goto "ModLauncher_Display"
 	
-	#ModLauncher_PreviewShortcut
+	
+	#ModLauncher_Shortcut_Preview
 	_current_shortcut_id = call _data
 	"ctrlShow [_x,false]" forEach _info_window
 	"ctrlShow [_x,true ]" forEach [6460, 6463]
@@ -419,9 +441,11 @@
 	ctrlSetText [6464, MAINMENU_STR select 104]
 	goto "ResetLMB"
 	
+	
 	#ModLauncher_Shortcut_Launch
 	_launch_queue = ["launch",_current_shortcut_id] call FUNCTION_MOD_SHORTCUTS
 	goto "ModLauncher_RestartGame"
+	
 	
 	#ModLauncher_Shortcut_Options
 	_last_selected = _cur
@@ -429,9 +453,11 @@
 	lbClear 6657
 	lbSetCurSel [6657, -1]
 	_index = lbAdd [6657, "[" + (localize "STR_SINGLE_PLAY") + "]"]; lbSetValue [6657, _index, 16]
+	_index = lbAdd [6657, "[" + (localize "STR_DISP_EDIT") + "]"]; lbSetValue [6657, _index, 18]
 	_index = lbAdd [6657, "[" + (localize "STR_DISP_DELETE") + "]"]; lbSetValue [6657, _index, 17]
 	lbSetValue [6657, lbAdd[6657, MAINMENU_STR select 32], 5]	
 	goto "ResetLMB"
+	
 	
 	#ModLauncher_Shortcut_Delete
 	_mod_shortcuts_data set [_current_shortcut_id,"null"]
