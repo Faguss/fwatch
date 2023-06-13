@@ -4,22 +4,18 @@
 #include <fstream>		// file operations
 #include <windows.h>	// winapi
 #include <tlhelp32.h>	// process/module traversing
-#include <unistd.h>     // for access command
 #include <sstream>      // for converting int to string
 #include <vector>       // dynamic array
 #include <algorithm>	// tolower
 #include <Shlobj.h>		// opening explorer
-#include <iostream>		// cout
-
-#define USING_LOLE32 1
-
-using namespace std;
+#include <functional>   // notl, ptr_fun
+#include <tchar.h>		// ansi/wide macro
 
 struct GLOBAL_VARIABLES 
 {
-	string downloaded_filename;
-	string working_directory;
-	ofstream logfile;
+	std::string downloaded_filename;
+	std::string working_directory;
+	std::ofstream logfile;
 } global = {
 	"",
 	""
@@ -49,44 +45,8 @@ enum MOD_LIST
 
 // **************** FUNCTIONS **************************************************
 
-// Compare characters of two strings case insensitive
-// http://my.fit.edu/~vkepuska/ece5527/sctk-2.3-rc1/src/rfilter1/include/strncmpi.c
-int strncmpi(const char *ps1, const char *ps2, int n)
-{
-	char *px1     = (char *)ps1;
-	char *px2     = (char *)ps2;
-	int indicator = 9999;
-	int i         = 0;
-
-	while (indicator == 9999) {
-		if (++i > n) 
-			indicator = 0;
-		else {
-			if (*px1 == '\0') {
-				if (*px2 == '\0') 
-					indicator = 0; 
-				else	
-					indicator = -1;
-			} else {
-				if (toupper((int)*px1)  <  toupper((int)*px2)) 
-					indicator = -1; 
-				else {
-					if (toupper((int)*px1)  >  toupper((int)*px2)) 
-						indicator = 1; 
-					else 
-						px1 += 1, 
-						px2 += 1;
-				}
-			}
-		}
-	}
-
-	return indicator;
-}
-
-
 // Translate error code to message
-string FormatError(int error)
+std::string FormatError(DWORD error)
 {
 	if (error == 0) 
 		return "\n";
@@ -102,19 +62,19 @@ string FormatError(int error)
 		NULL
 	);
 
-	string message = "   - " + (string)(char*)lpMsgBuf + "\n";
+	std::string message = "   - " + (std::string)(char*)lpMsgBuf + "\n";
 	return message;
 };
 
-// https://stackoverflow.com/questions/11635/case-insensitive-string-comparison-in-c#315463
-bool Equals(const string& a, const string& b) 
+// https://stackoverflow.com/questions/11635/case-insensitive-std::string-comparison-in-c#315463
+bool Equals(const std::string& a, const std::string& b) 
 {
-    unsigned int sz = a.size();
+    size_t sz = a.size();
 
     if (b.size() != sz)
         return false;
 
-    for (unsigned int i = 0; i < sz; ++i)
+    for (size_t i = 0; i < sz; ++i)
         if (tolower(a[i]) != tolower(b[i]))
             return false;
 
@@ -123,10 +83,10 @@ bool Equals(const string& a, const string& b)
 
 
 // Function returns fwatch process ID or -1 if failed
-int get_process_id(string exename)
+DWORD get_process_id(std::string exename)
 {
 	PROCESSENTRY32 processInfo;
-	int pid 				 = 0;
+	DWORD pid                = 0;
 	processInfo.dwSize 		 = sizeof(processInfo);
 	HANDLE processesSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 	
@@ -134,7 +94,7 @@ int get_process_id(string exename)
 		Process32First(processesSnapshot, &processInfo);
 		
 		do {
-			if (strcmpi(processInfo.szExeFile,exename.c_str()) == 0)
+			if (_stricmp(processInfo.szExeFile,exename.c_str()) == 0)
 				pid = processInfo.th32ProcessID;
 		}
 		while (Process32Next(processesSnapshot, &processInfo));
@@ -147,7 +107,7 @@ int get_process_id(string exename)
 
 
 // Find OFP window by name and/or process id
-game_info find_game_instance(DWORD input_pid, string input_name)
+game_info find_game_instance(DWORD input_pid, std::string input_name)
 {
     game_info info = {NULL, 0};
 	HWND handle    = GetTopWindow(NULL);
@@ -160,7 +120,7 @@ game_info find_game_instance(DWORD input_pid, string input_name)
 			GetWindowText(handle, current_window, 1023);
 			GetWindowThreadProcessId(handle, &current_pid);
 	
-			bool match_name = strncmpi(current_window, input_name.c_str(), input_name.length()) == 0;
+			bool match_name = _strnicmp(current_window, input_name.c_str(), input_name.length()) == 0;
 			bool match_pid  = input_pid == current_pid;
 	
 			if (
@@ -168,7 +128,8 @@ game_info find_game_instance(DWORD input_pid, string input_name)
 				(input_pid!=0 && input_name.empty() && match_pid) ||
 				(input_pid==0 && !input_name.empty() && match_name)
 			) {
-				info = (game_info){handle, current_pid};
+				info.handle = handle;
+				info.pid    = current_pid;
 				break;
 			}
 			
@@ -182,15 +143,15 @@ game_info find_game_instance(DWORD input_pid, string input_name)
 
 
 
-// Format string (convert number to string and add leading zero)
-string LeadingZero(int number)
+// Format std::string (convert number to std::string and add leading zero)
+std::string LeadingZero(int number)
 {
-	string ret = "";
+	std::string ret = "";
 	
 	if (number < 10) 
 		ret += "0";
 		
-	stringstream temp;
+	std::stringstream temp;
 	temp << number;
 	ret += temp.str();
 	
@@ -198,13 +159,13 @@ string LeadingZero(int number)
 };
 
 
-// Read process parameters and copy them to a string
-int GetProcessParams(int pid, HANDLE *phandle, string moduleName, int offset, vector<string> &container)
+// Read process parameters and copy them to a std::string
+DWORD GetProcessParams(int pid, HANDLE *phandle, std::string moduleName, int offset, std::vector<std::string> &container)
 {    
     // Get address of wanted module
 	MODULEENTRY32 xModule;
-	int baseOffset = 0;
-	HANDLE hSnap   = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
+	uintptr_t baseOffset = 0;
+	HANDLE hSnap         = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
 	
 	if (hSnap != INVALID_HANDLE_VALUE) {
 		xModule.dwSize = sizeof(MODULEENTRY32);
@@ -213,7 +174,7 @@ int GetProcessParams(int pid, HANDLE *phandle, string moduleName, int offset, ve
 			if (lstrcmpi(xModule.szModule, (LPCTSTR)moduleName.c_str()) == 0)
 			{
 				// Read module base address
-				baseOffset = (int)xModule.modBaseAddr;
+				baseOffset = (uintptr_t)xModule.modBaseAddr;
 				break;
 			}
 		} while (Module32Next(hSnap, &xModule));
@@ -222,12 +183,12 @@ int GetProcessParams(int pid, HANDLE *phandle, string moduleName, int offset, ve
 		
 		if (baseOffset != 0) {		    
             // Find offset holding arguments
-			int pointer[]  = {baseOffset+offset, 0, 0};
-			int modif[]    = {0x0, 0x0};
-			int max_loops  = sizeof(pointer) / sizeof(pointer[0]) - 1;
-			SIZE_T stBytes = 0;
+			uintptr_t pointer[] = {baseOffset+offset, 0, 0};
+			uintptr_t modif[]   = {0x0, 0x0};
+			uintptr_t max_loops = sizeof(pointer) / sizeof(pointer[0]) - 1;
+			SIZE_T stBytes      = 0;
 		
-			for (int i=0; i<max_loops; i++) {
+			for (uintptr_t i=0; i<max_loops; i++) {
                 ReadProcessMemory(*phandle, (LPVOID)pointer[i], &pointer[i+1], 4, &stBytes);
 				pointer[i+1] = pointer[i+1] +  modif[i];
 			};
@@ -235,8 +196,8 @@ int GetProcessParams(int pid, HANDLE *phandle, string moduleName, int offset, ve
 			char buffer[1024] = "";
 			ReadProcessMemory(*phandle, (LPVOID)pointer[max_loops], &buffer, 1023, &stBytes);
 		
-			// Add arguments to vector
-			string word = "";
+			// Add arguments to std::vector
+			std::string word = "";
 			bool ignore_first_word = true;
 
 			for (int i=0, nullTerminators=0;  i<1024;  i++)
@@ -248,7 +209,7 @@ int GetProcessParams(int pid, HANDLE *phandle, string moduleName, int offset, ve
 						
 					if (!word.empty()) {
 						size_t isexe = word.find_last_of(".exe");
-						if (ignore_first_word  &&  isexe==string::npos) {
+						if (ignore_first_word  &&  isexe==std::string::npos) {
 							ignore_first_word = false;
 						}
 						
@@ -267,7 +228,7 @@ int GetProcessParams(int pid, HANDLE *phandle, string moduleName, int offset, ve
             return 0;
         }
         else
-            return -1;
+            return ERROR_MOD_NOT_FOUND;
     }
     else
 		return GetLastError();
@@ -275,10 +236,10 @@ int GetProcessParams(int pid, HANDLE *phandle, string moduleName, int offset, ve
 
 
 // Leave information for OFP about schedule
-void WriteSaveStateFile(string input)
+void WriteSaveStateFile(std::string input)
 {
-    ofstream file;
-    file.open ("fwatch\\tmp\\schedule\\restart_info.sqf", ios::out | ios::app);
+    std::ofstream file;
+    file.open ("fwatch\\tmp\\schedule\\restart_info.sqf", std::ios::out | std::ios::app);
     
     if (!file.is_open())
         return;
@@ -288,14 +249,14 @@ void WriteSaveStateFile(string input)
 }
 
 	// http://stackoverflow.com/a/3418285
-string ReplaceAll(string str, const string& from, const string& to) 
+std::string ReplaceAll(std::string str, const std::string& from, const std::string& to) 
 {
     if (from.empty())
         return str;
         
     size_t start_pos = 0;
     
-    while ((start_pos = str.find(from, start_pos)) != string::npos) {
+    while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
         str.replace(start_pos, from.length(), to);
         start_pos += to.length();
     }
@@ -311,9 +272,9 @@ enum OPTIONS_FNVHASH {
 	OPTION_LOWERCASE = 1
 };
 
-//https://stackoverflow.com/questions/11413860/best-string-hashing-function-for-short-filenames
-unsigned int fnv1a_hash(unsigned int hash, const char *text, int text_length, bool lowercase) {
-    for (int i=0; i<text_length; i++)
+//https://stackoverflow.com/questions/11413860/best-std::string-hashing-function-for-short-filenames
+unsigned int fnv1a_hash(unsigned int hash, const char *text, size_t text_length, bool lowercase) {
+    for (size_t i=0; i<text_length; i++)
 		hash = (hash ^ (lowercase ? tolower(text[i]) : text[i])) * FNV_PRIME;
 
     return hash;
@@ -324,7 +285,7 @@ struct BinarySearchResult {
 	bool found;
 };
 
-// Search for an unsigned int in a string buffer
+// Search for an unsigned int in a std::string buffer
 BinarySearchResult binary_search_str(const char *buffer, size_t array_size, unsigned int value_to_find, size_t low, size_t high) {
 	if (array_size  &&  high>=low) {
 		size_t mid        = low + (high - low) / 2;
@@ -356,19 +317,19 @@ BinarySearchResult binary_search_str(const char *buffer, size_t array_size, unsi
 	return out;
 }
 
-string ReadStartupParams(string key_name)
+std::string ReadStartupParams(std::string key_name)
 {
-	ifstream file("fwatch\\tmp\\schedule\\params.bin", ios::in | ios::binary);
-	string file_contents;
-	string output = "";
+	std::ifstream file("fwatch\\tmp\\schedule\\params.bin", std::ios::in | std::ios::binary);
+	std::string file_contents;
+	std::string output = "";
 	size_t buffer_size = 0;
   
 	if (file) {
-		file.seekg(0, ios::end);
-		buffer_size = file.tellg();
-		file_contents.resize(buffer_size);
-		file.seekg(0, ios::beg);
-		file.read(&file_contents[0], file_contents.size());
+		file.seekg(0, std::ios::end);
+		std::streampos size = file.tellg();
+		file_contents.resize(size);
+		file.seekg(0, std::ios::beg);
+		file.read(&file_contents[0], size);
 		file.close();
 	} else 
 		return output;
@@ -385,7 +346,7 @@ string ReadStartupParams(string key_name)
 	struct igsedb_pointer {	// indicates current and the next item in the array of pointers
 		size_t start;
 		size_t end;
-	} key_pointer, value_pointer;
+	} value_pointer;
 	
 	const char *buffer = file_contents.c_str();
 	header             = (igsedb_header*)buffer;
@@ -454,7 +415,13 @@ string ReadStartupParams(string key_name)
 		return output;
 	
 	// Find key
-	BinarySearchResult key_to_read = binary_search_str(buffer+sizeof(igsedb_header), header->number_of_keys, fnv1a_hash(FNV_BASIS, key_name.c_str(), key_name.length(), OPTION_LOWERCASE), 0, header->number_of_keys-1);
+	BinarySearchResult key_to_read = binary_search_str(
+		buffer+sizeof(igsedb_header), 
+		header->number_of_keys, 
+		fnv1a_hash(FNV_BASIS, key_name.c_str(), key_name.length(), OPTION_LOWERCASE), 
+		0, 
+		header->number_of_keys-1
+	);
 	
 	if (!key_to_read.found)
 		return output;
@@ -473,7 +440,7 @@ string ReadStartupParams(string key_name)
 		return output;
 
 	// Read
-	for (int i=0; i<value_pointer.end-1-value_pointer.start; i++)
+	for (size_t i=0; i<value_pointer.end-1-value_pointer.start; i++)
 		output += (buffer + value_pointer.start)[i];
 
 	return output;
@@ -481,7 +448,7 @@ string ReadStartupParams(string key_name)
 
 
 	// Remove quotation marks
-string UnQuote(string text)
+std::string UnQuote(std::string text)
 {
 	if (text.substr(text.length()-1) == "\"")
 		text = text.substr(0, text.length()-1);
@@ -494,16 +461,16 @@ string UnQuote(string text)
 
 
 
-void Tokenize(string text, string delimiter, vector<string> &container)
+void Tokenize(std::string text, std::string delimiter, std::vector<std::string> &container)
 {
 	bool first_item = false;
 	bool inQuote    = false;
 	
 	// Split line into parts
-	for (int pos=0, begin=-1;  pos<=text.length();  pos++) {
+	for (size_t pos=0, begin=-1;  pos<=text.length();  pos++) {
 		bool isToken = pos == text.length();
 		
-		for (int i=0;  !isToken && i<delimiter.length();  i++)
+		for (size_t i=0;  !isToken && i<delimiter.length();  i++)
 			if (text.substr(pos,1) == delimiter.substr(i,1))
 				isToken = true;
 				
@@ -516,54 +483,54 @@ void Tokenize(string text, string delimiter, vector<string> &container)
 						
 		// Mark end of the word
 		if (isToken  &&  begin>=0  &&  !inQuote) {
-			string part = UnQuote(text.substr(begin, pos-begin));
+			std::string part = UnQuote(text.substr(begin, pos-begin));
 			container.push_back(part);
 			begin = -1;
 		}
 	}
 }
 
-string Int2Str(int num)
+std::string Int2Str(int num)
 {
-    ostringstream text;
+    std::ostringstream text;
     text << num;
     return text.str();
 }
 
 
-string Trim(string s)
+std::string Trim(std::string s)
 {
-	s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
-	s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
+	s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(isspace))));
+	s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(isspace))).base(), s.end());
 	return s;
 }
 
 
-string PathLastItem(string path) 
+std::string PathLastItem(std::string path) 
 {
 	size_t lastSlash = path.find_last_of("\\/");
 
-	if (lastSlash != string::npos)
+	if (lastSlash != std::string::npos)
 		return path.substr(lastSlash+1);
 	else
 		return path;
 }
 
 
-string PathNoLastItem(string path, bool end_slash=true) 
+std::string PathNoLastItem(std::string path, bool end_slash=true) 
 {
 	size_t find = path.find_last_of("\\/");
 
-	if (find != string::npos)
+	if (find != std::string::npos)
 		return path.substr(0, find+end_slash);
 	else
 		return "";
 }
 
 
-string WrapInQuotes(string text)
+std::string WrapInQuotes(std::string text)
 {
-	for (int i=0; i<text.length(); i++)
+	for (size_t i=0; i<text.length(); i++)
 		if (text.substr(i,1) == " ") {
 			text = "\"" + text + "\"";
 			break;
@@ -574,21 +541,21 @@ string WrapInQuotes(string text)
 
 
 	// Read wget log to get information about download
-int ParseWgetLog(string &error)
+int ParseWgetLog(std::string &error)
 {
-	fstream DownloadLog;
-    DownloadLog.open("fwatch\\tmp\\schedule\\downloadLog.txt", ios::in);
+	std::fstream DownloadLog;
+    DownloadLog.open("fwatch\\tmp\\schedule\\downloadLog.txt", std::ios::in);
 
 	if (DownloadLog.is_open()) {
-		string line                  = "";
-		string filesize              = "";
-		string size_downloaded       = "";
-		string percentage_downloaded = "";
-		string download_speed        = "";
-		string time_remaining        = "";
+		std::string line                  = "";
+		std::string filesize              = "";
+		std::string size_downloaded       = "";
+		std::string percentage_downloaded = "";
+		std::string download_speed        = "";
+		std::string time_remaining        = "";
 		
 		const int filename_messages_items = 4;
-		vector<string> filename_messages[filename_messages_items];
+		std::vector<std::string> filename_messages[filename_messages_items];
 		filename_messages[0].push_back("Saving to: '");
 		filename_messages[0].push_back("'");
 		filename_messages[1].push_back(") - '");
@@ -598,7 +565,7 @@ int ParseWgetLog(string &error)
 		filename_messages[3].push_back("Server file no newer than local file '");
 		filename_messages[3].push_back("' -- not retrieving");
 			
-		vector<string> error_messages;
+		std::vector<std::string> error_messages;
 		error_messages.push_back("failed");
 		error_messages.push_back("ERROR");
 
@@ -613,35 +580,35 @@ int ParseWgetLog(string &error)
 				size_t open  = line.find('(');
 				size_t close = line.find(')');
 
-				if (open!=string::npos  &&  close!=string::npos)
+				if (open!=std::string::npos  &&  close!=std::string::npos)
 					filesize = line.substr( open+1, close-open-1);
 			}
 
 			// Get progress bar
 			size_t letter_k = line.find("K .");
 
-			if (letter_k == string::npos)
+			if (letter_k == std::string::npos)
 				letter_k = line.find("K ,");
 			
-			if (letter_k != string::npos) {			
+			if (letter_k != std::string::npos) {			
 				size_downloaded = line.substr(0, letter_k);
 				int size_num    = atoi(size_downloaded.c_str());
 				
 				if (size_num > 1024) {
 					double megabytes = size_num / (1024);
 					char temp[128] = "";
-					sprintf(temp, "%.0f M", megabytes);
-					size_downloaded = (string)temp;
+					sprintf_s(temp, 128, "%.0f M", megabytes);
+					size_downloaded = (std::string)temp;
 				} else
 					size_downloaded += " K";
 				
-				string new_download_speed = "";
-				size_t percent            = line.find("% ");
-				if (percent != string::npos) {
+				std::string new_download_speed = "";
+				size_t percent                 = line.find("% ");
+				if (percent != std::string::npos) {
 					while(percent>=0  &&  (line[percent]=='%'  ||  isdigit(line[percent])))
 						percent--;
 						
-					vector<string> Tokens;
+					std::vector<std::string> Tokens;
 					Tokenize(line.substr(percent), " =", Tokens);
 					
 					if (Tokens.size() > 0)
@@ -654,7 +621,7 @@ int ParseWgetLog(string &error)
 					if (Tokens.size() > 2)
 						time_remaining = Tokens[2];
 				} else {
-					int i = letter_k + 3;
+					size_t i = letter_k + 3;
 					while(i<line.length() && !isdigit(line[i]))
 						i++;
 						
@@ -670,11 +637,11 @@ int ParseWgetLog(string &error)
 			for (int i=0; i<filename_messages_items; i++) {
 				size_t begin = line.find(filename_messages[i][0]);
 				
-				if (begin != string::npos) {
-					int len      = filename_messages[i][0].length();
-					size_t end   = line.find(filename_messages[i][1], begin+len);
+				if (begin != std::string::npos) {
+					size_t len = filename_messages[i][0].length();
+					size_t end = line.find(filename_messages[i][1], begin+len);
 					
-					if (end != string::npos) {
+					if (end != std::string::npos) {
 						global.downloaded_filename = line.substr(begin+len,  end-(begin+len));
 						break;
 					}
@@ -682,9 +649,9 @@ int ParseWgetLog(string &error)
 			}
 
 			// Get error message
-			for (int i=0; i<error_messages.size(); i++) {
+			for (size_t i=0; i<error_messages.size(); i++) {
 				size_t search = line.find(error_messages[i]);
-				if (search != string::npos) {
+				if (search != std::string::npos) {
 					if (i==1)
 						error = line.substr(search);
 					else
@@ -706,20 +673,20 @@ int ParseWgetLog(string &error)
 
 
 	// Read 7za log to get information about unpacking
-int ParseUnpackLog(string &error, string &file_name)
+int ParseUnpackLog(std::string &error, std::string &file_name)
 {
-	fstream UnpackLog;
-    UnpackLog.open ("fwatch\\tmp\\schedule\\unpackLog.txt", ios::in);
+	std::fstream UnpackLog;
+    UnpackLog.open ("fwatch\\tmp\\schedule\\unpackLog.txt", std::ios::in);
 
-    int line_number      = 0;
-    int error_until_line = 0;
-	string error_msg   = "";
+    int line_number       = 0;
+    int error_until_line  = 0;
+	std::string error_msg = "";
 
 	if (UnpackLog.is_open()) {
-		string text         = "";
-		string current_file = "";
-		string percentage   = "";
-		bool foundFileName  = false;
+		std::string text         = "";
+		std::string current_file = "";
+		std::string percentage   = "";
+		bool foundFileName       = false;
 
 		while(getline(UnpackLog, text)) {
 			text = Trim(text);
@@ -732,7 +699,7 @@ int ParseUnpackLog(string &error, string &file_name)
 			// Get progress percentage
 			size_t percent = text.find_last_of("%");
 
-			if (percent != string::npos) {
+			if (percent != std::string::npos) {
 				if (percent < 2)
 					percent = 0;
 				else
@@ -741,14 +708,14 @@ int ParseUnpackLog(string &error, string &file_name)
 				percentage  = text.substr(percent, 3);
 				size_t dash = text.find("- ");
 
-				if (dash != string::npos)
+				if (dash != std::string::npos)
 					current_file = text.substr(dash+2);					
 			}
 
 			// Get error message
 			size_t error_pos = text.find("ERROR:");
 
-			if (error_pos != string::npos  &&  error=="") {
+			if (error_pos != std::string::npos  &&  error=="") {
 				error            = text.substr(error_pos);
 				error_msg        = text.substr(error_pos+7);
 				error_until_line = line_number + 1;
@@ -771,12 +738,12 @@ int ParseUnpackLog(string &error, string &file_name)
 
 
 	// Delete file or directory with its contents  http://stackoverflow.com/a/10836193
-int DeleteDirectory(const string &refcstrRootDirectory, bool bDeleteSubdirectories=true)
+DWORD DeleteDirectory(const std::string &refcstrRootDirectory, bool bDeleteSubdirectories=true)
 {
 	bool            bSubdirectory = false;       // Flag, indicating whether subdirectories have been found
 	HANDLE          hFile;                       // Handle to directory
-	string     	    strFilePath;                 // Filepath
-	string          strPattern;                  // Pattern
+	std::string     strFilePath;                 // Filepath
+	std::string     strPattern;                  // Pattern
 	WIN32_FIND_DATA FileInformation;             // File information
 
 	strPattern = refcstrRootDirectory + "\\*.*";
@@ -836,11 +803,11 @@ int DeleteDirectory(const string &refcstrRootDirectory, bool bDeleteSubdirectori
 }
 
 
-int Download(string url, string &error_text)
+DWORD Download(std::string url, std::string &error_text)
 {
 	// Format arguments
 	global.downloaded_filename = PathLastItem(url);
-	string arguments           = " --user-agent=\"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0\" --tries=1 --output-file=fwatch\\tmp\\schedule\\downloadLog.txt " + url;
+	std::string arguments      = " --user-agent=\"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0\" --tries=1 --output-file=fwatch\\tmp\\schedule\\downloadLog.txt " + url;
 
 	remove("fwatch\\tmp\\schedule\\downloadLog.txt");
 
@@ -856,18 +823,18 @@ int Download(string url, string &error_text)
 	si.wShowWindow = SW_SHOW;
 	
 	if (!CreateProcess("fwatch\\data\\wget.exe", &arguments[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi)) {
-		int errorCode = GetLastError();
+		DWORD errorCode = GetLastError();
 		global.logfile << "Failed to launch wget.exe - " << errorCode << " " << FormatError(errorCode);
 		error_text += "Failed to launch wget.exe - " + Int2Str(errorCode) + " " + FormatError(errorCode);
 		return errorCode;
 	} else
-		global.logfile << "Downloading  " << url << endl;
+		global.logfile << "Downloading  " << url << std::endl;
 
 
 
 	// Wait for the program to finish its job
 	DWORD exit_code;
-	string message = "";
+	std::string message = "";
 	
 	Sleep(10);
 					
@@ -884,7 +851,7 @@ int Download(string url, string &error_text)
 	ParseWgetLog(message);
 	
 	if (exit_code != 0) {
-		global.logfile << "Failed to download " << global.downloaded_filename << " - " << exit_code << " - " << message << endl;
+		global.logfile << "Failed to download " << global.downloaded_filename << " - " << exit_code << " - " << message << std::endl;
 		error_text + "Failed to download " + global.downloaded_filename + " - " + Int2Str(exit_code) + " - " + message + "\n";
 	}
 	
@@ -892,16 +859,16 @@ int Download(string url, string &error_text)
 }
 
 
-int Unpack(string file_name, string password, string &error_text, bool tmp_dir=false)
+DWORD Unpack(std::string file_name, std::string password, std::string &error_text, bool tmp_dir=false)
 {
 	// Get subdirectories
-	string relative_path = PathNoLastItem(file_name);
+	std::string relative_path = PathNoLastItem(file_name);
 
 	if (Equals(relative_path.substr(0,10), "_extracted"))
 		relative_path = relative_path.substr(11) += "_extracted";
 
 	// Clean destination directory
-	string destination = "fwatch\\tmp\\_extracted";
+	std::string destination = "fwatch\\tmp\\_extracted";
 	
 	if (relative_path != "")
 		destination += "\\" + relative_path;
@@ -928,28 +895,28 @@ int Unpack(string file_name, string password, string &error_text, bool tmp_dir=f
     STARTUPINFO si; 
 	ZeroMemory( &si, sizeof(si) );
 	ZeroMemory( &pi, sizeof(pi) );
-	si.cb 		     = sizeof(si);
-	si.dwFlags 	     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-	si.wShowWindow   = SW_SHOW;
-	si.hStdInput     = NULL;
-	si.hStdOutput    = logFile;
-	si.hStdError     = logFile;
-	string arguments = WrapInQuotes(global.working_directory) + (password.empty() ? "" : " -p"+password) + " x -y -bb3 -bsp1 " + (tmp_dir ? ("-ofwatch\\tmp\\_extracted ") : "") + file_name;
+	si.cb 		   = sizeof(si);
+	si.dwFlags 	   = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+	si.wShowWindow = SW_SHOW;
+	si.hStdInput   = NULL;
+	si.hStdOutput  = logFile;
+	si.hStdError   = logFile;
+	std::string arguments = WrapInQuotes(global.working_directory) + (password.empty() ? "" : " -p"+password) + " x -y -bb3 -bsp1 " + (tmp_dir ? ("-ofwatch\\tmp\\_extracted ") : "") + file_name;
 
 	if (!CreateProcess("fwatch\\data\\7z.exe", &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {		
-		int errorCode = GetLastError();
+		DWORD errorCode = GetLastError();
 		global.logfile << "Failed to launch 7z.exe - " << errorCode << " " << FormatError(errorCode);
 		error_text += "Failed to launch 7z.exe - " + Int2Str(errorCode) + FormatError(errorCode);
 		return errorCode;
 	} else
-		global.logfile << "Extracting " << file_name << endl;
+		global.logfile << "Extracting " << file_name << std::endl;
 		
 	Sleep(10);
 
 
 	// Wait for the program to finish its job
 	DWORD exit_code;
-	string message = "";
+	std::string message = "";
 
 	do {					
 		ParseUnpackLog(message, file_name);
@@ -961,7 +928,7 @@ int Unpack(string file_name, string password, string &error_text, bool tmp_dir=f
 	ParseUnpackLog(message, file_name);
 
 	if (exit_code != 0) {
-		global.logfile << "Failed to extract " << file_name << " - " << exit_code << " - " << message << endl;
+		global.logfile << "Failed to extract " << file_name << " - " << exit_code << " - " << message << std::endl;
 		error_text += "Failed to extract " + file_name + " - " + Int2Str(exit_code) + " - " + message;
 	}
 
@@ -974,7 +941,7 @@ int Unpack(string file_name, string password, string &error_text, bool tmp_dir=f
 
 
 	// https://superuser.com/questions/475874/how-does-the-windows-rename-command-interpret-wildcards
-string MaskNewName(string path, string mask) 
+std::string MaskNewName(std::string path, std::string mask) 
 {
 	if (mask.empty())
 		return path;
@@ -982,10 +949,10 @@ string MaskNewName(string path, string mask)
 	if (path.empty())
 		return "";
 		
-	int    x = 0;
-	string R = "";
+	size_t x      = 0;
+	std::string R = "";
 	
-	for (int m=0; m<mask.length(); m++) {
+	for (size_t m=0; m<mask.length(); m++) {
 		char ch       = mask[m];
 		bool q_exists = x<path.length();
 		char q        = q_exists          ? path[x]   : ' ';
@@ -1005,12 +972,9 @@ string MaskNewName(string path, string mask)
 				R += path[x++];
         } else if (ch == '*') {
             if (z == '.') {
-                int i = path.length()-1;
-                for (;  i>=0;  i--) 
-					if (path[i] == '.') 
-						break;
+                size_t i = path.find_last_of('.');
 						
-                if (i < 0) {
+				if (i == std::string::npos) {
                     R += path.substr(x, path.length()) + '.';
                     i  = path.length();
                 } else {
@@ -1024,14 +988,11 @@ string MaskNewName(string path, string mask)
 				m++;
 				x  = path.length();
             } else {
-                int i = path.length()-1;
-                for (;  i>=0;  i--) 
-					if (path[i] == z) 
-						break;
+                size_t i = path.find_last_of(z);
 						
-                if (i < 0) {
+				if (i == std::string::npos) {
 					R += path.substr(x, path.length()) + z;
-					x = path.length();
+					x  = path.length();
 					m++;
 				} else {
 					R += path.substr(x, i - x);
@@ -1053,7 +1014,7 @@ string MaskNewName(string path, string mask)
 	return R;
 }
 
-int CreateFileList(string source, string destination, vector<string> &sources, vector<string> &destinations, vector<bool> &dirs, bool is_move, vector<string> &empty_dirs, int &buffer_size, bool match_dirs)
+DWORD CreateFileList(std::string source, std::string destination, std::vector<std::string> &sources, std::vector<std::string> &destinations, std::vector<bool> &dirs, bool is_move, std::vector<std::string> &empty_dirs, size_t &buffer_size, bool match_dirs)
 {
 	WIN32_FIND_DATA fd;
 	HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -1061,30 +1022,30 @@ int CreateFileList(string source, string destination, vector<string> &sources, v
 	int result   = 0;
 
 	if (hFind == INVALID_HANDLE_VALUE) {
-		int errorCode = GetLastError();
-		global.logfile << "Failed to list files in " << source << "  - " << errorCode << " " + FormatError(errorCode) << endl;
+		DWORD errorCode = GetLastError();
+		global.logfile << "Failed to list files in " << source << "  - " << errorCode << " " + FormatError(errorCode) << std::endl;
 		return errorCode;
 	}
 
-	string base_source      = PathNoLastItem(source);
-	string base_destination = PathNoLastItem(destination);
-	string new_name         = PathLastItem(destination);
+	std::string base_source      = PathNoLastItem(source);
+	std::string base_destination = PathNoLastItem(destination);
+	std::string new_name         = PathLastItem(destination);
 
 	if (new_name.empty())
 		new_name = PathLastItem(source);
 
-	bool is_source_wildcard      = source.find("*")!=string::npos    ||  source.find("?")!=string::npos;
-	bool is_destination_wildcard = new_name.find("*")!=string::npos  ||  new_name.find("?")!=string::npos;
+	bool is_source_wildcard      = source.find("*")!=std::string::npos    ||  source.find("?")!=std::string::npos;
+	bool is_destination_wildcard = new_name.find("*")!=std::string::npos  ||  new_name.find("?")!=std::string::npos;
 
 	do {
-		if (fd.cFileName[0] == '.')
+		if (_tcscmp(fd.cFileName,_T(".")) || _tcscmp(fd.cFileName,_T("..")))
 			continue;
 		
-		string file_name       = string(fd.cFileName);
-		string new_source      = base_source      + file_name;
-		string new_destination = base_destination + (is_destination_wildcard ? MaskNewName(file_name,new_name) : new_name);
-		bool   is_dir          = fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
-		int attributes         = GetFileAttributes(new_destination.c_str());
+		std::string file_name       = std::string(fd.cFileName);
+		std::string new_source      = base_source      + file_name;
+		std::string new_destination = base_destination + (is_destination_wildcard ? MaskNewName(file_name,new_name) : new_name);
+		bool is_dir                 = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) > 0;
+		int attributes              = GetFileAttributes(new_destination.c_str());
 		
 		if (is_dir  &&  is_source_wildcard  &&  !match_dirs)
 			continue;
@@ -1122,25 +1083,25 @@ int CreateFileList(string source, string destination, vector<string> &sources, v
 }
 
 
-int MoveFiles(string source, string destination, string new_name, bool is_move, bool overwrite, bool match_dirs, string &error_text)
+DWORD MoveFiles(std::string source, std::string destination, std::string new_name, bool is_move, bool overwrite, bool match_dirs, std::string &error_text)
 {
 	// Find files and save them to a list
-	vector<string> source_list;
-	vector<string> destination_list;
-	vector<bool>   is_dir_list;
-	vector<string> empty_dirs;
-	int buffer_size = 0;
-	int final_result = 0;
+	std::vector<std::string> source_list;
+	std::vector<std::string> destination_list;
+	std::vector<bool>        is_dir_list;
+	std::vector<std::string> empty_dirs;
+	size_t buffer_size = 0;
+	DWORD final_result = 0;
 	
-	int result = CreateFileList(source, destination+new_name, source_list, destination_list, is_dir_list, is_move, empty_dirs, buffer_size, match_dirs);
+	DWORD result = CreateFileList(source, destination+new_name, source_list, destination_list, is_dir_list, is_move, empty_dirs, buffer_size, match_dirs);
 
 	if (result != 0)
 		return result;
 	
 
-	DWORD flags       = MOVEFILE_REPLACE_EXISTING;
-	bool FailIfExists = false;
-	int return_value  = 0;
+	DWORD flags        = MOVEFILE_REPLACE_EXISTING;
+	bool FailIfExists  = false;
+	DWORD return_value = 0;
 
 	if (!overwrite) {
 		FailIfExists = true;
@@ -1149,9 +1110,9 @@ int MoveFiles(string source, string destination, string new_name, bool is_move, 
 
 
 	// For each file in the list
-	for (int i=0;  i<source_list.size(); i++) {
+	for (size_t i=0;  i<source_list.size(); i++) {
 		// Format path for logging
-		string destinationLOG = PathNoLastItem(destination_list[i], 0);
+		std::string destinationLOG = PathNoLastItem(destination_list[i], 0);
 
 		if (destinationLOG.empty())
 			destinationLOG = "the game folder";
@@ -1169,7 +1130,7 @@ int MoveFiles(string source, string destination, string new_name, bool is_move, 
 	    if (result == 0) {
 			return_value = GetLastError();
 			
-	    	/*if (!overwrite  &&  return_value==183)
+	    	/*if (!overwrite  &&  return_value==ERROR_ALREADY_EXISTS)
 	    		global.logfile << "  - file already exists";
 			else */{
 				final_result = 1;
@@ -1178,7 +1139,7 @@ int MoveFiles(string source, string destination, string new_name, bool is_move, 
 			}
 		}
 			
-		global.logfile << endl;
+		global.logfile << std::endl;
 	}
 	
 	if (source_list.size() == 0)
@@ -1187,25 +1148,25 @@ int MoveFiles(string source, string destination, string new_name, bool is_move, 
 
 	// Remove empty directories
 	if (is_move)
-		for (int i=empty_dirs.size()-1; i>=0; i--)
+		for (size_t i=empty_dirs.size()-1; i>=0; i--)
 			RemoveDirectory(empty_dirs[i].c_str());
 	
 	return final_result;
 }
 
-string Decrypt(string sentence) 
+std::string Decrypt(std::string sentence) 
 {
 	int decrypt_key = 0;
 	int modulus_key = 0;
-	vector<int> numbers;
-	vector<string> words;
+	std::vector<int> numbers;
+	std::vector<std::string> words;
 	Tokenize(sentence, "a", words);
-	string decrypted = "";
+	std::string decrypted = "";
 
-	for (int i=0; i<words.size(); i++)	{
-		string digits = "";
+	for (size_t i=0; i<words.size(); i++)	{
+		std::string digits = "";
 		
-		for (int j=0; j<words[i].length(); j++) {
+		for (size_t j=0; j<words[i].length(); j++) {
 			char digit = words[i][j];
 			digits += Int2Str(digit-98);
 		}
@@ -1213,7 +1174,7 @@ string Decrypt(string sentence)
 		numbers.push_back(atoi(digits.c_str()));
 	}
 	
-	for (int i=0; i<numbers.size(); i++) {
+	for (size_t i=0; i<numbers.size(); i++) {
 		int result = 1;
 		int key    = decrypt_key;
 		
@@ -1258,7 +1219,7 @@ int main(int argc, char *argv[])
 	// Set working directory to the game root folder -----------
 	TCHAR pwd[MAX_PATH];
 	GetCurrentDirectory(MAX_PATH,pwd);
-	global.working_directory = ReplaceAll((string)pwd, "\\fwatch\\data", "");
+	global.working_directory = ReplaceAll((std::string)pwd, "\\fwatch\\data", "");
 	SetCurrentDirectory(global.working_directory.c_str());
 
 
@@ -1268,48 +1229,48 @@ int main(int argc, char *argv[])
 	// Process arguments ---------------------------------------
 	GetCurrentDirectory(MAX_PATH, pwd);
 	
-	string user_arguments     = " ";
-	string user_arguments_log = " ";
-	string game_exe           = "";
-	string server_uniqueid    = "";
-	string PBOaddon   		  = "";
-	string voice_server       = "";
-	string server_time        = "";
-	string update_resource    = "";
-	string username           = "";
-	string maxcustom          = "";
-	string ip                 = "";
-	string port               = "";
+	std::string user_arguments     = " ";
+	std::string user_arguments_log = " ";
+	std::string game_exe           = "";
+	std::string server_uniqueid    = "";
+	std::string PBOaddon   		   = "";
+	std::string voice_server       = "";
+	std::string server_time        = "";
+	std::string update_resource    = "";
+	std::string username           = "";
+	std::string maxcustom          = "";
+	std::string ip                 = "";
+	std::string port               = "";
 	
-	bool query_server         = false;
-	bool self_update		  = false;
-	bool server_equalmodreq   = false;
-	DWORD game_pid            = 0;
-	vector<string> required_mods[2];
+	bool query_server       = false;
+	bool self_update        = false;
+	bool server_equalmodreq = false;
+	DWORD game_pid          = 0;
+	std::vector<std::string> required_mods[2];
 	
 	for (int i=1; i<argc; i++) {
-		string namevalue = (string)argv[i];
-		size_t separator = namevalue.find_first_of('=');
+		std::string namevalue = (std::string)argv[i];
+		size_t separator      = namevalue.find_first_of('=');
 		
-		if (separator != string::npos) {
-			string name  = namevalue.substr(0,separator);
-			string value = namevalue.substr(separator+1);
+		if (separator != std::string::npos) {
+			std::string name  = namevalue.substr(0,separator);
+			std::string value = namevalue.substr(separator+1);
 			
 			if (Equals(name,"-mod")) {
-				vector<string> temp_array;
+				std::vector<std::string> temp_array;
 				Tokenize(value, ";", temp_array);
 				
-				for (int i=0; i<temp_array.size(); i++)
+				for (size_t i=0; i<temp_array.size(); i++)
 					required_mods[NAME].push_back(temp_array[i]);
 					
 				continue;
 			}
 			
 			if (Equals(name,"-modid")) {
-				vector<string> temp_array;
+				std::vector<std::string> temp_array;
 				Tokenize(value, ";", temp_array);
 				
-				for (int i=0; i<temp_array.size(); i++)
+				for (size_t i=0; i<temp_array.size(); i++)
 					required_mods[ID].push_back(temp_array[i]);
 					
 				continue;
@@ -1371,21 +1332,21 @@ int main(int argc, char *argv[])
 			
 			if (Equals(name,"-evoice")) {
 				if (value.substr(0,12) == "ts3server://") {
-					string ip        = value.substr(12);
-					string query     = "";
+					std::string ip        = value.substr(12);
+					std::string query     = "";
 					size_t query_pos = ip.find("?");
 					
-					// Decrypt query string
-					if (query_pos != string::npos) {
+					// Decrypt query std::string
+					if (query_pos != std::string::npos) {
 						query = ip.substr(query_pos+1);
 						ip    = ip.substr(0, query_pos);
 						
-						vector<string> query_string_array;
+						std::vector<std::string> query_string_array;
 						Tokenize(query, "&", query_string_array);
 						query = "";
 						
-						for (int i=0; i<query_string_array.size(); i++) {							
-							vector<string> var;
+						for (size_t i=0; i<query_string_array.size(); i++) {							
+							std::vector<std::string> var;
 							Tokenize(query_string_array[i], "=", var);
 							
 							if (var.size() > 1) {
@@ -1432,11 +1393,6 @@ int main(int argc, char *argv[])
 				continue;
 			}
 			
-			if (Equals(name,"-queryserver")) {
-				query_server = Equals(value,"true") || Equals(value,"1");
-				continue;
-			}
-			
 			if (Equals(name,"-connect")) {
 				ip = value;
 			}
@@ -1456,90 +1412,6 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	// Download server info
-	if (query_server) {
-		if (ip.empty() || Equals(ip,"localhost") || ip.substr(0,8)=="192.168." || ip=="127.0.0.1") {
-			return 1;
-		}
-			
-		string filename   = "fwatch\\tmp\\schedule\\queryserver" + server_uniqueid + ".txt";		
-		string url        = "--output-document=" + filename + " https://ofp-api.ofpisnotdead.com/" + ip + ":" + (port.empty() ? "2302" : port);
-		string error_text = "";
-		int result        = Download(url, error_text);
-		
-		if (result != 0) {
-			return 2;
-		}
-
-		ifstream file(filename.c_str(), ios::in);
-		string contents;
-		
-		if (!file) {
-			return 3;
-		}
-	  
-		file.seekg(0, ios::end);
-		contents.resize(file.tellg());
-		file.seekg(0, ios::beg);
-		file.read(&contents[0], contents.size());
-		file.close();
-			
-		if (contents == "{\"error\":\"timeout\"}") {
-			return 4;
-		}
-		
-		vector<string> to_find;
-		to_find.push_back("\"gstate\":");
-		to_find.push_back("\"numplayers\":");
-		to_find.push_back("\"gametype\":");
-		to_find.push_back("\"mapname\":");
-		vector<string> output;
-		cout << "[";
-		
-		for (int i=0; i<to_find.size(); i++) {
-			string value = "";
-			size_t start = contents.find(to_find[i]);
-			
-			if (start != string::npos) {
-				start     += to_find[i].length();
-				size_t end = contents.find(",", start);
-				
-				if (end != string::npos)
-					value = contents.substr(start, end-start);
-			}
-			
-			if (i != 0)
-				cout << ",";
-			
-			if (i==0 || i==1)
-				value = ReplaceAll(value, "\"", "");
-				
-			cout << value;
-		}
-		
-		string to_find2 = "\"player\":";
-		string players  = "";
-		size_t start    = contents.find(to_find2);
-		
-		while (start != string::npos) {
-			start     += to_find2.length();
-			size_t end = contents.find(",", start);
-				
-			if (end != string::npos) {				
-				if (!players.empty())
-					players += "\\n";
-					
-				players += contents.substr(start, end-start);
-			}
-			
-			start = contents.find(to_find2, start+1);
-		}
-		
-		cout << ",\"" << ReplaceAll(players, "\"", "") << "\"]";
-		remove(filename.c_str());
-		return 0;
-	}
-
 
 
 
@@ -1547,23 +1419,23 @@ int main(int argc, char *argv[])
 	SYSTEMTIME st;
 	GetLocalTime(&st);
 	
-	global.logfile.open("fwatch\\data\\gameRestartLog.txt", ios::out | ios::app);
+	global.logfile.open("fwatch\\data\\gameRestartLog.txt", std::ios::out | std::ios::app);
 	global.logfile << "\n--------------\n\n" 
 			<< st.wYear << "." 
 			<< LeadingZero(st.wMonth) << "." 
 			<< LeadingZero(st.wDay) << "  " 
 			<< LeadingZero(st.wHour) << ":" 
 			<< LeadingZero(st.wMinute) << ":" 
-			<< LeadingZero(st.wSecond) << endl;
+			<< LeadingZero(st.wSecond) << std::endl;
 	
-	global.logfile << "Arguments: " << global.working_directory << user_arguments_log << endl;
+	global.logfile << "Arguments: " << global.working_directory << user_arguments_log << std::endl;
 
 
 
 	// If scheduled to restart at a specific time --------------
 	if (!server_time.empty()) {
 		FILETIME schedule;
-		vector<string> date;
+		std::vector<std::string> date;
 		Tokenize(server_time, "[,]", date);
 		
 		if (date.size() >= 8) {
@@ -1578,15 +1450,15 @@ int main(int argc, char *argv[])
 
 			SystemTimeToFileTime(&st      , &schedule);
 			FileTimeToSystemTime(&schedule, &st);						
-			global.logfile << "Game is scheduled to restart at " << LeadingZero(st.wHour) << ":" << LeadingZero(st.wMinute) << endl;
+			global.logfile << "Game is scheduled to restart at " << LeadingZero(st.wHour) << ":" << LeadingZero(st.wMinute) << std::endl;
 			
 			char processID[12] = "";
-			sprintf(processID, "%d", GetCurrentProcessId());
+			sprintf_s(processID, 12, "%d", GetCurrentProcessId());
 			
-			string temp = "_gamerestart_pid=" + (string)processID + ";";
+			std::string temp = "_gamerestart_pid=" + (std::string)processID + ";";
 			WriteSaveStateFile(temp);
 		} else {
-			global.logfile << "Incorrect date passed" << endl;
+			global.logfile << "Incorrect date passed" << std::endl;
 			global.logfile.close();
 			return 1;
 		}
@@ -1594,16 +1466,16 @@ int main(int argc, char *argv[])
         // Keep checking time
 		SYSTEMTIME st;
 		FILETIME now;
-		fstream instructions;
+		std::fstream instructions;
 		bool abort = false;
 		int result = 0;
 
 		do {
 			// Read instructions from user
-			instructions.open ("fwatch\\tmp\\schedule\\RestartInstruction.txt", ios::in);
+			instructions.open ("fwatch\\tmp\\schedule\\RestartInstruction.txt", std::ios::in);
 			
 			if (instructions.is_open()) {
-				string text = "";
+				std::string text = "";
                 while(getline(instructions, text)) {					
                     if (text == "abort") {
                         abort = true;
@@ -1647,7 +1519,7 @@ int main(int argc, char *argv[])
 		VER_201
 	};
 
-	string exe_name_list[] = {
+	std::string exe_name_list[] = {
 		"armaresistance.exe",
 		"coldwarassault.exe",
 		"flashpointresistance.exe",
@@ -1660,7 +1532,7 @@ int main(int argc, char *argv[])
 		"ofpr_server.exe"
 	};
 	
-	string window_name_list[] = {
+	std::string window_name_list[] = {
 		"ArmA Resistance",
 		"Cold War Assault",
 		"Operation Flashpoint",
@@ -1689,17 +1561,17 @@ int main(int argc, char *argv[])
 	int exe_num    = sizeof(exe_version_list) / sizeof(exe_version_list[0]);
 	int window_num = sizeof(window_name_list) / sizeof(window_name_list[0]);
 
-	string game_window    = "";
-	bool got_handle       = false;
-	bool dedicated_server = false;
+	std::string game_window = "";
+	bool got_handle         = false;
+	bool dedicated_server   = false;
+	int game_version        = VER_196;
 	game_info game;
-	int game_version      = VER_196;
 	
 	for (int i=0; i<exe_num; i++)
 		if (!game_exe.empty()) {		// if executable name is known then match corresponding window name
 			if (Equals(exe_name_list[i],game_exe)) {
-				game_window  = window_name_list[i];
-				game_version = exe_version_list[i];
+				game_window      = window_name_list[i];
+				game_version     = exe_version_list[i];
 				dedicated_server = i>=7;
 				break;
 			}
@@ -1763,27 +1635,27 @@ int main(int argc, char *argv[])
 
 
     // Is fwatch -nolaunch?
-	int fwatch_pid          = 0;
-	bool nolaunch           = false;
-	bool steam              = false;
-	string fwatch_arguments = " ";
-	fstream fwatch_info;
-	fwatch_info.open("fwatch_info.sqf", ios::in);
+	int fwatch_pid = 0;
+	bool nolaunch  = false;
+	bool steam     = false;
+	std::string fwatch_arguments = " ";
+	std::fstream fwatch_info;
+	fwatch_info.open("fwatch_info.sqf", std::ios::in);
 
 	if (fwatch_info.is_open()) {
-	    string data_line;
+	    std::string data_line;
 		getline(fwatch_info, data_line);
-		vector<string> data_array;
+		std::vector<std::string> data_array;
 		Tokenize(data_line, "[,]\" ", data_array);
 		
-			for (int i=0; i<data_array.size(); i++) {
+			for (size_t i=0; i<data_array.size(); i++) {
 				if (i==0)
 					fwatch_pid = atoi(data_array[i].c_str());
 				else {
-					vector<string> param_array;
+					std::vector<std::string> param_array;
 					Tokenize(data_array[i], " ", param_array);
 					
-					for (int j=0; j<param_array.size(); j++) {
+					for (size_t j=0; j<param_array.size(); j++) {
 						if (Equals(param_array[j],"-nolaunch"))
 							nolaunch = true;
 						
@@ -1812,7 +1684,7 @@ int main(int argc, char *argv[])
 	
 		
 	// Access game process
-	string filtered_game_arguments = " ";
+	std::string filtered_game_arguments = " ";
 
 	/*if (!nolaunch)
 		filtered_game_arguments += fwatch_arguments;*/
@@ -1822,17 +1694,17 @@ int main(int argc, char *argv[])
 		
 		// Read game parameters
 		if (game.handle != 0) {
-			vector<string> all_game_arguments;
+			std::vector<std::string> all_game_arguments;
 			char module_name[32] = "ifc22.dll";
 			
 			if (dedicated_server)
-				strcpy(module_name, "ijl15.dll");
+				strcpy_s(module_name, 32, "ijl15.dll");
 			
 			int result = GetProcessParams(game.pid, &game_handle, module_name, dedicated_server ? 0x4FF20 : 0x2C154, all_game_arguments);
 			if (result == 0) {
-				string log_arguments = "";
+				std::string log_arguments = "";
 				
-				for (int i=0; i<all_game_arguments.size(); i++) {
+				for (size_t i=0; i<all_game_arguments.size(); i++) {
 					if (
 						!Equals(all_game_arguments[i].substr(0,9),"-connect=") &&
 						!Equals(all_game_arguments[i].substr(0,6),"-port=") &&
@@ -1849,12 +1721,12 @@ int main(int argc, char *argv[])
 						filtered_game_arguments += all_game_arguments[i] + " ";
 				}
 				
-				global.logfile << "Game arguments: " << log_arguments << endl;	
+				global.logfile << "Game arguments: " << log_arguments << std::endl;	
 			} else {
 				if (result == -1)
-					global.logfile << "Couldn't find " << module_name << endl;
+					global.logfile << "Couldn't find " << module_name << std::endl;
 				else {
-					string errorMSG = FormatError(GetLastError());
+					std::string errorMSG = FormatError(GetLastError());
 					global.logfile << "Can't get module list" << errorMSG;
 				}
 			}
@@ -1868,7 +1740,7 @@ int main(int argc, char *argv[])
 				
 
 		// Shutdown the game
-		bool close = PostMessage(game.handle, WM_CLOSE, 0, 0);
+		BOOL close = PostMessage(game.handle, WM_CLOSE, 0, 0);
 		int tries  = 0;
 			
 		do {
@@ -1876,7 +1748,7 @@ int main(int argc, char *argv[])
 			Sleep(500);
 		} while (close && game.pid!=0 && ++tries<7);
 			
-		if (game.pid!=0) {
+		if (game.pid != 0) {
 			game_handle = OpenProcess(PROCESS_ALL_ACCESS, 0, game.pid);
 			
 			if (TerminateProcess(game_handle, 0)) 
@@ -1907,7 +1779,7 @@ int main(int argc, char *argv[])
 		Sleep(100);
 
 		if (++tries > 50) {
-			global.logfile << "Fwatch didn't quit" << endl;
+			global.logfile << "Fwatch didn't quit" << std::endl;
 			global.logfile.close();
 			return 5;
 		}
@@ -1915,11 +1787,11 @@ int main(int argc, char *argv[])
 	
 	if (nolaunch) {
 		if (!steam)
-            global.logfile << "Fwatch -nolaunch" << endl;
+            global.logfile << "Fwatch -nolaunch" << std::endl;
         else
-            global.logfile << "Fwatch -steam" << endl;
+            global.logfile << "Fwatch -steam" << std::endl;
     } else 
-		global.logfile << "Waited for Fwatch to quit" << endl;
+		global.logfile << "Waited for Fwatch to quit" << std::endl;
 
 
 
@@ -1928,15 +1800,15 @@ int main(int argc, char *argv[])
 
 	
 	// Create a pbo file if ordered ----------------------------
-	if (PBOaddon!=""  &&  PBOaddon.find("..\\")==string::npos) {
-        string PBOexec = global.working_directory + "\\fwatch\\data\\MakePbo.exe";
-		vector<string> PBOarg;
+	if (PBOaddon!="" && PBOaddon.find("..\\")==std::string::npos) {
+        std::string PBOexec = global.working_directory + "\\fwatch\\data\\MakePbo.exe";
+		std::vector<std::string> PBOarg;
 		
 		PBOarg.push_back(global.working_directory + "\\@AddonTest\\ -NRK @AddonTest\\addons\\" + PBOaddon);
 		PBOarg.push_back(global.working_directory + "\\@AddonTest\\ -NRK @AddonTest\\Campaigns\\AddonTest");
 		
-        for (int i=0; i<PBOarg.size(); i++) {
-			global.logfile << PBOexec << endl << PBOarg[i] << endl;
+        for (size_t i=0; i<PBOarg.size(); i++) {
+			global.logfile << PBOexec << std::endl << PBOarg[i] << std::endl;
 
 			// Execute
 			PROCESS_INFORMATION pi2;
@@ -1958,7 +1830,7 @@ int main(int argc, char *argv[])
 			}
 			while(st2 == STILL_ACTIVE);
 
-			global.logfile << "MakePBO result: " << st2 << endl;
+			global.logfile << "MakePBO result: " << st2 << std::endl;
 			CloseHandle(pi2.hProcess);
 			CloseHandle(pi2.hThread);
 		}
@@ -1972,8 +1844,8 @@ int main(int argc, char *argv[])
 	
 	// Game schedule options -----------------------------------	
 	if (required_mods[ID].size() > 0) {
-		vector<string> mods[ARRAY_SIZE];
-		vector<bool> force_name;
+		std::vector<std::string> mods[ARRAY_SIZE];
+		std::vector<bool> force_name;
 			
 		WIN32_FIND_DATA fd;
 		HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -1986,20 +1858,20 @@ int main(int argc, char *argv[])
 		}
 
 		do {
-			if (fd.cFileName[0] == '.'  ||  !(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+			if (_tcscmp(fd.cFileName,_T(".")) || _tcscmp(fd.cFileName,_T("..")) || !(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
 				continue;
 
-			string folder_name = (string)fd.cFileName;
-			string path_to_id  = folder_name + "\\__gs_id";
-			fstream mod_id_file;
-			mod_id_file.open(path_to_id.c_str(), ios::in);
+			std::string folder_name = (std::string)fd.cFileName;
+			std::string path_to_id  = folder_name + "\\__gs_id";
+			std::fstream mod_id_file;
+			mod_id_file.open(path_to_id.c_str(), std::ios::in);
 			
 			if (mod_id_file.is_open()) {
-				string data_line;
+				std::string data_line;
 				getline(mod_id_file, data_line);
 				mod_id_file.close();
 
-				vector<string> data;
+				std::vector<std::string> data;
 				Tokenize(data_line, ";", data);
 
 				if (data.size() > 0) {
@@ -2012,7 +1884,7 @@ int main(int argc, char *argv[])
 						if (Equals(data[4],"true") || Equals(data[4],"1")) {
 							is_force = true;
 							
-							for (int i=0; i<required_mods[ID].size(); i++)
+							for (size_t i=0; i<required_mods[ID].size(); i++)
 								if (Equals(data[0],required_mods[ID][i]))
 									required_mods[NAME][i] = data[3];
 						}
@@ -2026,15 +1898,15 @@ int main(int argc, char *argv[])
 
 		bool add_param_name = true;
 
-		for (int i=0; i<required_mods[ID].size(); i++) {		// for each required mod id
-			for (int j=0; j<mods[ID].size(); j++) {				// find matching id within a list of existing modfolders
+		for (size_t i=0; i<required_mods[ID].size(); i++) {		// for each required mod id
+			for (size_t j=0; j<mods[ID].size(); j++) {				// find matching id within a list of existing modfolders
 				if (required_mods[ID][i] == mods[ID][j]) {
 					if ((server_equalmodreq || force_name[j])   &&   !Equals(required_mods[NAME][i],mods[NAME][j])) {	// if there's a name conflict					
 						if (GetFileAttributes(required_mods[NAME][i].c_str()) != INVALID_FILE_ATTRIBUTES) {	// if so then rename to something else
-							string rename_src = required_mods[NAME][i];
-							string rename_dst = "";
-							int tries         = 1;
-							int last_error    = 0;
+							std::string rename_src = required_mods[NAME][i];
+							std::string rename_dst = "";
+							int tries              = 1;
+							DWORD last_error       = 0;
 							
 							do {
 								rename_dst = required_mods[NAME][i] + "_renamed" + (tries>1 ? Int2Str(tries) : "");
@@ -2043,20 +1915,20 @@ int main(int argc, char *argv[])
 								else {
 									tries++;
 									last_error = GetLastError();
-									if (last_error != 183) {
+									if (last_error != ERROR_ALREADY_EXISTS) {
 										global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << " - " << FormatError(last_error);
 										global.logfile.close();
 										return 7;
 									}
 								}
-							} while (last_error == 183);
+							} while (last_error == ERROR_ALREADY_EXISTS);
 							
-							global.logfile << "Renamed " << rename_src << " to " << rename_dst << endl;
+							global.logfile << "Renamed " << rename_src << " to " << rename_dst << std::endl;
 						}
 						
 						// now rename the actual required mod to its proper name
 						if (rename(mods[NAME][j].c_str(), required_mods[NAME][i].c_str()) == 0) {
-							global.logfile << "Renamed " << mods[NAME][j] << " to " << required_mods[NAME][i] << endl;
+							global.logfile << "Renamed " << mods[NAME][j] << " to " << required_mods[NAME][i] << std::endl;
 							mods[NAME][j] = required_mods[NAME][i];
 						} else {
 							global.logfile << "Failed to rename " << mods[NAME][j] << " to " << required_mods[NAME][i] << " - " << FormatError(GetLastError());
@@ -2068,7 +1940,7 @@ int main(int argc, char *argv[])
 					if (add_param_name) {
 						user_arguments     += "-mod=";
 						user_arguments_log += "-mod=";
-						add_param_name  = false;
+						add_param_name      = false;
 					} else
 						user_arguments += ";";
 					
@@ -2078,26 +1950,26 @@ int main(int argc, char *argv[])
 			}
 		}
 	} else
-		for (int i=0; i<required_mods[NAME].size(); i++) {
-			string path_to_id  = required_mods[NAME][i] + "\\__gs_id";
-			fstream mod_id_file;
-			mod_id_file.open(path_to_id.c_str(), ios::in);
+		for (size_t i=0; i<required_mods[NAME].size(); i++) {
+			std::string path_to_id  = required_mods[NAME][i] + "\\__gs_id";
+			std::fstream mod_id_file;
+			mod_id_file.open(path_to_id.c_str(), std::ios::in);
 
 			if (mod_id_file.is_open()) {
-				string data_line;
+				std::string data_line;
 				getline(mod_id_file, data_line);
 				mod_id_file.close();
-				vector<string> data;
+				std::vector<std::string> data;
 				Tokenize(data_line, ";", data);
 
 				// Force original modfolder name
 				if (data.size() >= 5) {
 					if (Equals(data[4],"true")  &&  !Equals(required_mods[NAME][i],data[3])) {
 						if (GetFileAttributes(data[3].c_str()) != INVALID_FILE_ATTRIBUTES) {
-							string rename_src = data[3];
-							string rename_dst = "";
-							int tries         = 1;
-							int last_error    = 0;
+							std::string rename_src = data[3];
+							std::string rename_dst = "";
+							int tries              = 1;
+							DWORD last_error       = 0;
 							
 							do {
 								rename_dst = data[3] + "_renamed" + (tries>1 ? Int2Str(tries) : "");
@@ -2114,12 +1986,12 @@ int main(int argc, char *argv[])
 								}
 							} while (last_error == 183);
 							
-							global.logfile << "Renamed " << rename_src << " to " << rename_dst << endl;
+							global.logfile << "Renamed " << rename_src << " to " << rename_dst << std::endl;
 						}
 						
 						// now rename the actual required mod to its proper name
 						if (rename(required_mods[NAME][i].c_str(), data[3].c_str()) == 0) {
-							global.logfile << "Renamed " << required_mods[NAME][i] << " to " << data[3] << endl;
+							global.logfile << "Renamed " << required_mods[NAME][i] << " to " << data[3] << std::endl;
 							required_mods[NAME][i] = data[3];
 						} else {
 							global.logfile << "Failed to rename " << required_mods[NAME][i] << " to " << data[3] << " - " << FormatError(GetLastError());
@@ -2140,13 +2012,13 @@ int main(int argc, char *argv[])
 
 	// Read from a file user's startup parameters for this server
 	if (!server_uniqueid.empty()) {
-		string params = ReadStartupParams(server_uniqueid);
+		std::string params = ReadStartupParams(server_uniqueid);
 		
 		if (server_equalmodreq) {
-			vector<string> params_array;
+			std::vector<std::string> params_array;
 			Tokenize(params, " ", params_array);
 			
-			for (int i=0; i<params_array.size(); i++) {
+			for (size_t i=0; i<params_array.size(); i++) {
 				if (Equals(params_array[i].substr(0,5),"-mod="))
 					continue;
 					
@@ -2165,9 +2037,9 @@ int main(int argc, char *argv[])
 	
 	// Self-update ---------------------------------------------
 	if (self_update) {
-		char url[]        = "http://ofp-faguss.com/fwatch/116test";
-		string error_text = "";
-		int result        = 0;
+		char url[]             = "http://ofp-faguss.com/fwatch/116test";
+		std::string error_text = "";
+		DWORD result           = 0;
 		
 		if (nolaunch) {
 			if (fwatch_pid == 0)
@@ -2176,9 +2048,9 @@ int main(int argc, char *argv[])
 			HANDLE fwatch_handle = OpenProcess(PROCESS_ALL_ACCESS, 0, fwatch_pid);
 			
 			if (fwatch_handle == NULL) {
-				int last_error  = GetLastError();
-				string errorMSG = FormatError(last_error);
-				global.logfile << "Failed to access Fwatch process " << last_error << errorMSG << endl;
+				DWORD last_error     = GetLastError();
+				std::string errorMSG = FormatError(last_error);
+				global.logfile << "Failed to access Fwatch process " << last_error << errorMSG << std::endl;
 				global.logfile.close();
 				error_text += "Failed to access Fwatch process " + Int2Str(last_error) + errorMSG;
 				
@@ -2192,20 +2064,16 @@ int main(int argc, char *argv[])
 				if (last_error == 5) {
 					CHAR pwd[MAX_PATH];
 					GetCurrentDirectory(MAX_PATH,pwd);				
-					string path_to_file = (string)pwd + "\\fwatch\\data\\gameRestart.exe";
+					std::string path_to_file = (std::string)pwd + "\\fwatch\\data\\gameRestart.exe";
 					
-					#if USING_LOLE32 == 1
-						ITEMIDLIST *pIDL = ILCreateFromPath(path_to_file.c_str());
-						if (pIDL != NULL) {
-							CoInitialize(NULL);
-						    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
-						    	ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
-							CoUninitialize();
-						    ILFree(pIDL);
-						}
-					#else
-						ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
-					#endif
+					ITEMIDLIST *pIDL = ILCreateFromPath(path_to_file.c_str());
+					if (pIDL != NULL) {
+						CoInitialize(NULL);
+					    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
+					    	ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
+						CoUninitialize();
+					    ILFree(pIDL);
+					}
 				}
 				else
 					ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
@@ -2213,16 +2081,16 @@ int main(int argc, char *argv[])
 				return 1;
 			}
 			
-			bool terminated = TerminateProcess(fwatch_handle, 0);
+			BOOL terminated = TerminateProcess(fwatch_handle, 0);
 			CloseHandle(fwatch_handle);
 			
 			if (!terminated) {
-				int last_error  = GetLastError();
-				string errorMSG = FormatError(last_error);
-				global.logfile << "Failed to close Fwatch " << last_error << errorMSG << endl;
+				DWORD last_error     = GetLastError();
+				std::string errorMSG = FormatError(last_error);
+				global.logfile << "Failed to close Fwatch " << last_error << errorMSG << std::endl;
 				global.logfile.close();
-				error_text += "Failed to close Fwatch " + Int2Str(last_error) + errorMSG;
-				error_text += "\n\nYou have to download and update manually";
+				error_text  += "Failed to close Fwatch " + Int2Str(last_error) + errorMSG;
+				error_text  += "\n\nYou have to download and update manually";
 				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
 				ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 				return 1;
@@ -2237,20 +2105,20 @@ int main(int argc, char *argv[])
 		DeleteFile("fwatch\\data\\libssl32.dll");
 		DeleteFile("fwatch\\data\\sortMissions.exe");
 
-		string file_name = "fwatch\\tmp\\schedule\\schedule.bin";
+		std::string file_name = "fwatch\\tmp\\schedule\\schedule.bin";
 		if (!DeleteFile(file_name.c_str())) {
-			string errorMSG = FormatError(GetLastError());
+			std::string errorMSG = FormatError(GetLastError());
 			global.logfile << "Failed to delete " << file_name << errorMSG;
 			error_text += "Failed to delete " + file_name + errorMSG;
 		}
 		
-		string rename_src = "fwatch\\data\\gameRestart.exe";
-		string rename_dst = "fwatch\\data\\gameRestart_old.exe";
+		std::string rename_src = "fwatch\\data\\gameRestart.exe";
+		std::string rename_dst = "fwatch\\data\\gameRestart_old.exe";
 		DeleteFile(rename_dst.c_str());
 		result = MoveFileEx(rename_src.c_str(), rename_dst.c_str(), MOVEFILE_REPLACE_EXISTING);
 		if (result == 0) {
-			int last_error = GetLastError();
-			global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << FormatError(last_error) << endl;
+			DWORD last_error = GetLastError();
+			global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << FormatError(last_error) << std::endl;
 			error_text += "Failed to rename " + rename_src + " to " + rename_dst + FormatError(last_error);
 			global.logfile.close();
 			error_text += "\n\nYou have to download and update manually";
@@ -2261,11 +2129,11 @@ int main(int argc, char *argv[])
 		
 		
 		// Try update from two mirrors
-		vector<string> download_mirrors;
+		std::vector<std::string> download_mirrors;
 		download_mirrors.push_back("http://ofp-faguss.com/fwatch/download/fwatch_self_update.7z");
 		download_mirrors.push_back("http://faguss.paradoxstudio.uk/fwatch/download/fwatch_self_update.7z");
 		
-		for (int i=0; i<download_mirrors.size(); i++) {
+		for (size_t i=0; i<download_mirrors.size(); i++) {
 			result = Download(download_mirrors[i], error_text);
 			
 			if (result != 0 && i==download_mirrors.size()-1) {
@@ -2278,7 +2146,7 @@ int main(int argc, char *argv[])
 			}
 			
 			// Delete files manually to make sure they're not being accessed
-			result = 0;
+			result    = 0;
 			int tries = 4;
 			
 			do {
@@ -2290,9 +2158,9 @@ int main(int argc, char *argv[])
 						Sleep(500);
 						tries--;
 					}
-					global.logfile << "Delete fwatch.dll " << result << endl;
+					global.logfile << "Delete fwatch.dll " << result << std::endl;
 				} else {
-					global.logfile << "Delete fwatch.dll success" << endl;
+					global.logfile << "Delete fwatch.dll success" << std::endl;
 				}
 			} while (result != 0 && tries>=0);
 			
@@ -2315,32 +2183,28 @@ int main(int argc, char *argv[])
 				global.logfile << "Unpacking failed\n\n--------------\n\n";
 				global.logfile.close();
 				
-				if (error_text.find("Can not open the file as") != string::npos)
+				if (error_text.find("Can not open the file as") != std::string::npos)
 					error_text += "\n\nYou have to download and update manually";
 				else
 					error_text += "\n\nYou have to unpack files manually";
 				
 				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
 				
-				if (error_text.find("Can not open the file as") != string::npos) {
+				if (error_text.find("Can not open the file as") != std::string::npos) {
 					ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 				} else {
 					CHAR pwd[MAX_PATH];
 					GetCurrentDirectory(MAX_PATH,pwd);				
-					string path_to_file = (string)pwd + "\\" + global.downloaded_filename;
+					std::string path_to_file = (std::string)pwd + "\\" + global.downloaded_filename;
 					
-					#if USING_LOLE32 == 1
-						ITEMIDLIST *pIDL = ILCreateFromPath(path_to_file.c_str());
-						if (pIDL != NULL) {
-							CoInitialize(NULL);
-						    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
-						    	ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
-							CoUninitialize();
-						    ILFree(pIDL);
-						};
-					#else
-						ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
-					#endif
+					ITEMIDLIST *pIDL = ILCreateFromPath(path_to_file.c_str());
+					if (pIDL != NULL) {
+						CoInitialize(NULL);
+					    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
+					    	ShellExecute(NULL, "open", pwd, NULL, NULL, SW_SHOWDEFAULT);
+						CoUninitialize();
+					    ILFree(pIDL);
+					};
 				}
 				
 				return result;			
@@ -2365,8 +2229,8 @@ int main(int argc, char *argv[])
 			si.dwFlags 	   = STARTF_USESHOWWINDOW;
 			si.wShowWindow = SW_SHOW;
 		
-			string launch_exe = global.working_directory + "\\" + "fwatch.exe";
-			string launch_arg = " " + global.working_directory + " -nolaunch " + fwatch_arguments;
+			std::string launch_exe = global.working_directory + "\\" + "fwatch.exe";
+			std::string launch_arg = " " + global.working_directory + " -nolaunch " + fwatch_arguments;
 			
 			CreateProcess(&launch_exe[0], &launch_arg[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi);
 			CloseHandle(pi.hProcess);
@@ -2377,15 +2241,15 @@ int main(int argc, char *argv[])
 		DeleteFile("fwatch\\data\\gameRestart_old.exe");
 		
 	if (update_resource != "") {
-		string error_text = "";
-		char url[]        = "http://ofp-faguss.com/fwatch/116test";
-		int result        = 0;
+		std::string error_text = "";
+		char url[]             = "http://ofp-faguss.com/fwatch/116test";
+		int result             = 0;
 		
-		vector<string> download_mirrors2;
+		std::vector<std::string> download_mirrors2;
 		download_mirrors2.push_back("http://ofp-faguss.com/fwatch/download/ofp_aspect_ratio207.7z");
 		download_mirrors2.push_back("http://faguss.paradoxstudio.uk/fwatch/download/ofp_aspect_ratio207.7z");
 		
-		for (int i=0; i<download_mirrors2.size(); i++) {
+		for (size_t i=0; i<download_mirrors2.size(); i++) {
 			result = Download(download_mirrors2[i], error_text);
 			if (result == 0)
 				break;
@@ -2410,8 +2274,8 @@ int main(int argc, char *argv[])
 			return result;			
 		}
 		
-		string source = "fwatch\\tmp\\_extracted\\Files\\";
-		string destination = "bin\\";
+		std::string source = "fwatch\\tmp\\_extracted\\Files\\";
+		std::string destination = "bin\\";
 		
 		if (update_resource == "1.96") {
 			source += "OFP Resistance 1.96";
@@ -2424,12 +2288,12 @@ int main(int argc, char *argv[])
 		if (update_resource == "2.01")
 			source += "ArmA Resistance 2.01";
 
-		string destination_folder = destination;
-		source += "\\Resource.cpp";
-		destination += "Resource.cpp";
-		int tries = 1;
-		int last_error = 0;
-		string destination_backup = "";
+		std::string destination_folder = destination;
+		source          += "\\Resource.cpp";
+		destination     += "Resource.cpp";
+		int tries        = 1;
+		DWORD last_error = 0;
+		std::string destination_backup = "";
 		
 		do {
 			destination_backup = destination_folder + "Resource_backup" + (tries>1 ? Int2Str(tries) : "") + ".cpp";
@@ -2439,7 +2303,7 @@ int main(int argc, char *argv[])
 				tries++;
 				last_error = GetLastError();
 				if (last_error != 183) {
-					string message = "Failed to rename " + destination + " to " + destination_backup + " - " + FormatError(last_error);
+					std::string message = "Failed to rename " + destination + " to " + destination_backup + " - " + FormatError(last_error);
 					global.logfile << message;
 					global.logfile.close();
 					int msgboxID = MessageBox(NULL, message.c_str(), "Resource update", MB_OK | MB_ICONSTOP);		
@@ -2449,7 +2313,7 @@ int main(int argc, char *argv[])
 		} while (last_error == 183);
 		
 		if (!MoveFileEx(source.c_str(), destination.c_str(), 0)) {
-			string message = "Failed to move " + source + " to " + destination + " - " + FormatError(GetLastError());
+			std::string message = "Failed to move " + source + " to " + destination + " - " + FormatError(GetLastError());
 			global.logfile << message;
 			global.logfile.close();
 			int msgboxID = MessageBox(NULL, message.c_str(), "Resource update", MB_OK | MB_ICONSTOP);		
@@ -2473,8 +2337,8 @@ int main(int argc, char *argv[])
 			si.dwFlags 	   = STARTF_USESHOWWINDOW;
 			si.wShowWindow = SW_SHOW;
 		
-			string launch_exe = global.working_directory + "\\" + "fwatch.exe";
-			string launch_arg = " " + global.working_directory + " -nolaunch " + fwatch_arguments;
+			std::string launch_exe = global.working_directory + "\\" + "fwatch.exe";
+			std::string launch_arg = " " + global.working_directory + " -nolaunch " + fwatch_arguments;
 			
 			CreateProcess(&launch_exe[0], &launch_arg[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi);
 			CloseHandle(pi.hProcess);
@@ -2489,25 +2353,25 @@ int main(int argc, char *argv[])
 
 	
 	// Check for face textures in modfolders -------------------
-	vector<string> mod_list;
-	vector<string> arguments_split;
+	std::vector<std::string> mod_list;
+	std::vector<std::string> arguments_split;
 	Tokenize(user_arguments, " ", arguments_split);
-	string player_name = "";
+	std::string player_name = "";
 	
 	// Get list of selected mods
-	for (int i=0; i<arguments_split.size(); i++) {
-		string namevalue = arguments_split[i];
-		size_t separator = namevalue.find_first_of('=');
+	for (size_t i=0; i<arguments_split.size(); i++) {
+		std::string namevalue = arguments_split[i];
+		size_t separator      = namevalue.find_first_of('=');
 		
-		if (separator != string::npos) {
-			string name  = namevalue.substr(0,separator);
-			string value = namevalue.substr(separator+1);
+		if (separator != std::string::npos) {
+			std::string name  = namevalue.substr(0,separator);
+			std::string value = namevalue.substr(separator+1);
 			
 			if (Equals(name,"-mod")) {
-				vector<string> temp_array;
+				std::vector<std::string> temp_array;
 				Tokenize(value, ";", temp_array);
 				
-				for (int i=0; i<temp_array.size(); i++)
+				for (size_t i=0; i<temp_array.size(); i++)
 					mod_list.push_back(temp_array[i]);
 			}
 			
@@ -2519,10 +2383,10 @@ int main(int argc, char *argv[])
 	
 	// Before launching the game do the face texture replacement
 	if (mod_list.size() > 0) {
-		string mod_face;
-		string user_face;
-		string user_face_backup;
-		string changelog;
+		std::string mod_face;
+		std::string user_face;
+		std::string user_face_backup;
+		std::string changelog;
 
 		enum FACE_TYPES {
 			NONE,
@@ -2530,13 +2394,13 @@ int main(int argc, char *argv[])
 			JPG
 		};
 
-		int face_type = NONE;
-		string face_extensions[] = {"paa", "jpg"};
-		int face_extensions_length = sizeof(face_extensions) / sizeof(face_extensions[0]);
+		size_t face_type              = NONE;
+		std::string face_extensions[] = {"paa", "jpg"};
+		size_t face_extensions_length = sizeof(face_extensions) / sizeof(face_extensions[0]);
 
 		// Find mod with custom face file starting from the last
-		for (int i=mod_list.size()-1; i>=0 && face_type==NONE; i--) {
-			for (int j=0; j<face_extensions_length; j++) {
+		for (size_t i=mod_list.size()-1; i>=0 && face_type==NONE; i--) {
+			for (size_t j=0; j<face_extensions_length; j++) {
 				mod_face = mod_list[i] + "\\face." + face_extensions[j];
 
 				if (GetFileAttributes(mod_face.c_str()) != 0xFFFFFFFF) {
@@ -2544,7 +2408,7 @@ int main(int argc, char *argv[])
 
 					// Need player name from the registry
 					if (player_name.length() == 0) {
-						HKEY key_handle = 0;
+						HKEY key_handle  = 0;
 						char value[1024] = "";
 						DWORD value_size = sizeof(value);
 						LONG result      = RegOpenKeyEx(HKEY_CURRENT_USER, game_version==VER_199 ? "SOFTWARE\\Bohemia Interactive Studio\\ColdWarAssault" : "SOFTWARE\\Codemasters\\Operation Flashpoint", 0, KEY_READ, &key_handle);
@@ -2553,7 +2417,7 @@ int main(int argc, char *argv[])
 							DWORD data_type = REG_SZ;
 
 							if (RegQueryValueEx(key_handle, "Player Name", 0, &data_type, (BYTE*)value, &value_size) == ERROR_SUCCESS)
-								player_name = (string)value;
+								player_name = (std::string)value;
 						}
 
 						RegCloseKey(key_handle);
@@ -2564,7 +2428,7 @@ int main(int argc, char *argv[])
 
 					// Check if backup already exists
 					bool already_exists = false;
-					for (int k=0; k<face_extensions_length && !already_exists; k++) {
+					for (size_t k=0; k<face_extensions_length && !already_exists; k++) {
 						user_face = "Users\\" + player_name + "\\face." + face_extensions[k] + "backup";
 
 						if (GetFileAttributes(user_face.c_str()) != 0xFFFFFFFF)
@@ -2575,7 +2439,7 @@ int main(int argc, char *argv[])
 						break;
 
 					// Backup current face
-					for (int k=0; k<face_extensions_length; k++) {
+					for (size_t k=0; k<face_extensions_length; k++) {
 						user_face        = "Users\\" + player_name + "\\face." + face_extensions[k];
 						user_face_backup = user_face + "backup";
 
@@ -2587,8 +2451,8 @@ int main(int argc, char *argv[])
 					// Move the face from mod
 					user_face = "Users\\" + player_name + "\\face." + face_extensions[j];
 
-					fstream out;
-					out.open("fwatch\\data\\user_rename.txt", ios::out | ios::app);
+					std::fstream out;
+					out.open("fwatch\\data\\user_rename.txt", std::ios::out | std::ios::app);
 
 					if (MoveFileEx(mod_face.c_str(), user_face.c_str(), 0))
 						out << mod_face << "?" << user_face << "\n";
@@ -2609,32 +2473,33 @@ int main(int argc, char *argv[])
 	
 	// Check if custom files are below limit -------------------
 	if (!maxcustom.empty() && !username.empty()) {
-		string changelog   = "";
-		string path_to_cfg = "Users\\" + username + "\\UserInfo.cfg";
-		int face_offset    = 0;
-		char *face_ptr     = NULL;
-		FILE *f            = fopen(path_to_cfg.c_str(),"rb");
-		bool rewrite       = false;
-		int file_size      = 0;
-		double size_limit  = strtod(maxcustom.c_str(), NULL);
+		std::string changelog   = "";
+		std::string path_to_cfg = "Users\\" + username + "\\UserInfo.cfg";
+		int face_offset         = 0;
+		char *face_ptr          = NULL;
+		FILE *f;
+		errno_t fopen_error = fopen_s(&f, path_to_cfg.c_str(), "rb");
+		bool rewrite        = false;
+		int file_size       = 0;
+		double size_limit   = strtod(maxcustom.c_str(), NULL);
 		char *file_buffer;
 		HANDLE hFind;
 		WIN32_FIND_DATA fd;
 		
-		if (f) {
+		if (fopen_error == 0) {
 			fseek(f, 0, SEEK_END);
 			file_size = ftell(f);
 			fseek(f, 0, SEEK_SET);
-			file_buffer	        = new char[file_size+1];
-			int result		    = fread(file_buffer, 1, file_size, f);
+			file_buffer         = new char[file_size+1];
+			size_t result       = fread(file_buffer, 1, file_size, f);
 			file_buffer[result] = '\0';
 			face_ptr            = strstr(file_buffer, "face=\"Custom\"");
 		}
 		
 		// Get custom face size
 		if (face_ptr != NULL) {
-			string path_to_face = "Users\\" + username + "\\face.paa";
-			double face_size    = 0;
+			std::string path_to_face = "Users\\" + username + "\\face.paa";
+			double face_size         = 0;
 
 			hFind = FindFirstFile(path_to_face.c_str(), &fd);
 			if (hFind != INVALID_HANDLE_VALUE) {
@@ -2659,10 +2524,11 @@ int main(int argc, char *argv[])
 		
 		if (f) {
 			if (rewrite) {
-				freopen(path_to_cfg.c_str(), "wb", f);
+				fclose(f);
+				errno_t fopen_error = fopen_s(&f, path_to_cfg.c_str(), "wb");
 				if (f) {
 					fwrite(file_buffer, 1, file_size, f);
-					global.logfile << "Changed custom face to a default one due to server file limit" << endl;
+					global.logfile << "Changed custom face to a default one due to server file limit" << std::endl;
 				}
 			}
 			
@@ -2673,8 +2539,8 @@ int main(int argc, char *argv[])
 		}
 		
 		// Get custom sound size
-		string path_to_sound = "Users\\" + username + "\\sound\\*.*";
-		hFind                = FindFirstFile(path_to_sound.c_str(), &fd);
+		std::string path_to_sound = "Users\\" + username + "\\sound\\*.*";
+		hFind                     = FindFirstFile(path_to_sound.c_str(), &fd);
 		
 		if (hFind != INVALID_HANDLE_VALUE) {
 			do {
@@ -2683,11 +2549,11 @@ int main(int argc, char *argv[])
 
 				// If above limit then move it out of the folder
 				if (fd.nFileSizeLow > size_limit && fd.nFileSizeLow <= 51200) {
-					string rename_src  = "Users\\" + username + "\\sound\\" + (string)fd.cFileName;
-					string rename_base = "Users\\" + username + "\\" + (string)fd.cFileName;
-					string rename_dst  = "";
-					int tries          = 1;
-					int last_error     = 0;
+					std::string rename_src  = "Users\\" + username + "\\sound\\" + (std::string)fd.cFileName;
+					std::string rename_base = "Users\\" + username + "\\" + (std::string)fd.cFileName;
+					std::string rename_dst  = "";
+					int tries               = 1;
+					DWORD last_error        = 0;
 					
 					do {
 						rename_dst = rename_base + (tries>1 ? Int2Str(tries) : "");
@@ -2697,15 +2563,15 @@ int main(int argc, char *argv[])
 						} else {
 							tries++;
 							last_error = GetLastError();
-							if (last_error != 183) {
+							if (last_error != ERROR_ALREADY_EXISTS) {
 								global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << " - " << FormatError(last_error);
 								global.logfile.close();
 								return 7;
 							}
 						}
-					} while (last_error == 183);
+					} while (last_error == ERROR_ALREADY_EXISTS);
 					
-					global.logfile << "Renamed " << rename_src << " to " << rename_dst << endl;
+					global.logfile << "Renamed " << rename_src << " to " << rename_dst << std::endl;
 				}
 			}
 			while (FindNextFile(hFind, &fd) != 0);
@@ -2715,8 +2581,8 @@ int main(int argc, char *argv[])
 		
 		// Save to file what was renamed
 		if (!changelog.empty()) {
-			fstream out;
-			out.open("fwatch\\data\\user_rename.txt", ios::out | ios::app);
+			std::fstream out;
+			out.open("fwatch\\data\\user_rename.txt", std::ios::out | std::ios::app);
 			out << changelog;
 			out.close();
 		}
@@ -2728,18 +2594,18 @@ int main(int argc, char *argv[])
 
 	
 	// Start a new game ----------------------------------------
-	string launch_exe     = global.working_directory + "\\" + (nolaunch ? game_exe : "fwatch.exe");
-	string launch_arg     = " \"" + global.working_directory + "\" " + filtered_game_arguments + user_arguments + " " + (nolaunch ? "" : fwatch_arguments);
-	string launch_arg_log = " \"" + global.working_directory + "\" " + filtered_game_arguments + user_arguments_log + " " + (nolaunch ? "" : fwatch_arguments);	
+	std::string launch_exe     = global.working_directory + "\\" + (nolaunch ? game_exe : "fwatch.exe");
+	std::string launch_arg     = " \"" + global.working_directory + "\" " + filtered_game_arguments + user_arguments + " " + (nolaunch ? "" : fwatch_arguments);
+	std::string launch_arg_log = " \"" + global.working_directory + "\" " + filtered_game_arguments + user_arguments_log + " " + (nolaunch ? "" : fwatch_arguments);	
 	
 	// Sort arguments to deal with the OFP arguments bug
-	vector<string> temp_array;
+	std::vector<std::string> temp_array;
 	Tokenize(launch_arg, " ", temp_array);
-	string with_equality    = "";
-	string without_equality = "";
+	std::string with_equality    = "";
+	std::string without_equality = "";
 
-	for (int i=0; i<temp_array.size(); i++) {
-		if (temp_array[i].find_first_of("=") != string::npos)
+	for (size_t i=0; i<temp_array.size(); i++) {
+		if (temp_array[i].find_first_of("=") != std::string::npos)
 			with_equality += temp_array[i] + " ";
 		else
 			without_equality += temp_array[i] + " ";
@@ -2752,8 +2618,8 @@ int main(int argc, char *argv[])
 	with_equality    = "";
 	without_equality = "";
 
-	for (int i=0; i<temp_array.size(); i++) {
-		if (temp_array[i].find_first_of("=") != string::npos)
+	for (size_t i=0; i<temp_array.size(); i++) {
+		if (temp_array[i].find_first_of("=") != std::string::npos)
 			with_equality += temp_array[i] + " ";
 		else
 			without_equality += temp_array[i] + " ";
@@ -2776,26 +2642,26 @@ int main(int argc, char *argv[])
 			bool key2 = RegQueryValueEx(hKey, "SteamExe",  0, &dwType, (BYTE*)SteamExe,  &SteamExeSize)	 == ERROR_SUCCESS;
 
 			if (key1 && key2) {
-				launch_exe = (string)SteamExe;
+				launch_exe = (std::string)SteamExe;
 				launch_arg = " -applaunch 65790 ";
 				
-				if (filtered_game_arguments.find("-nomap")==string::npos && user_arguments.find("-nomap")==string::npos)
+				if (filtered_game_arguments.find("-nomap")==std::string::npos && user_arguments.find("-nomap")==std::string::npos)
 					launch_arg += " -nomap ";
 					
 				launch_arg += filtered_game_arguments + user_arguments;
 			} else {
-                string errorMSG = FormatError(GetLastError());
+                std::string errorMSG = FormatError(GetLastError());
                 global.logfile << "Couldn't read registry key" << errorMSG;
             }
 		} else {
-            string errorMSG = FormatError(GetLastError());
+            std::string errorMSG = FormatError(GetLastError());
             global.logfile << "Couldn't open registry" << errorMSG;
         }
 
 		RegCloseKey(hKey);
 	}
 
-	global.logfile << launch_exe << endl << launch_arg_log << endl;
+	global.logfile << launch_exe << std::endl << launch_arg_log << std::endl;
 	
 	
 	// Execute
@@ -2808,7 +2674,7 @@ int main(int argc, char *argv[])
 	si.wShowWindow = SW_SHOW;
 
 	if (!CreateProcess(&launch_exe[0], &launch_arg[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi)) {
-		string errorMSG = FormatError(GetLastError());
+		std::string errorMSG = FormatError(GetLastError());
 		global.logfile << "Couldn't start the game" << errorMSG;
 		MessageBox(NULL, "Failed to launch the game.\nPlease refer to the fwatch\\data\\gameRestartLog.txt.", "gameRestart", MB_OK|MB_ICONERROR );
 		global.logfile.close();

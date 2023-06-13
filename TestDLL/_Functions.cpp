@@ -1798,8 +1798,8 @@ int VerifyPath(String &path, StringDynamic &buffer, int options) {
 
 
 //https://stackoverflow.com/questions/11413860/best-string-hashing-function-for-short-filenames
-unsigned int fnv1a_hash(unsigned int hash, char *text, int text_length, bool lowercase) {
-    for (int i=0; i<text_length; i++)
+unsigned int fnv1a_hash(unsigned int hash, char *text, size_t text_length, bool lowercase) {
+    for (size_t i=0; i<text_length; i++)
 		hash = (hash ^ (lowercase ? tolower(text[i]) : text[i])) * FNV_PRIME;
 
     return hash;

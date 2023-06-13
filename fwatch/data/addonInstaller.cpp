@@ -1,11 +1,11 @@
 // AddonInstaller.exe by Faguss (ofp-faguss.com) for Fwatch 1.16
+// Program installing mods for Operation Flashpoint game
 // Russian translation by mju (twitter.com/paumju)
 
 
 #include <fstream>		// file operations
 #include <windows.h>	// winapi
 #include <tlhelp32.h>	// process/module traversing
-#include <unistd.h>     // for access command
 #include <vector>       // dynamic array
 #include <algorithm>	// tolower
 #include <sstream>      // for converting int to string
@@ -13,8 +13,9 @@
 #include <map>			// associative array for arguments
 #include <time.h>		// get current time as unix timestamp
 #include <iomanip>		// for url encode
-
-using namespace std;
+#include <ctype.h>		// std::isspace
+#include <process.h>	// threads
+#include <tchar.h>		// ansi/wide macro
 
 struct GLOBAL_VARIABLES 
 {
@@ -35,27 +36,27 @@ struct GLOBAL_VARIABLES
 	time_t current_mod_version_date;
 	float installer_version;
 	float script_version;
-	string gamerestart_arguments;
-	string downloaded_filename;
-	string current_mod;
-	string missing_modfolders;
-	string last_pbo_file;
-	string working_directory;
-	string command_line;
-	string current_mod_new_name;
-	string current_mod_version;
-	string current_mod_id;
-	string current_mod_keepname;
-	string downloaded_filename_last;
-	vector<int> condition;
-	vector<string> downloads;
-	vector<string> mod_id;
-	vector<string> mod_name;
-	vector<string> current_mod_alias;
-	string *lang;
-	string *lang_eng;
-	map<string, string> arguments_table;
-	ofstream logfile;
+	std::string gamerestart_arguments;
+	std::string downloaded_filename;
+	std::string current_mod;
+	std::string missing_modfolders;
+	std::string last_pbo_file;
+	std::string working_directory;
+	std::string command_line;
+	std::string current_mod_new_name;
+	std::string current_mod_version;
+	std::string current_mod_id;
+	std::string current_mod_keepname;
+	std::string downloaded_filename_last;
+	std::vector<int> condition;
+	std::vector<std::string> downloads;
+	std::vector<std::string> mod_id;
+	std::vector<std::string> mod_name;
+	std::vector<std::string> current_mod_alias;
+	std::string *lang;
+	std::string *lang_eng;
+	std::map<std::string, std::string> arguments_table;
+	std::ofstream logfile;
 } global = {
 	false,
 	false,
@@ -72,7 +73,7 @@ struct GLOBAL_VARIABLES
 	0,
 	0,
 	0,
-	0.6f,
+	0.61f,
 	0,
 	"",
 	"",
@@ -229,48 +230,48 @@ enum MISSIONSQM_PLAYERCOUNT
 
 
 
-// String operations -------------------------------------------------------------------------------------
+// std::string operations -------------------------------------------------------------------------------------
 
-	// https://stackoverflow.com/questions/6691555/converting-narrow-string-to-wide-string
-wstring string2wide(const string& input)
+	// https://stackoverflow.com/questions/6691555/converting-narrow-std::string-to-wide-std::string
+std::wstring string2wide(const std::string& input)
 {
     if (input.empty())
-		return wstring();
+		return std::wstring();
 
 	size_t output_length = MultiByteToWideChar(CP_UTF8, 0, input.c_str(), (int)input.length(), 0, 0);
-	wstring output(output_length, L'\0');
+	std::wstring output(output_length, L'\0');
 	MultiByteToWideChar(CP_UTF8, 0, input.c_str(), (int)input.length(), &output[0], (int)input.length());
 	
 	return output;
 }
 
 	// https://mariusbancila.ro/blog/2008/10/20/writing-utf-8-files-in-c/
-string wide2string(const wchar_t* input, int input_length)
+std::string wide2string(const wchar_t* input, int input_length)
 {
 	int output_length = WideCharToMultiByte(CP_UTF8, 0, input, input_length, NULL, 0, NULL, NULL);
       
 	if (output_length == 0) 
 		return "";
  
-	string output(output_length, ' ');
+	std::string output(output_length, ' ');
 	WideCharToMultiByte(CP_UTF8, 0, input, input_length, const_cast< char* >(output.c_str()), output_length, NULL, NULL); 
  
 	return output;
 }
  
-string wide2string(const wstring& input)
+std::string wide2string(const std::wstring& input)
 {
    return wide2string(input.c_str(), (int)input.size());
 }
 
-string Trim(string s)
+std::string Trim(std::string s)
 {
-	s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
-	s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
+	s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(isspace))));
+	s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(isspace))).base(), s.end());
 	return s;
 }
 
-string WrapInQuotes(string text)
+std::string WrapInQuotes(std::string text)
 {
 	for (size_t i=0; i<text.length(); i++)
 		if (text.substr(i,1) == " ") {
@@ -282,7 +283,7 @@ string WrapInQuotes(string text)
 }
 
 	// Remove quotation marks
-string UnQuote(string text)
+std::string UnQuote(std::string text)
 {
 	if (text.substr(text.length()-1) == "\"")
 		text = text.substr(0, text.length()-1);
@@ -293,15 +294,15 @@ string UnQuote(string text)
 	return text;	
 }
 
-	// Convert number to string and add leading zero
-string LeadingZero(int number)
+	// Convert number to std::string and add leading zero
+std::string LeadingZero(int number)
 {
-	string ret = "";
+	std::string ret = "";
 	
 	if (number < 10) 
 		ret += "0";
 		
-	stringstream temp;
+	std::stringstream temp;
 	temp << number;
 	ret += temp.str();
 	
@@ -309,7 +310,7 @@ string LeadingZero(int number)
 }
 
 	// https://superuser.com/questions/475874/how-does-the-windows-rename-command-interpret-wildcards	https://superuser.com/a/739718
-string MaskNewName(string path, string mask) 
+std::string MaskNewName(std::string path, std::string mask) 
 {
 	if (mask.empty())
 		return path;
@@ -318,7 +319,7 @@ string MaskNewName(string path, string mask)
 		return "";
 		
 	size_t x  = 0;
-	string R = "";
+	std::string R = "";
 	
 	for (size_t m=0; m<mask.length(); m++) {
 		char ch       = mask[m];
@@ -342,7 +343,7 @@ string MaskNewName(string path, string mask)
             if (z == '.') {
                 size_t i = path.find_last_of('.');
 						
-				if (i == string::npos) {
+				if (i == std::string::npos) {
                     R += path.substr(x, path.length()) + '.';
                     i  = path.length();
                 } else {
@@ -358,7 +359,7 @@ string MaskNewName(string path, string mask)
             } else {
                 size_t i = path.find_last_of(z);
 						
-				if (i == string::npos) {
+				if (i == std::string::npos) {
 					R += path.substr(x, path.length()) + z;
 					x = path.length();
 					m++;
@@ -382,28 +383,28 @@ string MaskNewName(string path, string mask)
 	return R;
 }
 
-string PathLastItem(string path) 
+std::string PathLastItem(std::string path) 
 {
 	size_t lastSlash = path.find_last_of("\\/");
 
-	if (lastSlash != string::npos)
+	if (lastSlash != std::string::npos)
 		return path.substr(lastSlash+1);
 	else
 		return path;
 }
 
-string PathNoLastItem(string path, int options=FLAG_NONE) 
+std::string PathNoLastItem(std::string path, int options=FLAG_NONE) 
 {
 	size_t find = path.find_last_of("\\/");
 
-	if (find != string::npos)
+	if (find != std::string::npos)
 		return path.substr(0, find+(options & FLAG_NO_END_SLASH ? 0 : 1));
 	else
 		return "";
 }
 
 	// Windows error message
-string FormatError(DWORD error)
+std::string FormatError(DWORD error)
 {
 	if (error == 0) 
 		return "\n";
@@ -419,7 +420,7 @@ string FormatError(DWORD error)
 	0,
 	NULL);
 
-	string ret = Trim("   - " + (string)(char*)errorText + "\n");
+	std::string ret = Trim("   - " + (std::string)(char*)errorText + "\n");
 
 	if (errorText != NULL)
 		LocalFree(errorText);
@@ -427,7 +428,7 @@ string FormatError(DWORD error)
 	return ret;
 }
 
-void Tokenize(string text, string delimiter, vector<string> &container)
+void Tokenize(std::string text, std::string delimiter, std::vector<std::string> &container)
 {
 	bool first_item   = false;
 	bool inQuote      = false;
@@ -462,14 +463,14 @@ void Tokenize(string text, string delimiter, vector<string> &container)
 }
 
 	// http://stackoverflow.com/a/3418285
-string ReplaceAll(string str, const string& from, const string& to) 
+std::string ReplaceAll(std::string str, const std::string& from, const std::string& to) 
 {
     if (from.empty())
         return str;
         
     size_t start_pos = 0;
     
-    while ((start_pos = str.find(from, start_pos)) != string::npos) {
+    while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
         str.replace(start_pos, from.length(), to);
         start_pos += to.length();
     }
@@ -477,8 +478,8 @@ string ReplaceAll(string str, const string& from, const string& to)
     return str;
 }
 
-	// https://stackoverflow.com/questions/11635/case-insensitive-string-comparison-in-c#315463
-bool Equals(const string& a, const string& b) 
+	// https://stackoverflow.com/questions/11635/case-insensitive-std::string-comparison-in-c#315463
+bool Equals(const std::string& a, const std::string& b) 
 {
     size_t sz = a.size();
 
@@ -492,9 +493,9 @@ bool Equals(const string& a, const string& b)
     return true;
 }
 
-bool VerifyPath(string path)
+bool VerifyPath(std::string path)
 {
-	vector<string> directories;
+	std::vector<std::string> directories;
 	Tokenize(path, "\\/", directories);
 
 	// Path cannot go back to the parent directory
@@ -505,28 +506,44 @@ bool VerifyPath(string path)
 	return true;
 }
 
-string Int2Str(int num)
+std::string Int2Str(int num)
 {
-    ostringstream text;
+	std::ostringstream text;
     text << num;
     return text.str();
 }
 
-string UInt2Str(size_t num)
+std::string UInt2Str(size_t num)
 {
-    ostringstream text;
+	std::ostringstream text;
     text << num;
     return text.str();
 }
 
-string Float2Str(float num)
+size_t Str2UInt(std::string num)
 {
-    ostringstream text;
+	std::stringstream sstream(num);
+	size_t result;
+    sstream >> result;
+    return result;
+}
+
+std::string Float2Str(float num)
+{
+	std::ostringstream text;
     text << num;
     return text.str();
 }
 
-bool IsURL(string text)
+float Str2Float(std::string num)
+{
+	std::stringstream ss(num);
+	float result;
+	ss >> result;
+	return result;
+}
+
+bool IsURL(std::string text)
 {
 	return (
 		Equals(text.substr(0,7),"http://")  ||  
@@ -536,7 +553,7 @@ bool IsURL(string text)
 	);
 }
 
-bool IsModName(string filename)
+bool IsModName(std::string filename)
 {
 	if (Equals(filename,global.current_mod))
 		return true;
@@ -548,26 +565,26 @@ bool IsModName(string filename)
 	return false;
 }
 
-string GetTextBetween(string &buffer, string start, string end, size_t &offset, bool reverse=false)
+std::string GetTextBetween(std::string &buffer, std::string start, std::string end, size_t &offset, bool reverse=false)
 {
-	string out  = "";
-	size_t pos0 = buffer.find(start, offset);
+	std::string out = "";
+	size_t pos0     = buffer.find(start, offset);
 	
 	if (!reverse) {
-		if (pos0 != string::npos) {
+		if (pos0 != std::string::npos) {
 			size_t pos1 = pos0 + start.length();
 			size_t pos2 = buffer.find(end, pos1);
 			
-			if (pos2 != string::npos) {
+			if (pos2 != std::string::npos) {
 				offset = pos1;
 				out    = buffer.substr(pos1, pos2-pos1);
 			}
 		}		
 	} else {
-		if (pos0 != string::npos) {
+		if (pos0 != std::string::npos) {
 			size_t pos1 = buffer.rfind(end, pos0);			
 			
-			if (pos1 != string::npos) {
+			if (pos1 != std::string::npos) {
 				offset      = pos0 + start.length();
 				size_t pos2 = pos1 + end.length();
 				out         = buffer.substr(pos2, pos0-pos2);
@@ -579,14 +596,14 @@ string GetTextBetween(string &buffer, string start, string end, size_t &offset, 
 }
 
 	// https://stackoverflow.com/questions/154536/encode-decode-urls-in-c
-string url_encode(const string &value) 
+std::string url_encode(const std::string &value) 
 {
-    ostringstream escaped;
+	std::ostringstream escaped;
     escaped.fill('0');
-    escaped << hex;
+	escaped << std::hex;
 
-    for (string::const_iterator i = value.begin(), n = value.end(); i != n; ++i) {
-        string::value_type c = (*i);
+    for (std::string::const_iterator i = value.begin(), n = value.end(); i != n; ++i) {
+        std::string::value_type c = (*i);
 
         // Keep alphanumeric and other accepted characters intact
         if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
@@ -595,17 +612,17 @@ string url_encode(const string &value)
         }
 
         // Any other characters are percent-encoded
-        escaped << uppercase;
-        escaped << '%' << setw(2) << int((unsigned char) c);
-        escaped << nouppercase;
+		escaped << std::uppercase;
+		escaped << '%' << std::setw(2) << int((unsigned char) c);
+		escaped << std::nouppercase;
     }
 
     return escaped.str();
 }
 
-string lowercase(const string &input) 
+std::string lowercase(const std::string &input) 
 {
-	string output = input;
+	std::string output = input;
 	
 	for (size_t i=0; i<output.length(); i++)
 		output[i] = tolower(output[i]);
@@ -620,10 +637,10 @@ string lowercase(const string &input)
 // Installer messaging -----------------------------------------------------------------------------------
 
 	// Feedback for the game
-void WriteProgressFile(int status, string input)
+void WriteProgressFile(int status, std::string input)
 {
-	ofstream progressLog;
-	progressLog.open("fwatch\\tmp\\schedule\\install_progress.sqf", ios::out | ios::trunc);
+	std::ofstream progressLog;
+	progressLog.open("fwatch\\tmp\\schedule\\install_progress.sqf", std::ios::out | std::ios::trunc);
 
 	if (!progressLog.is_open())
 		return;
@@ -638,14 +655,14 @@ void WriteProgressFile(int status, string input)
 };
 
 	// Write mod identification file
-int WriteModID(string modfolder, string content, string content2)
+int WriteModID(std::string modfolder, std::string content, std::string content2)
 {
 	if (global.test_mode)
 		return ERROR_NONE;
 	
-	ofstream ID_file;
-	string path = modfolder + "\\__gs_id";
-	ID_file.open(path.c_str(), ios::out | ios::trunc);
+	std::ofstream ID_file;
+	std::string path = modfolder + "\\__gs_id";
+	ID_file.open(path.c_str(), std::ios::out | std::ios::trunc);
 
 	if (ID_file.is_open()) {
 		SYSTEMTIME st;
@@ -653,7 +670,7 @@ int WriteModID(string modfolder, string content, string content2)
 		TIME_ZONE_INFORMATION TimeZoneInfo;
 		GetTimeZoneInformation (&TimeZoneInfo);
 		char current_date[128] = "";
-		sprintf(current_date, ";[%d,%d,%d,%d,%d,%d,%d,%d,%d,false]",
+		sprintf_s(current_date, 128, ";[%d,%d,%d,%d,%d,%d,%d,%d,%d,false]",
 			st.wYear, 
 			st.wMonth, 
 			st.wDay, 
@@ -673,15 +690,15 @@ int WriteModID(string modfolder, string content, string content2)
 }
 
 	// Format error message
-int ErrorMessage(int string_code, string message="%STR%", int error_code=ERROR_COMMAND_FAILED) 
+int ErrorMessage(int string_code, std::string message="%STR%", int error_code=ERROR_COMMAND_FAILED) 
 {
 	if (global.current_mod=="?pretendtoinstall" && global.current_mod_version=="-1")
 		return ERROR_NONE;
 	
-	int status              = global.last_download_attempt ? INSTALL_ERROR : INSTALL_PROGRESS;
-	string message_eng      = ReplaceAll(message, "%STR%", global.lang_eng[string_code]);
-	string message_local    = ReplaceAll(message, "%STR%", global.lang[string_code]);
-	string message_complete = "";
+	int status                   = global.last_download_attempt ? INSTALL_ERROR : INSTALL_PROGRESS;
+	std::string message_eng      = ReplaceAll(message, "%STR%", global.lang_eng[string_code]);
+	std::string message_local    = ReplaceAll(message, "%STR%", global.lang[string_code]);
+	std::string message_complete = "";
 	
 	// show which command failed
 	if (error_code == ERROR_COMMAND_FAILED) {
@@ -703,14 +720,14 @@ int ErrorMessage(int string_code, string message="%STR%", int error_code=ERROR_C
 			if (!global.download_phase)
 				global.logfile << ": " << global.command_line;
 				
-			global.logfile << " - " << ReplaceAll(message_eng, "\\n", " ") << endl;
+			global.logfile << " - " << ReplaceAll(message_eng, "\\n", " ") << std::endl;
 		}
 	}
 	
 	// just display input message
 	if (error_code == ERROR_WRONG_SCRIPT) {
 		message_complete = global.lang[STR_ERROR] + "\\n" + message_local;
-		global.logfile << "ERROR - " << ReplaceAll(message_eng, "\\n", " ") << endl;
+		global.logfile << "ERROR - " << ReplaceAll(message_eng, "\\n", " ") << std::endl;
 	}
 	
 	WriteProgressFile(status, message_complete);
@@ -720,13 +737,13 @@ int ErrorMessage(int string_code, string message="%STR%", int error_code=ERROR_C
 	// Separate thread for checking user feedback
 void ReceiveInstructions(void *nothing)
 {
-	fstream instructions;
+	std::fstream instructions;
 
 	while (!global.end_thread  &&  !global.abort_installer) {
-		instructions.open("fwatch\\tmp\\schedule\\InstallerInstruction.txt", ios::in);
+		instructions.open("fwatch\\tmp\\schedule\\InstallerInstruction.txt", std::ios::in);
 
 		if (instructions.is_open()) {
-		    string text;
+		    std::string text;
 
 			while (getline(instructions, text)) {
 				if (text == "abort")
@@ -774,40 +791,41 @@ int Abort()
 // File reading ------------------------------------------------------------------------------------------
 
 	// https://insanecoding.blogspot.com/2011/11/how-to-read-in-file-in-c.html
-string GetFileContents(const char *filename)
+std::string GetFileContents(const char *filename)
 {
-	ifstream file(filename, ios::in | ios::binary);
-	string contents;
+	std::ifstream file(filename, std::ios::in | std::ios::binary);
+	std::string contents;
   
 	if (file) {
-		file.seekg(0, ios::end);
-		contents.resize(file.tellg());
-		file.seekg(0, ios::beg);
-		file.read(&contents[0], contents.size());
+		file.seekg(0, std::ios::end);
+		std::streampos size = file.tellg();
+		file.seekg(0, std::ios::beg);
+		contents.resize(size);
+		file.read(&contents[0], size);
 		file.close();
 	}
 	
 	return contents;
 }
 
-string GetFileContents(string &filename) 
+std::string GetFileContents(std::string &filename) 
 {
 	return GetFileContents(filename.c_str());
 }
 
-string GetFileExtension(string file_name)
+std::string GetFileExtension(std::string file_name)
 {
-	string file_extension = file_name.substr( file_name.find_last_of('.')+1 );
+	std::string file_extension = file_name.substr( file_name.find_last_of('.')+1 );
 	transform(file_extension.begin(), file_extension.end(), file_extension.begin(), ::tolower);
 	
 	// If extension is a number then it's a wget backup - find real extension
 	int Number;
 	
-	if (file_extension!="7z" && istringstream(file_extension) >> Number) {
+	if (file_extension!="7z" && std::istringstream(file_extension) >> Number) {
 		size_t lastDot       = file_name.find_last_of('.');
 		size_t secondLastDot = file_name.find_last_of('.', lastDot-1);
 		
-		if (lastDot!=string::npos  &&  secondLastDot!=string::npos)
+		if (lastDot!=std::string::npos  &&  secondLastDot!=std::string::npos)
 			file_extension = file_name.substr( secondLastDot+1, lastDot-secondLastDot-1 );
 	}
 	
@@ -815,21 +833,21 @@ string GetFileExtension(string file_name)
 }
 
 	// Read wget log to get information about the download
-int ParseWgetLog(string &error)
+int ParseWgetLog(std::string &error)
 {
-	fstream DownloadLog;
-    DownloadLog.open("fwatch\\tmp\\schedule\\downloadLog.txt", ios::in);
+	std::fstream DownloadLog;
+    DownloadLog.open("fwatch\\tmp\\schedule\\downloadLog.txt", std::ios::in);
 
 	if (DownloadLog.is_open()) {
-		string line                  = "";
-		string filesize              = "";
-		string size_downloaded       = "";
-		string percentage_downloaded = "";
-		string download_speed        = "";
-		string time_remaining        = "";
+		std::string line                  = "";
+		std::string filesize              = "";
+		std::string size_downloaded       = "";
+		std::string percentage_downloaded = "";
+		std::string download_speed        = "";
+		std::string time_remaining        = "";
 		
 		const int filename_messages_items = 4;
-		string filename_messages[filename_messages_items][2] = {
+		std::string filename_messages[filename_messages_items][2] = {
 			{"Saving to: 'fwatch/tmp/"                          , "'"},
 			{") - 'fwatch/tmp/"                                 , "' saved ["},
 			{"File 'fwatch/tmp/"                                , "' already there; not retrieving"},
@@ -837,7 +855,7 @@ int ParseWgetLog(string &error)
 		};
 			
 		const int error_messages_items = 2;
-		string error_messages[error_messages_items] = {"failed","ERROR"};
+		std::string error_messages[error_messages_items] = {"failed","ERROR"};
 
 		while(getline(DownloadLog, line)) {
 			line = Trim(line);
@@ -850,35 +868,35 @@ int ParseWgetLog(string &error)
 				size_t open  = line.find('(');
 				size_t close = line.find(')');
 
-				if (open!=string::npos  &&  close!=string::npos)
+				if (open!=std::string::npos  &&  close!=std::string::npos)
 					filesize = line.substr( open+1, close-open-1);
 			}
 
 			// Get progress bar
 			size_t letter_k = line.find("K .");
 
-			if (letter_k == string::npos)
+			if (letter_k == std::string::npos)
 				letter_k = line.find("K ,");
 			
-			if (letter_k != string::npos) {			
+			if (letter_k != std::string::npos) {			
 				size_downloaded = line.substr(0, letter_k);
 				int size_num    = atoi(size_downloaded.c_str());
 				
 				if (size_num > 1024) {
 					double megabytes = size_num / (1024);
 					char temp[128] = "";
-					sprintf(temp, "%.0f M", megabytes);
-					size_downloaded = (string)temp;
+					sprintf_s(temp, 128, "%.0f M", megabytes);
+					size_downloaded = (std::string)temp;
 				} else
 					size_downloaded += " K";
 				
-				string new_download_speed = "";
+				std::string new_download_speed = "";
 				size_t percent            = line.find("% ");
-				if (percent != string::npos) {
+				if (percent != std::string::npos) {
 					while(percent>=0  &&  (line[percent]=='%'  ||  isdigit(line[percent])))
 						percent--;
 						
-					vector<string> Tokens;
+					std::vector<std::string> Tokens;
 					Tokenize(line.substr(percent), " =", Tokens);
 					
 					if (Tokens.size() > 0)
@@ -907,11 +925,11 @@ int ParseWgetLog(string &error)
 			for (int i=0; i<filename_messages_items; i++) {
 				size_t begin = line.find(filename_messages[i][0]);
 				
-				if (begin != string::npos) {
+				if (begin != std::string::npos) {
 					size_t len = filename_messages[i][0].length();
 					size_t end = line.find(filename_messages[i][1], begin+len);
 					
-					if (end != string::npos) {
+					if (end != std::string::npos) {
 						global.downloaded_filename = line.substr(begin+len,  end-(begin+len));
 						break;
 					}
@@ -921,7 +939,7 @@ int ParseWgetLog(string &error)
 			// Get error message
 			for (int i=0; i<error_messages_items; i++) {
 				size_t search = line.find(error_messages[i]);
-				if (search != string::npos) {
+				if (search != std::string::npos) {
 					if (i==1)
 						error = line.substr(search);
 					else
@@ -934,7 +952,7 @@ int ParseWgetLog(string &error)
 
 		DownloadLog.close();
 
-		string tosave = global.lang[STR_ACTION_CONNECTING] + "...";
+		std::string tosave = global.lang[STR_ACTION_CONNECTING] + "...";
 
 		if (!size_downloaded.empty()) {
 			tosave = global.lang[STR_ACTION_DOWNLOADING] + "...\\n" + 
@@ -959,19 +977,19 @@ int ParseWgetLog(string &error)
 }
 
 	// Read 7za log to get information about unpacking
-int ParseUnpackLog(string &error, string &file_name)
+int ParseUnpackLog(std::string &error, std::string &file_name)
 {
-	fstream UnpackLog;
-    UnpackLog.open ("fwatch\\tmp\\schedule\\unpackLog.txt", ios::in);
+	std::fstream UnpackLog;
+    UnpackLog.open ("fwatch\\tmp\\schedule\\unpackLog.txt", std::ios::in);
 
     int line_number      = 0;
     int error_until_line = 0;
-    string error_msg   = "";
+    std::string error_msg   = "";
 
 	if (UnpackLog.is_open()) {
-		string text         = "";
-		string current_file = "";
-		string percentage   = "";
+		std::string text         = "";
+		std::string current_file = "";
+		std::string percentage   = "";
 		bool foundFileName  = false;
 
 		while(getline(UnpackLog, text)) {
@@ -985,7 +1003,7 @@ int ParseUnpackLog(string &error, string &file_name)
 			// Get progress percentage
 			size_t percent = text.find_last_of("%");
 
-			if (percent != string::npos) {
+			if (percent != std::string::npos) {
 				if (percent < 3)
 					percent = 0;
 				else
@@ -994,14 +1012,14 @@ int ParseUnpackLog(string &error, string &file_name)
 				percentage  = Trim(text.substr(percent, 4));
 				size_t dash = text.find("- ");
 
-				if (dash != string::npos)
+				if (dash != std::string::npos)
 					current_file = text.substr(dash+2);					
 			}
 
 			// Get error message
 			size_t error_pos = text.find("ERROR:");
 
-			if (error_pos != string::npos  &&  error=="") {
+			if (error_pos != std::string::npos  &&  error=="") {
 				error            = text.substr(error_pos);
 				error_msg        = text.substr(error_pos+7);
 				error_until_line = line_number + 1;
@@ -1018,7 +1036,7 @@ int ParseUnpackLog(string &error, string &file_name)
 
 		UnpackLog.close();
 
-		string tosave = global.lang[STR_ACTION_EXTRACTING] + "...\\n" + file_name + "\\n" + percentage + "\\n\\n" + current_file;
+		std::string tosave = global.lang[STR_ACTION_EXTRACTING] + "...\\n" + file_name + "\\n" + percentage + "\\n\\n" + current_file;
 		WriteProgressFile(INSTALL_PROGRESS, tosave);
 	}
 
@@ -1026,12 +1044,12 @@ int ParseUnpackLog(string &error, string &file_name)
 }
 
 	// Read MakePbo/ExtractPBO log to get information about un/packing
-int ParsePBOLog(string &message, string &exename, string &file_name)
+int ParsePBOLog(std::string &message, std::string &exename, std::string &file_name)
 {
-	fstream PackLog;
-	PackLog.open("fwatch\\tmp\\schedule\\PBOLog.txt", ios::in);
+	std::fstream PackLog;
+	PackLog.open("fwatch\\tmp\\schedule\\PBOLog.txt", std::ios::in);
 
-	string verb = "";
+	std::string verb = "";
 
 	if (exename == "ExtractPbo.exe")
 		verb = global.lang[STR_ACTION_UNPACKINGPBO];
@@ -1040,7 +1058,7 @@ int ParsePBOLog(string &message, string &exename, string &file_name)
 		verb = global.lang[STR_ACTION_PACKINGPBO];
 
 	if (PackLog.is_open()) {
-		string text = "";
+		std::string text = "";
 
 		while(getline(PackLog, text)) {
 			text = Trim(text);
@@ -1057,20 +1075,20 @@ int ParsePBOLog(string &message, string &exename, string &file_name)
 				message = "command line syntax error";
 		}
 
-		string tosave = verb + "...\\n" + file_name + "\\n\\n" + message;
+		std::string tosave = verb + "...\\n" + file_name + "\\n\\n" + message;
 		WriteProgressFile(INSTALL_PROGRESS, tosave);
 	}
 
 	return 0;
 }
 
-int CreateFileList(string source, string destination, vector<string> &sources, vector<string> &destinations, vector<bool> &dirs, int options, vector<string> &empty_dirs, size_t &buffer_size, int &recursion)
+int CreateFileList(std::string source, std::string destination, std::vector<std::string> &sources, std::vector<std::string> &destinations, std::vector<bool> &dirs, int options, std::vector<std::string> &empty_dirs, size_t &buffer_size, int &recursion)
 {
 	WIN32_FIND_DATAW fd;
-	HANDLE hFind        = INVALID_HANDLE_VALUE;
-	wstring source_wide = string2wide(source);
-	hFind               = FindFirstFileW(source_wide.c_str(), &fd);
-	int result          = 0;
+	HANDLE hFind             = INVALID_HANDLE_VALUE;
+	std::wstring source_wide = string2wide(source);
+	hFind                    = FindFirstFileW(source_wide.c_str(), &fd);
+	int result               = 0;
 
 	if (hFind == INVALID_HANDLE_VALUE) {
 		DWORD error_code = GetLastError();
@@ -1082,28 +1100,28 @@ int CreateFileList(string source, string destination, vector<string> &sources, v
 	}
 
 	recursion++;
-	string base_source      = PathNoLastItem(source);
-	string base_destination = PathNoLastItem(destination);
-	string new_name         = PathLastItem(destination);
-	string face1            = global.current_mod_new_name + "\\face.jpg";
-	string face2            = global.current_mod_new_name + "\\face.paa";
-	string id_file          = global.current_mod_new_name + "\\__gs_id";
+	std::string base_source      = PathNoLastItem(source);
+	std::string base_destination = PathNoLastItem(destination);
+	std::string new_name         = PathLastItem(destination);
+	std::string face1            = global.current_mod_new_name + "\\face.jpg";
+	std::string face2            = global.current_mod_new_name + "\\face.paa";
+	std::string id_file          = global.current_mod_new_name + "\\__gs_id";
 
 	if (new_name.empty())
 		new_name = PathLastItem(source);
 		
-	bool is_source_wildcard      = source.find("*")!=string::npos    ||  source.find("?")!=string::npos;
-	bool is_destination_wildcard = new_name.find("*")!=string::npos  ||  new_name.find("?")!=string::npos;
+	bool is_source_wildcard      = source.find("*")!=std::string::npos    ||  source.find("?")!=std::string::npos;
+	bool is_destination_wildcard = new_name.find("*")!=std::string::npos  ||  new_name.find("?")!=std::string::npos;
 
 	do {
 		if (wcscmp(fd.cFileName,L".")==0  ||  wcscmp(fd.cFileName,L"..")==0)
 			continue;
 	    
-		string file_name       = wide2string(fd.cFileName);
-		string new_source      = base_source      + file_name;
-		string new_destination = base_destination + (is_destination_wildcard ? MaskNewName(file_name,new_name) : new_name);
-		bool is_dir            = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) > 0;
-		DWORD attributes       = GetFileAttributes(new_destination.c_str());
+		std::string file_name       = wide2string(fd.cFileName);
+		std::string new_source      = base_source      + file_name;
+		std::string new_destination = base_destination + (is_destination_wildcard ? MaskNewName(file_name,new_name) : new_name);
+		bool is_dir                 = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) > 0;
+		DWORD attributes            = GetFileAttributes(new_destination.c_str());
 
 		if ((is_dir  &&  is_source_wildcard  &&  ~options & FLAG_MATCH_DIRS)  ||  (!is_dir  &&  options & FLAG_MATCH_DIRS_ONLY)  ||  Equals(new_source,face1)  ||  Equals(new_source,face2)  ||  Equals(new_source,id_file))
 			continue;
@@ -1147,27 +1165,27 @@ int CreateFileList(string source, string destination, vector<string> &sources, v
 	return result;
 }
 
-string GetMissionDestinationFromSQM(string path)
+std::string GetMissionDestinationFromSQM(std::string path)
 {
 	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_READMISSIONSQM]);
 	
-	string text_buffer = GetFileContents(path);
+	std::string text_buffer = GetFileContents(path);
 	
 	if (text_buffer.empty())
 		return "Addons";
 		
-	int expect        = SQM_PROPERTY;
-	int class_level   = 0;
-	int array_level   = 0;
-	int player_count  = 0;
-	size_t word_start = -1;
-	bool word_started = false;
-	bool is_array     = false;
-	bool in_quote     = false;
-	bool in_mission   = false;
-	bool is_wizard    = false;
-	char separator    = ' ';
-	string property   = "";
+	int expect           = SQM_PROPERTY;
+	int class_level      = 0;
+	int array_level      = 0;
+	int player_count     = 0;
+	size_t word_start    = -1;
+	bool word_started    = false;
+	bool is_array        = false;
+	bool in_quote        = false;
+	bool in_mission      = false;
+	bool is_wizard       = false;
+	char separator       = ' ';
+	std::string property = "";
 	
 	for (size_t i=0; i<text_buffer.size(); i++) {
 		char c = text_buffer[i];
@@ -1253,10 +1271,10 @@ string GetMissionDestinationFromSQM(string path)
 					}
 				} else {
 					if (!in_quote && array_level==0 && (c==';' || c=='\r' || c=='\n')) {
-						string word = text_buffer.substr(word_start, i-word_start);
+						std::string word = text_buffer.substr(word_start, i-word_start);
 						transform(word.begin(), word.end(), word.begin(), ::tolower);
 						
-						if (!is_wizard && Equals(property,"position[]") && word.find("wizvar_")!=string::npos)
+						if (!is_wizard && Equals(property,"position[]") && word.find("wizvar_")!=std::string::npos)
 							is_wizard = true;
 				
 						word_started = false;
@@ -1317,7 +1335,7 @@ static int CALLBACK BrowseCallbackProc(HWND hwnd,UINT uMsg, LPARAM lParam, LPARA
 }
 
 	// https://stackoverflow.com/questions/12034943/win32-select-directory-dialog-from-c-c
-string BrowseFolder(string saved_path)
+std::string BrowseFolder(std::string saved_path)
 {
 	TCHAR path[MAX_PATH];
 
@@ -1354,7 +1372,6 @@ enum MOD_SUBFOLDERS {
 	DIR_BIN,
 	DIR_CAMPAIGNS,
 	DIR_DTA,
-	DIR_WORLDS,
 	DIR_MISSIONS,
 	DIR_MPMISSIONS,
 	DIR_TEMPLATES,
@@ -1365,13 +1382,12 @@ enum MOD_SUBFOLDERS {
 	DIR_MAX
 };
 
-string mod_subfolders[] = {
+std::string mod_subfolders[] = {
 	"",
 	"Addons",
 	"Bin",
 	"Campaigns",
 	"Dta",
-	"Worlds",
 	"Missions",
 	"MPMissions",
 	"Templates",
@@ -1387,14 +1403,14 @@ struct DIRECTORY_INFO {
 	int number_of_dirs;
 	int number_of_wanted_mods;
 	int number_of_mod_subfolders;
-	vector<wstring> file_list;
-	vector<DWORD> attributes_list;
-	vector<int> mod_sub_id_list;
-	vector<bool> is_mod_list;
+	std::vector<std::wstring> file_list;
+	std::vector<DWORD> attributes_list;
+	std::vector<int> mod_sub_id_list;
+	std::vector<bool> is_mod_list;
 };
 
 	// Browse files in a given folder and return file list plus some other info
-DIRECTORY_INFO ScanDirectory(string path) 
+DIRECTORY_INFO ScanDirectory(std::string path) 
 {
 	DIRECTORY_INFO output;	
 	output.error_code               = ERROR_NONE;
@@ -1402,10 +1418,10 @@ DIRECTORY_INFO ScanDirectory(string path)
 	output.number_of_dirs           = 0;
 	output.number_of_wanted_mods    = 0;
 	output.number_of_mod_subfolders = 0;
-	vector<wstring> files;
+	std::vector<std::wstring> files;
 	
 	WIN32_FIND_DATAW FileInformation;
-	wstring pattern = string2wide(path) + L"\\*";
+	std::wstring pattern = string2wide(path) + L"\\*";
 	HANDLE hFile    = FindFirstFileW(pattern.c_str(), &FileInformation);
 
 	if (hFile != INVALID_HANDLE_VALUE) {
@@ -1463,12 +1479,12 @@ DIRECTORY_INFO ScanDirectory(string path)
 // File writing ------------------------------------------------------------------------------------------
 
 	// Delete file or directory with its contents  http://stackoverflow.com/a/10836193
-DWORD DeleteDirectory(const wstring &refcstrRootDirectory, bool bDeleteSubdirectories=true)
+DWORD DeleteDirectory(const std::wstring &refcstrRootDirectory, bool bDeleteSubdirectories=true)
 {
 	bool             bSubdirectory = false;       // Flag, indicating whether subdirectories have been found
 	HANDLE           hFile;                       // Handle to directory
-	wstring     	 strFilePath;                 // Filepath
-	wstring          strPattern;                  // Pattern
+	std::wstring     strFilePath;                 // Filepath
+	std::wstring     strPattern;                  // Pattern
 	WIN32_FIND_DATAW FileInformation;             // File information
 
 	strPattern = refcstrRootDirectory + L"\\*.*";
@@ -1528,15 +1544,15 @@ DWORD DeleteDirectory(const wstring &refcstrRootDirectory, bool bDeleteSubdirect
 	return 0;
 }
 
-int DeleteDirectory(const string &refcstrRootDirectory, bool bDeleteSubdirectories=true) 
+int DeleteDirectory(const std::string &refcstrRootDirectory, bool bDeleteSubdirectories=true) 
 {
 	return DeleteDirectory(string2wide(refcstrRootDirectory), bDeleteSubdirectories);
 }
 
-int Download(string url, int options=FLAG_NONE, string log_file_name="")
+int Download(std::string url, int options=FLAG_NONE, std::string log_file_name="")
 {
 	if (!global.test_mode  &&  options & (FLAG_CLEAN_DL_NOW | FLAG_CLEAN_DL_LATER)  &&  global.downloads.size()>0  &&  Equals(global.downloaded_filename_last, global.downloads[global.downloads.size()-1])) {
-		string filename = "fwatch\\tmp\\" + global.downloaded_filename_last;
+		std::string filename = "fwatch\\tmp\\" + global.downloaded_filename_last;
 
 		if (DeleteFile(filename.c_str()))
 			global.downloads.pop_back();
@@ -1545,10 +1561,10 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 	global.downloaded_filename = PathLastItem(UnQuote(url));
 
 	// Format arguments
-	string output = "--output-document=";
-	size_t find   = url.find(output);
+	std::string output = "--output-document=";
+	size_t find        = url.find(output);
 	
-	while(find != string::npos) {
+	while(find != std::string::npos) {
 		bool in_quote    = false;
 		bool outer_quote = false;
 		
@@ -1568,9 +1584,9 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 		}
 		
 		// validate
-		string path = url.substr(find, end-find);
-		path        = PathLastItem(path);
-		path        = ReplaceAll(path, "\"", "");
+		std::string path = url.substr(find, end-find);
+		path             = PathLastItem(path);
+		path             = ReplaceAll(path, "\"", "");
 		
 		if (path.empty()  ||  path=="..")
 			return ErrorMessage(STR_DOWNLOAD_PATH_ERROR);
@@ -1584,7 +1600,7 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 	output = "-O";
 	find   = url.find(output);
 	
-	while(find != string::npos) {
+	while(find != std::string::npos) {
 		if (find>0  &&  isspace(url[find-1])) {	// must precede with whitespace
 			find += output.length();
 			
@@ -1601,9 +1617,9 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 				end++;
 			}		
 
-			string path = url.substr(find, end-find);
-			path        = PathLastItem(path);
-			path        = ReplaceAll(path, "\"", "");
+			std::string path = url.substr(find, end-find);
+			path             = PathLastItem(path);
+			path             = ReplaceAll(path, "\"", "");
 	
 			if (path.empty()  ||  path=="..")
 				return ErrorMessage(STR_DOWNLOAD_PATH_ERROR);
@@ -1615,7 +1631,7 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 		find = url.find(output, find);
 	}
 
-	string arguments = " --user-agent=\"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0\" --tries=1 --no-check-certificate --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ ";
+	std::string arguments = " --user-agent=\"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0\" --tries=1 --no-check-certificate --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ ";
 	
 	if (~options & FLAG_OVERWRITE)
 		arguments += "--no-clobber ";
@@ -1624,7 +1640,7 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 		arguments += "--header=\"ofpgsinstall: 1\" ";
 
 	arguments += url;
-	unlink("fwatch\\tmp\\schedule\\downloadLog.txt");
+	DeleteFile("fwatch\\tmp\\schedule\\downloadLog.txt");
 
 
 				
@@ -1642,13 +1658,13 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 		return ErrorMessage(STR_ERROR_EXE, "%STR% wget.exe - " + Int2Str(errorCode) + " " + FormatError(errorCode));
 	} else
 		if (~options & FLAG_SILENT_MODE)
-			global.logfile << "Downloading  " << (log_file_name.empty() ? url : log_file_name) << endl;
+			global.logfile << "Downloading  " << (log_file_name.empty() ? url : log_file_name) << std::endl;
 
 
 
 	// Wait for the program to finish its job
 	DWORD exit_code;
-	string message = "";
+	std::string message = "";
 
 	Sleep(10);
 
@@ -1659,7 +1675,7 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 			CloseHandle(pi.hThread);
 			
 			Sleep(100);
-			string filename = "fwatch\\tmp\\" + global.downloaded_filename;
+			std::string filename = "fwatch\\tmp\\" + global.downloaded_filename;
 			DeleteFile(filename.c_str());
 			return ERROR_USER_ABORTED;
 		}
@@ -1675,13 +1691,13 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 	
 	ParseWgetLog(message);
 	
-	if (exit_code==1  &&  message.find("not retrieving")!=string::npos) {
+	if (exit_code==1  &&  message.find("not retrieving")!=std::string::npos) {
 		exit_code = 0;
-		global.logfile << message << endl;
+		global.logfile << message << std::endl;
 	}
 	
 	if (exit_code != 0) {
-		string exit_status = "";
+		std::string exit_status = "";
 		
 		switch(exit_code) {
 			case 1 : exit_status="Generic error code"; break;
@@ -1694,9 +1710,9 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 			case 8 : exit_status="Server issued an error response"; break;
 		}
 		
-		global.logfile << exit_code << " - " << exit_status << " - " << message << endl;
+		global.logfile << exit_code << " - " << exit_status << " - " << message << std::endl;
 		ErrorMessage(STR_DOWNLOAD_FAILED, "%STR%\\n" + global.downloaded_filename + "\\n\\n" + message, options & FLAG_SILENT_MODE ? ERROR_WRONG_SCRIPT : ERROR_COMMAND_FAILED);
-		string filename = "fwatch\\tmp\\" + global.downloaded_filename;
+		std::string filename = "fwatch\\tmp\\" + global.downloaded_filename;
 		DeleteFile(filename.c_str());
 	} else
 		if (~options & FLAG_SILENT_MODE)
@@ -1707,16 +1723,16 @@ int Download(string url, int options=FLAG_NONE, string log_file_name="")
 	return (exit_code!=0 ? ERROR_COMMAND_FAILED : ERROR_NONE);
 }
 
-int Unpack(string file_name, string password="", int options=FLAG_NONE)
+int Unpack(std::string file_name, std::string password="", int options=FLAG_NONE)
 {
 	// Get subdirectories
-	string relative_path = PathNoLastItem(file_name);
+	std::string relative_path = PathNoLastItem(file_name);
 
 	if (Equals(relative_path.substr(0,10), "_extracted"))
 		relative_path = relative_path.substr(11) += "_extracted";
 
 	// Clean destination directory
-	string destination = "fwatch\\tmp\\_extracted";
+	std::string destination = "fwatch\\tmp\\_extracted";
 	
 	if (relative_path != "")
 		destination += "\\" + relative_path;
@@ -1730,7 +1746,7 @@ int Unpack(string file_name, string password="", int options=FLAG_NONE)
     sa.lpSecurityDescriptor = NULL;
     sa.bInheritHandle       = TRUE;       
 
-    HANDLE logFile = CreateFile(TEXT("fwatch\\tmp\\schedule\\unpackLog.txt"),
+    HANDLE logFile = CreateFile(_T("fwatch\\tmp\\schedule\\unpackLog.txt"),
         FILE_APPEND_DATA,
         FILE_SHARE_WRITE | FILE_SHARE_READ,
         &sa,
@@ -1749,21 +1765,21 @@ int Unpack(string file_name, string password="", int options=FLAG_NONE)
 	si.hStdInput     = NULL;
 	si.hStdOutput    = logFile;
 	si.hStdError     = logFile;
-	string arguments = WrapInQuotes(global.working_directory) + (password.empty() ? "" : " -p"+password) + " x -y -o\"" + destination + "\\\" -bb3 -bsp1 " + "\"fwatch\\tmp\\" + file_name + "\"";
+	std::string arguments = WrapInQuotes(global.working_directory) + (password.empty() ? "" : " -p"+password) + " x -y -o\"" + destination + "\\\" -bb3 -bsp1 " + "\"fwatch\\tmp\\" + file_name + "\"";
 
 	if (!CreateProcess("fwatch\\data\\7z.exe", &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {		
 		DWORD errorCode = GetLastError();
 		return ErrorMessage(STR_ERROR_EXE, "%STR% 7z.exe - " + Int2Str(errorCode) + " " + FormatError(errorCode));
 	} else
-		global.logfile << "Extracting " << file_name << endl;
+		global.logfile << "Extracting " << file_name << std::endl;
 		
 	Sleep(10);
 
 
 	// Wait for the program to finish its job
 	DWORD exit_code;	
-	string message = "";
-	int output     = ERROR_NONE;
+	std::string message = "";
+	int output          = ERROR_NONE;
 
 	do {					
 		if (Abort()) {
@@ -1783,9 +1799,9 @@ int Unpack(string file_name, string password="", int options=FLAG_NONE)
 
 	if (exit_code != 0) {
 		output = ERROR_COMMAND_FAILED;
-		global.logfile << exit_code << " - " << message << endl;
+		global.logfile << exit_code << " - " << message << std::endl;
 		
-		if (message.find("Can not open the file as") != string::npos  &&  message.find("archive") != string::npos) {
+		if (message.find("Can not open the file as") != std::string::npos  &&  message.find("archive") != std::string::npos) {
 			message += " - " + global.lang[STR_UNPACK_REDO_FILE];
 			output   = ERROR_WRONG_ARCHIVE;
 		}
@@ -1801,13 +1817,13 @@ int Unpack(string file_name, string password="", int options=FLAG_NONE)
 	return output;
 }
 
-int MakeDir(string path)
+int MakeDir(std::string path)
 {
-	vector<string> directories;
+	std::vector<std::string> directories;
 	Tokenize(path, "\\/", directories);
 
-	string build_path = "";
-	int result        = 0;
+	std::string build_path = "";
+	int result             = 0;
 
 	for (size_t i=0; i<directories.size(); i++) {
 		build_path += (build_path!="" ? "\\" : "") + directories[i];
@@ -1819,13 +1835,13 @@ int MakeDir(string path)
 			if (error_code != ERROR_ALREADY_EXISTS)
 				return ErrorMessage(STR_MDIR_ERROR, "%STR% " + build_path + " " + Int2Str(error_code) + " " + FormatError(error_code));
 		} else
-			global.logfile << "Created directory " << build_path << endl;
+			global.logfile << "Created directory " << build_path << std::endl;
 	}
 	
 	return ERROR_NONE;
 }
 
-int MoveFiles(string source, string destination, string new_name, int options)
+int MoveFiles(std::string source, std::string destination, std::string new_name, int options)
 {
 	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_COPYING]+"...");
 
@@ -1838,10 +1854,10 @@ int MoveFiles(string source, string destination, string new_name, int options)
 	}
 	
 	// Find files and save them to a list
-	vector<string> source_list;
-	vector<string> destination_list;
-	vector<bool>   is_dir_list;
-	vector<string> empty_dirs;
+	std::vector<std::string> source_list;
+	std::vector<std::string> destination_list;
+	std::vector<bool>        is_dir_list;
+	std::vector<std::string> empty_dirs;
 	size_t buffer_size = 0;
 	int recursion      = -1;
 
@@ -1860,8 +1876,8 @@ int MoveFiles(string source, string destination, string new_name, int options)
 		flags        = 0;
 	}
 	
-	wstring source_wide;
-	wstring destination_wide;
+	std::wstring source_wide;
+	std::wstring destination_wide;
 
 	// For each file in the list
 	for (size_t i=0;  i<source_list.size(); i++) {
@@ -1869,7 +1885,7 @@ int MoveFiles(string source, string destination, string new_name, int options)
 			return ERROR_USER_ABORTED;
 
 		// Format path for logging
-		string destinationLOG = PathNoLastItem(destination_list[i], FLAG_NO_END_SLASH);
+		std::string destinationLOG = PathNoLastItem(destination_list[i], FLAG_NO_END_SLASH);
 
 		if (destinationLOG.empty())
 			destinationLOG = "the game folder";
@@ -1894,7 +1910,7 @@ int MoveFiles(string source, string destination, string new_name, int options)
 	    	if (~options & FLAG_OVERWRITE  &&  error_code==ERROR_ALREADY_EXISTS)
 	    		global.logfile << "  - file already exists";
 			else {
-				global.logfile << endl;
+				global.logfile << std::endl;
 				result = ErrorMessage(
 					options & FLAG_MOVE_FILES ? STR_MOVE_ERROR : STR_COPY_ERROR,
 					"%STR% " + source_list[i] + " " + global.lang[STR_MOVE_TO_ERROR] + " " + destination_list[i] + " - " + Int2Str(error_code) + " " + FormatError(error_code)
@@ -1903,7 +1919,7 @@ int MoveFiles(string source, string destination, string new_name, int options)
 			}
 		}
 
-		global.logfile << endl;
+		global.logfile << std::endl;
 	}
 
 	// Remove empty directories
@@ -1918,7 +1934,7 @@ int MoveFiles(string source, string destination, string new_name, int options)
 	return result;
 }
 
-int ExtractPBO(string source, string destination="", string file_to_unpack="", bool silent=false) 
+int ExtractPBO(std::string source, std::string destination="", std::string file_to_unpack="", bool silent=false) 
 {
 	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_UNPACKINGPBO]+"...");
 
@@ -1926,8 +1942,8 @@ int ExtractPBO(string source, string destination="", string file_to_unpack="", b
 	// Program extractpbo.exe has a bug with destination argument
 	// It won't work if path has a space wrapping in quotes doesn't do anything
 	// Temporarily we have to extract it to D:\Temp\_extractedPBO and then move it to the actual destination
-	string destination_temp = "";
-	string destinationLOG   = "";
+	std::string destination_temp = "";
+	std::string destinationLOG   = "";
 	
 	if (!destination.empty()) {
 		destination_temp = global.working_directory.substr(0,3) + "temp\\_extractedPBO\\";
@@ -1942,7 +1958,7 @@ int ExtractPBO(string source, string destination="", string file_to_unpack="", b
     sa.lpSecurityDescriptor = NULL;
     sa.bInheritHandle       = TRUE;
 
-    HANDLE logFile = CreateFile(TEXT("fwatch\\tmp\\schedule\\PBOLog.txt"),
+    HANDLE logFile = CreateFile(_T("fwatch\\tmp\\schedule\\PBOLog.txt"),
         FILE_APPEND_DATA,
         FILE_SHARE_WRITE | FILE_SHARE_READ,
         &sa,
@@ -1962,9 +1978,9 @@ int ExtractPBO(string source, string destination="", string file_to_unpack="", b
 	si.hStdOutput  = logFile;
 	si.hStdError   = logFile;
 
-	string exename    = "ExtractPbo.exe";
-	string executable = "fwatch\\data\\" + exename;
-	string arguments  = " -NYP ";
+	std::string exename    = "ExtractPbo.exe";
+	std::string executable = "fwatch\\data\\" + exename;
+	std::string arguments  = " -NYP ";
 	
 	if (!file_to_unpack.empty())
 		arguments += " -F " + file_to_unpack + " ";
@@ -1981,7 +1997,7 @@ int ExtractPBO(string source, string destination="", string file_to_unpack="", b
 			if (!destination.empty())
 				global.logfile << "  to  " << destinationLOG;
 			
-			global.logfile << endl;
+			global.logfile << std::endl;
 		}
 		
 	Sleep(10);
@@ -1989,7 +2005,7 @@ int ExtractPBO(string source, string destination="", string file_to_unpack="", b
 
 	// Wait for the program to finish its job
 	DWORD exit_code;	
-	string error_message = "";
+	std::string error_message = "";
 	
 	do {
 		if (Abort()) {
@@ -2012,10 +2028,10 @@ int ExtractPBO(string source, string destination="", string file_to_unpack="", b
 		ErrorMessage(STR_PBO_UNPACK_ERROR, "%STR% " + Int2Str(exit_code) + " - " + error_message);
 	else 
 		if (!destination.empty()) {
-			string dir_name = PathLastItem(source);
-			dir_name        = dir_name.substr(0, dir_name.length()-4);
-			source          = destination_temp + dir_name;
-			destination     = UnQuote(destination) + dir_name;
+			std::string dir_name = PathLastItem(source);
+			dir_name             = dir_name.substr(0, dir_name.length()-4);
+			source               = destination_temp + dir_name;
+			destination          = UnQuote(destination) + dir_name;
 			MoveFiles(source, destination, "", FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_MATCH_DIRS);	
 		}
 
@@ -2027,16 +2043,7 @@ int ExtractPBO(string source, string destination="", string file_to_unpack="", b
 	return (exit_code!=0 ? ERROR_COMMAND_FAILED : ERROR_NONE);
 }
 
-	//https://support.microsoft.com/en-us/help/167296/how-to-convert-a-unix-time-t-to-a-win32-filetime-or-systemtime
-void UnixTimeToFileTime(time_t t, LPFILETIME pft)
-{
-	LONGLONG ll;
-	ll = Int32x32To64(t, 10000000) + 116444736000000000;
-	pft->dwLowDateTime = (DWORD)ll;
-	pft->dwHighDateTime = ll >> 32;
-}
-
-int ChangeFileDate(string file_name, FILETIME *ft) 
+int ChangeFileDate(std::string file_name, FILETIME *ft) 
 {   
 	HANDLE file_handle = CreateFile(file_name.c_str(), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	DWORD error_code   = 0;
@@ -2054,17 +2061,20 @@ int ChangeFileDate(string file_name, FILETIME *ft)
 		return ERROR_NONE;
 }
 
-int ChangeFileDate(string file_name, int timestamp)
+	//https://support.microsoft.com/en-us/help/167296/how-to-convert-a-unix-time-t-to-a-win32-filetime-or-systemtime
+int ChangeFileDate(std::string file_name, time_t timestamp)
 {
 	FILETIME ft;
-	UnixTimeToFileTime(timestamp, &ft);
+	LONGLONG ll       = Int32x32To64(timestamp, 10000000) + 116444736000000000;
+	ft.dwLowDateTime  = (DWORD)ll;
+	ft.dwHighDateTime = ll >> 32;
 	return ChangeFileDate(file_name, &ft);
 }
 
-int ChangeFileDate(string file_name, string timestamp)
+int ChangeFileDate(std::string file_name, std::string timestamp)
 {
 	FILETIME ft;
-	vector<string> date_item;
+	std::vector<std::string> date_item;
 	Tokenize(timestamp, "-T:+ ", date_item);
 	
 	if (date_item.size() == 1)
@@ -2087,12 +2097,12 @@ int ChangeFileDate(string file_name, string timestamp)
 }
 
 	// Read directory and save file modification dates
-int CreateTimestampList(string path, int path_cut, vector<string> &namelist, vector<unsigned int> &timelist) 
+int CreateTimestampList(std::string path, size_t path_cut, std::vector<std::string> &namelist, std::vector<time_t> &timelist) 
 {
 	WIN32_FIND_DATAW fd;
-	string wildcard   = path + "\\*";
-	wstring wildcardW = string2wide(wildcard);
-	HANDLE hFind      = FindFirstFileW(wildcardW.c_str(), &fd);
+	std::string wildcard   = path + "\\*";
+	std::wstring wildcardW = string2wide(wildcard);
+	HANDLE hFind           = FindFirstFileW(wildcardW.c_str(), &fd);
 
 	if (hFind == INVALID_HANDLE_VALUE) {
 		DWORD error_code = GetLastError();
@@ -2107,8 +2117,8 @@ int CreateTimestampList(string path, int path_cut, vector<string> &namelist, vec
 		if (wcscmp(fd.cFileName,L".")==0  ||  wcscmp(fd.cFileName,L"..")==0)
 			continue;
 			
-		string file_name = wide2string(fd.cFileName);
-		string full_path = path + "\\" + file_name;
+		std::string file_name = wide2string(fd.cFileName);
+		std::string full_path = path + "\\" + file_name;
 
 		if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
 			CreateTimestampList(full_path, path_cut, namelist, timelist);
@@ -2134,13 +2144,13 @@ int CreateTimestampList(string path, int path_cut, vector<string> &namelist, vec
 
 // Installer commands that get reused --------------------------------------------------------------------
 
-int RequestExecution(string path_to_dir, string file_name)
+int RequestExecution(std::string path_to_dir, std::string file_name)
 {		
 	DWORD exit_code = 0;
 	
-	global.logfile << "Asking the user to run " << file_name << endl;
+	global.logfile << "Asking the user to run " << file_name << std::endl;
 	
-	string message = global.lang[STR_ASK_EXE] + ":\\n" + file_name + "\\n\\n" + global.lang[STR_ALTTAB];
+	std::string message = global.lang[STR_ASK_EXE] + ":\\n" + file_name + "\\n\\n" + global.lang[STR_ALTTAB];
 	WriteProgressFile(INSTALL_WAITINGFORUSER, message);
 	
 	message = "File\n" + file_name + "must be manually run\n\nPress OK to start\nPress CANCEL to skip installing this modfolder";
@@ -2160,8 +2170,8 @@ int RequestExecution(string path_to_dir, string file_name)
 		si.dwFlags 	   = STARTF_USESHOWWINDOW;
 		si.wShowWindow = SW_SHOW;
 		
-		string executable = path_to_dir + "\\" + file_name;
-		string arguments  = " " + global.working_directory;
+		std::string executable = path_to_dir + "\\" + file_name;
+		std::string arguments  = " " + global.working_directory;
 		
 		if (!CreateProcess(&executable[0], &arguments[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi)) {
 			MoveFileEx("Aspect_Ratio.backup", "Aspect_Ratio.hpp", MOVEFILE_REPLACE_EXISTING);
@@ -2176,47 +2186,43 @@ int RequestExecution(string path_to_dir, string file_name)
 			Sleep(100);
 		} while (exit_code == STILL_ACTIVE);
 		
-		global.logfile << "Exit code: " << exit_code << endl;
+		global.logfile << "Exit code: " << exit_code << std::endl;
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
 
 		MoveFileEx("Aspect_Ratio.backup", "Aspect_Ratio.hpp", MOVEFILE_REPLACE_EXISTING);
 	}
 	
-	//string path_to_file = path_to_dir + file_name;
-	//int result          = E_FAIL;
-	/*ITEMIDLIST *pIDL = ILCreateFromPath(path_to_file.c_str());
+	std::string path_to_file = path_to_dir + file_name;
+	int result               = E_FAIL;
+	ITEMIDLIST *pIDL         = ILCreateFromPath(path_to_file.c_str());
 	
 	if (pIDL != NULL) {
 		CoInitialize(NULL);
-	    int result = SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) == 0;	    
+	    if (SHOpenFolderAndSelectItems(pIDL, 0, 0, 0) != S_OK)
+	    	ShellExecute(NULL, "open", path_to_dir.c_str(), NULL, NULL, SW_SHOWDEFAULT);
 		CoUninitialize();
 	    ILFree(pIDL);
-	};*/
-	
-	//if (result != S_OK)
-	//HINSTANCE result =
-	 
-	//ShellExecute(NULL, "open", path_to_dir.c_str(), NULL, NULL, SW_SHOWDEFAULT);
+	};
 
 	return (exit_code!=0 ? ERROR_COMMAND_FAILED : ERROR_NONE);
 }
 
-int Condition_If_version(const vector<string> &arg, int arg_id, int arg_num) 
+int Condition_If_version(const std::vector<std::string> &arg, int arg_id, int arg_num) 
 {
 	if (arg_num < 2)
 		return ErrorMessage(STR_ERROR_ARG_COUNT);
 	
 	// Process arguments (two or three)
-	string op          = "==";
+	std::string op     = "==";
 	float given_number = 0;
 
 	if (arg_num >= 2) {
 		op           = arg[arg_id];
-		given_number = atof(arg[arg_id+1].c_str());
+		given_number = Str2Float(arg[arg_id+1].c_str());
 	} else	
 		if (isdigit(arg[arg_id][0])  ||  arg[arg_id][0]=='.')
-			given_number = atof(arg[arg_id].c_str());
+			given_number = Str2Float(arg[arg_id].c_str());
 		else
 			return ErrorMessage(STR_IF_NUMBER_ERROR);
 
@@ -2225,7 +2231,7 @@ int Condition_If_version(const vector<string> &arg, int arg_id, int arg_num)
 	bool result = false;
 	
 	if (global.condition_index<0  ||  global.condition_index>=0 && global.condition[global.condition_index]) {
-		float game_version = atof(global.arguments_table["gameversion"].c_str());
+		float game_version = Str2Float(global.arguments_table["gameversion"].c_str());
 
 		if (op=="=="  ||  op=="=")
 			result = game_version == given_number;
@@ -2271,7 +2277,7 @@ int Condition_Endif()
 	return ERROR_NONE;
 }
 
-int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string password="")
+int Auto_Install(std::string file, DWORD attributes, int options=FLAG_NONE, std::string password="")
 {
 	if (Abort())
 		return ERROR_USER_ABORTED;
@@ -2279,9 +2285,9 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 	if (file.empty())
 		return ERROR_NONE;
 
-	string file_with_path = "fwatch\\tmp\\" + file;
-	string file_only      = PathLastItem(file);
-	size_t dots           = count(file_only.begin(), file_only.end(), '.');
+	std::string file_with_path = "fwatch\\tmp\\" + file;
+	std::string file_only      = PathLastItem(file);
+	size_t dots                = count(file_only.begin(), file_only.end(), '.');
 	
 	if (attributes & FILE_ATTRIBUTE_DIRECTORY) {
 		// Translate this bit to a local bool so that it won't get carried over
@@ -2301,18 +2307,18 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 		// If directory ends with _anim or _anims then move it to IslandCutscenes
 		if (file_only.length()>=4 && Equals(file_only.substr(file_only.length()-5),"anim") || file_only.length()>=5 && Equals(file_only.substr(file_only.length()-5),"_anim") || file_only.length()>=6 && Equals(file_only.substr(file_only.length()-5),"_anims")) {
 			options &= ~FLAG_RUN_EXE;
-			string destination = global.current_mod_new_name + "\\IslandCutscenes\\" + (options & FLAG_RES_ADDONS ? "_Res\\" : "") ;
+			std::string destination = global.current_mod_new_name + "\\IslandCutscenes\\" + (options & FLAG_RES_ADDONS ? "_Res\\" : "") ;
 			return MoveFiles(file_with_path, destination, "", FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_CREATE_DIR | FLAG_MATCH_DIRS);
 		}
 
 		// If directory has a dot in its name then move it to Missions
 		if (dots > 0) {
-			string destination = GetMissionDestinationFromSQM(file_with_path+"\\mission.sqm");
+			std::string destination = GetMissionDestinationFromSQM(file_with_path+"\\mission.sqm");
 		
 			if (destination != "Addons") {
-				string file_lower = lowercase(file_only);	
+				std::string file_lower = lowercase(file_only);	
 				
-				if ((Equals(destination,"Missions") || Equals(destination,"MPMissions")) && (options & FLAG_DEMO_MISSIONS || file_lower.find("demo")!=string::npos || file_lower.find("template")!=string::npos))
+				if ((Equals(destination,"Missions") || Equals(destination,"MPMissions")) && (options & FLAG_DEMO_MISSIONS || file_lower.find("demo")!=std::string::npos || file_lower.find("template")!=std::string::npos))
 					destination += "Users";
 				
 				options &= ~FLAG_RUN_EXE;
@@ -2320,7 +2326,7 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 			}
 		}
 
-		// Check if the folder name is addons/bin/dta/worlds/campaigns etc.
+		// Check if the folder name is addons/bin/dta/campaigns etc.
 		int index                        = DIR_NONE;
 		bool missions_but_different_name = false;
 		
@@ -2331,7 +2337,7 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 				
 			// Folder could be an sp missions folder but named differently
 			if (index == DIR_NONE) {
-				string overview = file_with_path + "\\overview.html";
+				std::string overview = file_with_path + "\\overview.html";
 				
 				if (GetFileAttributes(overview.c_str()) != INVALID_FILE_ATTRIBUTES) {
 					index                       = DIR_MISSIONS;
@@ -2342,13 +2348,13 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 
 		// If so then move it to the modfolder
 		if (index != DIR_NONE) {
-			string destination = global.current_mod_new_name + "\\";
-			string new_name    = "";
+			std::string destination = global.current_mod_new_name + "\\";
+			std::string new_name    = "";
 			
 			if (!missions_but_different_name) {
 				// If it's a Missions/MPMissions folder and it contains a single subfolder then move that subfolder instead
 				if (index==DIR_MISSIONS  ||  index==DIR_MPMISSIONS) {
-					string destination_overview_path = global.current_mod_new_name + "\\Missions\\overview.html";
+					std::string destination_overview_path = global.current_mod_new_name + "\\Missions\\overview.html";
 					DIRECTORY_INFO dir               = ScanDirectory(file_with_path);
 					
 					if (dir.error_code == ERROR_NONE) {
@@ -2376,9 +2382,9 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 		
 		// If the folder is some other modfolder then ignore it
 		if (!Equals(file_only,"_extracted") && !Equals(file_only,"Res") && !force_install)
-			for (int i=DIR_ADDONS; i<=DIR_WORLDS && scan_directory; i++) {
-				string mod_subpath = file_with_path + "\\" + mod_subfolders[i];
-				DWORD attributes   = GetFileAttributes(mod_subpath.c_str());
+			for (int i=DIR_ADDONS; i<=DIR_DTA && scan_directory; i++) {
+				std::string mod_subpath = file_with_path + "\\" + mod_subfolders[i];
+				DWORD attributes        = GetFileAttributes(mod_subpath.c_str());
 				
 				if (attributes!=INVALID_FILE_ATTRIBUTES  &&  attributes & FILE_ATTRIBUTE_DIRECTORY)
 					scan_directory = false;
@@ -2396,23 +2402,23 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 				options |= FLAG_DONT_IGNORE;
 			
 			for (size_t i=0; i<dir.file_list.size(); i++) {
-				string file_inside       = wide2string(dir.file_list[i]);
-				string path_to_this_file = file + "\\" + file_inside;
-				int result               = ERROR_NONE;
-				bool is_dir              = (dir.attributes_list[i] & FILE_ATTRIBUTE_DIRECTORY);
+				std::string file_inside       = wide2string(dir.file_list[i]);
+				std::string path_to_this_file = file + "\\" + file_inside;
+				int result                    = ERROR_NONE;
+				bool is_dir                   = (dir.attributes_list[i] & FILE_ATTRIBUTE_DIRECTORY) > 0;
 				
 				// Files that are next to the wanted modfolder are moved without looking at them
 				if (dir.number_of_wanted_mods>0  &&  (!is_dir || is_dir && dir.mod_sub_id_list[i]!=DIR_MISSIONS && dir.mod_sub_id_list[i]!=DIR_MPMISSIONS && !dir.is_mod_list[i] && _wcsicmp(dir.file_list[i].c_str(),L"Res")!=0 && _wcsicmp(dir.file_list[i].c_str(),L"ResAddons")!=0)) {
-					string source      = file_with_path+"\\"+wide2string(dir.file_list[i]);
-					string destination = global.current_mod_new_name+"\\";
-					string new_name    = "";
+					std::string source      = file_with_path+"\\"+wide2string(dir.file_list[i]);
+					std::string destination = global.current_mod_new_name+"\\";
+					std::string new_name    = "";
 					
 					// If it's "addons" folder then it probably contains island cutscenes; move it with changed name
 					if (dir.mod_sub_id_list[i] == DIR_ADDONS)
 						new_name = "IslandCutscenes";
 					
 					options &= ~FLAG_RUN_EXE;
-					result = MoveFiles(source, destination, new_name, FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_CREATE_DIR | FLAG_MATCH_DIRS);
+					result   = MoveFiles(source, destination, new_name, FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_CREATE_DIR | FLAG_MATCH_DIRS);
 				} else {
 					file_inside = lowercase(file_inside);
 
@@ -2426,8 +2432,8 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 						KEY_RES,
 						KEY_ADDONS
 					};
-					vector<string> keywords;
-					vector<bool> key_exists;
+					std::vector<std::string> keywords;
+					std::vector<bool> key_exists;
 					keywords.push_back("demo");
 					keywords.push_back("mission");
 					keywords.push_back("user");
@@ -2438,7 +2444,7 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 					key_exists.resize(keywords.size());
 					
 					for (size_t j=0; j<keywords.size(); j++)
-						key_exists[j] = file_inside.find(keywords[j]) != string::npos;
+						key_exists[j] = file_inside.find(keywords[j]) != std::string::npos;
 					
 					if (((key_exists[KEY_DEMO] || key_exists[KEY_EDITOR] || key_exists[KEY_TEMPLATE]) && key_exists[KEY_MISSION]) || key_exists[KEY_USER])
 						options |= FLAG_DEMO_MISSIONS;
@@ -2456,7 +2462,7 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 		}
 	} else {
 		// If it's a file then check its extension
-		string file_extension = GetFileExtension(file);
+		std::string file_extension = GetFileExtension(file);
 
 		if (file.substr(0,11) == "_extracted\\")
 			file = file.substr(11);
@@ -2474,7 +2480,7 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 			EXT_INVALID
 		};
 		
-		string valid_extensions[] = {
+		std::string valid_extensions[] = {
 			"pbo",
 			"rar",
 			"zip",
@@ -2493,15 +2499,15 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 		switch(extension_index) {
 			// Unpack PBO and detect if it's an addon or a mission
 			case EXT_PBO : {
-				options           &= ~FLAG_RUN_EXE;
-				string destination = "Addons";
+				options                &= ~FLAG_RUN_EXE;
+				std::string destination = "Addons";
 				
 				if (dots > 1) {
 					destination = "MPMissions";
 	
 					if (ExtractPBO(global.working_directory+"\\"+file_with_path, "", "mission.sqm", 1) == 0) {
-						string extracted_dir = PathNoLastItem(file_with_path) + file.substr(0, file.length()-4);
-						destination          = GetMissionDestinationFromSQM(extracted_dir+"\\mission.sqm");
+						std::string extracted_dir = PathNoLastItem(file_with_path) + file.substr(0, file.length()-4);
+						destination               = GetMissionDestinationFromSQM(extracted_dir+"\\mission.sqm");
 						DeleteDirectory(extracted_dir);
 					}
 				}
@@ -2528,7 +2534,7 @@ int Auto_Install(string file, DWORD attributes, int options=FLAG_NONE, string pa
 				int result = Unpack(file_with_path.substr(11), password, FLAG_ALLOW_ERROR);
 				
 				if (result == ERROR_NONE) {
-					string resource_path = PathNoLastItem(file_with_path) + "_extracted\\.rsrc";
+					std::string resource_path = PathNoLastItem(file_with_path) + "_extracted\\.rsrc";
 					
 					// Make sure that this exe is not a program
 					if (GetFileAttributes(resource_path.c_str()) == INVALID_FILE_ATTRIBUTES)
@@ -2559,12 +2565,12 @@ void EndModVersion()
 	// Remove downloaded files
 	if (!global.test_mode) {
 		for (size_t i=0; i<global.downloads.size(); i++) {
-			string filename = "fwatch\\tmp\\" + global.downloads[i];
+			std::string filename = "fwatch\\tmp\\" + global.downloads[i];
 
 			if (!DeleteFile(filename.c_str())) {
 				DWORD errorCode = GetLastError();
-				string errorMSG = FormatError(errorCode);
-				global.logfile << "Failed to delete " << filename << " - " << errorCode << " " << errorMSG << endl;
+				std::string errorMSG = FormatError(errorCode);
+				global.logfile << "Failed to delete " << filename << " - " << errorCode << " " << errorMSG << std::endl;
 			}
 		}
 
@@ -2591,7 +2597,7 @@ void EndMod()
 			global.missing_modfolders += ", ";
 
 		global.missing_modfolders += global.current_mod;
-		global.logfile << "Modfolder " << global.current_mod << " wasn't actually installed!" << endl;
+		global.logfile << "Modfolder " << global.current_mod << " wasn't actually installed!" << std::endl;
 	}
 
 	EndModVersion();
@@ -2610,28 +2616,28 @@ void EndMod()
 int main(int argc, char *argv[])
 {
 	// Process arguments
-	global.arguments_table.insert(pair<string,string>("gameversion","1.99"));
-	global.arguments_table.insert(pair<string,string>("assignid",""));
-	global.arguments_table.insert(pair<string,string>("assignidpath",""));
-	global.arguments_table.insert(pair<string,string>("assignname",""));
-	global.arguments_table.insert(pair<string,string>("assignkeepname",""));
-	global.arguments_table.insert(pair<string,string>("testmod",""));
-	global.arguments_table.insert(pair<string,string>("testdir",""));
-	global.arguments_table.insert(pair<string,string>("installid",""));
-	global.arguments_table.insert(pair<string,string>("installdir",""));
-	global.arguments_table.insert(pair<string,string>("downloadscript",""));
-	global.arguments_table.insert(pair<string,string>("evoice",""));
-	global.arguments_table.insert(pair<string,string>("language","English"));
+	global.arguments_table.insert(std::pair<std::string,std::string>("gameversion","1.99"));
+	global.arguments_table.insert(std::pair<std::string,std::string>("assignid",""));
+	global.arguments_table.insert(std::pair<std::string,std::string>("assignidpath",""));
+	global.arguments_table.insert(std::pair<std::string,std::string>("assignname",""));
+	global.arguments_table.insert(std::pair<std::string,std::string>("assignkeepname",""));
+	global.arguments_table.insert(std::pair<std::string,std::string>("testmod",""));
+	global.arguments_table.insert(std::pair<std::string,std::string>("testdir",""));
+	global.arguments_table.insert(std::pair<std::string,std::string>("installid",""));
+	global.arguments_table.insert(std::pair<std::string,std::string>("installdir",""));
+	global.arguments_table.insert(std::pair<std::string,std::string>("downloadscript",""));
+	global.arguments_table.insert(std::pair<std::string,std::string>("evoice",""));
+	global.arguments_table.insert(std::pair<std::string,std::string>("language","English"));
 
 	// Separate arguments:
 	// arguments for this program go to the table
-	// arguments for gameRestart.exe go to a separate string
+	// arguments for gameRestart.exe go to a separate std::string
 	for (int i=1; i<argc; i++) {
-		string current_argument = (string)argv[i];
-		bool found              = false;
+		std::string current_argument = (std::string)argv[i];
+		bool found                   = false;
 		
-		for (map<string,string>::iterator it=global.arguments_table.begin(); it!=global.arguments_table.end(); ++it) {
-			string table_argument = "-" + it->first + "=";
+		for (std::map<std::string,std::string>::iterator it=global.arguments_table.begin(); it!=global.arguments_table.end(); ++it) {
+			std::string table_argument = "-" + it->first + "=";
 			
 			if (Equals(current_argument.substr(0, table_argument.length()), table_argument)) {
 				it->second = current_argument.substr(table_argument.length());
@@ -2653,7 +2659,7 @@ int main(int argc, char *argv[])
 
 	
 	// Load language
-	string stringtable[][STR_MAX] = {
+	std::string stringtable[][STR_MAX] = {
 		{
 			"Initializing",
 			"Fetching installation script",
@@ -2876,7 +2882,7 @@ int main(int argc, char *argv[])
 	// Find current directory
 	TCHAR pwd[MAX_PATH];
 	GetCurrentDirectory(MAX_PATH, pwd);
-	global.working_directory = (string)pwd;
+	global.working_directory = (std::string)pwd;
 
 	// When testing outside of the game change path to the game root dir
 	if (global.test_mode) {
@@ -2908,7 +2914,7 @@ int main(int argc, char *argv[])
 
 
 	// Create a log file
-	global.logfile.open("fwatch\\data\\addonInstallerLog.txt", ios::out | ios::app);
+	global.logfile.open("fwatch\\data\\addonInstallerLog.txt", std::ios::out | std::ios::app);
 
 	if (!global.logfile.is_open()) {
 		WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR]+"\\n"+global.lang[STR_ERROR_LOGFILE]));
@@ -2919,11 +2925,11 @@ int main(int argc, char *argv[])
 	GetLocalTime(&st);
 	global.logfile << "\n--------------\n\n"
 			<< st.wYear << "." 
-			<< LeadingZero(st.wMonth) << "." 
-			<< LeadingZero(st.wDay) << "  " 
-			<< LeadingZero(st.wHour) << ":" 
+			<< LeadingZero(st.wMonth)  << "." 
+			<< LeadingZero(st.wDay)    << "  " 
+			<< LeadingZero(st.wHour)   << ":" 
 			<< LeadingZero(st.wMinute) << ":" 
-			<< LeadingZero(st.wSecond) << endl;
+			<< LeadingZero(st.wSecond) << std::endl;
 			
 			
 	// Set up global variables for testing mode
@@ -2942,7 +2948,7 @@ int main(int argc, char *argv[])
 		if (!Equals(global.current_mod,global.current_mod_new_name))
 			global.logfile << " as " << global.current_mod_new_name;
 		 
-		global.logfile << endl;
+		global.logfile << std::endl;
 	}
 
 
@@ -2974,7 +2980,7 @@ int main(int argc, char *argv[])
 		COMMAND_EXIT
 	};
 	
-	string command_names[] = {
+	std::string command_names[] = {
 		"auto_install",	
 		"download",		
 		"get", 			
@@ -3068,7 +3074,7 @@ int main(int argc, char *argv[])
 		SWITCH_MAX            = 0x200
 	};
 	
-	string command_switches_names[] = {
+	std::string command_switches_names[] = {
 		"",
 		"/password:",
 		"/no_overwrite",
@@ -3119,8 +3125,8 @@ int main(int argc, char *argv[])
 	if (!global.arguments_table["downloadscript"].empty()) {
 		WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_GETSCRIPT]);
 
-		string url = GetFileContents(global.arguments_table["downloadscript"]) + " --verbose \"--output-document=fwatch\\tmp\\installation script\"";
-		int result = Download(url, FLAG_OVERWRITE | FLAG_SILENT_MODE);
+		std::string url = GetFileContents(global.arguments_table["downloadscript"]) + " --verbose \"--output-document=fwatch\\tmp\\installation script\"";
+		int result      = Download(url, FLAG_OVERWRITE | FLAG_SILENT_MODE);
 		DeleteFile(global.arguments_table["downloadscript"].c_str());
 
 		if (result > 0) {
@@ -3133,10 +3139,10 @@ int main(int argc, char *argv[])
 	// Open installation script
 	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_READSCRIPT]);
 
-    vector<string> instructions;
-    fstream script_file;
-    string script_file_name    = global.test_mode ? "fwatch\\data\\addonInstaller_test.txt" : "fwatch\\tmp\\installation script";
-	string script_file_content = GetFileContents(script_file_name);
+    std::vector<std::string> instructions;
+	std::fstream script_file;
+    std::string script_file_name    = global.test_mode ? "fwatch\\data\\addonInstaller_test.txt" : "fwatch\\tmp\\installation script";
+	std::string script_file_content = GetFileContents(script_file_name);
 	
 	if (script_file_content.empty()) {
 		global.logfile << "Failed to open " << script_file_name << "\n\n--------------\n\n";
@@ -3164,26 +3170,26 @@ int main(int argc, char *argv[])
 	
 	// Table storing commands from the script
 	struct {
-		vector<int> id;				//command enum
-		vector<bool> ctrl_flow;		//is it a control flow command
-		vector<int> line_num;		//position in the text file
-		vector<int> switches;		//bit mask
-		vector<size_t> arg_start;   //arguments starting index in the other table
-		vector<int> arg_num;		//number of arguments passed to this command
-		vector<size_t> url_start;   //urls starting index in the other table
-		vector<int> url_num;		//number of urls passed to this command
-		vector<string> password;	//password switch passed to this command
-		vector<string> arguments;	//table storing arguments associated with commands (not parallel)
-		vector<string> timestamp;   //timestamp switch passed to this command
+		std::vector<int>         id;        //command enum
+		std::vector<bool>        ctrl_flow; //is it a control flow command
+		std::vector<int>         line_num;  //position in the text file
+		std::vector<int>         switches;  //bit mask
+		std::vector<size_t>      arg_start; //arguments starting index in the other table
+		std::vector<int>         arg_num;   //number of arguments passed to this command
+		std::vector<size_t>      url_start; //urls starting index in the other table
+		std::vector<int>         url_num;   //number of urls passed to this command
+		std::vector<std::string> password;  //password switch passed to this command
+		std::vector<std::string> arguments; //table storing arguments associated with commands (not parallel)
+		std::vector<std::string> timestamp; //timestamp switch passed to this command
 	} current_script_command;
 
 	// Table storing download urls associated with the commands	
 	struct {
-		vector<size_t> arg_start;   //arguments starting index in the other table
-		vector<int> arg_num;		//number of arguments passed to this url
-		vector<int> line_num;		//position in the text file
-		vector<string> link;		//actual url
-		vector<string> arguments;	//table storing url arguments associated with the urls (not parallel)
+		std::vector<size_t>      arg_start; //arguments starting index in the other table
+		std::vector<int>         arg_num;   //number of arguments passed to this url
+		std::vector<int>         line_num;  //position in the text file
+		std::vector<std::string> link;      //actual url
+		std::vector<std::string> arguments; //table storing url arguments associated with the urls (not parallel)
 	} current_script_command_urls;
 	
 	for (size_t i=0; i<=script_file_content.length(); i++) {
@@ -3245,14 +3251,14 @@ int main(int argc, char *argv[])
 				word_begin   += 3;
 				size_t end    = script_file_content.find(script_file_content[i+2], i+3);
 				end_of_word   = true;
-				i             = end==string::npos ? script_file_content.length() : end;
+				i             = end==std::string::npos ? script_file_content.length() : end;
 				remove_quotes = false;
 			}
 		}
 		
 		// When hit end of the word
 		if (end_of_word && word_started && !in_quote) {
-			string word = script_file_content.substr(word_begin, i-word_begin);
+			std::string word = script_file_content.substr(word_begin, i-word_begin);
 
 			if (remove_quotes)
 				word = UnQuote(word);
@@ -3309,7 +3315,7 @@ int main(int argc, char *argv[])
 						word_line_num_local = 0;
 				} else {
 					size_t end = script_file_content.find("\n", i);
-					i          = (end==string::npos ? script_file_content.length() : end) - 1;
+					i          = (end==std::string::npos ? script_file_content.length() : end) - 1;
 				}
 			} else {
 				// Check if URL starts here
@@ -3317,12 +3323,12 @@ int main(int argc, char *argv[])
 					url_line = IsURL(word);
 					
 				// Check if it's a valid command switch
-				bool is_switch     = false;
-				size_t colon       = word.find(":");
-				string switch_name = word;
-				string switch_arg  = "";
+				bool is_switch          = false;
+				size_t colon            = word.find(":");
+				std::string switch_name = word;
+				std::string switch_arg  = "";
 				
-				if (colon != string::npos) {
+				if (colon != std::string::npos) {
 					switch_name = word.substr(0,colon+1);
 					switch_arg  = word.substr(colon+1);
 				}
@@ -3344,7 +3350,7 @@ int main(int argc, char *argv[])
 				if (!is_switch) {
 					if (url_line) {
 						if (!last_url_list_started) {
-							last_url_list_id = word_line_num;
+							last_url_list_id      = word_line_num;
 							last_url_list_started = true;
 							size_t temp           = current_script_command_urls.arguments.size();
 
@@ -3418,7 +3424,7 @@ int main(int argc, char *argv[])
 
 		// Execute only control flow instructions
 		switch(current_script_command.id[i]) {
-			case COMMAND_INSTALL_VERSION : global.script_version=atof(current_script_command.arguments[current_script_command.arg_start[i]].c_str()); break;
+			case COMMAND_INSTALL_VERSION : global.script_version=Str2Float(current_script_command.arguments[current_script_command.arg_start[i]].c_str()); break;
 			case COMMAND_BEGIN_MOD       : global.current_mod="?pretendtoinstall"; break;
 			case COMMAND_BEGIN_VERSION   : global.current_mod_version="-1"; break;
 			case COMMAND_IF_VERSION      : Condition_If_version(current_script_command.arguments, current_script_command.arg_start[i], current_script_command.arg_num[i]); break;
@@ -3510,15 +3516,15 @@ int main(int argc, char *argv[])
 				if (current_script_command_urls.arg_num[j] == 1)
 					command_result = Download(current_script_command_urls.link[j] + " \"--output-document=" + current_script_command_urls.arguments[current_script_command_urls.arg_start[j]] + "\"", download_flags);
 				else {
-					string original_url     = current_script_command_urls.link[j];
-					string cookie_file_name = "fwatch\\tmp\\__cookies.txt";
-					string token_file_name  = "fwatch\\tmp\\__downloadtoken";
-					string wget_arguments   = "";
-					string new_url          = original_url;
-					string POST             = "";
-					int result              = 0;
-					int last_url_arg        = current_script_command_urls.arg_start[j] + current_script_command_urls.arg_num[j] - 1;
-					bool found_phrase       = false;
+					std::string original_url     = current_script_command_urls.link[j];
+					std::string cookie_file_name = "fwatch\\tmp\\__cookies.txt";
+					std::string token_file_name  = "fwatch\\tmp\\__downloadtoken";
+					std::string wget_arguments   = "";
+					std::string new_url          = original_url;
+					std::string POST             = "";
+					int result                   = 0;
+					int last_url_arg             = current_script_command_urls.arg_start[j] + current_script_command_urls.arg_num[j] - 1;
+					bool found_phrase            = false;
 				
 					DeleteFile(cookie_file_name.c_str());
 					DeleteFile(token_file_name.c_str());
@@ -3538,41 +3544,41 @@ int main(int argc, char *argv[])
 							goto Finished_downloading;
 				
 						// Parse downloaded file and find link
-						string token_file_buffer = GetFileContents(token_file_name);
-					    bool is_href             = Equals(current_script_command_urls.arguments[k].substr(0,6),"href=\"") || Equals(current_script_command_urls.arguments[k].substr(0,6),"href=''");
-						size_t find              = token_file_buffer.find(current_script_command_urls.arguments[k]);
+						std::string token_file_buffer = GetFileContents(token_file_name);
+					    bool is_href                  = Equals(current_script_command_urls.arguments[k].substr(0,6),"href=\"") || Equals(current_script_command_urls.arguments[k].substr(0,6),"href=''");
+						size_t find                   = token_file_buffer.find(current_script_command_urls.arguments[k]);
 			
-						if (find != string::npos) {
-							size_t left_quote  = string::npos;
-							size_t right_quote = string::npos;
+						if (find != std::string::npos) {
+							size_t left_quote  = std::string::npos;
+							size_t right_quote = std::string::npos;
 							
 							if (is_href)
 								left_quote = find+5;
 							else
-								for (size_t j=find; j>=0 && left_quote==string::npos; j--)
+								for (size_t j=find; j>=0 && left_quote==std::string::npos; j--)
 									if (token_file_buffer[j]=='\"' || token_file_buffer[j]=='\'')
 										left_quote = j;
 									
-							for (size_t k=find+(is_href ? 6u : 0u); k<token_file_buffer.length() && right_quote==string::npos; k++)
+							for (size_t k=find+(is_href ? 6u : 0u); k<token_file_buffer.length() && right_quote==std::string::npos; k++)
 								if (token_file_buffer[k]=='\"' || token_file_buffer[k]=='\'')
 									right_quote = k;
 							
-							if (left_quote!=string::npos && right_quote!=string::npos) {
+							if (left_quote!=std::string::npos && right_quote!=std::string::npos) {
 								left_quote++;
-								found_phrase     = true;
-								string found_url = ReplaceAll(token_file_buffer.substr(left_quote, right_quote - left_quote), "&amp;", "&");
+								found_phrase          = true;
+								std::string found_url = ReplaceAll(token_file_buffer.substr(left_quote, right_quote - left_quote), "&amp;", "&");
 								
 								// if relative address
 								if (found_url[0] == '/') {
 									size_t offset      = 0;
 									size_t doubleslash = original_url.find("//");
 									
-									if (doubleslash != string::npos)
+									if (doubleslash != std::string::npos)
 										offset = doubleslash + 2;
 									
 									size_t slash = original_url.find_first_of("/", offset);
 									
-									if (slash != string::npos)
+									if (slash != std::string::npos)
 										original_url = original_url.substr(0, slash);
 									
 									found_url = original_url + found_url;
@@ -3580,7 +3586,7 @@ int main(int argc, char *argv[])
 									if (!IsURL(found_url)) {
 										size_t last_slash = new_url.find_last_of("/");
 										
-										if (last_slash != string::npos)
+										if (last_slash != std::string::npos)
 											new_url = new_url.substr(0, last_slash+1);
 										
 										found_url = new_url + found_url;
@@ -3588,15 +3594,15 @@ int main(int argc, char *argv[])
 									
 								// Check if it's a form
 								if (left_quote>8  &&  token_file_buffer.substr(left_quote-8, 7)=="action=") {
-									size_t offset = 0;
-									string form   = GetTextBetween(token_file_buffer, "</form>", "<form", left_quote, true);
-									string input  = GetTextBetween(form, "<input", ">", offset);
+									size_t offset     = 0;
+									std::string form  = GetTextBetween(token_file_buffer, "</form>", "<form", left_quote, true);
+									std::string input = GetTextBetween(form, "<input", ">", offset);
 									
 									while (!input.empty()) {
-										vector<string> attributes;
+										std::vector<std::string> attributes;
 										Tokenize(input," ", attributes);
-										string name  = "";
-										string value = "";
+										std::string name  = "";
+										std::string value = "";
 										
 										for (size_t j=0; j<attributes.size(); j++) {
 											if (attributes[j].substr(0,5) == "name=")
@@ -3609,14 +3615,14 @@ int main(int argc, char *argv[])
 										if (!name.empty()) {
 											size_t replacement = token_file_buffer.find("input[name="+name);
 											
-											if (replacement != string::npos) {
+											if (replacement != std::string::npos) {
 												size_t new_value = token_file_buffer.find("'", replacement+13+name.length());
 												
-												if (new_value != string::npos) {
+												if (new_value != std::string::npos) {
 													new_value++;
 													size_t end_value = token_file_buffer.find("'", new_value);
 													
-													if (end_value != string::npos)
+													if (end_value != std::string::npos)
 														value = token_file_buffer.substr(new_value, end_value-new_value);
 												}
 											}
@@ -3666,8 +3672,8 @@ int main(int argc, char *argv[])
 		
 		// If download was successful then execute command
 		if (current_script_command.url_num[i]==0 || (current_script_command.url_num[i]>0 && failed_downloads<current_script_command.url_num[i])) {
-			int first               = current_script_command.arg_num[i]>0 ? current_script_command.arg_start[i] : -1;
-			global.download_phase   = false;
+			int first             = current_script_command.arg_num[i]>0 ? current_script_command.arg_start[i] : -1;
+			global.download_phase = false;
 			
 			switch(current_script_command.id[i]) {
 				case COMMAND_BEGIN_MOD : {
@@ -3688,7 +3694,7 @@ int main(int argc, char *argv[])
 					global.current_mod_version  = "";
 					
 					// Make a list of mod aliases for the entire installation
-					vector<string> aliases;
+					std::vector<std::string> aliases;
 					Tokenize(current_script_command.arguments[first + 3], " ", aliases);
 					
 					for (size_t j=0; j<aliases.size(); j++)
@@ -3717,11 +3723,11 @@ int main(int argc, char *argv[])
 						activate_rename = true;
 						
 						if (dir & FILE_ATTRIBUTE_DIRECTORY) {						
-							string mod_id_filename = global.current_mod_new_name + "\\__gs_id";
-							string mod_id_contents = GetFileContents(mod_id_filename);
+							std::string mod_id_filename = global.current_mod_new_name + "\\__gs_id";
+							std::string mod_id_contents = GetFileContents(mod_id_filename);
 							
 							if (!mod_id_contents.empty()) {
-								vector<string> mod_id_items;
+								std::vector<std::string> mod_id_items;
 								Tokenize(mod_id_contents, ";", mod_id_items);
 								
 								if (mod_id_items.size() > 0)
@@ -3732,10 +3738,10 @@ int main(int argc, char *argv[])
 						
 					// Rename current modfolder to make space for a new one
 					if (activate_rename) {
-						string rename_src = global.current_mod_new_name;
-						string rename_dst = "";
-						int tries         = 1;
-						int last_error    = 0;
+						std::string rename_src = global.current_mod_new_name;
+						std::string rename_dst = "";
+						int tries              = 1;
+						int last_error         = 0;
 						
 						do {
 							rename_dst = global.current_mod_new_name + "_old" + (tries>1 ? Int2Str(tries) : "");
@@ -3753,7 +3759,7 @@ int main(int argc, char *argv[])
 							}
 						} while (last_error == ERROR_ALREADY_EXISTS);
 						
-						global.logfile << "Renaming existing " << rename_src << " to " << rename_dst << endl;
+						global.logfile << "Renaming existing " << rename_src << " to " << rename_dst << std::endl;
 					}
 				
 					break;
@@ -3788,14 +3794,14 @@ int main(int argc, char *argv[])
 				case COMMAND_EXIT       : i=current_script_command.id.size(); break;
 
 				case COMMAND_AUTO_INSTALL :  {
-					global.logfile << "Auto installation" << endl; 
-					string file = global.downloaded_filename;
+					global.logfile << "Auto installation" << std::endl; 
+					std::string file = global.downloaded_filename;
 					
 					if (current_script_command.arg_num[i] > 0)
 						file = current_script_command.arguments[first];
 					
-					string file_with_path = "fwatch\\tmp\\" + file;
-					DWORD attributes      = GetFileAttributes(file_with_path.c_str());
+					std::string file_with_path = "fwatch\\tmp\\" + file;
+					DWORD attributes           = GetFileAttributes(file_with_path.c_str());
 					
 					if (attributes != INVALID_FILE_ATTRIBUTES) {
 						command_result = Auto_Install(file, attributes, FLAG_RUN_EXE, current_script_command.password[i]);
@@ -3818,7 +3824,7 @@ int main(int argc, char *argv[])
 				}
 
 				case COMMAND_UNPACK : {
-					string *file_name = &current_script_command.arguments[first];
+					std::string *file_name = &current_script_command.arguments[first];
 
 					if (Equals(*file_name,"<download>")  ||  Equals(*file_name,"<dl>")  ||  (*file_name).empty())
 						*file_name = global.downloaded_filename;
@@ -3843,9 +3849,9 @@ int main(int argc, char *argv[])
 				
 				case COMMAND_MOVE :  
 				case COMMAND_COPY : {
-					string *source      = &current_script_command.arguments[first];
-					string *destination = &current_script_command.arguments[first + 1];
-					string *new_name    = &current_script_command.arguments[first + 2];
+					std::string *source      = &current_script_command.arguments[first];
+					std::string *destination = &current_script_command.arguments[first + 1];
+					std::string *new_name    = &current_script_command.arguments[first + 2];
 
 					if ((*source).empty()) {
 						command_result = ErrorMessage(STR_ERROR_NO_FILE);
@@ -3897,7 +3903,7 @@ int main(int argc, char *argv[])
 					// If user selected directory then move it along with its sub-folders
 					bool source_is_dir = false;
 					
-					if ((*source).find("*")==string::npos && (*source).find("?")==string::npos && GetFileAttributes((*source).c_str()) & FILE_ATTRIBUTE_DIRECTORY) {
+					if ((*source).find("*")==std::string::npos && (*source).find("?")==std::string::npos && GetFileAttributes((*source).c_str()) & FILE_ATTRIBUTE_DIRECTORY) {
 						options      |= FLAG_MATCH_DIRS;
 						source_is_dir = true;
 					}
@@ -3935,7 +3941,7 @@ int main(int argc, char *argv[])
 				
 					// Format new name 
 					// 3rd argument - new name
-					if ((*new_name).find("\\")!=string::npos  ||  (*new_name).find("/")!=string::npos) {
+					if ((*new_name).find("\\")!=std::string::npos  ||  (*new_name).find("/")!=std::string::npos) {
 						command_result = ErrorMessage(STR_RENAME_DST_PATH_ERROR);
 						break;
 					}
@@ -3945,7 +3951,7 @@ int main(int argc, char *argv[])
 				}
 				
 				case COMMAND_MAKEDIR : {
-					string *path = &current_script_command.arguments[first];
+					std::string *path = &current_script_command.arguments[first];
 					
 					if (VerifyPath(*path))
 						command_result = MakeDir(global.current_mod_new_name + "\\" + *path);
@@ -3958,7 +3964,7 @@ int main(int argc, char *argv[])
 				case COMMAND_DELETE : {
 					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+"...");
 					
-					string *file_name = &current_script_command.arguments[first];
+					std::string *file_name = &current_script_command.arguments[first];
 					int options       = FLAG_MOVE_FILES | FLAG_ALLOW_ERROR;
 					
 					if (current_script_command.switches[i] & SWITCH_MATCH_DIR)
@@ -3986,10 +3992,10 @@ int main(int argc, char *argv[])
 				
 				
 					// Find files and save them to a list
-					vector<string> source_list;
-					vector<string> destination_list;
-					vector<bool>   is_dir_list;
-					vector<string> empty_dirs;
+					std::vector<std::string> source_list;
+					std::vector<std::string> destination_list;
+					std::vector<bool>        is_dir_list;
+					std::vector<std::string> empty_dirs;
 					size_t buffer_size = 1;
 					int recursion      = -1;
 				
@@ -4003,7 +4009,7 @@ int main(int argc, char *argv[])
 					char *file_list;
 					size_t base_path_len = global.working_directory.length() + 1;
 					size_t buffer_pos    = 0;
-					wstring temp;
+					std::wstring temp;
 					
 					if (trash) {
 						file_list = new char[buffer_size*2];
@@ -4025,7 +4031,7 @@ int main(int argc, char *argv[])
 						if (trash) {
 							temp               = string2wide(destination_list[j]);
 							size_t name_length = (temp.length()+1) * 2;
-							global.logfile << "Trashing " << destination_list[j].substr(base_path_len) << endl;
+							global.logfile << "Trashing " << destination_list[j].substr(base_path_len) << std::endl;
 							memcpy(file_list+buffer_pos, temp.c_str(), name_length);
 							buffer_pos += name_length;
 						} else {
@@ -4043,7 +4049,7 @@ int main(int argc, char *argv[])
 								break;
 							}
 								
-							global.logfile << endl;
+							global.logfile << std::endl;
 						}
 					}
 				
@@ -4071,9 +4077,9 @@ int main(int argc, char *argv[])
 				case COMMAND_RENAME : {
 					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_RENAMING]+"...");
 				
-					string *source      = &current_script_command.arguments[first];
-					string *destination = &current_script_command.arguments[first + 1];
-					int options         = FLAG_MOVE_FILES;
+					std::string *source      = &current_script_command.arguments[first];
+					std::string *destination = &current_script_command.arguments[first + 1];
+					int options              = FLAG_MOVE_FILES;
 					
 					if (current_script_command.switches[i] & SWITCH_MATCH_DIR)
 						options |= FLAG_MATCH_DIRS;
@@ -4101,10 +4107,10 @@ int main(int argc, char *argv[])
 					} else
 						*source = global.current_mod_new_name + "\\" + *source;
 				
-					string relative_path = PathNoLastItem(*source);
-					bool source_wildcard = false;
+					std::string relative_path = PathNoLastItem(*source);
+					bool source_wildcard      = false;
 				
-					if (relative_path.find("*")!=string::npos  ||  relative_path.find("?")!=string::npos) {
+					if (relative_path.find("*")!=std::string::npos  ||  relative_path.find("?")!=std::string::npos) {
 						command_result = ErrorMessage(STR_RENAME_WILDCARD_ERROR, "%STR%");
 						break;
 					}
@@ -4116,17 +4122,17 @@ int main(int argc, char *argv[])
 						break;
 					}
 					
-					if ((*destination).find("\\")!=string::npos  ||  (*destination).find("/")!=string::npos) {
+					if ((*destination).find("\\")!=std::string::npos  ||  (*destination).find("/")!=std::string::npos) {
 						command_result = ErrorMessage(STR_RENAME_DST_PATH_ERROR);
 						break;
 					}
 						
 							
 					// Find files and save them to a list
-					vector<string> source_list;
-					vector<string> destination_list;
-					vector<bool>   is_dir_list;
-					vector<string> empty_dirs;
+					std::vector<std::string> source_list;
+					std::vector<std::string> destination_list;
+					std::vector<bool>        is_dir_list;
+					std::vector<std::string> empty_dirs;
 					size_t buffer_size = 0;
 					int recursion      = -1;
 
@@ -4135,8 +4141,8 @@ int main(int argc, char *argv[])
 					if (command_result != 0)
 						break;
 
-					wstring source_wide;
-					wstring destination_wide;
+					std::wstring source_wide;
+					std::wstring destination_wide;
 
 
 					// For each file on the list
@@ -4156,19 +4162,19 @@ int main(int argc, char *argv[])
 
 					    if (!result) {
 							DWORD error_code = GetLastError();
-							global.logfile << endl;
+							global.logfile << std::endl;
 							command_result = ErrorMessage(STR_MOVE_RENAME_ERROR, "%STR% " + source_list[j] + " " + global.lang[STR_MOVE_RENAME_TO_ERROR] + " " + destination_list[j] + " - " + UInt2Str(error_code) + " " + FormatError(error_code));
 							break;
 					    }
 					    
-					    global.logfile << endl;
+					    global.logfile << std::endl;
 					}
 
 					break;
 				}
 				
 				case COMMAND_ASK_RUN : {
-					string *file_name = &current_script_command.arguments[first];
+					std::string *file_name = &current_script_command.arguments[first];
 					
 					if (Equals(*file_name,"<download>")  ||  Equals(*file_name,"<dl>")  ||  (*file_name).empty())
 						*file_name = global.downloaded_filename;
@@ -4183,7 +4189,7 @@ int main(int argc, char *argv[])
 						break;
 					}
 				
-					string path_to_dir = global.working_directory;
+					std::string path_to_dir = global.working_directory;
 					
 					if ((*file_name).substr(0,6) == "<mod>\\") {
 						*file_name   = (*file_name).substr(6);
@@ -4201,30 +4207,30 @@ int main(int argc, char *argv[])
 						break;
 					}
 					
-					string *file_name   = &current_script_command.arguments[first];
-					string *url         = &current_script_command.arguments[first + 1];
-					string download_dir = GetFileContents("fwatch\\tmp\\schedule\\DownloadDir.txt");
-					bool move           = false;
-					fstream config;
+					std::string *file_name   = &current_script_command.arguments[first];
+					std::string *url         = &current_script_command.arguments[first + 1];
+					std::string download_dir = GetFileContents("fwatch\\tmp\\schedule\\DownloadDir.txt");
+					bool move                = false;
+					std::fstream config;
 					
 					// Check if file already exists
-					string path1 = download_dir + "\\" + *file_name;
-					string path2 = "fwatch\\tmp\\" + *file_name;
+					std::string path1 = download_dir + "\\" + *file_name;
+					std::string path2 = "fwatch\\tmp\\" + *file_name;
 					
 					if (GetFileAttributes(path1.c_str()) != INVALID_FILE_ATTRIBUTES) {
-						global.logfile << "Found " << path1 << endl;
+						global.logfile << "Found " << path1 << std::endl;
 						move = true;
 					} else
 						if (GetFileAttributes(path2.c_str()) != INVALID_FILE_ATTRIBUTES) {
 							global.downloaded_filename = *file_name;
-							global.logfile << "Found " << path2 << endl;
+							global.logfile << "Found " << path2 << std::endl;
 							global.downloads.push_back(global.downloaded_filename);
 						} else {
-							string message = global.lang[STR_ASK_DLOAD] + ":\\n" + *file_name + "\\n\\n" + global.lang[STR_ALTTAB];
+							std::string message = global.lang[STR_ASK_DLOAD] + ":\\n" + *file_name + "\\n\\n" + global.lang[STR_ALTTAB];
 							WriteProgressFile(INSTALL_WAITINGFORUSER, message);
 							
 							ShellExecute(0, 0, (*url).c_str(), 0, 0 , SW_SHOW);
-							global.logfile << "Opened " << *url << endl;
+							global.logfile << "Opened " << *url << std::endl;
 							
 							message      = "You must manually download\n" + *file_name + "\n\nPress OK once download has finished\nPress CANCEL to skip installing this modfolder";
 							int msgboxID = MessageBox(NULL, message.c_str(), "Addon Installer", MB_ICONQUESTION | MB_OKCANCEL | MB_DEFBUTTON1);
@@ -4238,7 +4244,7 @@ int main(int argc, char *argv[])
 									download_dir = BrowseFolder("");
 									printf("%s", download_dir.c_str());
 									
-									fstream config("fwatch\\tmp\\schedule\\DownloadDir.txt", ios::out | ios::trunc);
+									std::fstream config("fwatch\\tmp\\schedule\\DownloadDir.txt", std::ios::out | std::ios::trunc);
 					
 									if (config.is_open()) {
 										config << download_dir;
@@ -4253,11 +4259,11 @@ int main(int argc, char *argv[])
 					if (move) {
 						WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_COPYINGDOWNLOAD]);
 						
-						string source      = download_dir + "\\" + *file_name;
-						string destination = global.working_directory + "\\fwatch\\tmp\\" + *file_name;
-						int result         = MoveFileEx(source.c_str(), destination.c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_REPLACE_EXISTING);
+						std::string source      = download_dir + "\\" + *file_name;
+						std::string destination = global.working_directory + "\\fwatch\\tmp\\" + *file_name;
+						int result              = MoveFileEx(source.c_str(), destination.c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_REPLACE_EXISTING);
 						
-						global.logfile << "Moving " << source << "  to  " << destination << endl;
+						global.logfile << "Moving " << source << "  to  " << destination << std::endl;
 						
 						if (!result) {
 							DWORD error_code = GetLastError();
@@ -4274,7 +4280,7 @@ int main(int argc, char *argv[])
 				case COMMAND_MAKEPBO : {
 					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_PACKINGPBO]+"...");
 					
-					string *file_name = &current_script_command.arguments[first];
+					std::string *file_name = &current_script_command.arguments[first];
 										
 					if (!VerifyPath(*file_name)) {
 						command_result = ErrorMessage(STR_ERROR_PATH);
@@ -4319,11 +4325,11 @@ int main(int argc, char *argv[])
 					si.hStdOutput  = logFile;
 					si.hStdError   = logFile;
 					
-					string exename         = "MakePbo.exe";
-					string executable      = "fwatch\\data\\" + exename;
-					string arguments       = " -NRK \"" + *file_name + "\"";
-					string pbo_name        = *file_name + ".pbo";
-					string pbo_name_backup = "";
+					std::string exename         = "MakePbo.exe";
+					std::string executable      = "fwatch\\data\\" + exename;
+					std::string arguments       = " -NRK \"" + *file_name + "\"";
+					std::string pbo_name        = *file_name + ".pbo";
+					std::string pbo_name_backup = "";
 					
 					if (GetFileAttributes(pbo_name.c_str()) != INVALID_FILE_ATTRIBUTES) {
 						int tries         = 2;
@@ -4351,16 +4357,16 @@ int main(int argc, char *argv[])
 							MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
 						
 						DWORD error_code = GetLastError();
-						command_result = ErrorMessage(STR_ERROR_EXE, "%STR% " + exename + " - " + Int2Str(error_code) + " " + FormatError(error_code));
+						command_result   = ErrorMessage(STR_ERROR_EXE, "%STR% " + exename + " - " + Int2Str(error_code) + " " + FormatError(error_code));
 					} else
-						global.logfile << "Creating a PBO file out of " << *file_name << endl;
+						global.logfile << "Creating a PBO file out of " << *file_name << std::endl;
 						
 					Sleep(10);
 				
 
 					// Wait for the program to finish its job
 					DWORD exit_code;
-					string message = "";
+					std::string message = "";
 					
 					do {					
 						if (Abort()) {
@@ -4387,15 +4393,16 @@ int main(int argc, char *argv[])
 					
 					// Need to fix the pbo timestamps after makepbo
 					if (exit_code == 0) {
-						vector<string> sourcedir_name;
-						vector<unsigned int> sourcedir_time;
+						std::vector<std::string> sourcedir_name;
+						std::vector<time_t> sourcedir_time;
 						command_result = CreateTimestampList(*file_name, (*file_name).length()+1, sourcedir_name, sourcedir_time);
 				
 						if (command_result == ERROR_NONE) {
-							FILE *f = fopen(pbo_name.c_str(), "rb");
-							if (f) {
+							FILE *f;
+							errno_t f_error = fopen_s(&f, pbo_name.c_str(), "rb");
+							if (f_error == 0) {
 								fseek(f, 0, SEEK_END);
-								int file_size = ftell(f);
+								size_t file_size = ftell(f);
 								fseek(f, 0, SEEK_SET);
 								
 								char *buffer = (char*) malloc(file_size+1);
@@ -4408,7 +4415,7 @@ int main(int argc, char *argv[])
 									char name[name_max] = "";
 									int name_len        = 0;
 									int file_count      = 0;
-									int file_pos        = 0;
+									size_t file_pos     = 0;
 									 
 									while (file_pos < file_size) {
 										memset(name, 0, name_max);
@@ -4449,7 +4456,7 @@ int main(int argc, char *argv[])
 											} else
 												break;
 										} else {
-											for (int i=0; i<sourcedir_name.size(); i++)
+											for (size_t i=0; i<sourcedir_name.size(); i++)
 												if (strcmp(sourcedir_name[i].c_str(), name) == 0) {
 													if (sourcedir_time[i] != TimeStamp)
 														memcpy(buffer+file_pos-8, &sourcedir_time[i], 4);
@@ -4461,10 +4468,11 @@ int main(int argc, char *argv[])
 										file_count++;
 									}
 									
-									freopen(pbo_name.c_str(), "wb", f);
-									int bytes_written = 0;
+									fclose(f);
+									errno_t reopen       = fopen_s(&f, pbo_name.c_str(), "wb");
+									size_t bytes_written = 0;
 									
-									if (f) {
+									if (reopen == 0) {
 										bytes_written = fwrite(buffer, 1, file_size, f);
 										fclose(f);
 									}
@@ -4475,7 +4483,7 @@ int main(int argc, char *argv[])
 										if (!pbo_name_backup.empty())
 											MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
 										
-										command_result = ErrorMessage(STR_EDIT_WRITE_ERROR, "%STR% " + Int2Str(bytes_written) + "/" + Int2Str(file_size));
+										command_result = ErrorMessage(STR_EDIT_WRITE_ERROR, "%STR% " + UInt2Str(bytes_written) + "/" + UInt2Str(file_size));
 										break;
 									}
 								}
@@ -4483,7 +4491,9 @@ int main(int argc, char *argv[])
 								if (!pbo_name_backup.empty())
 									MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
 									
-								command_result = ErrorMessage(STR_EDIT_READ_ERROR, "%STR% " + Int2Str(errno) + " - " + (string)strerror(errno));
+								char error_message[128] = "";
+								strerror_s(error_message, 128, f_error);
+								command_result = ErrorMessage(STR_EDIT_READ_ERROR, "%STR% " + Int2Str(f_error) + " - " + error_message);
 								break;
 							}
 						} else {
@@ -4500,7 +4510,7 @@ int main(int argc, char *argv[])
 						if (command_result == ERROR_NONE) {
 							if (~current_script_command.switches[i] & SWITCH_KEEP_SOURCE) {
 								WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+"...");
-								global.logfile << "Removing " << *file_name << " directory" << endl;
+								global.logfile << "Removing " << *file_name << " directory" << std::endl;
 								global.last_pbo_file = "";
 								DeleteDirectory(*file_name);
 							}
@@ -4521,8 +4531,8 @@ int main(int argc, char *argv[])
 				}
 				
 				case COMMAND_EXTRACTPBO : {
-					string *source      = &current_script_command.arguments[first];
-					string *destination = &current_script_command.arguments[first + 1];
+					std::string *source      = &current_script_command.arguments[first];
+					std::string *destination = &current_script_command.arguments[first + 1];
 					
 					// Verify source argument
 					if ((*source).empty()) {
@@ -4588,9 +4598,9 @@ int main(int argc, char *argv[])
 						break;
 					}
 					
-					string *file_name   = &current_script_command.arguments[first];
-					string *wanted_text = &current_script_command.arguments[first + 2];
-					int wanted_line     = atoi(current_script_command.arguments[first+1].c_str());
+					std::string *file_name   = &current_script_command.arguments[first];
+					std::string *wanted_text = &current_script_command.arguments[first + 2];
+					size_t wanted_line       = Str2UInt(current_script_command.arguments[first+1]);
 				
 					if ((*file_name).empty()) {
 						command_result = ErrorMessage(STR_ERROR_NO_FILE);
@@ -4612,18 +4622,18 @@ int main(int argc, char *argv[])
 						break;
 					}
 				
-					vector<string> contents;
-				    fstream file;
-					int line_number        = 0;
+					std::vector<std::string> contents;
+					std::fstream file;
+					size_t line_number     = 0;
 					bool ends_with_newline = true;
 				    
 				    if (~current_script_command.switches[i] & SWITCH_NEWFILE) {
-				    	global.logfile << "Editing line " << wanted_line << " in " << *file_name << endl;
+				    	global.logfile << "Editing line " << wanted_line << " in " << *file_name << std::endl;
 				    	
-				    	file.open((*file_name).c_str(), ios::in);
+				    	file.open((*file_name).c_str(), std::ios::in);
 				    	
 						if (file.is_open()) {
-							string line;
+							std::string line;
 						
 							while (getline(file, line)) {
 								line_number++;
@@ -4632,7 +4642,7 @@ int main(int argc, char *argv[])
 									ends_with_newline = false;
 								
 								if (line_number == wanted_line) {
-									string new_line = current_script_command.switches[i] & SWITCH_APPEND ? line+*wanted_text : *wanted_text;
+									std::string new_line = current_script_command.switches[i] & SWITCH_APPEND ? line+*wanted_text : *wanted_text;
 								
 									contents.push_back(new_line);
 									
@@ -4655,17 +4665,17 @@ int main(int argc, char *argv[])
 							break;
 						}
 					} else {
-						global.logfile << "Creating new file " << *file_name << endl;
+						global.logfile << "Creating new file " << *file_name << std::endl;
 						contents.push_back(*wanted_text);
 						
 						// Trash the file
-						int buffer_pos  = 0;
-						int buffer_size = (*file_name).length() + 3;
-						char *file_list = new char[buffer_size*2];
+						size_t buffer_pos  = 0;
+						size_t buffer_size = (*file_name).length() + 3;
+						char *file_list    = new char[buffer_size*2];
 				
 						if (file_list) {
-							wstring file_name_wide = string2wide(*file_name);
-							int name_length        = (file_name_wide.length()+1) * 2;
+							std::wstring file_name_wide = string2wide(*file_name);
+							size_t name_length          = (file_name_wide.length()+1) * 2;
 							memcpy(file_list, file_name_wide.c_str(), name_length);
 							memcpy(file_list+name_length, "\0\0", 2);
 							
@@ -4678,7 +4688,7 @@ int main(int argc, char *argv[])
 							int result   = SHFileOperationW(&shfos);
 				
 							if (result!=0  &&  result!=1026  &&  result!=2)
-								global.logfile << "Trashing FAILED " << result << " " << FormatError(result) << endl;
+								global.logfile << "Trashing FAILED " << result << " " << FormatError(result) << std::endl;
 							
 							delete[] file_list;
 						}
@@ -4686,14 +4696,14 @@ int main(int argc, char *argv[])
 				    	
 				    	
 				    // Write file
-					file.open((*file_name).c_str(), ios::out | ios::trunc);
+					file.open((*file_name).c_str(), std::ios::out | std::ios::trunc);
 					
 					if (file.is_open()) {
-						for (int j=0; j<contents.size(); j++) {
+						for (size_t j=0; j<contents.size(); j++) {
 							file << contents[j];
 							
-							if (j+1 < line_number  ||  j+1==line_number && ends_with_newline)
-								file << endl;
+							if (j+1 < line_number  ||  (j+1==line_number && ends_with_newline))
+								file << std::endl;
 						}
 				
 						file.close();
@@ -4716,8 +4726,8 @@ int main(int argc, char *argv[])
 						break;
 					}
 					
-					string *file_name = &current_script_command.arguments[first];
-					string *date_text = &current_script_command.arguments[first + 1];
+					std::string *file_name = &current_script_command.arguments[first];
+					std::string *date_text = &current_script_command.arguments[first + 1];
 					
 					if (!VerifyPath(*file_name)) {
 						command_result = ErrorMessage(STR_ERROR_PATH);
@@ -4758,11 +4768,11 @@ int main(int argc, char *argv[])
 	if (global.missing_modfolders.empty()) {
 		WriteProgressFile(INSTALL_DONE, global.lang[STR_ACTION_DONE]);
 		GetLocalTime(&st);
-		global.logfile << "All done  " << LeadingZero(st.wHour) << ":" << LeadingZero(st.wMinute) << ":" << LeadingZero(st.wSecond) << endl;
+		global.logfile << "All done  " << LeadingZero(st.wHour) << ":" << LeadingZero(st.wMinute) << ":" << LeadingZero(st.wSecond) << std::endl;
 	} else {
-		string message = ReplaceAll(global.lang[STR_ACTION_DONEWARNING], "%MOD%", global.missing_modfolders);
+		std::string message = ReplaceAll(global.lang[STR_ACTION_DONEWARNING], "%MOD%", global.missing_modfolders);
 		WriteProgressFile(INSTALL_WARNING, message);
-		global.logfile << "WARNING: Installation completed but modfolders " << global.missing_modfolders << " are still missing" << endl;
+		global.logfile << "WARNING: Installation completed but modfolders " << global.missing_modfolders << " are still missing" << std::endl;
 		global.restart_game = false;
 	}
 	
@@ -4782,12 +4792,12 @@ int main(int argc, char *argv[])
 		si.cb          = sizeof(si);
 		si.dwFlags     = STARTF_USESHOWWINDOW;
 		si.wShowWindow = SW_HIDE;
-		string param   = WrapInQuotes(global.working_directory) + " " + global.gamerestart_arguments;
+		std::string param   = WrapInQuotes(global.working_directory) + " " + global.gamerestart_arguments;
 	 
 		if (CreateProcess("fwatch\\data\\gameRestart.exe", &param[0], NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi))
-			global.logfile << "Executing gameRestart.exe  " << global.gamerestart_arguments << endl;
+			global.logfile << "Executing gameRestart.exe  " << global.gamerestart_arguments << std::endl;
 		else
-			global.logfile << "Failed to launch gameRestart.exe " << FormatError(GetLastError()) << endl;
+			global.logfile << "Failed to launch gameRestart.exe " << FormatError(GetLastError()) << std::endl;
 	 
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);

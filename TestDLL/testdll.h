@@ -660,7 +660,7 @@ WatchProgramInfo db_pid_load(int db_id_wanted);
 double             rad2deg(double num);
 double             deg2rad(double num);
 bool               IsNumberInArray(int number, const int *array, int array_size);
-unsigned int       fnv1a_hash (unsigned int hash, char *text, int text_length, bool lowercase);
+unsigned int       fnv1a_hash (unsigned int hash, char *text, size_t text_length, bool lowercase);
 int                binary_search(unsigned item_to_find, unsigned int *array, int low, int high);
 BinarySearchResult binary_search_str(char *buffer, size_t array_size, unsigned int value_to_find, size_t low, size_t high);
 FileSize           DivideBytes(double bytes);
