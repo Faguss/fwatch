@@ -513,7 +513,7 @@ FUNCTION_READ_DOWNLOADED_FILE = {
 
 	// Read file if download succeeded
 	if (GS_DOWNLOAD_RESULT select 0) then {
-		_ok = call loadFile "\:IGSE DB file:..\fwatch\tmp\schedule\dl_schedule.db read:general";
+		_ok = call loadFile Format ["\:IGSE DB file:..\fwatch\tmp\%1 read:general", _downloaded_file];
 
 		// If reading failed
 		if (!(_ok select 0) || (count (_ok select 5) > 0)) then {

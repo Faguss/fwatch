@@ -227,6 +227,8 @@ enum MISSIONSQM_PLAYERCOUNT
 	SQM_MULTI_PLAYER_TEMPLATE
 };
 
+std::string GetFileContents(const char *filename);
+
 
 
 
@@ -430,10 +432,7 @@ std::string FormatError(DWORD error)
 
 void Tokenize(std::string text, std::string delimiter, std::vector<std::string> &container)
 {
-	bool first_item   = false;
 	bool inQuote      = false;
-	char custom_delim = ' ';
-	bool use_unQuote  = true;
 	size_t word_start = 0;
 	bool word_started = false;
 	
@@ -543,6 +542,14 @@ float Str2Float(std::string num)
 	return result;
 }
 
+WORD Str2Short(std::string num)
+{
+	std::stringstream sstream(num);
+	WORD result;
+    sstream >> result;
+    return result;
+}
+
 bool IsURL(std::string text)
 {
 	return (
@@ -623,10 +630,7 @@ std::string url_encode(const std::string &value)
 std::string lowercase(const std::string &input) 
 {
 	std::string output = input;
-	
-	for (size_t i=0; i<output.length(); i++)
-		output[i] = tolower(output[i]);
-		
+	std::transform(output.begin(), output.end(), output.begin(), ::tolower);
 	return output;
 }
 // -------------------------------------------------------------------------------------------------------
@@ -690,7 +694,7 @@ int WriteModID(std::string modfolder, std::string content, std::string content2)
 }
 
 	// Format error message
-int ErrorMessage(int string_code, std::string message="%STR%", int error_code=ERROR_COMMAND_FAILED) 
+DWORD ErrorMessage(int string_code, std::string message="%STR%", int error_code=ERROR_COMMAND_FAILED) 
 {
 	if (global.current_mod=="?pretendtoinstall" && global.current_mod_version=="-1")
 		return ERROR_NONE;
@@ -735,34 +739,25 @@ int ErrorMessage(int string_code, std::string message="%STR%", int error_code=ER
 }
 
 	// Separate thread for checking user feedback
-void ReceiveInstructions(void *nothing)
+DWORD WINAPI ReceiveInstructions(__in LPVOID lpParameter)
 {
-	std::fstream instructions;
-
 	while (!global.end_thread  &&  !global.abort_installer) {
-		instructions.open("fwatch\\tmp\\schedule\\InstallerInstruction.txt", std::ios::in);
+		std::string contents = GetFileContents("fwatch\\tmp\\schedule\\InstallerInstruction.txt");
+		if (!contents.empty()) {
+			if (contents == "abort")
+				global.abort_installer = true;
 
-		if (instructions.is_open()) {
-		    std::string text;
+			if (contents == "restart")
+				global.restart_game = !global.restart_game;
+				
+			if (contents == "voice")
+				global.run_voice_program = !global.run_voice_program;
 
-			while (getline(instructions, text)) {
-				if (text == "abort")
-					global.abort_installer = true;
-
-				if (text == "restart")
-					global.restart_game = !global.restart_game;
-					
-				if (text == "voice")
-					global.run_voice_program = !global.run_voice_program;
-			}
+			DeleteFile("fwatch\\tmp\\schedule\\InstallerInstruction.txt");
 		}
-
-		instructions.close();
-		DeleteFile("fwatch\\tmp\\schedule\\InstallerInstruction.txt");
 		Sleep(100);
 	}
-
-	_endthread();
+	return 0;
 }
 
 	// Cancel entire installation
@@ -990,7 +985,6 @@ int ParseUnpackLog(std::string &error, std::string &file_name)
 		std::string text         = "";
 		std::string current_file = "";
 		std::string percentage   = "";
-		bool foundFileName  = false;
 
 		while(getline(UnpackLog, text)) {
 			text = Trim(text);
@@ -1082,13 +1076,13 @@ int ParsePBOLog(std::string &message, std::string &exename, std::string &file_na
 	return 0;
 }
 
-int CreateFileList(std::string source, std::string destination, std::vector<std::string> &sources, std::vector<std::string> &destinations, std::vector<bool> &dirs, int options, std::vector<std::string> &empty_dirs, size_t &buffer_size, int &recursion)
+DWORD CreateFileList(std::string source, std::string destination, std::vector<std::string> &sources, std::vector<std::string> &destinations, std::vector<bool> &dirs, int options, std::vector<std::string> &empty_dirs, size_t &buffer_size, int &recursion)
 {
 	WIN32_FIND_DATAW fd;
 	HANDLE hFind             = INVALID_HANDLE_VALUE;
 	std::wstring source_wide = string2wide(source);
 	hFind                    = FindFirstFileW(source_wide.c_str(), &fd);
-	int result               = 0;
+	DWORD result             = 0;
 
 	if (hFind == INVALID_HANDLE_VALUE) {
 		DWORD error_code = GetLastError();
@@ -1178,7 +1172,7 @@ std::string GetMissionDestinationFromSQM(std::string path)
 	int class_level      = 0;
 	int array_level      = 0;
 	int player_count     = 0;
-	size_t word_start    = -1;
+	size_t word_start    = 0;
 	bool word_started    = false;
 	bool is_array        = false;
 	bool in_quote        = false;
@@ -1869,7 +1863,6 @@ int MoveFiles(std::string source, std::string destination, std::string new_name,
 
 	DWORD flags       = MOVEFILE_REPLACE_EXISTING;
 	bool FailIfExists = false;
-	int return_value  = 0;
 
 	if (~options & FLAG_OVERWRITE) {
 		FailIfExists = true;
@@ -2084,12 +2077,12 @@ int ChangeFileDate(std::string file_name, std::string timestamp)
 			date_item.push_back("0");
 			
 		SYSTEMTIME st;
-		st.wYear         = atoi(date_item[0].c_str());
-		st.wMonth        = atoi(date_item[1].c_str());
-		st.wDay          = atoi(date_item[2].c_str());
-		st.wHour         = atoi(date_item[3].c_str());
-		st.wMinute       = atoi(date_item[4].c_str());
-		st.wSecond       = atoi(date_item[5].c_str());
+		st.wYear         = Str2Short(date_item[0].c_str());
+		st.wMonth        = Str2Short(date_item[1].c_str());
+		st.wDay          = Str2Short(date_item[2].c_str());
+		st.wHour         = Str2Short(date_item[3].c_str());
+		st.wMinute       = Str2Short(date_item[4].c_str());
+		st.wSecond       = Str2Short(date_item[5].c_str());
 		st.wMilliseconds = 0;
 		SystemTimeToFileTime(&st, &ft);
 		return ChangeFileDate(file_name, &ft);
@@ -2194,7 +2187,6 @@ int RequestExecution(std::string path_to_dir, std::string file_name)
 	}
 	
 	std::string path_to_file = path_to_dir + file_name;
-	int result               = E_FAIL;
 	ITEMIDLIST *pIDL         = ILCreateFromPath(path_to_file.c_str());
 	
 	if (pIDL != NULL) {
@@ -2905,7 +2897,8 @@ int main(int argc, char *argv[])
 
 
 	// Start listen thread
-	_beginthread(ReceiveInstructions, 0, (void *)(0));
+	DWORD threadID1 = 0;
+	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ReceiveInstructions, 0, 0,&threadID1);
 
 
 
@@ -3090,28 +3083,28 @@ int main(int argc, char *argv[])
 	// Automatic filling with empty strings for a command when not enough arguments were passed
 	// This is for the commands that can be used with or without arguments
 	int command_minimal_arg[] = {
-		0,
-		0,
-		1,
-		3,
-		3,
-		1,
-		1,
-		0,
-		1,
-		2,
-		0,
-		0,
-		0,
-		0,
-		1,
-		2,
-		0,
-		0,
-		0,
-		0,
-		1,
-		0
+		0, // auto_install
+		0, // download
+		1, // unpack
+		3, // move
+		3, // copy
+		1, // makedir
+		1, // ask_run
+		0, // begin_mod
+		1, // delete
+		2, // rename
+		0, // ask_download
+		0, // if_version
+		0, // else
+		0, // endif
+		1, // makepbo
+		2, // extractpbo
+		0, // edit
+		0, // begin_version
+		0, // alias
+		0, // filedate
+		1, // install_version
+		0  // exit
 	};
 
 	int number_of_commands = sizeof(command_names) / sizeof(command_names[0]);
@@ -3160,7 +3153,6 @@ int main(int argc, char *argv[])
 	int command_id             = -1;
 	int last_command_line_num  = -1;
 	size_t last_url_list_id    = 0;
-	int url_arg_key            = -1;
 	bool in_quote              = false;
 	bool remove_quotes         = true;
 	bool url_block             = false;
@@ -3522,14 +3514,13 @@ int main(int argc, char *argv[])
 					std::string wget_arguments   = "";
 					std::string new_url          = original_url;
 					std::string POST             = "";
-					int result                   = 0;
-					int last_url_arg             = current_script_command_urls.arg_start[j] + current_script_command_urls.arg_num[j] - 1;
+					size_t last_url_arg          = current_script_command_urls.arg_start[j] + current_script_command_urls.arg_num[j] - 1;
 					bool found_phrase            = false;
 				
 					DeleteFile(cookie_file_name.c_str());
 					DeleteFile(token_file_name.c_str());
 				
-					for (int k=current_script_command_urls.arg_start[j]; k<last_url_arg; k++) {
+					for (size_t k=current_script_command_urls.arg_start[j]; k<last_url_arg; k++) {
 						wget_arguments = "";
 						
 						if (!POST.empty()) {
@@ -3643,7 +3634,7 @@ int main(int argc, char *argv[])
 							goto Finished_downloading;
 						}
 							
-						token_file_name += Int2Str(k - current_script_command_urls.arg_start[j]);
+						token_file_name += UInt2Str(k - current_script_command_urls.arg_start[j]);
 					}
 
 					wget_arguments = "--load-cookies " + cookie_file_name;
@@ -3809,7 +3800,7 @@ int main(int argc, char *argv[])
 						// If not an archive but there are still backup links then go back to download
 						if (!global.last_download_attempt && command_result==ERROR_WRONG_ARCHIVE) {
 							file       = "fwatch\\tmp\\" + file;
-							int result = DeleteFile(file.c_str());
+							DeleteFile(file.c_str());
 							file       = "<dl>";
 							global.downloads.pop_back();
 							global.download_iterator++;
@@ -3835,7 +3826,7 @@ int main(int argc, char *argv[])
 						// If not an archive but there are still backup links then go back to download
 						if (!global.last_download_attempt && command_result==ERROR_WRONG_ARCHIVE) {
 							*file_name = "fwatch\\tmp\\" + *file_name;
-							int result = DeleteFile((*file_name).c_str());
+							DeleteFile((*file_name).c_str());
 							*file_name = "<dl>";
 							global.downloads.pop_back();
 							global.download_iterator++;
@@ -4006,7 +3997,7 @@ int main(int argc, char *argv[])
 				
 				
 					// Allocate buffer for the file list
-					char *file_list;
+					char *file_list      = NULL;
 					size_t base_path_len = global.working_directory.length() + 1;
 					size_t buffer_pos    = 0;
 					std::wstring temp;
@@ -4036,7 +4027,7 @@ int main(int argc, char *argv[])
 							buffer_pos += name_length;
 						} else {
 							global.logfile << "Deleting  " << destination_list[j].substr(base_path_len);
-							int error_code = 0;
+							DWORD error_code = 0;
 							
 							if (is_dir_list[j])
 								error_code = DeleteDirectory(destination_list[j]);
@@ -4108,7 +4099,6 @@ int main(int argc, char *argv[])
 						*source = global.current_mod_new_name + "\\" + *source;
 				
 					std::string relative_path = PathNoLastItem(*source);
-					bool source_wildcard      = false;
 				
 					if (relative_path.find("*")!=std::string::npos  ||  relative_path.find("?")!=std::string::npos) {
 						command_result = ErrorMessage(STR_RENAME_WILDCARD_ERROR, "%STR%");
@@ -4669,7 +4659,6 @@ int main(int argc, char *argv[])
 						contents.push_back(*wanted_text);
 						
 						// Trash the file
-						size_t buffer_pos  = 0;
 						size_t buffer_size = (*file_name).length() + 3;
 						char *file_list    = new char[buffer_size*2];
 				

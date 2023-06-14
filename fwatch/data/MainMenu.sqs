@@ -12,8 +12,8 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2023,6,13,2,20,23,1,78,120,FALSE]
-	GS_MY_VERSION        = 0.6
+	GS_FWATCH_MY_VERSION = [2023,6,14,3,18,12,48,137,120,FALSE]
+	GS_MY_VERSION        = 0.61
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
 	; Won't work with older version
@@ -798,6 +798,7 @@
 	_pid            = _ok select 4
 	_install_status = 0
 	_progress       = ""
+	_progress_upd   = false
 	? Format ["%1",_pid] == "scalar bool array string 0xfcffffef" : titleText [Format [MAINMENU_STR select 40,_result], "PLAIN", 1.5]; goto "Schedule"
 
 	; Save variables indicating that installation started
@@ -824,12 +825,12 @@
 		; Wait for the program to finish
 		#InstallWait
 		_progressText = loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
-		if (count (call loadFile ("\:STRING FIND find:""text:"+_progressText)) == 2) then {_progress=call _progressText}
+		if (count (call loadFile ("\:STRING FIND find:""text:"+_progressText)) == 2) then {_progress=call _progressText; _progress_upd=false}
 		? _progress == "" : _progress=MAINMENU_STR select 10
 		? !(_auto_restart in [_current_auto_restart])   : goto "InstallDisplay"
 		? !(_run_voice_program in [_current_run_voice]) : goto "InstallDisplay"
 
-		? _install_status == 0 : if (lbSize 6657 == 0) then {goto "InstallDisplay"}; _ok=call loadFile Format ["\:EXE ADDONINSTALL  check %1", _pid]; _install_hanged=!(_ok select 0); if (_install_hanged) then {if ((_ok select 2) in [740,186]) then {_progress=_progress+Format ["%1 %2 - %3\n\nRight click on fwatch.exe --> Properties --> Compatibility --> Run this program as an administrator",MAINMENU_STR select 63,(_ok select 2),(_ok select 3)]} else {_progress=_progress+(MAINMENU_STR select 45)}}
+		? _install_status == 0 : if (lbSize 6657 == 0) then {goto "InstallDisplay"}; _ok=call loadFile Format ["\:EXE ADDONINSTALL  check %1", _pid]; _install_hanged=!(_ok select 0); if (_install_hanged && !_progress_upd) then {_progress_upd=true; if ((_ok select 2) in [740,186]) then {_progress=_progress+Format ["\n\n%1 %2 - %3\n\nRight click on fwatch.exe --> Properties --> Compatibility --> Run this program as an administrator",MAINMENU_STR select 63,(_ok select 2),(_ok select 3)]} else {_progress=_progress+(MAINMENU_STR select 45)}}
 		ctrlSetText [6463, _progress]
 
 		; waiting for user input
@@ -1030,6 +1031,7 @@
 		_voice_name         = ""
 		_run_voice_program  = false
 		_progress           = ""
+		_progress_upd       = false
 		_playingNow         = false
 		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:savestate"
 		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
@@ -1108,7 +1110,7 @@
 		? !_silent_mode : (MAINMENU_STR select 17) call FUNCTION_MSG_LB
 		
 		#DownloadDatabase_Read
-		["DownloadDatabase_ForEachURL", "schedule\schedule.db"] call FUNCTION_READ_DOWNLOADED_FILE
+		["DownloadDatabase_ForEachURL", Format["schedule\dl_%1.db",_mode]] call FUNCTION_READ_DOWNLOADED_FILE
 
 		if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="scalar") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0; if (_update_available) then {goto "DownloadDatabase_Done"}}
 		? GS_VERSION != GS_MY_VERSION : [MAINMENU_STR select 20,""] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"

@@ -66,7 +66,7 @@ std::string FormatError(DWORD error)
 	return message;
 };
 
-// https://stackoverflow.com/questions/11635/case-insensitive-std::string-comparison-in-c#315463
+// https://stackoverflow.com/questions/11635/case-insensitive-string-comparison-in-c#315463
 bool Equals(const std::string& a, const std::string& b) 
 {
     size_t sz = a.size();
@@ -143,7 +143,7 @@ game_info find_game_instance(DWORD input_pid, std::string input_name)
 
 
 
-// Format std::string (convert number to std::string and add leading zero)
+// Format string (convert number to std::string and add leading zero)
 std::string LeadingZero(int number)
 {
 	std::string ret = "";
@@ -159,7 +159,7 @@ std::string LeadingZero(int number)
 };
 
 
-// Read process parameters and copy them to a std::string
+// Read process parameters and copy them to a string
 DWORD GetProcessParams(int pid, HANDLE *phandle, std::string moduleName, int offset, std::vector<std::string> &container)
 {    
     // Get address of wanted module
@@ -196,7 +196,7 @@ DWORD GetProcessParams(int pid, HANDLE *phandle, std::string moduleName, int off
 			char buffer[1024] = "";
 			ReadProcessMemory(*phandle, (LPVOID)pointer[max_loops], &buffer, 1023, &stBytes);
 		
-			// Add arguments to std::vector
+			// Add arguments to vector
 			std::string word = "";
 			bool ignore_first_word = true;
 
@@ -272,7 +272,7 @@ enum OPTIONS_FNVHASH {
 	OPTION_LOWERCASE = 1
 };
 
-//https://stackoverflow.com/questions/11413860/best-std::string-hashing-function-for-short-filenames
+//https://stackoverflow.com/questions/11413860/best-string-hashing-function-for-short-filenames
 unsigned int fnv1a_hash(unsigned int hash, const char *text, size_t text_length, bool lowercase) {
     for (size_t i=0; i<text_length; i++)
 		hash = (hash ^ (lowercase ? tolower(text[i]) : text[i])) * FNV_PRIME;
@@ -463,11 +463,12 @@ std::string UnQuote(std::string text)
 
 void Tokenize(std::string text, std::string delimiter, std::vector<std::string> &container)
 {
-	bool first_item = false;
-	bool inQuote    = false;
+	bool inQuote      = false;
+	size_t word_start = 0;
+	bool word_started = false;
 	
 	// Split line into parts
-	for (size_t pos=0, begin=-1;  pos<=text.length();  pos++) {
+	for (size_t pos=0;  pos<=text.length();  pos++) {
 		bool isToken = pos == text.length();
 		
 		for (size_t i=0;  !isToken && i<delimiter.length();  i++)
@@ -478,14 +479,16 @@ void Tokenize(std::string text, std::string delimiter, std::vector<std::string> 
 			inQuote = !inQuote;
 			
 		// Mark beginning of the word
-		if (!isToken  &&  begin<0)
-			begin = pos;
+		if (!isToken  &&  !word_started) {
+			word_start   = pos;
+			word_started = true;
+		}
 						
 		// Mark end of the word
-		if (isToken  &&  begin>=0  &&  !inQuote) {
-			std::string part = UnQuote(text.substr(begin, pos-begin));
+		if (isToken  &&  word_started  &&  !inQuote) {
+			std::string part = UnQuote(text.substr(word_start, pos-word_start));
 			container.push_back(part);
-			begin = -1;
+			word_started = false;
 		}
 	}
 }
@@ -495,6 +498,14 @@ std::string Int2Str(int num)
     std::ostringstream text;
     text << num;
     return text.str();
+}
+
+WORD Str2Short(std::string num)
+{
+	std::stringstream sstream(num);
+	WORD result;
+    sstream >> result;
+    return result;
 }
 
 
@@ -673,7 +684,7 @@ int ParseWgetLog(std::string &error)
 
 
 	// Read 7za log to get information about unpacking
-int ParseUnpackLog(std::string &error, std::string &file_name)
+int ParseUnpackLog(std::string &error)
 {
 	std::fstream UnpackLog;
     UnpackLog.open ("fwatch\\tmp\\schedule\\unpackLog.txt", std::ios::in);
@@ -686,7 +697,6 @@ int ParseUnpackLog(std::string &error, std::string &file_name)
 		std::string text         = "";
 		std::string current_file = "";
 		std::string percentage   = "";
-		bool foundFileName       = false;
 
 		while(getline(UnpackLog, text)) {
 			text = Trim(text);
@@ -758,7 +768,7 @@ DWORD DeleteDirectory(const std::string &refcstrRootDirectory, bool bDeleteSubdi
 				if (FileInformation.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 					if (bDeleteSubdirectories) {
 						// Delete subdirectory
-						int iRC = DeleteDirectory(strFilePath, bDeleteSubdirectories);
+						DWORD iRC = DeleteDirectory(strFilePath, bDeleteSubdirectories);
 						if (iRC)
 							return iRC;
 					} else
@@ -919,13 +929,13 @@ DWORD Unpack(std::string file_name, std::string password, std::string &error_tex
 	std::string message = "";
 
 	do {					
-		ParseUnpackLog(message, file_name);
+		ParseUnpackLog(message);
 		GetExitCodeProcess(pi.hProcess, &exit_code);
 		Sleep(100);
 	}
 	while (exit_code == STILL_ACTIVE);
 
-	ParseUnpackLog(message, file_name);
+	ParseUnpackLog(message);
 
 	if (exit_code != 0) {
 		global.logfile << "Failed to extract " << file_name << " - " << exit_code << " - " << message << std::endl;
@@ -1019,7 +1029,7 @@ DWORD CreateFileList(std::string source, std::string destination, std::vector<st
 	WIN32_FIND_DATA fd;
 	HANDLE hFind = INVALID_HANDLE_VALUE;
 	hFind        = FindFirstFile(source.c_str(), &fd);
-	int result   = 0;
+	DWORD result = 0;
 
 	if (hFind == INVALID_HANDLE_VALUE) {
 		DWORD errorCode = GetLastError();
@@ -1082,78 +1092,6 @@ DWORD CreateFileList(std::string source, std::string destination, std::vector<st
 	return result;
 }
 
-
-DWORD MoveFiles(std::string source, std::string destination, std::string new_name, bool is_move, bool overwrite, bool match_dirs, std::string &error_text)
-{
-	// Find files and save them to a list
-	std::vector<std::string> source_list;
-	std::vector<std::string> destination_list;
-	std::vector<bool>        is_dir_list;
-	std::vector<std::string> empty_dirs;
-	size_t buffer_size = 0;
-	DWORD final_result = 0;
-	
-	DWORD result = CreateFileList(source, destination+new_name, source_list, destination_list, is_dir_list, is_move, empty_dirs, buffer_size, match_dirs);
-
-	if (result != 0)
-		return result;
-	
-
-	DWORD flags        = MOVEFILE_REPLACE_EXISTING;
-	bool FailIfExists  = false;
-	DWORD return_value = 0;
-
-	if (!overwrite) {
-		FailIfExists = true;
-		flags        = 0;
-	}
-
-
-	// For each file in the list
-	for (size_t i=0;  i<source_list.size(); i++) {
-		// Format path for logging
-		std::string destinationLOG = PathNoLastItem(destination_list[i], 0);
-
-		if (destinationLOG.empty())
-			destinationLOG = "the game folder";
-		
-		global.logfile << (is_move ? "Moving" : "Copying") << "  " << ReplaceAll(source_list[i], "fwatch\\tmp\\_extracted\\", "") << "  to  " << destinationLOG;
-		
-		if (!new_name.empty())
-			global.logfile << "  as  " << PathLastItem(destination_list[i]);
-
-		if (is_move)
-			result = MoveFileEx(source_list[i].c_str(), destination_list[i].c_str(), flags);
-		else
-			result = CopyFile(source_list[i].c_str(), destination_list[i].c_str(), FailIfExists);
-
-	    if (result == 0) {
-			return_value = GetLastError();
-			
-	    	/*if (!overwrite  &&  return_value==ERROR_ALREADY_EXISTS)
-	    		global.logfile << "  - file already exists";
-			else */{
-				final_result = 1;
-				global.logfile << "  FAILED " << return_value << " " << FormatError(return_value);
-				error_text += "Failed to move " + source_list[i] + FormatError(return_value);
-			}
-		}
-			
-		global.logfile << std::endl;
-	}
-	
-	if (source_list.size() == 0)
-		final_result = 1;
-
-
-	// Remove empty directories
-	if (is_move)
-		for (size_t i=empty_dirs.size()-1; i>=0; i--)
-			RemoveDirectory(empty_dirs[i].c_str());
-	
-	return final_result;
-}
-
 std::string Decrypt(std::string sentence) 
 {
 	int decrypt_key = 0;
@@ -1186,8 +1124,7 @@ std::string Decrypt(std::string sentence)
 			key        = key / 2;
 		}
 		
-		char letter = result;
-		decrypted += letter;
+		decrypted += (char)result;
 		
 	}
 	
@@ -1242,7 +1179,6 @@ int main(int argc, char *argv[])
 	std::string ip                 = "";
 	std::string port               = "";
 	
-	bool query_server       = false;
 	bool self_update        = false;
 	bool server_equalmodreq = false;
 	DWORD game_pid          = 0;
@@ -1336,7 +1272,7 @@ int main(int argc, char *argv[])
 					std::string query     = "";
 					size_t query_pos = ip.find("?");
 					
-					// Decrypt query std::string
+					// Decrypt query string
 					if (query_pos != std::string::npos) {
 						query = ip.substr(query_pos+1);
 						ip    = ip.substr(0, query_pos);
@@ -1440,13 +1376,13 @@ int main(int argc, char *argv[])
 		
 		if (date.size() >= 8) {
 			SYSTEMTIME st;
-			st.wYear         = atoi(date[0].c_str());
-			st.wMonth        = atoi(date[1].c_str());
-			st.wDay          = atoi(date[2].c_str());
-			st.wHour         = atoi(date[4].c_str());
-			st.wMinute       = atoi(date[5].c_str());
-			st.wSecond       = atoi(date[6].c_str());
-			st.wMilliseconds = atoi(date[7].c_str());
+			st.wYear         = Str2Short(date[0].c_str());
+			st.wMonth        = Str2Short(date[1].c_str());
+			st.wDay          = Str2Short(date[2].c_str());
+			st.wHour         = Str2Short(date[4].c_str());
+			st.wMinute       = Str2Short(date[5].c_str());
+			st.wSecond       = Str2Short(date[6].c_str());
+			st.wMilliseconds = Str2Short(date[7].c_str());
 
 			SystemTimeToFileTime(&st      , &schedule);
 			FileTimeToSystemTime(&schedule, &st);						
@@ -1559,13 +1495,14 @@ int main(int argc, char *argv[])
 	};
 	
 	int exe_num    = sizeof(exe_version_list) / sizeof(exe_version_list[0]);
-	int window_num = sizeof(window_name_list) / sizeof(window_name_list[0]);
 
 	std::string game_window = "";
 	bool got_handle         = false;
 	bool dedicated_server   = false;
 	int game_version        = VER_196;
 	game_info game;
+	game.handle = 0;
+	game.pid = 0;
 	
 	for (int i=0; i<exe_num; i++)
 		if (!game_exe.empty()) {		// if executable name is known then match corresponding window name
@@ -1635,9 +1572,9 @@ int main(int argc, char *argv[])
 
 
     // Is fwatch -nolaunch?
-	int fwatch_pid = 0;
-	bool nolaunch  = false;
-	bool steam     = false;
+	DWORD fwatch_pid = 0;
+	bool nolaunch    = false;
+	bool steam       = false;
 	std::string fwatch_arguments = " ";
 	std::fstream fwatch_info;
 	fwatch_info.open("fwatch_info.sqf", std::ios::in);
@@ -1700,7 +1637,7 @@ int main(int argc, char *argv[])
 			if (dedicated_server)
 				strcpy_s(module_name, 32, "ijl15.dll");
 			
-			int result = GetProcessParams(game.pid, &game_handle, module_name, dedicated_server ? 0x4FF20 : 0x2C154, all_game_arguments);
+			DWORD result = GetProcessParams(game.pid, &game_handle, module_name, dedicated_server ? 0x4FF20 : 0x2C154, all_game_arguments);
 			if (result == 0) {
 				std::string log_arguments = "";
 				
@@ -1978,13 +1915,13 @@ int main(int argc, char *argv[])
 								else {
 									tries++;
 									last_error = GetLastError();
-									if (last_error != 183) {
+									if (last_error != ERROR_ALREADY_EXISTS) {
 										global.logfile << "Failed to rename " << rename_src << " to " << rename_dst << " - " << FormatError(last_error);
 										global.logfile.close();
 										return 7;
 									}
 								}
-							} while (last_error == 183);
+							} while (last_error == ERROR_ALREADY_EXISTS);
 							
 							global.logfile << "Renamed " << rename_src << " to " << rename_dst << std::endl;
 						}
@@ -2059,7 +1996,7 @@ int main(int argc, char *argv[])
 				else
 					error_text += "\n\nYou have to download and update manually";
 				
-				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+				MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
 				
 				if (last_error == 5) {
 					CHAR pwd[MAX_PATH];
@@ -2091,7 +2028,7 @@ int main(int argc, char *argv[])
 				global.logfile.close();
 				error_text  += "Failed to close Fwatch " + Int2Str(last_error) + errorMSG;
 				error_text  += "\n\nYou have to download and update manually";
-				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+				MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
 				ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 				return 1;
 			}
@@ -2122,7 +2059,7 @@ int main(int argc, char *argv[])
 			error_text += "Failed to rename " + rename_src + " to " + rename_dst + FormatError(last_error);
 			global.logfile.close();
 			error_text += "\n\nYou have to download and update manually";
-			int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+			MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
 			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 			return result;
 		}
@@ -2140,7 +2077,7 @@ int main(int argc, char *argv[])
 				global.logfile << "Download failed\n\n--------------\n\n";
 				global.logfile.close();
 				error_text += "\n\nYou have to download and update manually";
-				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+				MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
 				ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 				return result;
 			}
@@ -2168,7 +2105,7 @@ int main(int argc, char *argv[])
 				global.logfile << "Delete failed\n\n--------------\n\n";
 				global.logfile.close();
 				error_text += "Failed to delete fwatch.dll " + FormatError(result);
-				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+				MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
 				ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 				return result;
 			}
@@ -2188,7 +2125,7 @@ int main(int argc, char *argv[])
 				else
 					error_text += "\n\nYou have to unpack files manually";
 				
-				int msgboxID = MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
+				MessageBox(NULL, error_text.c_str(), "Fwatch self-update", MB_OK | MB_ICONSTOP);
 				
 				if (error_text.find("Can not open the file as") != std::string::npos) {
 					ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
@@ -2243,7 +2180,7 @@ int main(int argc, char *argv[])
 	if (update_resource != "") {
 		std::string error_text = "";
 		char url[]             = "http://ofp-faguss.com/fwatch/116test";
-		int result             = 0;
+		DWORD result           = 0;
 		
 		std::vector<std::string> download_mirrors2;
 		download_mirrors2.push_back("http://ofp-faguss.com/fwatch/download/ofp_aspect_ratio207.7z");
@@ -2259,7 +2196,7 @@ int main(int argc, char *argv[])
 			global.logfile << "Download failed\n\n--------------\n\n";
 			global.logfile.close();
 			error_text += "\n\nYou have to download and update manually";
-			int msgboxID = MessageBox(NULL, error_text.c_str(), "Resource update", MB_OK | MB_ICONSTOP);
+			MessageBox(NULL, error_text.c_str(), "Resource update", MB_OK | MB_ICONSTOP);
 			ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 			return result;
 		}
@@ -2270,7 +2207,7 @@ int main(int argc, char *argv[])
 		if (result != 0) {
 			global.logfile << "Unpacking failed\n\n--------------\n\n";
 			global.logfile.close();
-			int msgboxID = MessageBox(NULL, error_text.c_str(), "Resource update", MB_OK | MB_ICONSTOP);		
+			MessageBox(NULL, error_text.c_str(), "Resource update", MB_OK | MB_ICONSTOP);		
 			return result;			
 		}
 		
@@ -2302,21 +2239,21 @@ int main(int argc, char *argv[])
 			else {
 				tries++;
 				last_error = GetLastError();
-				if (last_error != 183) {
+				if (last_error != ERROR_ALREADY_EXISTS) {
 					std::string message = "Failed to rename " + destination + " to " + destination_backup + " - " + FormatError(last_error);
 					global.logfile << message;
 					global.logfile.close();
-					int msgboxID = MessageBox(NULL, message.c_str(), "Resource update", MB_OK | MB_ICONSTOP);		
+					MessageBox(NULL, message.c_str(), "Resource update", MB_OK | MB_ICONSTOP);		
 					return 7;
 				}
 			}
-		} while (last_error == 183);
+		} while (last_error == ERROR_ALREADY_EXISTS);
 		
 		if (!MoveFileEx(source.c_str(), destination.c_str(), 0)) {
 			std::string message = "Failed to move " + source + " to " + destination + " - " + FormatError(GetLastError());
 			global.logfile << message;
 			global.logfile.close();
-			int msgboxID = MessageBox(NULL, message.c_str(), "Resource update", MB_OK | MB_ICONSTOP);		
+			MessageBox(NULL, message.c_str(), "Resource update", MB_OK | MB_ICONSTOP);		
 			return 7;
 		}
 		
@@ -2399,9 +2336,9 @@ int main(int argc, char *argv[])
 		size_t face_extensions_length = sizeof(face_extensions) / sizeof(face_extensions[0]);
 
 		// Find mod with custom face file starting from the last
-		for (size_t i=mod_list.size()-1; i>=0 && face_type==NONE; i--) {
+		for (std::vector<std::string>::reverse_iterator current_mod=mod_list.rbegin(); current_mod!=mod_list.rend(); ++current_mod) {
 			for (size_t j=0; j<face_extensions_length; j++) {
-				mod_face = mod_list[i] + "\\face." + face_extensions[j];
+				mod_face = *current_mod + "\\face." + face_extensions[j];
 
 				if (GetFileAttributes(mod_face.c_str()) != 0xFFFFFFFF) {
 					face_type = j + 1;
@@ -2475,14 +2412,13 @@ int main(int argc, char *argv[])
 	if (!maxcustom.empty() && !username.empty()) {
 		std::string changelog   = "";
 		std::string path_to_cfg = "Users\\" + username + "\\UserInfo.cfg";
-		int face_offset         = 0;
 		char *face_ptr          = NULL;
 		FILE *f;
 		errno_t fopen_error = fopen_s(&f, path_to_cfg.c_str(), "rb");
 		bool rewrite        = false;
 		int file_size       = 0;
 		double size_limit   = strtod(maxcustom.c_str(), NULL);
-		char *file_buffer;
+		char *file_buffer   = NULL;
 		HANDLE hFind;
 		WIN32_FIND_DATA fd;
 		
@@ -2526,7 +2462,7 @@ int main(int argc, char *argv[])
 			if (rewrite) {
 				fclose(f);
 				errno_t fopen_error = fopen_s(&f, path_to_cfg.c_str(), "wb");
-				if (f) {
+				if (fopen_error == 0) {
 					fwrite(file_buffer, 1, file_size, f);
 					global.logfile << "Changed custom face to a default one due to server file limit" << std::endl;
 				}
