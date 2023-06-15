@@ -950,147 +950,6 @@ DWORD Unpack(std::string file_name, std::string password, std::string &error_tex
 }
 
 
-	// https://superuser.com/questions/475874/how-does-the-windows-rename-command-interpret-wildcards
-std::string MaskNewName(std::string path, std::string mask) 
-{
-	if (mask.empty())
-		return path;
-	
-	if (path.empty())
-		return "";
-		
-	size_t x      = 0;
-	std::string R = "";
-	
-	for (size_t m=0; m<mask.length(); m++) {
-		char ch       = mask[m];
-		bool q_exists = x<path.length();
-		char q        = q_exists          ? path[x]   : ' ';
-		char z        = m<mask.length()-1 ? mask[m+1] : ' ';
-		
-		if (ch!='.'  &&  ch!='*'  &&  ch!='?') {
-			if (q_exists  &&  q!='.')
-				x++;
-			R += ch;
-        } else if (ch == '?') {
-            if (q_exists  &&  q!='.') {
-				R += q;
-				x++;
-			}
-        } else if (ch == '*'   &&   m == mask.length()-1) {
-            while (x < path.length()) 
-				R += path[x++];
-        } else if (ch == '*') {
-            if (z == '.') {
-                size_t i = path.find_last_of('.');
-						
-				if (i == std::string::npos) {
-                    R += path.substr(x, path.length()) + '.';
-                    i  = path.length();
-                } else {
-					R += path.substr(x, i - x + 1);
-					x = i + 1;
-					m++;
-				}
-				
-            } else if (z == '?') {
-                R += path.substr(x, path.length());
-				m++;
-				x  = path.length();
-            } else {
-                size_t i = path.find_last_of(z);
-						
-				if (i == std::string::npos) {
-					R += path.substr(x, path.length()) + z;
-					x  = path.length();
-					m++;
-				} else {
-					R += path.substr(x, i - x);
-					x = i + 1;
-				}
-            }
-        } else if (ch == '.') {
-            while (x < path.length()) 
-				if (path[x++] == '.') 
-					break;
-					
-            R += '.';
-        }
-    }
-	
-    while (R[R.length() - 1] == '.') 
-		R = R.substr(0, R.length() - 1);
-		
-	return R;
-}
-
-DWORD CreateFileList(std::string source, std::string destination, std::vector<std::string> &sources, std::vector<std::string> &destinations, std::vector<bool> &dirs, bool is_move, std::vector<std::string> &empty_dirs, size_t &buffer_size, bool match_dirs)
-{
-	WIN32_FIND_DATA fd;
-	HANDLE hFind = INVALID_HANDLE_VALUE;
-	hFind        = FindFirstFile(source.c_str(), &fd);
-	DWORD result = 0;
-
-	if (hFind == INVALID_HANDLE_VALUE) {
-		DWORD errorCode = GetLastError();
-		global.logfile << "Failed to list files in " << source << "  - " << errorCode << " " + FormatError(errorCode) << std::endl;
-		return errorCode;
-	}
-
-	std::string base_source      = PathNoLastItem(source);
-	std::string base_destination = PathNoLastItem(destination);
-	std::string new_name         = PathLastItem(destination);
-
-	if (new_name.empty())
-		new_name = PathLastItem(source);
-
-	bool is_source_wildcard      = source.find("*")!=std::string::npos    ||  source.find("?")!=std::string::npos;
-	bool is_destination_wildcard = new_name.find("*")!=std::string::npos  ||  new_name.find("?")!=std::string::npos;
-
-	do {
-		if (_tcscmp(fd.cFileName,_T(".")) || _tcscmp(fd.cFileName,_T("..")))
-			continue;
-		
-		std::string file_name       = std::string(fd.cFileName);
-		std::string new_source      = base_source      + file_name;
-		std::string new_destination = base_destination + (is_destination_wildcard ? MaskNewName(file_name,new_name) : new_name);
-		bool is_dir                 = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) > 0;
-		int attributes              = GetFileAttributes(new_destination.c_str());
-		
-		if (is_dir  &&  is_source_wildcard  &&  !match_dirs)
-			continue;
-
-		// If we need full paths and their totaled length
-		if (buffer_size != 0) {
-			new_destination = global.working_directory + "\\" + new_destination;
-			buffer_size    += new_destination.length() + 1;
-		}
-
-
-		// Check if destination directory already exists
-		if (is_dir  &&  (attributes != INVALID_FILE_ATTRIBUTES  &&  attributes & FILE_ATTRIBUTE_DIRECTORY  ||  !is_move)  &&  buffer_size==0) {
-			if (!is_move)
-				CreateDirectory(new_destination.c_str(), NULL);
-			else
-				empty_dirs.push_back(new_source);
-
-			// If dir already exists then move its contents
-			new_source      += "\\*";
-			new_destination += "\\";
-			result           = CreateFileList(new_source, new_destination, sources, destinations, dirs, is_move, empty_dirs, buffer_size, match_dirs);
-			if (result != 0)
-				break;
-		} else {
-			sources     .push_back(new_source);
-			destinations.push_back(new_destination);
-			dirs        .push_back(is_dir);
-		}
-	}
-	while (FindNextFile(hFind, &fd) != 0);
-
-	FindClose(hFind);
-	return result;
-}
 
 std::string Decrypt(std::string sentence) 
 {
@@ -1795,7 +1654,7 @@ int main(int argc, char *argv[])
 		}
 
 		do {
-			if (_tcscmp(fd.cFileName,_T(".")) || _tcscmp(fd.cFileName,_T("..")) || !(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+			if (_tcscmp(fd.cFileName,_T("."))==0 || _tcscmp(fd.cFileName,_T(".."))==0 || !(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
 				continue;
 
 			std::string folder_name = (std::string)fd.cFileName;
@@ -1878,8 +1737,10 @@ int main(int argc, char *argv[])
 						user_arguments     += "-mod=";
 						user_arguments_log += "-mod=";
 						add_param_name      = false;
-					} else
-						user_arguments += ";";
+					} else {
+						user_arguments     += ";";
+						user_arguments_log += ";";
+					}
 					
 					user_arguments     += mods[NAME][j];
 					user_arguments_log += mods[NAME][j];
