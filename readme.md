@@ -9,7 +9,7 @@ Binary download: https://ofp-faguss.com/fwatch/116test
 
 ## Compiling
 
-Project is compiled using Microsoft Visual C++ 6.0 SP6 on WinXP SP3
+Project is compiled using Microsoft Visual C++ 6.0 SP6 on WinXP SP3. Helper programs are compiled using Microsoft Visual Studio 2005 on WinXP SP3.
 
 * Open file TestDLL.dsw in MSVC
 * Select option: Build >> Set Active Configuration >> Win32 Release

@@ -4234,7 +4234,7 @@ int main(int argc, char *argv[])
 									download_dir = BrowseFolder("");
 									printf("%s", download_dir.c_str());
 									
-									std::fstream config("fwatch\\tmp\\schedule\\DownloadDir.txt", std::ios::out | std::ios::trunc);
+									std::ofstream config("fwatch\\tmp\\schedule\\DownloadDir.txt", std::ios::out | std::ios::trunc);
 					
 									if (config.is_open()) {
 										config << download_dir;
@@ -4685,17 +4685,18 @@ int main(int argc, char *argv[])
 				    	
 				    	
 				    // Write file
-					file.open((*file_name).c_str(), std::ios::out | std::ios::trunc);
+					std::ofstream file_new;
+					file_new.open((*file_name).c_str(), std::ios::out | std::ios::trunc);
 					
-					if (file.is_open()) {
+					if (file_new.is_open()) {
 						for (size_t j=0; j<contents.size(); j++) {
-							file << contents[j];
+							file_new << contents[j];
 							
 							if (j+1 < line_number  ||  (j+1==line_number && ends_with_newline))
-								file << std::endl;
+								file_new << std::endl;
 						}
 				
-						file.close();
+						file_new.close();
 						
 						if (current_script_command.switches[i] & SWITCH_TIMESTAMP)
 							command_result = ChangeFileDate(*file_name, current_script_command.timestamp[i]);
