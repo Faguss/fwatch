@@ -344,59 +344,65 @@ case C_FILE_MODLIST:
 			if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)==0  ||  strcmpi("Res",fd.cFileName)==0)
 				continue;
 
+			// valid modfolders have signature file or at least one of the special subfolders
 			char path2[MAX_PATH] = "";
+			sprintf(path2, "%s\\__gs_id", fd.cFileName);
+			bool is_mod = false;
 
-			// Check if current directory contains at least one of four required sub-folders
-			for (int i=0; i<sub_folder_num; i++) {			
-				sprintf(path2, "%s\\%s", fd.cFileName, sub_folder[i]);
+			DWORD attributes = GetFileAttributes(path2);
+			if (attributes != 1)
+				is_mod = true;
+			else
+				for (int i=0; i<sub_folder_num && !is_mod; i++) {
+					sprintf(path2, "%s\\%s", fd.cFileName, sub_folder[i]);
+					DWORD attributes = GetFileAttributes(path2);
+					if (attributes != -1  &&  attributes & FILE_ATTRIBUTE_DIRECTORY)
+						is_mod = true;
+				}
 
-				DWORD attributes = GetFileAttributes(path2);
+			if (is_mod) {
+				StringDynamic_append(ModNames, "]+[\"");
+				StringDynamic_appendq(ModNames, fd.cFileName);
+				StringDynamic_append(ModNames, "\"");
+				StringDynamic_append(ModID, "]+[{");
+				StringDynamic_append(ModCfg, "]+[[");
 
-				if (attributes != -1  &&  attributes & FILE_ATTRIBUTE_DIRECTORY) {
-					StringDynamic_append(ModNames, "]+[\"");
-					StringDynamic_appendq(ModNames, fd.cFileName);
-					StringDynamic_append(ModNames, "\"");
-					StringDynamic_append(ModID, "]+[{");
-					StringDynamic_append(ModCfg, "]+[[");
+				sprintf(path2, "%s\\__gs_id", fd.cFileName);
+				FILE *f = fopen(path2, "r");
 
-					sprintf(path2, "%s\\__gs_id", fd.cFileName);
-					FILE *f = fopen(path2, "r");
+				if (f) {
+					char data_buffer[256] = "";
+					fread(data_buffer, sizeof(char), 255, f);
+					String data = {data_buffer, strlen(data_buffer)};
+					String item;
+					int index = 0;
+					size_t data_pos = 0;
 
-					if (f) {
-						char data_buffer[256] = "";
-						fread(data_buffer, sizeof(char), 255, f);
-						String data = {data_buffer, strlen(data_buffer)};
-						String item;
-						int index = 0;
-						size_t data_pos = 0;
-
-						while ((item = String_tokenize(data,";",data_pos,OPTION_NONE)).length > 0) {
-							switch (index) {
-								case 0 : StringDynamic_appends(ModID, item); break;
-								case 3 : StringDynamic_appendf(ModCfg, "{%s},", item.text); break;
-								case 4 : {
-									if (strcmpi(item.text,"0") == 0)
-										StringDynamic_append(ModCfg, "false");
+					while ((item = String_tokenize(data,";",data_pos,OPTION_NONE)).length > 0) {
+						switch (index) {
+							case 0 : StringDynamic_appends(ModID, item); break;
+							case 3 : StringDynamic_appendf(ModCfg, "{%s},", item.text); break;
+							case 4 : {
+								if (strcmpi(item.text,"0") == 0)
+									StringDynamic_append(ModCfg, "false");
+								else
+									if (strcmpi(item.text,"1") == 0)
+										StringDynamic_append(ModCfg, "true");
 									else
-										if (strcmpi(item.text,"1") == 0)
-											StringDynamic_append(ModCfg, "true");
-										else
-											StringDynamic_appendf(ModCfg, "%s", item.text); break;
-								} break;
-								default : StringDynamic_appendf(ModCfg, "%s,", item.text); break;
-							}
-
-							index++;
+										StringDynamic_appendf(ModCfg, "%s", item.text); break;
+							} break;
+							default : StringDynamic_appendf(ModCfg, "%s,", item.text); break;
 						}
 
-						fclose(f);
-					} else
-						StringDynamic_append(ModCfg, "0,[],{},0");
+						index++;
+					}
 
-					StringDynamic_append(ModID, "}");
-					StringDynamic_append(ModCfg, "]");
-					break;
-				}
+					fclose(f);
+				} else
+					StringDynamic_append(ModCfg, "0,[],{},0");
+
+				StringDynamic_append(ModID, "}");
+				StringDynamic_append(ModCfg, "]");
 			}
 		} while (FindNextFile(hFind, &fd));
 		FindClose(hFind);

@@ -125,9 +125,6 @@ case C_RESTART_SERVER:
 	bool close = argument_num>2 && strcmpi(argument[2].text,"close") == 0;
 
 	if (check || close) {
-		DWORD pid	= 0;
-		bool  found	= false;
-
 		if (argument_num > 3) 
 			db_id = atoi(argument[3].text);
 		else {
@@ -138,39 +135,67 @@ case C_RESTART_SERVER:
 
 		// Convert db_id to pid here
 		WatchProgramInfo info = db_pid_load(db_id);
-		pid = info.pid;
 
-		// If create process failed
-		if (info.launch_error != 0) {
-			QWrite_err(FWERROR_WINAPI, 1, info.launch_error);
-			QWritef("%d,%d]", db_id, info.exit_code);
-			break;
-		}
+		if (info.db_id > 0) {
+			// If create process failed
+			if (info.launch_error != 0) {
+				QWrite_err(FWERROR_WINAPI, 1, info.launch_error);
+				QWritef("%d,%d]", db_id, info.exit_code);
+				break;
+			}
 
-		// If thread in fwatch.exe hasn't prepared data yet then quit
-		if (pid == 0  ||  info.exit_code == STILL_ACTIVE) {
-			QWrite_err(FWERROR_NONE, 0);
-			QWritef("%d,%d]", db_id, info.exit_code);
-			break;
-		}
+			// If thread in fwatch.exe hasn't prepared data yet then quit
+			if (info.pid == 0) {
+				if (check) {
+					QWrite_err(FWERROR_NONE, 0);
+					QWritef("%d,%d]", db_id, info.exit_code);
+					break;
+				} else
+					if (close) {
+						QWrite_err(FWERROR_NO_PROCESS, 1, exe_name);
+						QWritef("%d,%d]", db_id, info.exit_code);
+						break;
+					}
+			}
 
-		// If program is done then return exit code
-		if (pid != 0  &&  info.exit_code != STILL_ACTIVE) {
+			// If program is done then return exit code
+			if (info.exit_code != STILL_ACTIVE) {
+				if (check) {
+					QWrite_err(FWERROR_NO_PROCESS, 1, exe_name);
+					QWritef("%d,%d]", db_id, info.exit_code);
+					break;
+				} else
+					if (close) {
+						QWrite_err(FWERROR_NONE, 0);
+						QWritef("%d,%d]", db_id, info.exit_code);
+						break;
+					}
+			}
+
+			// If program is running
+			if (check) {
+				QWrite_err(FWERROR_NONE, 0);
+				QWritef("%d,%d]", db_id, info.exit_code);
+				break;
+			}
+		} else {
 			QWrite_err(FWERROR_NO_PROCESS, 1, exe_name);
 			QWritef("%d,%d]", db_id, info.exit_code);
 			break;
 		}
+
 		
 		// Search for the process
 		PROCESSENTRY32 processInfo;
 		processInfo.dwSize       = sizeof(processInfo);
 		HANDLE processesSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
+		bool found               = false;
 
 		if (processesSnapshot != INVALID_HANDLE_VALUE) {
 			Process32First(processesSnapshot, &processInfo);
 
 			do {
-				if (processInfo.th32ProcessID != pid) 
+				if (processInfo.th32ProcessID != info.pid) 
 					continue;
 
 				if (strcmpi(processInfo.szExeFile,exe_name) == 0) {
@@ -187,7 +212,7 @@ case C_RESTART_SERVER:
 		}
 	
 		if (close && found) {
-			HANDLE AThandle = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
+			HANDLE AThandle = OpenProcess(PROCESS_ALL_ACCESS, 0, info.pid);
 
 			if (!TerminateProcess(AThandle,0))
 				QWrite_err(FWERROR_WINAPI, 1, GetLastError());
@@ -205,7 +230,6 @@ case C_RESTART_SERVER:
 		QWritef("%d,%d]", db_id, info.exit_code);
 		break;
 	}
-	// ---------
 
 
 	// Assign id number for this instance so we can find it later
@@ -379,6 +403,9 @@ case C_RESTART_SERVER:
 		HANDLE mailslot = CreateFile(TEXT("\\\\.\\mailslot\\fwatch_mailslot"), GENERIC_WRITE, FILE_SHARE_READ, (LPSECURITY_ATTRIBUTES)NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, (HANDLE)NULL);
 		
 		if (mailslot != INVALID_HANDLE_VALUE) {
+			WatchProgramInfo info = {db_id, 0, 0, 0};
+			db_pid_save(info);
+
 			DWORD bytes_written = 0;
 
 			if (WriteFile(mailslot, param.text, param.length+1, &bytes_written, (LPOVERLAPPED)NULL)) {
@@ -441,5 +468,376 @@ case C_EXE_WEBSITE:
 	) break;
 
 	ShellExecute(NULL, "open", argument[2].text, NULL, NULL, SW_SHOWNORMAL);
+}
+break;
+
+
+
+
+
+
+
+
+
+
+
+
+case C_RESTART_SCHEDULE:		
+{ // Add task to the Windows Task Scheduler
+
+	// Is it main menu
+	int	is_main_menu_address = 0;
+	int is_main_menu         = 0;
+
+	switch(global_exe_version[global.exe_index]) {
+		case VER_196 : is_main_menu_address=0x75E254; break;
+		case VER_199 : is_main_menu_address=0x74B58C; break;
+	}
+
+	if (is_main_menu_address) {
+		ReadProcessMemory(phandle, (LPVOID)is_main_menu_address, &is_main_menu, 4, &stBytes);
+
+		if (!is_main_menu) 
+			break;
+	}
+
+	enum RESTART_SCHEDULE_MODE {
+		MODE_CREATE_TASK,
+		MODE_DELETE_TASK,
+		MODE_LIST_TASKS
+	};
+
+	const char modes[][8] = {
+		"create",
+		"delete",
+		"list"
+	};
+
+	size_t arg_eventid    = empty_char_index;
+	size_t arg_parameters = empty_char_index;
+	size_t arg_comment    = empty_char_index;
+	size_t arg_date       = empty_char_index;
+	int arg_recurrence    = TASK_TIME_TRIGGER_ONCE;
+	int arg_mode          = MODE_CREATE_TASK;
+
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_EVENTID:
+				arg_eventid = i + 1;
+				break;
+
+			case NAMED_ARG_PARAMETERS:
+				arg_parameters = i + 1;
+				break;
+
+			case NAMED_ARG_COMMENT:
+				arg_comment = i + 1;
+				break;
+
+			case NAMED_ARG_DATE:
+				arg_date = i + 1;
+				break;
+
+			case NAMED_ARG_RECURRENCE:
+				arg_recurrence = atoi(argument[i+1].text);
+				break;
+
+			case NAMED_ARG_MODE:
+				for (int j=0; j<(sizeof(modes) / sizeof(modes[0])); j++)
+					if (strcmpi(argument[i+1].text,modes[j]) == 0)
+						arg_mode = j;
+				break;
+		}
+	}
+
+	switch(arg_mode) {
+		case MODE_CREATE_TASK : {
+			if (argument[arg_eventid].length == 0) {
+				QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_eventid");
+				QWrite("[]]");
+				break;
+			}
+
+			if (argument[arg_date].length == 0) {
+				QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_date");
+				QWrite("[]]");
+				break;
+			}
+
+			// Task name
+			const int taskname_size         = 32;
+			wchar_t taskname[taskname_size] = L"OFP_GS_";
+			MultiByteToWideChar(CP_UTF8, 0, argument[arg_eventid].text, argument[arg_eventid].length, taskname+wcslen(taskname), taskname_size-wcslen(taskname));
+
+			// Path to exe
+			wchar_t appname[MAX_PATH] = L"";
+			GetCurrentDirectoryW(MAX_PATH, appname);
+			wchar_t gameRestart[] = L"\\fwatch\\data\\gameRestart.exe";
+
+			if (wcslen(appname) + wcslen(gameRestart) + 1 < MAX_PATH)
+				wcscat(appname, gameRestart);
+
+			// Exe arguments
+			size_t params_size = (argument[arg_parameters].length + 128) * 2;
+			wchar_t *params = (wchar_t*) malloc (params_size);
+			if (!params) {
+				QWrite_err(FWERROR_MALLOC, 2, "params", params_size);
+				QWrite("[]]");
+				break;
+			}
+			memset(params, 0, params_size);
+
+			int remaining_size = (int)params_size;
+			wcscat(params, L"-run=");
+			wchar_t *p = params + wcslen(params);
+			remaining_size -= wcslen(params)*2;
+			MultiByteToWideChar(CP_UTF8, 0, global_exe_name[global.exe_index], strlen(global_exe_name[global.exe_index]), p, remaining_size);
+
+			wcscat(params, L" -eventtask=");
+			wcscat(params, taskname);
+			wcscat(params, L" ");
+			p = params + wcslen(params);
+			remaining_size -= wcslen(params)*2;
+			MultiByteToWideChar(CP_UTF8, 0, argument[arg_parameters].text, argument[arg_parameters].length, p, remaining_size);
+
+			// Working directory
+			wchar_t appdir[MAX_PATH] = L"";
+			MultiByteToWideChar(CP_UTF8, 0, global.game_dir, global.game_dir_length, appdir, MAX_PATH);
+
+			// Task comment
+			const int comment_size        = 128;
+			wchar_t comment[comment_size] = L"";
+			MultiByteToWideChar(CP_UTF8, 0, argument[arg_comment].text, argument[arg_comment].length, comment, comment_size);
+
+			// Task user
+			DWORD username_length = 128;
+			wchar_t username[128] = L"";
+			GetUserNameW(username, &username_length);
+
+			// Start time
+			TASK_TRIGGER trigger_options;
+			ZeroMemory(&trigger_options, sizeof(TASK_TRIGGER));
+			trigger_options.cbTriggerSize = sizeof(TASK_TRIGGER);
+			String item;
+			size_t pos = 0;
+			int index = 0;
+
+			while ((item = String_tokenize(argument[arg_date], ",", pos, OPTION_TRIM_SQUARE_BRACKETS)).length > 0) {
+				switch(index) {
+					case 0 : trigger_options.wBeginYear=(WORD)strtoul(item.text,NULL,0); break;
+					case 1 : trigger_options.wBeginMonth=(WORD)strtoul(item.text,NULL,0); break;
+					case 2 : trigger_options.wBeginDay=(WORD)strtoul(item.text,NULL,0); break;
+					case 3 : trigger_options.Type.Weekly.rgfDaysOfTheWeek=1 << ((WORD)strtoul(item.text,NULL,0)); break;
+					case 4 : trigger_options.wStartHour=(WORD)strtoul(item.text,NULL,0); break;
+					case 5 : trigger_options.wStartMinute=(WORD)strtoul(item.text,NULL,0); break;
+				}
+				index++;
+			}
+
+			trigger_options.TriggerType = (TASK_TRIGGER_TYPE)arg_recurrence;
+			switch(trigger_options.TriggerType) {
+				case TASK_TIME_TRIGGER_WEEKLY : trigger_options.Type.Weekly.WeeksInterval=1; break;
+				case TASK_TIME_TRIGGER_DAILY  : trigger_options.Type.Daily.DaysInterval=1; break;
+			}
+
+			// Task flags
+			#define TASK_FLAG_RUN_ONLY_IF_LOGGED_ON 0x2000
+			DWORD flags = 
+				TASK_FLAG_RUN_IF_CONNECTED_TO_INTERNET | 
+				TASK_FLAG_RUN_ONLY_IF_LOGGED_ON | 
+				TASK_FLAG_SYSTEM_REQUIRED | 
+				TASK_FLAG_INTERACTIVE;
+
+			if (trigger_options.TriggerType == TASK_TIME_TRIGGER_ONCE)
+				flags |= TASK_FLAG_DELETE_WHEN_DONE;
+			
+			ITaskScheduler *scheduler = NULL;
+			IUnknown       *unknown   = NULL;
+			ITask          *task      = NULL;
+			ITaskTrigger *trigger     = NULL;
+			IPersistFile *job_file    = NULL;
+			WORD trigger_number       = 0;
+			char error_text[32]       = "";
+
+			HRESULT result = CoInitialize(NULL);
+			if (SUCCEEDED(result)) {
+				result = CoCreateInstance(CLSID_CTaskScheduler, NULL, CLSCTX_INPROC_SERVER, IID_ITaskScheduler, (void **)&scheduler);
+				if (FAILED(result)) {strcpy(error_text, "CoCreateInstance"); goto scheduler_end;}
+			} else {
+				strcpy(error_text, "CoInitialize"); goto scheduler_end;
+			}
+
+			result = scheduler->Activate((LPCWSTR)taskname, IID_ITask, &unknown);
+			if (SUCCEEDED(result)) {
+				unknown->Release();
+				unknown = NULL;
+				result  = scheduler->Delete((LPCWSTR)taskname);
+				if (FAILED(result)) {strcpy(error_text, "Delete"); goto scheduler_end;}
+			}
+			
+			result = scheduler->NewWorkItem((LPCWSTR)taskname, CLSID_CTask, IID_ITask, &unknown);
+			if (FAILED(result)) {strcpy(error_text, "NewWorkItem"); goto scheduler_end;}
+
+			result = unknown->QueryInterface(IID_ITask, (void **)&task);
+			if (FAILED(result)) {strcpy(error_text, "QueryInterface"); goto scheduler_end;}
+
+			result = task->SetAccountInformation((LPCWSTR)username, NULL);
+			if (FAILED(result)) {strcpy(error_text, "SetAccountInformation"); goto scheduler_end;}
+
+			result = task->SetApplicationName((LPCWSTR)appname);
+			if (FAILED(result)) {strcpy(error_text, "SetApplicationName"); goto scheduler_end;}
+
+			result = task->SetParameters((LPCWSTR)params);
+			if (FAILED(result)) {strcpy(error_text, "SetParameters"); goto scheduler_end;}
+
+			result = task->SetWorkingDirectory((LPCWSTR)appdir);
+			if (FAILED(result)) {strcpy(error_text, "SetDirectory"); goto scheduler_end;}
+
+			result = task->SetComment((LPCWSTR)comment);
+			if (FAILED(result)) {strcpy(error_text, "SetComment"); goto scheduler_end;}
+
+			result = task->SetFlags(flags);
+			if (FAILED(result)) {strcpy(error_text, "SetFlags"); goto scheduler_end;}
+
+			result = task->CreateTrigger(&trigger_number, &trigger);
+			if (FAILED(result)) {strcpy(error_text, "CreateTrigger"); goto scheduler_end;}
+
+			result = trigger->SetTrigger(&trigger_options);
+			if (FAILED(result)) {strcpy(error_text, "SetTrigger"); goto scheduler_end;}
+
+			result = task->QueryInterface(IID_IPersistFile, (void **)&job_file);
+			if (FAILED(result)) {strcpy(error_text, "QueryInterface job"); goto scheduler_end;}
+
+			result = job_file->Save(NULL, FALSE);
+			if (FAILED(result)) {strcpy(error_text, "Save"); goto scheduler_end;}
+
+			scheduler_end:
+			free(params);
+			if (job_file)  job_file->Release();
+			if (trigger)   trigger->Release();
+			if (task)      task->Release();
+			if (unknown)   unknown->Release();
+			if (scheduler) scheduler->Release();
+			CoUninitialize();
+
+			if (SUCCEEDED(result))
+				QWrite_err(FWERROR_NONE, 0);
+			else {
+				QWrite_err(FWERROR_HRESULT, 2, error_text, result);
+			}
+			QWrite("[]]");
+		} break;
+
+		case MODE_DELETE_TASK : {
+			if (argument[arg_eventid].length == 0) {
+				QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_eventid");
+				QWrite("[]]");
+				break;
+			}
+
+			// Task name
+			const int taskname_size         = 32;
+			wchar_t taskname[taskname_size] = L"OFP_GS_";
+			MultiByteToWideChar(CP_UTF8, 0, argument[arg_eventid].text, argument[arg_eventid].length, taskname+wcslen(taskname), taskname_size-wcslen(taskname));
+
+			ITaskScheduler *scheduler = NULL;
+			IUnknown       *unknown   = NULL;
+			char error_text[32]       = "";
+
+			HRESULT result = CoInitialize(NULL);
+			if (SUCCEEDED(result)) {
+				result = CoCreateInstance(CLSID_CTaskScheduler, NULL, CLSCTX_INPROC_SERVER, IID_ITaskScheduler, (void **)&scheduler);
+				if (FAILED(result)) {strcpy(error_text, "CoCreateInstance"); goto scheduler_end2;}
+			} else {
+				strcpy(error_text, "CoInitialize"); goto scheduler_end2;
+			}
+
+			result = scheduler->Activate((LPCWSTR)taskname, IID_ITask, &unknown);
+			if (SUCCEEDED(result)) {
+				unknown->Release();
+				unknown = NULL;
+				result  = scheduler->Delete((LPCWSTR)taskname);
+				if (FAILED(result)) {strcpy(error_text, "Delete"); goto scheduler_end2;}
+			}
+
+			scheduler_end2:
+			if (scheduler) scheduler->Release();
+			if (unknown)   unknown->Release();
+			CoUninitialize();
+
+			if (SUCCEEDED(result))
+				QWrite_err(FWERROR_NONE, 0);
+			else {
+				QWrite_err(FWERROR_HRESULT, 2, error_text, result);
+			}
+			QWrite("[]]");
+		} break;
+
+		case MODE_LIST_TASKS : {
+			ITaskScheduler *scheduler   = NULL;
+			IEnumWorkItems *enumeration = NULL;
+			char error_text[32]         = "";
+  
+			LPWSTR *task_names  = NULL;
+			LPWSTR task_name    = NULL;
+			DWORD task_count    = 0;
+			ULONG retrieve_size = 5;
+
+			HRESULT result = CoInitialize(NULL);
+			if (SUCCEEDED(result)) {
+				result = CoCreateInstance(CLSID_CTaskScheduler, NULL, CLSCTX_INPROC_SERVER, IID_ITaskScheduler, (void **)&scheduler);
+				if (FAILED(result)) {strcpy(error_text, "CoCreateInstance"); goto scheduler_end3;}
+			} else {
+				strcpy(error_text, "CoInitialize"); goto scheduler_end3;
+			}
+			
+			result = scheduler->Enum(&enumeration);
+			if (FAILED(result)) {strcpy(error_text, "Enum"); goto scheduler_end3;};
+
+			QWrite_err(FWERROR_NONE, 0);
+			QWrite("[");
+
+			while (SUCCEEDED(enumeration->Next(retrieve_size, &task_names, &task_count)) && (task_count != 0)) {
+				while (task_count) {
+					task_name = task_names[--task_count];
+
+					if (_wcsnicmp(task_name,L"OFP_GS_",7) == 0) {
+						LPWSTR event_idW = task_name + 7;
+						size_t length    = wcslen(event_idW);
+						wchar_t *dot     = wcschr(event_idW, L'.');
+
+						if (dot)
+							length = dot - event_idW;
+
+						const unsigned int max_length = 16;
+
+						if (length > max_length)
+							length = max_length;
+
+						char event_idA[max_length] = "";
+						int output_size = WideCharToMultiByte(CP_UTF8, 0, event_idW, (int)length, NULL, 0, NULL, NULL);
+						WideCharToMultiByte(CP_UTF8, 0, event_idW, length, event_idA, output_size, NULL, NULL);
+
+						QWritef("]+[\"%s\"", event_idA);
+					}
+
+					CoTaskMemFree(task_name);
+				}
+				CoTaskMemFree(task_names);
+			}
+
+			QWrite("]]");
+  
+			scheduler_end3:
+			if (enumeration) enumeration->Release();
+			if (scheduler) scheduler->Release();
+			CoUninitialize();
+			
+			if (FAILED(result)) {
+				QWrite_err(FWERROR_HRESULT, 2, error_text, result);
+				QWrite("[]]");
+			}
+		} break;
+	}
 }
 break;

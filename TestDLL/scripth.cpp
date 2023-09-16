@@ -29,6 +29,14 @@ You may use this source code for personal entertainment purposes only. Any comme
 #include <climits>
 #include <float.h>		// _is_nan
 
+// task scheduler
+#include <initguid.h>
+#include <ole2.h>
+#include <mstask.h>
+#include <msterr.h>
+#include <objidl.h>
+#include <wchar.h>
+
 extern GLOBAL_VARIABLES_TESTDLL global;
 
 #define SCRIPT_VERSION	1.16		// Script engine version
@@ -63,6 +71,7 @@ enum COMMAND_HASHES {
 	C_EXE_PREPROCESS      = 2891211499u,
 	C_RESTART_CLIENT      = 1040407795u,
 	C_RESTART_SERVER      = 1698669191u,
+	C_RESTART_SCHEDULE    = 962537865u,
 	C_EXE_WEBSITE         = 226367578u,
 	C_FILE_EXISTS         = 1534773825u,
 	C_FILE_READ           = 4131020217u,
@@ -181,6 +190,7 @@ unsigned int commands_named_arguments[] = { // sorted
 	C_IGSE_RENAME,
 	C_STRING_ISVARIABLE,
 	C_CLIP_COPY,
+	C_RESTART_SCHEDULE,
 	C_MEM_SETGRAPHICS,
 	C_MEM_MODLIST,
 	C_CLIP_GETLINE,
@@ -230,6 +240,7 @@ unsigned int commands_memory[] = { // sorted
 	C_MEM_SETPLAYERANIM,
 	C_MEM_SETSPEEDKEY,
 	C_MEM_GETPLAYERVIEW,
+	C_RESTART_SCHEDULE,
 	C_MEM_SETGRAPHICS,
 	C_MEM_SETRESPAWNTYPE,
 	C_MEM_GETCURSOR,
@@ -301,6 +312,7 @@ enum NAMED_ARGUMENTS {
 	NAMED_ARG_FOVTOP              = 647594911u,
 	NAMED_ARG_MAXLEVEL            = 650761905u,
 	NAMED_ARG_CLOUDSSPEED         = 675179266u,
+	NAMED_ARG_RECURRENCE          = 720132575u,
 	NAMED_ARG_RENAMEPROPERTY      = 769516826u,
 	NAMED_ARG_WORDDELIMITER       = 834005314u,
 	NAMED_ARG_URL                 = 848251934u,
@@ -320,6 +332,7 @@ enum NAMED_ARGUMENTS {
 	NAMED_ARG_SPEEDFOG            = 1127042784u,
 	NAMED_ARG_DELETEPROPERTY      = 1140007295u,
 	NAMED_ARG_MAXOBJECTS          = 1143128927u,
+	NAMED_ARG_PARAMETERS          = 1218784985u,
 	NAMED_ARG_LIMITTO             = 1221296253u,
 	NAMED_ARG_CHAT_H              = 1244682140u,
 	NAMED_ARG_GUST                = 1356619534u,
@@ -346,6 +359,7 @@ enum NAMED_ARGUMENTS {
 	NAMED_ARG_CLOUDLETS           = 1698501532u,
 	NAMED_ARG_EXCLUDE             = 1717269161u,
 	NAMED_ARG_SETPOSASL           = 1718914665u,
+	NAMED_ARG_COMMENT             = 1738982494u,
 	NAMED_ARG_DELETE              = 1740784714u,
 	NAMED_ARG_KEY                 = 1746258028u,
 	NAMED_ARG_TANK_X              = 1770179694u,
@@ -388,6 +402,7 @@ enum NAMED_ARGUMENTS {
 	NAMED_ARG_MAXLIGHTS           = 2281039248u,
 	NAMED_ARG_WAIT                = 2301512864u,
 	NAMED_ARG_CHAT_COLORDIRECT    = 2373422770u,
+	NAMED_ARG_EVENTID             = 2407974098u,
 	NAMED_ARG_KEEPWWW             = 2464564123u,
 	NAMED_ARG_POSITION            = 2471448074u,
 	NAMED_ARG_ACTUALOVERCAST      = 2480966134u,
@@ -433,6 +448,7 @@ enum NAMED_ARGUMENTS {
 	NAMED_ARG_VEHICLESHADOWS      = 3526923404u,
 	NAMED_ARG_LEADER_W            = 3543383202u,
 	NAMED_ARG_OPEN                = 3546203337u,
+	NAMED_ARG_DATE                = 3564297305u,
 	NAMED_ARG_LEADER_Y            = 3576938440u,
 	NAMED_ARG_FINDCHAR            = 3581622558u,
 	NAMED_ARG_LEADER_X            = 3593716059u,
@@ -613,6 +629,9 @@ void ParseScript(String &command, FULLHANDLE file)
 							
 						case C_STRING_CUT :
 							enable_unit_separator = argument_hash[argument_num-1]==NAMED_ARG_TEXT || argument_hash[argument_num-1]==NAMED_ARG_STARTFIND || argument_hash[argument_num-1]==NAMED_ARG_ENDFIND; break;
+
+						case C_RESTART_SCHEDULE :
+							enable_unit_separator = argument_hash[argument_num-1]==NAMED_ARG_PARAMETERS || argument_hash[argument_num-1]==NAMED_ARG_COMMENT; break;
 					}
 				} else
 					is_name = true;

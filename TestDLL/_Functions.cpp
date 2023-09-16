@@ -2247,6 +2247,7 @@ void QWrite_err(int code_primary, int arg_num, ...) {
 		} break;
 		
 		case FWERROR_NO_PROCESS  : strcpy(format,"Couldn't find %s process"); break;
+		case FWERROR_HRESULT     : strcpy(format,"%s failed. Error code: 0x%x"); break;
 
 		case FWERROR_MALLOC      : strcpy(format,"Failed to allocate memory block %s %u bytes"); break;
 		case FWERROR_REALLOC     : strcpy(format,"Failed to reallocate memory block %s %u bytes"); break;

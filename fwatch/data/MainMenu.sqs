@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2023,6,23,5,13,12,54,517,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2023,9,16,6,18,9,48,303,120,FALSE]
 	GS_MY_VERSION        = 0.61
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -100,6 +100,7 @@
 	_install_status      = -1
 	_install_timing      = 0
 	_install_hanged      = false
+	_install_madechoice  = false
 	_jump_to_server      = ""
 	_timeout             = 0
 	_color_red           = [1,0,0,0.5]
@@ -127,6 +128,7 @@
 	_mod_shortcuts_names = []
 	_mod_shortcuts_data  = []
 	_current_shortcut_id = -1
+	_scheduled_events    = []
     
 	if (!_m_moved && (_mx<_x || _mx>_w || _my<_y || _my>_h)) then {loadFile Format [":mem setcursor %1 %2", _w, _y]; _m_moved=nil}
 	goto "ModLauncher_Display"
@@ -160,7 +162,6 @@
 		? _value == 6           : [_data, "global"] call FUNCTION_SHOW_MOD_INFO
 		? _value == 15          : goto "ModLauncher_Shortcut_Preview"
 		? _value == 201         : if (ctrlVisible 6463) then {goto "DisplayServerStatus"} else {goto "DisplayServer"}
-		? _value == 211         : goto "DisplayGameRestart"
 		#SkipSelectionCheck
 	
 	_mx = (FWATCH_INPUT_MULTI select 3) select 2
@@ -228,7 +229,7 @@
 	? _value == 207 : goto "Schedule_List_Servers"
 	? _value == 208 : if (_install_hanged) then {loadFile ":IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  remove:savestate"; loadFile ":IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\install_progress.sqf"; _install_status=-1; _install_hanged=false; if (_server_uniqueid=="mod") then {goto "ModLauncher_Display"} else {goto "Schedule"}} else {loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:abort"]}
 	? _value == 209 : loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:restart"]
-	? _value == 210 : _jump_to_server=_server_uniqueid; _install_status=-1; loadFile ":IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  remove:savestate"; loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\install_progress.sqf"; call FUNCTION_REFRESH_MODLIST; if (_server_uniqueid=="mod") then {goto "ModLauncher_Display"} else {goto "Schedule"}
+	? _value == 210 : goto "CloseInstaller"
 	? _value == 211 : goto "CancelGameRestart"
 	? _value == 212 : goto "ServerOptions"
 	? _value == 213 : goto "AssignID_ForThisMod"
@@ -241,13 +242,19 @@
 	? _value == 220 : _action="auto"; goto "Voice"
 	? _value == 221 : _action="connect"; goto "Voice"
 	? _value == 222 : if ((GS_VOICE select (_server_voice select 0)) select 1) then {loadFile Format ["\:RESTART CLIENT -evoice=%1", _server_voice select 1]} else {loadFile Format ["\:EXE WEBSITE %1", (GS_VOICE select (_server_voice select 0)) select 2]}
-	? _value == 223 : lbDelete [6657, (lbSize 6657)-1]; "ctrlShow [_x,false]" forEach _info_window; if (_server_uniqueid!="mod") then {goto "SkipURL"} else {goto "DownloadMods_SkipURL"}
+	? _value == 223 : lbDelete [6657, (lbSize 6657)-1]; "ctrlShow [_x,false]" forEach _info_window; goto "DownloadDatabase_Done"
 	? _value == 224 : loadFile ("\:EXE WEBSITE "+([_url,_missing_mods_id,_missing_mods_myversion] call FUNCTION_BUILD_PREVIEW_LINK))
 	? _value == 225 : loadFile ("\:EXE WEBSITE "+([_url,(call "_array=[]; {_array set [count _array, _x select 0]} foreach _server_modfolders; _array"),[]] call FUNCTION_BUILD_PREVIEW_LINK))
 	? _value == 226 : _ok=call loadFile Format ["\:RESTART CLIENT -updateresource=%1",_my_game_version]; if (!(_ok select 0)) then {titleText [_ok select 3, "PLAIN DOWN", 1.5]} else {closeDialog 0; exit}
 	? _value == 227 : closeDialog 0; exit
 	? _value == 228 : _Input= _access_code_mod; _Label="SaveModAccessCode"; _Input_Note=MAINMENU_STR select 90; goto "INPUT"
 	? _value == 229 : _Input= _mod_search_phrase; _Label="SaveModSearchPhrase"; _Input_Note=MAINMENU_STR select 92; goto "INPUT"
+	? _value == 230 : goto "Schedule_ListServerEvents"
+	? _value == 231 : _selected_event=call _data; _action="auto"; goto "Voice"
+	? _value == 232 : loadFile "\:EXE WEBSITE https://ofp-faguss.com/fwatch/modmanager/details"
+	? _value == 233 : loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:retry"]; lbClear 6657; lbSetCurSel [6657,-1]; _install_madechoice=true
+	? _value == 234 : loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:pause"]
+	? _value == 235 : loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:resume"]
 	goto "ResetLMB"
 	
 	#OptionRightMouseClick
@@ -295,6 +302,7 @@
 	_i=0; FUNCTION_ADD_MOD_TO_LISTBOX forEach FWATCH_MODLIST
 	
 	[MAINMENU_STR select 109, 11, _color_gingerbrown] call FUNCTION_LBADD
+	[MAINMENU_STR select 30, 232, _color_gingerbrown] call FUNCTION_LBADD
 	
 	? Format ["%1",_last_selected]!="scalar bool array string 0xfcffffef" : lbSetCurSel [6657, _last_selected+9]; lbSetCurSel [6657, _last_selected]; _last_selected=nil
 	goto "ResetLMB"
@@ -555,6 +563,7 @@
 	;buttonSetAction [6450, "closeDialog 0"]
 	buttonSetAction [6451, "LOADMOD_MASTERSERVER=true"]
 	_mode = "schedule"
+	_scheduled_events = (call loadFile Format ["\:RESTART SCHEDULE mode:list"]) select 4
 	goto "DownloadDatabase"
 
 	; Display list of servers in a listbox
@@ -563,7 +572,6 @@
 	lbSetCurSel [6657, -1]
 	ctrlSetText [6463, ""]
 
-	? _gamerestart_pid > 0 : _ok=call loadFile Format ["\:RESTART CLIENT check %1", _gamerestart_pid]; if (_ok select 0) then {lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 24], 211]} else {_gamerestart_pid=0}
 	? _update_available    : goto "DisplayUpdateInformation"
 	
 	FUNCTION_ADD_SERVER_TO_LISTBOX forEach GS_SERVERS
@@ -590,7 +598,7 @@
 	_server_logohash          = ""
 	_server_uniqueid          = ""
 	_server_voice             = []
-	_server_game_times        = []
+	_server_game_times2       = []
 	_server_modfolders	      = []
 	_server_maxcustomfilesize = []
 	_server_maxcustombytes    = ""
@@ -649,10 +657,10 @@
 	ctrlSetText [6464, Format ["%1               %2", _server_status_name, ["@d M 0h:0i",_now] call FLIB_FORMATDATE]]
 
 	; Display playing times
-	? count _server_game_times == 0 : ctrlShow [6500, false]
+	? count _server_game_times2 == 0 : ctrlShow [6500, false]
 	[6502, !_playingNow] call FUNCTION_SHOW_RED_TEXT
 	ctrlSetText [6501, ""]
-	"ctrlSetText [6501, (ctrlText 6501) + _x + ""\n""]" forEach _server_game_times
+	"ctrlSetText [6501, (ctrlText 6501) + (_x select 0) + ""\n""]" forEach _server_game_times2
 
 		; Estimate download size
 		_roundToTenths = "private [""_fraction""];_this=_this-(_this mod 0.001); _fraction=(_this mod 0.01);_this=_this-_fraction;if (_fraction>0.004999) then {_this=_this+0.01};_fraction=(_this mod 0.1);_this=_this-_fraction;if (_fraction>0.049999) then {_this=_this+0.1};_this"
@@ -687,7 +695,7 @@
 	
 	lbClear 6657
 	lbSetCurSel [6657, -1]
-	? _server_version in [0,_my_game_version] && count _missing_mods_id==0 : comment "autoconnect;connect"; if (_server_uniqueid in GS_PLAYING_TODAY && !_playingNow && _gamerestart_pid==0) then {[MAINMENU_STR select 26, 220, _color_yellowgreen] call FUNCTION_LBADD}; [MAINMENU_STR select 27, 221, _color_yellowgreen] call FUNCTION_LBADD
+	? _server_version in [0,_my_game_version] && count _missing_mods_id==0 : comment "autoconnect;connect"; if (!_playingNow) then {[MAINMENU_STR select 26, 230, _color_yellowgreen] call FUNCTION_LBADD}; [MAINMENU_STR select 27, 221, _color_yellowgreen] call FUNCTION_LBADD
 	? count _missing_mods_id > 0                                           : comment "download;changelog"; [Format [MAINMENU_STR select 28, _missing_mods_size], 204, _color_fireenginered] call FUNCTION_LBADD; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 29], 224]
 	? _voice_name != ""                                                    : comment "voip"; lbSetValue [6657, lbAdd [6657, Format [_voice_format,_voice_name]], 222]
 	? count _missing_mods_id==0 && count _server_modfolders > 0            : comment "changelog"; lbSetValue [6657, lbAdd [6657, Format [MAINMENU_STR select 29, _missing_mods_size]], 225]
@@ -810,6 +818,8 @@
 
 		lbClear 6657
 		lbSetCurSel [6657, -1]
+		? _install_status == 0 : lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 112], 234]
+		? _install_status == 3 : lbSetValue  [6657, lbAdd [6657, "["+(localize "STR_CAMPAIGN_CONTINUE")+"]"], 235]
 		lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 36], 208]
 		lbSetValue  [6657, lbAdd [6657, Format [MAINMENU_STR select (if (_server_uniqueid=="mod") then {42} else {88}), (if (_auto_restart) then {MAINMENU_STR select 43} else {MAINMENU_STR select 44})]], 209]
 
@@ -835,10 +845,24 @@
 
 		; waiting for user input
 		? _install_status == 1  &&  lbSize 6657 > 0 : lbClear 6657; lbSetCurSel [6657,-1]
+		? _install_status == 2  &&  lbValue [6657,0]!=233  &&  !_install_madechoice : lbClear 6657; lbSetCurSel [6657,-1]; lbSetValue [6657, lbAdd [6657, "["+(localize "STR_DISP_INT_RETRY")+"]"], 233]; lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 36], 208]
+		? _install_status != 2 : _install_madechoice=false
+		? _install_status == 3 && lbValue[6657,0]==234 : goto "InstallDisplay"
+		? _install_status == 0 && lbValue[6657,0]==235 : goto "installDisplay"
 		
 		; installer finished
-		? _install_status > 1 && lbSize 6657 > 1 : lbClear 6657; lbSetCurSel [6657,-1]; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 32], 210]
+		? _install_status > 3 && lbSize 6657 > 1 : lbClear 6657; lbSetCurSel [6657,-1]; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 32], 210]
 		goto "MainLoop"
+		
+	#CloseInstaller
+	_ok = call loadFile Format ["\:EXE ADDONINSTALL  close %1", _pid]
+	_jump_to_server = _server_uniqueid
+	_install_status = -1
+	loadFile ":IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  remove:savestate"
+	loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\install_progress.sqf"
+	call FUNCTION_REFRESH_MODLIST
+	if (_server_uniqueid=="mod") then {goto "ModLauncher_Display"} else {goto "Schedule"}
+	
 
 
 
@@ -857,27 +881,32 @@
 
 
 	; Schedule connection to the server
+	#Schedule_ListServerEvents
+	lbClear 6657
+	lbSetCurSel [6657, -1]
+	_i=0; FUNCTION_LIST_EVENTS_FOR_AUTO_CONNECTION forEach _server_game_times2
+	lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 32], 212]
+	goto "ResetLMB"
+	
 	#ScheduleGameRestart
-	_ok = call loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\restart_info.sqf  open:recreate  text:_gamerestart_name=""%1"";_gamerestart_time=""%2"";", (if (_server_name!="") then {_server_name} else {_server_uniqueid}), ["0h:0i",_today_game_time] call FLIB_FORMATDATE]
-	_ok = call loadFile (Format ["\:RESTART CLIENT -servertime=%1 ", _today_game_time] + (call FUNCTION_GET_EXECUTE_PARAMS))
-	? !(_ok select 0) : titleText [_ok select 3, "PLAIN DOWN", 2]; goto "ResetLMB"
-	~1
-	call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\restart_info.sqf"
-	goto "ServerOptions"
+	_event_recurrence = ((_server_game_times2 select _selected_event) select 2) select 0
+	_event_date       = ((_server_game_times2 select _selected_event) select 2) select 1
+	_event_id         = (_server_game_times2 select _selected_event) select 1
+	_new_url = _url + Format["?mode=gamerestart&server=%1&eventid=%2",_server_uniqueid, _event_id] + ([_access_code, "password"] call FUNCTION_FORMAT_PASSWORD_STRING)
+	_ok = call loadFile Format ["\:RESTART SCHEDULE eventid:%1 date:%2 recurrence:%3 comment:%4parameters:-eventvoice=%5 -eventurl=%6", _event_id, _event_date, _event_recurrence, _server_name, (if (_run_voice_program) then {1} else {0}), _new_url]
 
-	; Display information about scheduled game restart
-	#DisplayGameRestart
-	"ctrlShow [_x,false]" forEach _info_window
-	"ctrlShow [_x,true ]" forEach [6460, 6463]
-	ctrlSetText [6463, Format [MAINMENU_STR select 47, _gamerestart_time, _gamerestart_name]]
-	goto "MainLoop"
+	if (_ok select 0) then {titleText [localize "STR_MISSION_COMPLETED", "PLAIN DOWN", 0.1]} else {titleText [_ok select 3, "PLAIN DOWN", 1.5]}
+	_scheduled_events = (call loadFile Format ["\:RESTART SCHEDULE mode:list"]) select 4
+	goto "Schedule_ListServerEvents"
 
 	#CancelGameRestart
-	loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\RestartInstruction.txt  text:abort"]
-	~2
-	call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\restart_info.sqf"
-	? _gamerestart_pid == 0 : "ctrlShow [_x,false]" forEach _info_window; goto "Schedule_List_Servers"
-	goto "ResetLMB"
+	_selected_event = call _data
+	_event_id       = (_server_game_times2 select _selected_event) select 1
+	_ok             = call loadFile Format ["\:RESTART SCHEDULE mode:delete eventid:%1", _event_id]
+	
+	if (_ok select 0) then {titleText [localize "STR_MISSION_COMPLETED", "PLAIN DOWN", 0.1]} else {titleText [_ok select 3, "PLAIN DOWN", 1.5]}
+	_scheduled_events = (call loadFile Format ["\:RESTART SCHEDULE mode:list"]) select 4
+	goto "Schedule_ListServerEvents"
 
 
 
@@ -1025,9 +1054,6 @@
 		_server_uniqueid    = ""
 		_server_equalModReq = false
 		_auto_restart       = false
-		_gamerestart_pid    = 0
-		_gamerestart_name   = ""
-		_gamerestart_time   = ""
 		_voice_name         = ""
 		_run_voice_program  = false
 		_progress           = ""
@@ -1036,7 +1062,7 @@
 		call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:savestate"
 		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"
 		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\restart_info.sqf"
-		? _install_status >= 0 : if (_silent_mode) then {_progress=call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"; titleText [_progress, "PLAIN", 0.1]; exit} else {goto "InstallDisplay"}
+		? _pid!=-1 : _ok=call loadFile Format ["\:EXE ADDONINSTALL  check %1", _pid]; if (_ok select 0) then {if (_silent_mode) then {_progress=call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"; titleText [_progress, "PLAIN", 0.1]; exit} else {goto "InstallDisplay"}} else {_pid=-1; _install_status=-1; loadFile ":IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  remove:savestate"; loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\install_progress.sqf"}
 	
 	; Silent mode - download only once per game launch
 	_now = call loadFile ":info date"

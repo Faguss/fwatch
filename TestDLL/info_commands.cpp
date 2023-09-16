@@ -93,13 +93,13 @@ case C_INFO_DATE:
 			while ((item = String_tokenize(argument[2], ",", pos, OPTION_TRIM_SQUARE_BRACKETS)).length > 0) {
 				// From ofp date array to systemtime structure
 				switch (index) {
-					case 0: st.wYear         = atoi(item.text); break;
-					case 1: st.wMonth        = atoi(item.text); break;
-					case 2: st.wDay          = atoi(item.text); break;
-					case 4: st.wHour         = atoi(item.text); break;
-					case 5: st.wMinute       = atoi(item.text); break;
-					case 6: st.wSecond       = atoi(item.text); break;
-					case 7: st.wMilliseconds = atoi(item.text); break;
+					case 0: st.wYear         = (WORD)strtoul(item.text,NULL,0); break;
+					case 1: st.wMonth        = (WORD)strtoul(item.text,NULL,0); break;
+					case 2: st.wDay          = (WORD)strtoul(item.text,NULL,0); break;
+					case 4: st.wHour         = (WORD)strtoul(item.text,NULL,0); break;
+					case 5: st.wMinute       = (WORD)strtoul(item.text,NULL,0); break;
+					case 6: st.wSecond       = (WORD)strtoul(item.text,NULL,0); break;
+					case 7: st.wMilliseconds = (WORD)strtoul(item.text,NULL,0); break;
 					case 9: get_system_time  = strcmpi(item.text,"true") == 0; break;
 				}
 				

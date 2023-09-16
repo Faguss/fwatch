@@ -1,4 +1,4 @@
-# Fwatch 1.16 early release
+# Fwatch 1.16 beta
 
 Fwatch was originally created by [Kegetys](http://www.kegetys.fi/). Updated by [Faguss](https://ofp-faguss.com/).
 
@@ -11,12 +11,15 @@ Binary download: https://ofp-faguss.com/fwatch/116test
 
 Project is compiled using Microsoft Visual C++ 6.0 SP6 on WinXP SP3. Helper programs are compiled using Microsoft Visual Studio 2005 on WinXP SP3.
 
-* Open file TestDLL.dsw in MSVC
-* Select option: Build >> Set Active Configuration >> Win32 Release
-* Press F7 or select: Build-->Build fwatch.dll
-* Open file TestLauncher.dsw in MSVC
-* Select option: Build >> Set Active Configuration >> Win32 Release
-* Press F7 or select: Build-->Build fwatch.exe
+* Open file TestDLL\TestDLL.dsw in MSVC 6.0
+* Select option: Build --> Set Active Configuration --> Win32 Release
+* Press F7 or select: Build --> Build fwatch.dll
+* Open file TestLauncher\TestLauncher.dsw in MSVC
+* Select option: Build --> Set Active Configuration --> Win32 Release
+* Press F7 or select: Build --> Build fwatch.exe
+* Open file fwatch_helpers\fwatch_helpers.sln in MSVC 2005
+* Select option: Build --> Configuration Manager --> Release
+* Press CTRL+SHIFT+B or select: Build --> Build Solution
 
 ## Program Description
 

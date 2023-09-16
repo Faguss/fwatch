@@ -2128,16 +2128,17 @@ void WatchProgram(ThreadArguments *arg)
 						// Set variables depending on the program
 						char exe_name[64] = "";
 						char exe_path[64] = "fwatch\\data\\";
+						unsigned short show_window = SW_HIDE;
 
 						switch(hash) {
-							case C_EXE_ADDONINSTALL : strcpy(exe_name, "addonInstarrer.exe"); break;
+							case C_EXE_ADDONINSTALL : strcpy(exe_name, "addonInstarrer.exe"); show_window=SW_SHOWNOACTIVATE; break;
 							case C_EXE_ADDONTEST    : strcpy(exe_name, "addontest.exe"); strcpy(exe_path, "@addontest\\ModData\\"); break;
 							case C_EXE_UNPBO        : strcpy(exe_name, "extractpbo.exe"); break;
 							case C_EXE_MAKEPBO      : strcpy(exe_name, "makepbo.exe"); break;
 							case C_EXE_WGET         : strcpy(exe_name, "wget.exe"); break;
 							case C_EXE_PREPROCESS   : strcpy(exe_name, "preproc.exe"); break;
 							case C_RESTART_SERVER   :
-							case C_RESTART_CLIENT   : strcpy(exe_name, "gameRestart.exe"); break;
+							case C_RESTART_CLIENT   : strcpy(exe_name, "gameRestart.exe"); show_window=SW_SHOWNOACTIVATE; break;
 
 							case C_INFO_ERRORLOG    : {
 								bool enabled_new = db_id ? 1 : 0;
@@ -2179,7 +2180,7 @@ void WatchProgram(ThreadArguments *arg)
 							ZeroMemory(&si, sizeof(si));
 							si.cb          = sizeof(si);
 							si.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-							si.wShowWindow = SW_HIDE;
+							si.wShowWindow = show_window;
 							si.hStdOutput  = logfile_stdout;
 							si.hStdError   = logfile_stdout;
 							ZeroMemory(&pi, sizeof(pi));

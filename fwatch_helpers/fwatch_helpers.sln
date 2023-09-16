@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 9.00
+# Visual Studio 2005
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gameRestart", "gameRestartGUI\gameRestartGUI.vcproj", "{FF519240-860D-4FE4-BA60-6F5C992F42C5}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "addonInstaller", "addonInstarrerGUI\addonInstarrerGUI.vcproj", "{436EFB37-9086-4B66-9609-8682D8002DFA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FF519240-860D-4FE4-BA60-6F5C992F42C5}.Debug|Win32.ActiveCfg = Debug|Win32
+		{FF519240-860D-4FE4-BA60-6F5C992F42C5}.Debug|Win32.Build.0 = Debug|Win32
+		{FF519240-860D-4FE4-BA60-6F5C992F42C5}.Release|Win32.ActiveCfg = Release|Win32
+		{FF519240-860D-4FE4-BA60-6F5C992F42C5}.Release|Win32.Build.0 = Release|Win32
+		{436EFB37-9086-4B66-9609-8682D8002DFA}.Debug|Win32.ActiveCfg = Debug|Win32
+		{436EFB37-9086-4B66-9609-8682D8002DFA}.Debug|Win32.Build.0 = Debug|Win32
+		{436EFB37-9086-4B66-9609-8682D8002DFA}.Release|Win32.ActiveCfg = Release|Win32
+		{436EFB37-9086-4B66-9609-8682D8002DFA}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

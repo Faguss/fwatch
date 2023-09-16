@@ -304,19 +304,14 @@ FUNCTION_GET_EXECUTE_PARAMS = {
         _params_modid   = "";
 
 		{
-			if (_add_param_name) then {
-				_add_param_name = false;
-				_params         = _params        + " -mod=";
-				_params_modid   = _params_modid  + " -modid=";
+			if (_params_modid == "") then {
+				_params_modid = _params_modid + " -modid=";
 			} else {
-				_params         = _params       + ";";
-				_params_modid   = _params_modid + ";";
+				_params_modid = _params_modid + ";";
 			};
 			
-			_params       = _params       + (_x select 1); //mod name
-			_params_modid = _params_modid + (_x select 0); //mod id
-		}
-		forEach _server_modfolders;
+			_params_modid = _params_modid + (_x select 0);
+		} forEach _server_modfolders;
         
         _params = _params + _params_modid;
 	} else {
@@ -712,7 +707,8 @@ FUNCTION_STRINGTABLE = {
 			"Staіe",		//108
 			"[Utwуrz Skrуt]",		//109
 			"Nazwa skrуtu",		//110
-			"Wybierz mody dla skrуtu"		//111
+			"Wybierz mody dla skrуtu",		//111
+			"[Wstrzymaj]" //112
 		];
 	};
 
@@ -829,7 +825,8 @@ FUNCTION_STRINGTABLE = {
 			"Постоянные",		//108
 			"[Создать Ярлык]",		//109
 			"сокращенное имя",		//110
-			"выбрать моды для ярлыка"		//111
+			"выбрать моды для ярлыка",		//111
+			"[Pause]" //112
 		];
 	};
 
@@ -946,7 +943,8 @@ FUNCTION_STRINGTABLE = {
 			"Persistent",		//108
 			"[Create Shortcut]",		//109
 			"Shortcut name",		//110
-			"Select mods for the shortcut"		//111
+			"Select mods for the shortcut",		//111
+			"[Pause]" //112
 		];
 	};
 	
@@ -1145,4 +1143,28 @@ FUNCTION_GET_SERVER_STATUS_NAME = {
 		] select _this);
 	};
 	_output
+};
+
+
+
+FUNCTION_LIST_EVENTS_FOR_AUTO_CONNECTION = {
+	_event_text = _x select 0;
+	_event_id   = _x select 1;
+
+	_description = Format ["[%1]",_event_text];
+	_option_value = 231;
+	
+	if (_event_id in _scheduled_events) then {
+		_description  = Format ["[%1 %2]",localize "STR_DISP_DELETE", _event_text];
+		_option_value = 211;
+	};
+	
+	_index = [_description, _option_value] call FUNCTION_LBADD;
+	lbSetData [6657, _index, Format["%1",_i]];
+	
+	if (_event_id in _scheduled_events) then {
+		lbSetColor [6657, _index, _color_red];
+	};
+	
+	_i = _i + 1;
 };
