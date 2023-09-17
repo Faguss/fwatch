@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2023,9,16,6,18,9,48,303,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2023,9,17,0,18,24,24,830,120,FALSE]
 	GS_MY_VERSION        = 0.61
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -889,11 +889,15 @@
 	goto "ResetLMB"
 	
 	#ScheduleGameRestart
+	_steam            = false
+	_fwatch_info      = call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch_info.sqf"
+	? Format ["%1",_fwatch_info] != "scalar bool array string 0xfcffffef" : _steam="-steam" in (_fwatch_info select 1)
+	
 	_event_recurrence = ((_server_game_times2 select _selected_event) select 2) select 0
 	_event_date       = ((_server_game_times2 select _selected_event) select 2) select 1
 	_event_id         = (_server_game_times2 select _selected_event) select 1
 	_new_url = _url + Format["?mode=gamerestart&server=%1&eventid=%2",_server_uniqueid, _event_id] + ([_access_code, "password"] call FUNCTION_FORMAT_PASSWORD_STRING)
-	_ok = call loadFile Format ["\:RESTART SCHEDULE eventid:%1 date:%2 recurrence:%3 comment:%4parameters:-eventvoice=%5 -eventurl=%6", _event_id, _event_date, _event_recurrence, _server_name, (if (_run_voice_program) then {1} else {0}), _new_url]
+	_ok = call loadFile Format ["\:RESTART SCHEDULE eventid:%1 date:%2 recurrence:%3 comment:%4parameters:-eventvoice=%5 -eventurl=%6 -steam=%7", _event_id, _event_date, _event_recurrence, _server_name, (if (_run_voice_program) then {1} else {0}), _new_url, _steam]
 
 	if (_ok select 0) then {titleText [localize "STR_MISSION_COMPLETED", "PLAIN DOWN", 0.1]} else {titleText [_ok select 3, "PLAIN DOWN", 1.5]}
 	_scheduled_events = (call loadFile Format ["\:RESTART SCHEDULE mode:list"]) select 4

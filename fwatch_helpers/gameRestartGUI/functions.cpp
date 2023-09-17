@@ -1240,6 +1240,11 @@ void ProcessArguments(LPWSTR command_line, INPUT_ARGUMENTS &input)
 				input.event_task_name = value;
 				continue;
 			}
+
+			if (Equals(name,L"-steam")) {
+				input.steam = Equals(value,L"true") || Equals(value,L"1");
+				continue;
+			}
 		}
 	
 		input.user_arguments     += namevalue + L" ";

@@ -18,6 +18,38 @@ DWORD WINAPI addonInstallerWrapper(__in LPVOID lpParameter)
 	}
 
 	DisableMenu();
+
+	// If user wants to restart the game after installation
+	if (global.restart_game) {
+		DeleteFile(L"fwatch\\tmp\\schedule\\install_progress.sqf");
+		
+		if (global.run_voice_program)
+			global.gamerestart_arguments += L" -evoice=" + global.arguments_table[L"evoice"];
+		
+		STARTUPINFO si;
+		PROCESS_INFORMATION pi;
+		ZeroMemory(&si, sizeof(si));
+		ZeroMemory(&pi, sizeof(pi));
+		si.cb          = sizeof(si);
+		si.dwFlags     = STARTF_USESHOWWINDOW;
+		si.wShowWindow = SW_SHOW;
+		std::wstring param = WrapInQuotes(global.working_directory) + L" " + global.gamerestart_arguments;
+	 
+		if (CreateProcess(L"fwatch\\data\\gameRestart.exe", &param[0], NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi))
+			LogMessage(L"Executing gameRestart.exe  " + global.gamerestart_arguments);
+		else
+			LogMessage(L"Failed to launch gameRestart.exe " + FormatError(GetLastError()));
+	 
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+		
+	}
+
+	LogMessage(L"", OPTION_CLOSELOG);
+
+	if (global.restart_game)
+		PostQuitMessage(0);
+
 	return 0;
 }
 
@@ -527,7 +559,6 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 
 		std::wstring url = GetFileContents(global.arguments_table[L"downloadscript"]) + L" --verbose \"--output-document=fwatch\\tmp\\installation script\"";
 		int result       = Download(url, FLAG_OVERWRITE | FLAG_SILENT_MODE);
-		//TODO: DeleteFile(global.arguments_table[L"downloadscript"].c_str());
 
 		if (result > 0) {
 			LogMessage(L"", OPTION_CLOSELOG);
@@ -554,7 +585,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 		std::vector<int>          id;        //command enum
 		std::vector<bool>         ctrl_flow; //is it a control flow command
 		std::vector<int>          line_num;  //position in the text file
-		std::vector<int>          step_num;  //position in the installation process
+		std::vector<int>          step_num;  //progress number
 		std::vector<int>          switches;  //bit mask
 		std::vector<size_t>       arg_start; //arguments starting index in the other table
 		std::vector<int>          arg_num;   //number of arguments passed to this command
@@ -1058,18 +1089,30 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				}
 		
 				Finished_downloading:
-				if (command_result == ERROR_NONE)
+				if (global.pause_installer || global.abort_installer)
 					break;
 				else
-					failed_downloads++;
+					if (command_result == ERROR_NONE)
+						break;
+					else
+						failed_downloads++;
 			}
 		}
 		
 		
 		
 		// If download was successful then execute command
-		if (current_script_command.url_num[instruction_index] == 0 || 
-			(current_script_command.url_num[instruction_index] > 0 && failed_downloads < current_script_command.url_num[instruction_index])
+		if ((
+				command_result != ERROR_USER_ABORTED && 
+				command_result != ERROR_PAUSED
+			) && 
+			(
+				current_script_command.url_num[instruction_index] == 0 || 
+				(
+					current_script_command.url_num[instruction_index] > 0 && 
+					failed_downloads < current_script_command.url_num[instruction_index]
+				)
+			)
 		) {
 			int first             = current_script_command.arg_num[instruction_index]>0 ? current_script_command.arg_start[instruction_index] : -1;
 			global.download_phase = false;
@@ -2136,12 +2179,15 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 			}
 		}
 
-		// If download failed then ask to retry
+		// If download/unpacking failed then ask to retry
 		if (
 			command_result != ERROR_USER_ABORTED && 
 			command_result != ERROR_PAUSED && 
 			current_script_command.url_num[instruction_index] > 0 && 
-			(failed_downloads == current_script_command.url_num[instruction_index] || command_result == ERROR_WRONG_ARCHIVE)
+			(
+				failed_downloads == current_script_command.url_num[instruction_index] || 
+				command_result == ERROR_WRONG_ARCHIVE
+			)
 		) {
 			WriteProgressFile(INSTALL_RETRYORABORT, global.last_log_message + L"\r\n\r\n" + global.lang[STR_ASK_RETRYORABORT]);
 			global.retry_installer = false;
@@ -2202,39 +2248,9 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 		global.restart_game = false;
 	}
 	
-	// If user wants to restart the game after installation
-	if (global.restart_game) {
-		DeleteFile(L"fwatch\\tmp\\schedule\\install_progress.sqf");
-		
-		if (global.run_voice_program)
-			global.gamerestart_arguments += L" -evoice=" + global.arguments_table[L"evoice"];
-		
-		STARTUPINFO si;
-		PROCESS_INFORMATION pi;
-		ZeroMemory(&si, sizeof(si));
-		ZeroMemory(&pi, sizeof(pi));
-		si.cb          = sizeof(si);
-		si.dwFlags     = STARTF_USESHOWWINDOW;
-		si.wShowWindow = SW_SHOWNOACTIVATE;
-		std::wstring param = WrapInQuotes(global.working_directory) + L" " + global.gamerestart_arguments;
-	 
-		if (CreateProcess(L"fwatch\\data\\gameRestart.exe", &param[0], NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi))
-			LogMessage(L"Executing gameRestart.exe  " + global.gamerestart_arguments);
-		else
-			LogMessage(L"Failed to launch gameRestart.exe " + FormatError(GetLastError()));
-	 
-		CloseHandle(pi.hProcess);
-		CloseHandle(pi.hThread);
-	}
-
-	LogMessage(L"", OPTION_CLOSELOG);
-	
 	// Close listen thread
 	global.end_thread = true;
 	WaitForSingleObject(global.thread_receiver, INFINITE);
-	
-	if (global.restart_game) 
-		PostQuitMessage(0);
 
     return ERROR_NONE;
 }

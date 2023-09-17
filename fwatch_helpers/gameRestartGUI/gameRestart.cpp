@@ -76,6 +76,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		L"",
 		"",
 		false,
+		false,
 		SELF_UPDATE_DISABLED,
 		0,
 		0
@@ -179,6 +180,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 
 		LONG dst = result==TIME_ZONE_ID_DAYLIGHT ? TimeZoneInfo.DaylightBias : 0;
 		std::wstring download_file_name = L"fwatch\\tmp\\schedule\\" + input.event_task_name + L".bin";
+		DeleteFile(download_file_name.c_str());
 
 		result = Download(
 			L"--output-document=" + download_file_name + L" " + 
@@ -542,6 +544,9 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		
 			fwatch_info.close();
 		}
+
+		if (input.steam)
+			fwatch_arguments += L"-steam ";
 	}
 
 	// Detect which game and executable
@@ -560,6 +565,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		for (int i=0; i<exe_num; i++)
 			if (!input.game_exe.empty()) {		// if executable name is known then just get window name
 				if (Equals(exe_name_list[i],input.game_exe)) {
+					game_exe         = exe_name_list[i];
 					game_window      = window_name_list[i];
 					game_version     = exe_version_list[i];
 					dedicated_server = i>=7;
@@ -766,6 +772,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 					
 						input.user_arguments     += local_mods[j].folder_name;
 						input.user_arguments_log += local_mods[j].folder_name;
+						break;
 					}
 				}
 			}
@@ -1362,7 +1369,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 	
 		launch_arg_log = without_equality + with_equality;
 	
-		if (steam) {
+		if (steam || (input.steam && nolaunch)) {
 			HKEY hKey			        = 0;
 			wchar_t SteamPath[MAX_PATH] = {0};
 			wchar_t SteamExe[MAX_PATH]  = {0};

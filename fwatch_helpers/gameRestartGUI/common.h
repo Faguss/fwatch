@@ -85,6 +85,7 @@ struct INPUT_ARGUMENTS
 	std::wstring event_task_name;
 	char fwatch_build_date[64];
 	bool server_equalmodreq;
+	bool steam;
 	int self_update;
 	int event_voice;
 	DWORD game_pid;

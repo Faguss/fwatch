@@ -1472,6 +1472,7 @@ int Download(std::wstring url, int options, std::wstring log_file_name)
 			return ErrorMessage(STR_DOWNLOAD_PATH_ERROR);
 		
 		// reassemble
+		global.downloaded_filename = path;
 		url = url.substr(0,find) + (outer_quote ? L"" : L"\"") + L"fwatch\\tmp\\" + path + L"\" " + url.substr(end);
 
 		find = url.find(output, find);
@@ -1504,6 +1505,7 @@ int Download(std::wstring url, int options, std::wstring log_file_name)
 			if (path.empty() || path == L"..")
 				return ErrorMessage(STR_DOWNLOAD_PATH_ERROR);
 	
+			global.downloaded_filename = path;
 			url = url.substr(0,find) + L"\"fwatch\\tmp\\" + path + L"\" " + url.substr(end);
 		} else
 			find += output.length();
