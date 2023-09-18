@@ -11,12 +11,6 @@ DWORD WINAPI addonInstallerWrapper(__in LPVOID lpParameter)
 
 	global.thread_installer = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)addonInstallerMain, 0, 0,&threadID1);
 	WaitForSingleObject(global.thread_installer, INFINITE);
-
-	if (!global.test_mode && global.abort_installer && !global.downloaded_filename.empty()) {
-		std::wstring filename = L"fwatch\\tmp\\" + global.downloaded_filename;
-		DeleteFile(filename.c_str());
-	}
-
 	DisableMenu();
 
 	// If user wants to restart the game after installation
@@ -104,217 +98,216 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 	// Load language
 	std::wstring stringtable[][STR_MAX] = {
 		{
-			L"Initializing",
-			L"Fetching installation script",
-			L"Reading installation script",
-			L"Connecting",
-			L"Downloading",
-			L"Downloaded",
-			L"Extracting",
-			L"Unpacking PBO",
-			L"Packing PBO",
-			L"Copying",
-			L"Copying downloaded file to the fwatch\\tmp",
-			L"Cleaning up",
-			L"Preparing to install a mod",
-			L"Deleting",
-			L"Renaming",
-			L"Editing",
-			L"Installation aborted by user",
-			L"Installation complete!",
-			L"Done\r\nbut mods %MOD% are still missing\r\nOpen fwatch\\data\\addonInstallerLog.txt for details",
-			L"Installation progress:",
-			L"ALT+TAB to the desktop",
-			L"ERROR",
-			L"Can't create logfile",
-			L"Can't read install script",
-			L"Incorrect script version",
-			L"In version",
-			L"On line",
-			L"Failed to launch",
-			L"Not enough arguments",
-			L"Failed to list files in ",
-			L"Missing file name argument",
-			L"Path is leaving current directory",
-			L"Installation script is invalid",
-			L"Invalid installator arguments",
-			L"Failed to allocate buffer",
-			L"left",
-			L"total",
-			L"Invalid download destination",
-			L"Failed to download",
-			L"Failed to find",
-			L"remove this file and download again",
-			L"Failed to extract",
-			L"Failed to create directory",
-			L"Failed to get attributes of",
-			L"Source path is leaving current directory",
-			L"Destination path is leaving current directory",
-			L"Not allowed to move files out of the game directory",
-			L"Failed to move",
-			L"to",
-			L"Failed to copy",
-			L"Failed to rename",
-			L"to",
-			L"New file name contains slashes",
-			L"Wildcards in the path",
-			L"Missing new file name",
-			L"Failed to delete",
-			L"Failed to move to recycle bin",
-			L"You must manually run",
-			L"You must manually download",
-			L"Select folder with the downloaded file",
-			L"Missing version number",
-			L"Not a PBO file",
-			L"Failed to create PBO",
-			L"Failed to unpack PBO",
-			L"Failed to read file",
-			L"Failed to create file",
-			L"Reading mission.sqm",
-			L"Select \"Retry\" or \"Abort\""
+			L"Initializing",		//STR_ACTION_INIT
+			L"Fetching installation script",		//STR_ACTION_GETSCRIPT
+			L"Reading installation script",		//STR_ACTION_READSCRIPT
+			L"Connecting",		//STR_ACTION_CONNECTING
+			L"Downloading",		//STR_ACTION_DOWNLOADING
+			L"Downloaded",		//STR_ACTION_DOWNLOADED
+			L"Extracting",		//STR_ACTION_EXTRACTING
+			L"Unpacking PBO",		//STR_ACTION_UNPACKINGPBO
+			L"Packing PBO",		//STR_ACTION_PACKINGPBO
+			L"Copying",		//STR_ACTION_COPYING
+			L"Copying downloaded file to the fwatch\\tmp",		//STR_ACTION_COPYINGDOWNLOAD
+			L"Cleaning up",		//STR_ACTION_CLEANING
+			L"Preparing to install a mod",		//STR_ACTION_PREPARING
+			L"Deleting",		//STR_ACTION_DELETING
+			L"Renaming",		//STR_ACTION_RENAMING
+			L"Editing",		//STR_ACTION_EDITING
+			L"Installation aborted by user",		//STR_ACTION_ABORTED
+			L"Installation complete!",		//STR_ACTION_DONE
+			L"Done\\nbut mods %MOD% are still missing\\nOpen fwatch\\data\\addonInstallerLog.txt for details",		//STR_ACTION_DONEWARNING
+			L"Installation progress:",		//STR_PROGRESS
+			L"ALT+TAB to the desktop",		//STR_ALTTAB
+			L"ERROR",		//STR_ERROR
+			L"Can't create logfile",		//STR_ERROR_LOGFILE
+			L"Can't read install script",		//STR_ERROR_READSCRIPT
+			L"Incorrect script version",		//STR_ERROR_WRONG_VERSION
+			L"In version",		//STR_ERROR_INVERSION
+			L"On line",		//STR_ERROR_ONLINE
+			L"Failed to launch",		//STR_ERROR_EXE
+			L"Not enough arguments",		//STR_ERROR_ARG_COUNT
+			L"Failed to list files in ",		//STR_ERROR_FILE_LIST
+			L"Missing file name argument",		//STR_ERROR_NO_FILE
+			L"Path is leaving current directory",		//STR_ERROR_PATH
+			L"Installation script is invalid",		//STR_ERROR_INVALID_SCRIPT
+			L"Invalid installator arguments",		//STR_ERROR_INVALID_ARG
+			L"Failed to allocate buffer",		//STR_ERROR_BUFFER
+			L"left",		//STR_DOWNLOAD_LEFT
+			L"total",		//STR_DOWNLOAD_TOTAL
+			L"Invalid download destination",		//STR_DOWNLOAD_PATH_ERROR
+			L"Failed to download",		//STR_DOWNLOAD_FAILED
+			L"Failed to find",		//STR_DOWNLOAD_FIND_ERROR
+			L"remove this file and download again",		//STR_UNPACK_REDO_FILE
+			L"Failed to extract",		//STR_UNPACK_ERROR
+			L"Failed to create directory",		//STR_MDIR_ERROR
+			L"Failed to get attributes of",		//STR_AUTO_READ_ATTRI
+			L"Source path is leaving current directory",		//STR_UNPACKPBO_SRC_PATH_ERROR
+			L"Destination path is leaving current directory",		//STR_UNPACKPBO_DST_PATH_ERROR
+			L"Not allowed to move files out of the game directory",		//STR_MOVE_DST_PATH_ERROR
+			L"Failed to move",		//STR_MOVE_ERROR
+			L"to",		//STR_MOVE_TO_ERROR
+			L"Failed to copy",		//STR_COPY_ERROR
+			L"Failed to rename",		//STR_MOVE_RENAME_ERROR
+			L"to",		//STR_MOVE_RENAME_TO_ERROR
+			L"New file name contains slashes",		//STR_RENAME_DST_PATH_ERROR
+			L"Wildcards in the path",		//STR_RENAME_WILDCARD_ERROR
+			L"Missing new file name",		//STR_RENAME_NO_NAME_ERROR
+			L"Failed to delete",		//STR_DELETE_PERMANENT_ERROR
+			L"Failed to move to recycle bin",		//STR_DELETE_BIN_ERROR
+			L"You must manually run",		//STR_ASK_EXE
+			L"You must manually download",		//STR_ASK_DLOAD
+			L"Select folder with the downloaded file",		//STR_ASK_DLOAD_SELECT
+			L"Missing version number",		//STR_IF_NUMBER_ERROR
+			L"Not a PBO file",		//STR_PBO_NAME_ERROR
+			L"Failed to create PBO",		//STR_PBO_MAKE_ERROR
+			L"Failed to unpack PBO",		//STR_PBO_UNPACK_ERROR
+			L"Failed to read file",		//STR_EDIT_READ_ERROR
+			L"Failed to create file",		//STR_EDIT_WRITE_ERROR
+			L"Reading mission.sqm",		//STR_ACTION_READMISSIONSQM
+			L"Select 'Retry' or 'Abort'"		//STR_ASK_RETRYORABORT
 		},
 		{
-			L"Запуск",		//0
-			L"Получение скрипта установки",		//1
-			L"Считывание файлов",		//2
-			L"Подключение",		//3
-			L"Загрузка",		//4
-			L"Загрузка завершена",		//5
-			L"Извлечение файлов",		//6
-			L"Распаковка архива PBO",		//7
-			L"Создание архива PBO",		//8
-			L"Копирование",		//9
-			L"Копирование загруженного файла в fwatch\tmp",		//10
-			L"Удаление временных файлов",		//11
-			L"Начало установки мода",		//12
-			L"Удаление файлов мода",		//13
-			L"Переименование файлов мода",		//14
-			L"Редактирование файлов мода",		//15
-			L"Установка прервана пользователем",		//16
-			L"Установка завершена!",		//17
-			L"Установка завершена\nно отсутствуют моды %MOD%. Дополнительная информация в fwatch\\data\\addonInstallerLog.txt",		//18
-			L"Процесс установки:",		//19
-			L"Нажмите ALT+TAB, чтобы свернуть игру",		//20
-			L"ОШИБКА",		//21
-			L"Невозможно создать файл журнала установки",		//22
-			L"Невозможно считать скрипт установки",		//23
-			L"Неверная версия скрипта установки",		//24
-			L"В версии",		//25
-			L"В строке",		//26
-			L"Ошибка при запуске",		//27
-			L"Недостаточно аргументов функции",		//28
-			L"Ошибка при создании списка файлов в папке ",		//29
-			L"Отсутствует имя файла аргумента",		//30
-			L"Путь не соответствует текущей папке",		//31
-			L"Неверный скрипт установки",		//32
-			L"Неверные аргументы мастера установки",		//33
-			L"Ошибка при выделении понятий",		//34
-			L"осталось",		//35
-			L"всего",		//36
-			L"Неверный путь установки",		//37
-			L"Ошибка при загрузке",		//38
-			L"Совпадений не найдено",		//39
-			L"удалите этот файл и загрузите снова",		//40
-			L"Ошибка при извлечении",		//41
-			L"Ошибка при создании папки",		//42
-			L"Ошибка при считывании атрибутов файла",		//43
-			L"Исходный путь не соответствует текущей папке",		//44
-			L"Путь назначения не соответствует текущей папке",		//45
-			L"Невозможно переместить файлы из папки игры",		//46
-			L"Ошибка при перемещении",		//47
-			L"в",		//48
-			L"Ошибка при копировании",		//49
-			L"Ошибка при переименовании файла",		//50
-			L"в",		//51
-			L"Новое имя файла содержит слеши",		//52
-			L"Путь содержит символы подстановки",		//53
-			L"Отсутствует новое имя файла",		//54
-			L"Ошибка при удалении",		//55
-			L"Ошибка при перемещении в Корзину",		//56
-			L"Необходимо запустить вручную",		//57
-			L"Необходимо загрузить вручную",		//58
-			L"Выберите папку с загруженным файлом",		//59
-			L"Отсутствует номер версии",		//60
-			L"Не файл типа PBO",		//61
-			L"Ошибка при создании файла PBO",		//62
-			L"Ошибка при извлечении из архива PBO",		//63
-			L"Ошибка при считывании",		//64
-			L"Ошибка при создании файла",		//65
-			L"Считывание mission.sqm",		//66
-			L"Select \"Retry\" or \"Abort\""
+			L"Запуск",		//STR_ACTION_INIT
+			L"Получение скрипта установки",		//STR_ACTION_GETSCRIPT
+			L"Считывание файлов",		//STR_ACTION_READSCRIPT
+			L"Подключение",		//STR_ACTION_CONNECTING
+			L"Загрузка",		//STR_ACTION_DOWNLOADING
+			L"Загрузка завершена",		//STR_ACTION_DOWNLOADED
+			L"Извлечение файлов",		//STR_ACTION_EXTRACTING
+			L"Распаковка архива PBO",		//STR_ACTION_UNPACKINGPBO
+			L"Создание архива PBO",		//STR_ACTION_PACKINGPBO
+			L"Копирование",		//STR_ACTION_COPYING
+			L"Копирование загруженного файла в fwatch\\tmp",		//STR_ACTION_COPYINGDOWNLOAD
+			L"Удаление временных файлов",		//STR_ACTION_CLEANING
+			L"Начало установки мода",		//STR_ACTION_PREPARING
+			L"Удаление файлов мода",		//STR_ACTION_DELETING
+			L"Переименование файлов мода",		//STR_ACTION_RENAMING
+			L"Редактирование файлов мода",		//STR_ACTION_EDITING
+			L"Установка прервана пользователем",		//STR_ACTION_ABORTED
+			L"Установка завершена!",		//STR_ACTION_DONE
+			L"Установка завершена\\nно отсутствуют моды %MOD%. Дополнительная информация в fwatch\\data\\addonInstallerLog.txt",		//STR_ACTION_DONEWARNING
+			L"Процесс установки:",		//STR_PROGRESS
+			L"Нажмите ALT+TAB, чтобы свернуть игру",		//STR_ALTTAB
+			L"ОШИБКА",		//STR_ERROR
+			L"Невозможно создать файл журнала установки",		//STR_ERROR_LOGFILE
+			L"Невозможно считать скрипт установки",		//STR_ERROR_READSCRIPT
+			L"Неверная версия скрипта установки",		//STR_ERROR_WRONG_VERSION
+			L"В версии",		//STR_ERROR_INVERSION
+			L"В строке",		//STR_ERROR_ONLINE
+			L"Ошибка при запуске",		//STR_ERROR_EXE
+			L"Недостаточно аргументов функции",		//STR_ERROR_ARG_COUNT
+			L"Ошибка при создании списка файлов в папке ",		//STR_ERROR_FILE_LIST
+			L"Отсутствует имя файла аргумента",		//STR_ERROR_NO_FILE
+			L"Путь не соответствует текущей папке",		//STR_ERROR_PATH
+			L"Неверный скрипт установки",		//STR_ERROR_INVALID_SCRIPT
+			L"Неверные аргументы мастера установки",		//STR_ERROR_INVALID_ARG
+			L"Ошибка при выделении понятий",		//STR_ERROR_BUFFER
+			L"осталось",		//STR_DOWNLOAD_LEFT
+			L"всего",		//STR_DOWNLOAD_TOTAL
+			L"Неверный путь установки",		//STR_DOWNLOAD_PATH_ERROR
+			L"Ошибка при загрузке",		//STR_DOWNLOAD_FAILED
+			L"Совпадений не найдено",		//STR_DOWNLOAD_FIND_ERROR
+			L"удалите этот файл и загрузите снова",		//STR_UNPACK_REDO_FILE
+			L"Ошибка при извлечении",		//STR_UNPACK_ERROR
+			L"Ошибка при создании папки",		//STR_MDIR_ERROR
+			L"Ошибка при считывании атрибутов файла",		//STR_AUTO_READ_ATTRI
+			L"Исходный путь не соответствует текущей папке",		//STR_UNPACKPBO_SRC_PATH_ERROR
+			L"Путь назначения не соответствует текущей папке",		//STR_UNPACKPBO_DST_PATH_ERROR
+			L"Невозможно переместить файлы из папки игры",		//STR_MOVE_DST_PATH_ERROR
+			L"Ошибка при перемещении",		//STR_MOVE_ERROR
+			L"в",		//STR_MOVE_TO_ERROR
+			L"Ошибка при копировании",		//STR_COPY_ERROR
+			L"Ошибка при переименовании файла",		//STR_MOVE_RENAME_ERROR
+			L"в",		//STR_MOVE_RENAME_TO_ERROR
+			L"Новое имя файла содержит слеши",		//STR_RENAME_DST_PATH_ERROR
+			L"Путь содержит символы подстановки",		//STR_RENAME_WILDCARD_ERROR
+			L"Отсутствует новое имя файла",		//STR_RENAME_NO_NAME_ERROR
+			L"Ошибка при удалении",		//STR_DELETE_PERMANENT_ERROR
+			L"Ошибка при перемещении в Корзину",		//STR_DELETE_BIN_ERROR
+			L"Необходимо запустить вручную",		//STR_ASK_EXE
+			L"Необходимо загрузить вручную",		//STR_ASK_DLOAD
+			L"Выберите папку с загруженным файлом",		//STR_ASK_DLOAD_SELECT
+			L"Отсутствует номер версии",		//STR_IF_NUMBER_ERROR
+			L"Не файл типа PBO",		//STR_PBO_NAME_ERROR
+			L"Ошибка при создании файла PBO",		//STR_PBO_MAKE_ERROR
+			L"Ошибка при извлечении из архива PBO",		//STR_PBO_UNPACK_ERROR
+			L"Ошибка при считывании",		//STR_EDIT_READ_ERROR
+			L"Ошибка при создании файла",		//STR_EDIT_WRITE_ERROR
+			L"Считывание mission.sqm",		//STR_ACTION_READMISSIONSQM
+			L"Выберите 'Заново' или 'Отмена'"		//STR_ASK_RETRYORABORT
 		},
 		{
-			L"Przygotowywanie",
-			L"Pobieraniu skryptu instalacyjnego",
-			L"Przetwarzanie skryptu instalacyjnego",
-			L"Ј№czenie",
-			L"Pobieranie",
-			L"Pobrano",
-			L"Wypakowywanie",
-			L"Wypakowywanie PBO",
-			L"Pakowanie PBO",
-			L"Kopiowanie plikуw",
-			L"Kopiowanie plikуw do fwatch\\tmp",
-			L"Porz№dkowanie",
-			L"Przygotowywanie do instalacji modu",
-			L"Usuwanie plikуw",
-			L"Zmienianie nazwy plikуw",
-			L"Edytowanie plikуw",
-			L"Instalacja przerwana przez uїytkownika",
-			L"Instalacja zakoсczona!",
-			L"Koniec instalacji\r\nale brakuje modуw %MOD%\r\nSzczegуіy w pliku fwatch\\data\\addonInstallerLog.txt",
-			L"Postкp instalacji:",
-			L"ALT+TAB їeby przejњж do pulpitu",
-			L"BЈҐD",
-			L"Nie moїna utworzyж zapisu instalacji",
-			L"Nie moїna odczytaж skryptu instalacyjnego",
-			L"Niepoprawna wersja skryptu instalacyjnego",
-			L"W wersji",
-			L"W linijce",
-			L"Nie moїna uruchomiж",
-			L"Brakuje argumentуw",
-			L"Nie moїna utworzyж listy plikуw z ",
-			L"Brakuje nazwy pliku",
-			L"Њcieїka wychodzi poza obecny katalog",
-			L"Skrypt instalacyjny jest bікdny",
-			L"Bікdne argumenty instalatora",
-			L"Nie moїna zarezerwowaж pamiкci",
-			L"zostaіo",
-			L"w sumie",
-			L"Nieprawidіowy katalog docelowy dla њci№gniкtego pliku",
-			L"Nie moїna pobraж",
-			L"Nie znaleziono",
-			L"usuс ten plik i њci№gnij ponownie",
-			L"Nie moїna rozpakowaж",
-			L"Nie moїna utworzyж katalogu",
-			L"Nie moїna odczytaж atrybutуw",
-			L"Њcieїka џrуdіowa wychodzi poza obecny katalog",
-			L"Њcieїka docelowa wychodzi poza obecny katalog",
-			L"Nie moїna przenosiж plikуw poza katalog z gr№",
-			L"Nie moїna przenieњж",
-			L"do",
-			L"Nie moїna skopiowaж",
-			L"Nie moїna zmieniж nazwy",
-			L"na",
-			L"Nowa nazwa pliku zawiera ukoњniki",
-			L"Њcieїka zawiera symbole zastкpcze",
-			L"Brakuje nowej nazwy pliku",
-			L"Nie moїna skasowaж",
-			L"Nie moїna przenieњж do kosza",
-			L"Musisz rкcznie uruchomiж",
-			L"Musisz rкcznie pobraж",
-			L"Wybierz katalog z pobranym plikiem",
-			L"Brakuje numeru wersji",
-			L"Plik nie jest PBO",
-			L"Nie moїna utworzyж PBO",
-			L"Nie moїna rozpakowaж PBO",
-			L"Nie moїna wczytaж pliku",
-			L"Nie moїna utworzyж pliku",
-			L"Przetwarzanie mission.sqm",
-			L"Select \"Retry\" or \"Abort\""
+			L"Przygotowywanie",		//STR_ACTION_INIT
+			L"Pobieraniu skryptu instalacyjnego",		//STR_ACTION_GETSCRIPT
+			L"Przetwarzanie skryptu instalacyjnego",		//STR_ACTION_READSCRIPT
+			L"Ј№czenie",		//STR_ACTION_CONNECTING
+			L"Pobieranie",		//STR_ACTION_DOWNLOADING
+			L"Pobrano",		//STR_ACTION_DOWNLOADED
+			L"Wypakowywanie",		//STR_ACTION_EXTRACTING
+			L"Wypakowywanie PBO",		//STR_ACTION_UNPACKINGPBO
+			L"Pakowanie PBO",		//STR_ACTION_PACKINGPBO
+			L"Kopiowanie plikуw",		//STR_ACTION_COPYING
+			L"Kopiowanie plikуw do fwatch\\tmp",		//STR_ACTION_COPYINGDOWNLOAD
+			L"Porz№dkowanie",		//STR_ACTION_CLEANING
+			L"Przygotowywanie do instalacji modu",		//STR_ACTION_PREPARING
+			L"Usuwanie plikуw",		//STR_ACTION_DELETING
+			L"Zmienianie nazwy plikуw",		//STR_ACTION_RENAMING
+			L"Edytowanie plikуw",		//STR_ACTION_EDITING
+			L"Instalacja przerwana przez uїytkownika",		//STR_ACTION_ABORTED
+			L"Instalacja zakoсczona!",		//STR_ACTION_DONE
+			L"Koniec instalacji\\nale brakuje modуw %MOD%\\nSzczegуіy w pliku fwatch\\data\\addonInstallerLog.txt",		//STR_ACTION_DONEWARNING
+			L"Postкp instalacji:",		//STR_PROGRESS
+			L"ALT+TAB їeby przejњж do pulpitu",		//STR_ALTTAB
+			L"BЈҐD",		//STR_ERROR
+			L"Nie moїna utworzyж zapisu instalacji",		//STR_ERROR_LOGFILE
+			L"Nie moїna odczytaж skryptu instalacyjnego",		//STR_ERROR_READSCRIPT
+			L"Niepoprawna wersja skryptu instalacyjnego",		//STR_ERROR_WRONG_VERSION
+			L"W wersji",		//STR_ERROR_INVERSION
+			L"W linijce",		//STR_ERROR_ONLINE
+			L"Nie moїna uruchomiж",		//STR_ERROR_EXE
+			L"Brakuje argumentуw",		//STR_ERROR_ARG_COUNT
+			L"Nie moїna utworzyж listy plikуw z ",		//STR_ERROR_FILE_LIST
+			L"Brakuje nazwy pliku",		//STR_ERROR_NO_FILE
+			L"Њcieїka wychodzi poza obecny katalog",		//STR_ERROR_PATH
+			L"Skrypt instalacyjny jest bікdny",		//STR_ERROR_INVALID_SCRIPT
+			L"Bікdne argumenty instalatora",		//STR_ERROR_INVALID_ARG
+			L"Nie moїna zarezerwowaж pamiкci",		//STR_ERROR_BUFFER
+			L"zostaіo",		//STR_DOWNLOAD_LEFT
+			L"w sumie",		//STR_DOWNLOAD_TOTAL
+			L"Nieprawidіowy katalog docelowy dla њci№gniкtego pliku",		//STR_DOWNLOAD_PATH_ERROR
+			L"Nie moїna pobraж",		//STR_DOWNLOAD_FAILED
+			L"Nie znaleziono",		//STR_DOWNLOAD_FIND_ERROR
+			L"usuс ten plik i њci№gnij ponownie",		//STR_UNPACK_REDO_FILE
+			L"Nie moїna rozpakowaж",		//STR_UNPACK_ERROR
+			L"Nie moїna utworzyж katalogu",		//STR_MDIR_ERROR
+			L"Nie moїna odczytaж atrybutуw",		//STR_AUTO_READ_ATTRI
+			L"Њcieїka џrуdіowa wychodzi poza obecny katalog",		//STR_UNPACKPBO_SRC_PATH_ERROR
+			L"Њcieїka docelowa wychodzi poza obecny katalog",		//STR_UNPACKPBO_DST_PATH_ERROR
+			L"Nie moїna przenosiж plikуw poza katalog z gr№",		//STR_MOVE_DST_PATH_ERROR
+			L"Nie moїna przenieњж",		//STR_MOVE_ERROR
+			L"do",		//STR_MOVE_TO_ERROR
+			L"Nie moїna skopiowaж",		//STR_COPY_ERROR
+			L"Nie moїna zmieniж nazwy",		//STR_MOVE_RENAME_ERROR
+			L"na",		//STR_MOVE_RENAME_TO_ERROR
+			L"Nowa nazwa pliku zawiera ukoњniki",		//STR_RENAME_DST_PATH_ERROR
+			L"Њcieїka zawiera symbole zastкpcze",		//STR_RENAME_WILDCARD_ERROR
+			L"Brakuje nowej nazwy pliku",		//STR_RENAME_NO_NAME_ERROR
+			L"Nie moїna skasowaж",		//STR_DELETE_PERMANENT_ERROR
+			L"Nie moїna przenieњж do kosza",		//STR_DELETE_BIN_ERROR
+			L"Musisz rкcznie uruchomiж",		//STR_ASK_EXE
+			L"Musisz rкcznie pobraж",		//STR_ASK_DLOAD
+			L"Wybierz katalog z pobranym plikiem",		//STR_ASK_DLOAD_SELECT
+			L"Brakuje numeru wersji",		//STR_IF_NUMBER_ERROR
+			L"Plik nie jest PBO",		//STR_PBO_NAME_ERROR
+			L"Nie moїna utworzyж PBO",		//STR_PBO_MAKE_ERROR
+			L"Nie moїna rozpakowaж PBO",		//STR_PBO_UNPACK_ERROR
+			L"Nie moїna wczytaж pliku",		//STR_EDIT_READ_ERROR
+			L"Nie moїna utworzyж pliku",		//STR_EDIT_WRITE_ERROR
+			L"Przetwarzanie mission.sqm",		//STR_ACTION_READMISSIONSQM
+			L"Wybierz 'Kontynuuj' lub 'Przerwij'"		//STR_ASK_RETRYORABORT
 		}
 	};
-	
 	global.lang_eng = stringtable[0];
 	global.lang     = stringtable[0];
 	

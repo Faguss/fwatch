@@ -945,7 +945,7 @@ DWORD Unpack(std::wstring file_name, std::wstring password, bool tmp_dir)
 
 std::wstring Decrypt(std::wstring sentence) 
 {
-	#include "keys.txt"
+	#include "keys.cpp"
 	std::vector<int> numbers;
 	std::vector<std::string> words;
 	Tokenize(utf8(sentence), "a", words);

@@ -708,7 +708,7 @@ FUNCTION_STRINGTABLE = {
 			"[Utwуrz Skrуt]",		//109
 			"Nazwa skrуtu",		//110
 			"Wybierz mody dla skrуtu",		//111
-			"[Wstrzymaj]" //112
+			"[Wstrzymaj]"		//112
 		];
 	};
 
@@ -826,7 +826,7 @@ FUNCTION_STRINGTABLE = {
 			"[—оздать ярлык]",		//109
 			"сокращенное им€",		//110
 			"выбрать моды дл€ €рлыка",		//111
-			"[Pause]" //112
+			"[ѕауза]"		//112
 		];
 	};
 
@@ -944,7 +944,7 @@ FUNCTION_STRINGTABLE = {
 			"[Create Shortcut]",		//109
 			"Shortcut name",		//110
 			"Select mods for the shortcut",		//111
-			"[Pause]" //112
+			"[Pause]"		//112
 		];
 	};
 	
