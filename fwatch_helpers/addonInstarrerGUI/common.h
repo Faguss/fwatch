@@ -15,6 +15,13 @@
 #include <functional>   // notl, ptr_fun
 #include <shellapi.h>	// shell execute
 
+struct OPERATION_LOG {
+	int operation_type;
+	std::wstring source;
+	std::wstring destination;
+	FILETIME modif_time;
+};
+
 struct GLOBAL_VARIABLES
 {
 	HANDLE thread_installer;
@@ -66,6 +73,7 @@ struct GLOBAL_VARIABLES
 	std::wstring *lang_eng;
 	std::map<std::wstring, std::wstring> arguments_table;
 	std::ofstream logfile;
+	std::vector<OPERATION_LOG> rollback;
 };
 
 enum INSTALL_STATUS 
@@ -97,7 +105,8 @@ enum FUNCTION_FLAGS
 	FLAG_MATCH_DIRS_ONLY = 0x800,
 	FLAG_CLEAN_DL_NOW    = 0x1000,
 	FLAG_CLEAN_DL_LATER  = 0x2000,
-	FLAG_CONTINUE        = 0x4000
+	FLAG_CONTINUE        = 0x4000,
+	FLAG_DONT_BACKUP     = 0x8000
 };
 
 enum ERROR_CODES 
@@ -245,3 +254,11 @@ extern void DisableMenu();
 
 #define OPTION_LEADINGZERO 1
 #define OPTION_CLOSELOG 1
+
+enum ROLLBACK_OPERATION_TYPE {
+	OPERATION_NONE,
+	OPERATION_MOVE,
+	OPERATION_DELETE,
+	OPERATION_DELETE_DIR,
+	OPERATION_FILEDATE
+};

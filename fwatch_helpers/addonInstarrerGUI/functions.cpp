@@ -1002,7 +1002,7 @@ DWORD CreateFileList(std::wstring source, std::wstring destination, std::vector<
 	if (hFind == INVALID_HANDLE_VALUE) {
 		DWORD error_code = GetLastError();
 		
-		if (options & FLAG_ALLOW_ERROR && error_code==ERROR_FILE_NOT_FOUND  ||  error_code==ERROR_PATH_NOT_FOUND)
+		if ((options & FLAG_ALLOW_ERROR && error_code==ERROR_FILE_NOT_FOUND)  ||  error_code==ERROR_PATH_NOT_FOUND)
 			return ERROR_NONE;
 
 		return ErrorMessage(STR_ERROR_FILE_LIST, L"%STR% " + source + L"  - " + Int2StrW(error_code) + L" " + FormatError(error_code));
@@ -1630,7 +1630,7 @@ int Unpack(std::wstring file_name, std::wstring password, int options)
 
 
 	// Create log file
-	SECURITY_ATTRIBUTES sa;
+	SECURITY_ATTRIBUTES sa = {0};
     sa.nLength              = sizeof(sa);
     sa.lpSecurityDescriptor = NULL;
     sa.bInheritHandle       = TRUE;       
@@ -1713,7 +1713,7 @@ int Unpack(std::wstring file_name, std::wstring password, int options)
 	return output;
 }
 
-int MakeDir(std::wstring path)
+int MakeDir(std::wstring path, int options)
 {
 	std::vector<std::wstring> directories;
 	Tokenize(path, L"\\/", directories);
@@ -1725,13 +1725,20 @@ int MakeDir(std::wstring path)
 		build_path += (build_path!=L"" ? L"\\" : L"") + directories[i];
 		result      = CreateDirectory(build_path.c_str(), NULL);
 
-		if (!result) {
-			DWORD error_code = GetLastError();
+		if (~options & FLAG_SILENT_MODE) {
+			if (!result) {
+				DWORD error_code = GetLastError();
 
-			if (error_code != ERROR_ALREADY_EXISTS)
-				return ErrorMessage(STR_MDIR_ERROR, L"%STR% " + build_path + L" " + Int2StrW(error_code) + L" " + FormatError(error_code));
-		} else
-			LogMessage(L"Created directory " + build_path);
+				if (error_code != ERROR_ALREADY_EXISTS)
+					return ErrorMessage(STR_MDIR_ERROR, L"%STR% " + build_path + L" " + Int2StrW(error_code) + L" " + FormatError(error_code));
+			} else {
+				OPERATION_LOG backup;
+				backup.operation_type = OPERATION_DELETE_DIR;
+				backup.source         = build_path;
+				global.rollback.push_back(backup);
+				LogMessage(L"Created directory " + build_path);
+			}
+		}
 	}
 	
 	return ERROR_NONE;
@@ -1779,6 +1786,61 @@ int MoveFiles(std::wstring source, std::wstring destination, std::wstring new_na
 		if (isAborted())
 			return ERROR_USER_ABORTED;
 
+		// Make backup
+		OPERATION_LOG backup;
+		backup.operation_type = OPERATION_NONE;
+
+		if (~options & FLAG_DONT_BACKUP) {
+			bool internal_move       = Equals(source_list[i].substr(0,global.current_mod_new_name.length()),global.current_mod_new_name);
+			DWORD dest_attr          = GetFileAttributes(destination_list[i].c_str());
+			std::wstring backup_path = L"fwatch\\tmp\\_backup\\" + destination_list[i];
+
+			// If replacing a file
+			if (dest_attr != INVALID_FILE_ATTRIBUTES && options & FLAG_OVERWRITE) {
+				MakeDir(PathNoLastItem(backup_path), FLAG_SILENT_MODE);
+
+				DWORD backup_attr = GetFileAttributes(backup_path.c_str());
+				int backup_num    = 1;
+
+				while (backup_attr != INVALID_FILE_ATTRIBUTES) {
+					backup_path = L"fwatch\\tmp\\_backup\\" + destination_list[i] + Int2StrW(++backup_num);
+					backup_attr = GetFileAttributes(backup_path.c_str());
+				}
+
+				if (MoveFileEx(destination_list[i].c_str(), backup_path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+					backup.operation_type = OPERATION_MOVE;
+					backup.source         = backup_path;
+					backup.destination    = destination_list[i];
+					global.rollback.push_back(backup);
+				} else {
+					DWORD error_code = GetLastError();
+					LogMessage(L"Failed to backup " + destination_list[i]);
+					result = ErrorMessage(STR_MOVE_ERROR,
+						L"%STR% " + destination_list[i] + L" " + global.lang[STR_MOVE_TO_ERROR] + L" " + backup_path + L" - " + Int2StrW(error_code) + L" " + FormatError(error_code)
+					);
+					break;
+				}
+
+				if (internal_move) {
+					backup.source      = destination_list[i];
+					backup.destination = source_list[i];
+				} else {
+					backup.operation_type = OPERATION_NONE;
+				}
+			} else 
+				// If not replacing a file
+				if (dest_attr == INVALID_FILE_ATTRIBUTES) {
+					if (internal_move) {
+						backup.operation_type = OPERATION_MOVE;
+						backup.source         = destination_list[i];
+						backup.destination    = source_list[i];
+					} else {
+						backup.operation_type = is_dir_list[i] ? OPERATION_DELETE_DIR : OPERATION_DELETE;
+						backup.source         = destination_list[i];
+					}
+				}
+		}
+
 		// Format path for logging
 		std::wstring destinationLOG = PathNoLastItem(destination_list[i], FLAG_NO_END_SLASH);
 
@@ -1804,7 +1866,10 @@ int MoveFiles(std::wstring source, std::wstring destination, std::wstring new_na
 		else
 			success = CopyFile(source_list[i].c_str(), destination_list[i].c_str(), FailIfExists);
 
-	    if (!success) {
+	    if (success) {
+			if (backup.operation_type != OPERATION_NONE)
+				global.rollback.push_back(backup);
+		} else {
 			DWORD error_code = GetLastError();
 			
 			if (~options & FLAG_OVERWRITE && error_code == ERROR_ALREADY_EXISTS) {
@@ -1822,7 +1887,7 @@ int MoveFiles(std::wstring source, std::wstring destination, std::wstring new_na
 	}
 
 	// Remove empty directories
-	if (options & FLAG_MOVE_FILES && empty_dirs.size() > 0) {
+	if (result != ERROR_NONE && options & FLAG_MOVE_FILES && empty_dirs.size() > 0) {
 		size_t i = empty_dirs.size();
 		do {
 			i--;
@@ -1849,10 +1914,53 @@ int ExtractPBO(std::wstring source, std::wstring destination, std::wstring file_
 		destinationLOG   = destination_temp;
 	}
 
-	
+	std::wstring addon_name = PathLastItem(source);
+	size_t dot = addon_name.find_last_of(L".");
+
+	if (dot != std::wstring::npos)
+		addon_name = addon_name.substr(0, dot);
+
+	std::wstring extracted_addon_dir = L"";
+	if (destination.empty()) {
+		extracted_addon_dir = PathNoLastItem(source) + addon_name;
+	} else {
+		if (Equals(destination.substr(0,global.working_directory.length()), global.working_directory))
+			extracted_addon_dir = destination.substr(global.working_directory.length()+1) + addon_name;
+		else
+			extracted_addon_dir = destination + addon_name;
+	}
+
+	DWORD dest_attr = GetFileAttributes(extracted_addon_dir.c_str());
+	if (dest_attr != INVALID_FILE_ATTRIBUTES) {
+		std::wstring backup_path = L"fwatch\\tmp\\_backup\\" + extracted_addon_dir;
+		MakeDir(PathNoLastItem(backup_path), FLAG_SILENT_MODE);
+
+		DWORD backup_attr = GetFileAttributes(backup_path.c_str());
+		int backup_num    = 1;
+
+		while (backup_attr != INVALID_FILE_ATTRIBUTES) {
+			backup_path = L"fwatch\\tmp\\_backup\\" + extracted_addon_dir + Int2StrW(++backup_num);
+			backup_attr = GetFileAttributes(backup_path.c_str());
+		}
+
+		if (MoveFileEx(extracted_addon_dir.c_str(), backup_path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+			OPERATION_LOG backup;
+			backup.operation_type = OPERATION_MOVE;
+			backup.source         = backup_path;
+			backup.destination    = extracted_addon_dir;
+			global.rollback.push_back(backup);
+		} else {
+			DWORD error_code = GetLastError();
+			LogMessage(L"Failed to backup " + extracted_addon_dir);
+			return ErrorMessage(STR_MOVE_ERROR,
+				L"%STR% " + extracted_addon_dir + L" " + global.lang[STR_MOVE_TO_ERROR] + L" " + backup_path + L" - " + Int2StrW(error_code) + L" " + FormatError(error_code)
+			);
+		}
+	}
+
 	
 	// Create log file
-	SECURITY_ATTRIBUTES sa;
+	SECURITY_ATTRIBUTES sa = {0};
     sa.nLength              = sizeof(sa);
     sa.lpSecurityDescriptor = NULL;
     sa.bInheritHandle       = TRUE;
@@ -1929,8 +2037,13 @@ int ExtractPBO(std::wstring source, std::wstring destination, std::wstring file_
 			dir_name              = dir_name.substr(0, dir_name.length()-4);
 			source                = destination_temp + dir_name;
 			destination           = UnQuote(destination) + dir_name;
-			MoveFiles(source, destination, L"", FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_MATCH_DIRS);
+			MoveFiles(source, destination, L"", FLAG_MOVE_FILES | FLAG_OVERWRITE | FLAG_MATCH_DIRS | FLAG_DONT_BACKUP);
 		}
+
+	OPERATION_LOG backup;
+	backup.operation_type = OPERATION_DELETE_DIR;
+	backup.source         = extracted_addon_dir;
+	global.rollback.push_back(backup);
 
 	return (exit_code!=ERROR_SUCCESS ? ERROR_COMMAND_FAILED : ERROR_NONE);
 }
@@ -1957,7 +2070,7 @@ int ChangeFileDate(std::wstring file_name, time_t timestamp)
 {
 	// https://support.microsoft.com/en-us/help/167296/how-to-convert-a-unix-time-t-to-a-win32-filetime-or-systemtime
 	
-	FILETIME ft;
+	FILETIME ft       = {0};
 	LONGLONG ll       = Int32x32To64(timestamp, 10000000) + 116444736000000000;
 	ft.dwLowDateTime  = (DWORD)ll;
 	ft.dwHighDateTime = (DWORD)(ll >> 32);
@@ -1976,7 +2089,7 @@ int ChangeFileDate(std::wstring file_name, std::wstring timestamp)
 		while(date_item.size() < 6)
 			date_item.push_back("0");
 			
-		SYSTEMTIME st;
+		SYSTEMTIME st    = {0};
 		st.wYear         = Str2Short(date_item[0].c_str());
 		st.wMonth        = Str2Short(date_item[1].c_str());
 		st.wDay          = Str2Short(date_item[2].c_str());
@@ -2015,7 +2128,7 @@ int CreateTimestampList(std::wstring path, size_t path_cut, std::vector<std::wst
 			CreateTimestampList(full_path, path_cut, namelist, timelist);
 		else {
 			//https://www.gamedev.net/forums/topic/565693-converting-filetime-to-time_t-on-windows/
-			ULARGE_INTEGER ull;
+			ULARGE_INTEGER ull = {0};
 			ull.LowPart  = fd.ftLastWriteTime.dwLowDateTime;
 			ull.HighPart = fd.ftLastWriteTime.dwHighDateTime;
 			time_t stamp = ull.QuadPart / 10000000ULL - 11644473600ULL;
@@ -2307,9 +2420,9 @@ int Auto_Install(std::wstring file, DWORD attributes, int options, std::wstring 
 		if (!Equals(file_only,L"_extracted") && !Equals(file_only,L"Res") && !force_install)
 			for (int i=DIR_ADDONS; i<=DIR_DTA && scan_directory; i++) {
 				std::wstring mod_subpath = file_with_path + L"\\" + mod_subfolders[i];
-				DWORD attributes         = GetFileAttributes(mod_subpath.c_str());
+				DWORD attributes_subdir  = GetFileAttributes(mod_subpath.c_str());
 				
-				if (attributes!=INVALID_FILE_ATTRIBUTES  &&  attributes & FILE_ATTRIBUTE_DIRECTORY)
+				if (attributes_subdir!=INVALID_FILE_ATTRIBUTES  &&  attributes_subdir & FILE_ATTRIBUTE_DIRECTORY)
 					scan_directory = false;
 			}
 
@@ -2511,6 +2624,10 @@ void EndModVersion()
 		DeleteDirectory(L"fwatch\\tmp\\_extracted");
 		global.downloads.clear();
 	}
+
+	// Remove backup
+	DeleteDirectory(L"fwatch\\tmp\\_backup");
+	global.rollback.clear();
 	
 	WriteModID(global.current_mod_new_name, global.current_mod_id+L";"+global.current_mod_version, global.current_mod_keepname);	
 }

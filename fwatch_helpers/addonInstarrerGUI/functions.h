@@ -69,7 +69,7 @@ DIRECTORY_INFO ScanDirectory(std::wstring path);
 DWORD DeleteDirectory(const std::wstring &refcstrRootDirectory, bool bDeleteSubdirectories=true);
 int Download(std::wstring url, int options=FLAG_NONE, std::wstring log_file_name=L"");
 int Unpack(std::wstring file_name, std::wstring password=L"", int options=FLAG_NONE);
-int MakeDir(std::wstring path);
+int MakeDir(std::wstring path, int options=FLAG_NONE);
 int MoveFiles(std::wstring source, std::wstring destination, std::wstring new_name, int options);
 int ExtractPBO(std::wstring source, std::wstring destination=L"", std::wstring file_to_unpack=L"", bool silent=false);
 int ChangeFileDate(std::wstring file_name, FILETIME *ft);

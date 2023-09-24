@@ -10,7 +10,8 @@ DWORD WINAPI addonInstallerWrapper(__in LPVOID lpParameter)
 	DWORD threadID1 = 0;
 
 	global.thread_installer = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)addonInstallerMain, 0, 0,&threadID1);
-	WaitForSingleObject(global.thread_installer, INFINITE);
+	if (global.thread_installer)
+		WaitForSingleObject(global.thread_installer, INFINITE);
 	DisableMenu();
 
 	// If user wants to restart the game after installation
@@ -727,8 +728,8 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 							url_line              = true;
 							last_url_list_id      = current_script_command_urls.link.size();
 							last_url_list_started = true;
-							size_t temp           = current_script_command_urls.arguments.size(); //dealing with std::_Vbase
-							current_script_command_urls.arg_start.push_back(temp);
+							size_t temp2          = current_script_command_urls.arguments.size(); //dealing with std::_Vbase
+							current_script_command_urls.arg_start.push_back(temp2);
 							current_script_command_urls.arg_num.push_back(0);
 							current_script_command_urls.line_num.push_back(word_line_num);
 							current_script_command_urls.link.push_back(word);
@@ -846,11 +847,14 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 			case COMMAND_IF_VERSION      : Condition_If_version(current_script_command.arguments, current_script_command.arg_start[i], current_script_command.arg_num[i]); break;
 			case COMMAND_ELSE            : Condition_Else(); break;
 			case COMMAND_ENDIF           : Condition_Endif(); break;
-			case COMMAND_EXIT            : i=current_script_command.id.size(); break;
 			default                      : global.installation_steps_max++;
 		}
 
+		//if (i < current_script_command.id.size())
 		current_script_command.step_num[i] = global.installation_steps_max;
+
+		if (current_script_command.id[i] == COMMAND_EXIT)
+			break;
 	}
 	
 	// Reset variables
@@ -881,7 +885,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 	
 	// Install for Real
 	size_t instruction_index = 0;
-	for (; instruction_index<current_script_command.id.size(); instruction_index++) {
+	while (instruction_index < current_script_command.id.size()) {
 		global.installation_steps_current = current_script_command.step_num[instruction_index];
 
 		if (global.pause_installer && !global.abort_installer) {
@@ -976,13 +980,13 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 							if (is_href)
 								left_quote = find+5;
 							else
-								for (size_t j=find; j>=0 && left_quote==std::wstring::npos; j--)
-									if (token_file_buffer[j]==L'\"' || token_file_buffer[j]==L'\'')
-										left_quote = j;
+								for (size_t m=find; m>=0 && left_quote==std::wstring::npos; m--)
+									if (token_file_buffer[m]==L'\"' || token_file_buffer[m]==L'\'')
+										left_quote = m;
 									
-							for (size_t k=find+(is_href ? 6u : 0u); k<token_file_buffer.length() && right_quote==std::wstring::npos; k++)
-								if (token_file_buffer[k]==L'\"' || token_file_buffer[k]==L'\'')
-									right_quote = k;
+							for (size_t n=find+(is_href ? 6u : 0u); n<token_file_buffer.length() && right_quote==std::wstring::npos; n++)
+								if (token_file_buffer[n]==L'\"' || token_file_buffer[n]==L'\'')
+									right_quote = n;
 							
 							if (left_quote!=std::wstring::npos && right_quote!=std::wstring::npos) {
 								left_quote++;
@@ -1025,12 +1029,12 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 										std::wstring name  = L"";
 										std::wstring value = L"";
 										
-										for (size_t j=0; j<attributes.size(); j++) {
-											if (attributes[j].substr(0,5) == L"name=")
-												name = ReplaceAll(attributes[j].substr(5), L"\"", L"");
+										for (size_t z=0; z<attributes.size(); z++) {
+											if (attributes[z].substr(0,5) == L"name=")
+												name = ReplaceAll(attributes[z].substr(5), L"\"", L"");
 												
-											if (attributes[j].substr(0,6) == L"value=")
-												value = ReplaceAll(attributes[j].substr(6), L"\"", L"");
+											if (attributes[z].substr(0,6) == L"value=")
+												value = ReplaceAll(attributes[z].substr(6), L"\"", L"");
 										}
 										
 										if (!name.empty()) {
@@ -1226,7 +1230,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				case COMMAND_IF_VERSION : command_result=Condition_If_version(current_script_command.arguments, current_script_command.arg_start[instruction_index], current_script_command.arg_num[instruction_index]); break;
 				case COMMAND_ELSE       : command_result=Condition_Else(); break;
 				case COMMAND_ENDIF      : command_result=Condition_Endif(); break;
-				case COMMAND_EXIT       : instruction_index=current_script_command.id.size(); break;
+				case COMMAND_EXIT       : break;
 
 				case COMMAND_AUTO_INSTALL :  {
 					LogMessage(L"Auto installation"); 
@@ -1259,19 +1263,19 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				}
 
 				case COMMAND_UNPACK : {
-					std::wstring *file_name = &current_script_command.arguments[first];
+					std::wstring file_name = current_script_command.arguments[first];
 
-					if (Equals(*file_name,L"<download>") || Equals(*file_name,L"<dl>") || (*file_name).empty())
-						*file_name = global.downloaded_filename;
+					if (Equals(file_name,L"<download>") || Equals(file_name,L"<dl>") || (file_name).empty())
+						file_name = global.downloaded_filename;
 
-					if (!(*file_name).empty()) {
-						command_result = Unpack(*file_name, current_script_command.password[instruction_index]);
+					if (!(file_name).empty()) {
+						command_result = Unpack(file_name, current_script_command.password[instruction_index]);
 						
 						// If not an archive but there are still backup links then go back to download
 						if (!global.last_download_attempt && command_result == ERROR_WRONG_ARCHIVE) {
-							*file_name = L"fwatch\\tmp\\" + *file_name;
-							DeleteFile((*file_name).c_str());
-							*file_name = L"<dl>";
+							file_name = L"fwatch\\tmp\\" + file_name;
+							DeleteFile(file_name.c_str());
+							file_name = L"<dl>";
 							global.downloads.pop_back();
 							global.download_iterator++;
 							goto Download_Phase;
@@ -1284,11 +1288,11 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				
 				case COMMAND_MOVE :  
 				case COMMAND_COPY : {
-					std::wstring *source      = &current_script_command.arguments[first];
-					std::wstring *destination = &current_script_command.arguments[first + 1];
-					std::wstring *new_name    = &current_script_command.arguments[first + 2];
+					std::wstring source      = current_script_command.arguments[first];
+					std::wstring destination = current_script_command.arguments[first + 1];
+					std::wstring new_name    = current_script_command.arguments[first + 2];
 
-					if ((*source).empty()) {
+					if (source.empty()) {
 						command_result = ErrorMessage(STR_ERROR_NO_FILE);
 						break;
 					}
@@ -1313,35 +1317,35 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 
 
 					// Format source path
-					if (Equals(*source,L"<download>")  ||  Equals(*source,L"<dl>")) {
-						*source = L"fwatch\\tmp\\" + global.downloaded_filename;
+					if (Equals(source,L"<download>")  ||  Equals(source,L"<dl>")) {
+						source = L"fwatch\\tmp\\" + global.downloaded_filename;
 						
 						if (options & FLAG_MOVE_FILES)
 							global.downloads.pop_back();
 					} else 
-						if (Equals((*source).substr(0,5),L"<mod>")) {
-							*source         = global.current_mod_new_name + (*source).substr(5);
+						if (Equals(source.substr(0,5),L"<mod>")) {
+							source          = global.current_mod_new_name + source.substr(5);
 							is_download_dir = false;
 						} else
-							if (Equals((*source).substr(0,7),L"<game>\\")) {
+							if (Equals(source.substr(0,7),L"<game>\\")) {
 								is_download_dir = false;
 								
 								if (~options & FLAG_MOVE_FILES)
-									*source = (*source).substr(7);
+									source = source.substr(7);
 								else {
 									command_result = ErrorMessage(STR_MOVE_DST_PATH_ERROR);
 									break;
 								}
 							} else
-								*source = L"fwatch\\tmp\\_extracted\\" + *source;
+								source = L"fwatch\\tmp\\_extracted\\" + source;
 				
 					// If user selected directory then move it along with its sub-folders
 					bool source_is_dir = false;
 					
 					if (
-						(*source).find(L"*") == std::wstring::npos && 
-						(*source).find(L"?") == std::wstring::npos && 
-						GetFileAttributes((*source).c_str()) & FILE_ATTRIBUTE_DIRECTORY
+						source.find(L"*") == std::wstring::npos && 
+						source.find(L"?") == std::wstring::npos && 
+						GetFileAttributes(source.c_str()) & FILE_ATTRIBUTE_DIRECTORY
 					) {
 						options      |= FLAG_MATCH_DIRS;
 						source_is_dir = true;
@@ -1349,29 +1353,29 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				
 				
 					// Format destination path
-					bool destination_passed = !(*destination).empty();
+					bool destination_passed = !destination.empty();
 					
-					if (*destination == L".")
-						*destination = L"";
+					if (destination == L".")
+						destination = L"";
 					
-					*destination = global.current_mod_new_name + L"\\" + *destination;
+					destination = global.current_mod_new_name + L"\\" + destination;
 					
-					if ((*destination).substr((*destination).length()-1) != L"\\")
-						*destination += L"\\";
+					if (destination.substr(destination.length()-1) != L"\\")
+						destination += L"\\";
 				
 					// If user wants to move modfolder then change destination to the game directory
-					if (is_download_dir && IsModName(PathLastItem(*source)) && !destination_passed) {
-						*destination = L"";
-						*new_name    = Equals(global.current_mod,global.current_mod_new_name) ? L"" : global.current_mod_new_name;
+					if (is_download_dir && IsModName(PathLastItem(source)) && !destination_passed) {
+						destination = L"";
+						new_name    = Equals(global.current_mod,global.current_mod_new_name) ? L"" : global.current_mod_new_name;
 						options     |= FLAG_MATCH_DIRS;
 					} else {
 						// Otherwise create missing directories in the destination path
 						
 						// if user wants to copy directory and give it a new name then first create a new directory with wanted name in the destination location
-						if (~options & FLAG_MOVE_FILES && source_is_dir && !(*new_name).empty())
-							command_result = MakeDir(*destination + *new_name);
+						if (~options & FLAG_MOVE_FILES && source_is_dir && !new_name.empty())
+							command_result = MakeDir(destination + new_name);
 						else
-							command_result = MakeDir(PathNoLastItem(*destination));
+							command_result = MakeDir(PathNoLastItem(destination));
 							
 						if (command_result != ERROR_NONE)
 							break;
@@ -1380,12 +1384,12 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				
 					// Format new name 
 					// 3rd argument - new name
-					if ((*new_name).find(L"\\") != std::wstring::npos || (*new_name).find(L"/") != std::wstring::npos) {
+					if (new_name.find(L"\\") != std::wstring::npos || new_name.find(L"/") != std::wstring::npos) {
 						command_result = ErrorMessage(STR_RENAME_DST_PATH_ERROR);
 						break;
 					}
 
-					command_result = MoveFiles(*source, *destination, *new_name, options);
+					command_result = MoveFiles(source, destination, new_name, options);
 					break;
 				}
 				
@@ -1403,13 +1407,13 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				case COMMAND_DELETE : {
 					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+L"...");
 					
-					std::wstring *file_name = &current_script_command.arguments[first];
-					int options             = FLAG_MOVE_FILES | FLAG_ALLOW_ERROR;
+					std::wstring file_name = current_script_command.arguments[first];
+					int options            = FLAG_MOVE_FILES | FLAG_ALLOW_ERROR;
 					
 					if (current_script_command.switches[instruction_index] & SWITCH_MATCH_DIR)
 						options |= FLAG_MATCH_DIRS;
 						
-					if (!VerifyPath(*file_name)) {
+					if (!VerifyPath(file_name)) {
 						command_result = ErrorMessage(STR_ERROR_PATH);
 						break;
 					}
@@ -1417,16 +1421,16 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					// Format source path
 					bool trash = false;
 				
-					if (Equals(*file_name,L"<download>") || Equals(*file_name,L"<dl>") || (*file_name).empty()) {
+					if (Equals(file_name,L"<download>") || Equals(file_name,L"<dl>") || file_name.empty()) {
 						if (global.downloaded_filename.empty()) {
 							command_result = ErrorMessage(STR_ERROR_NO_FILE);
 							break;
 						}
 					
-						*file_name = L"fwatch\\tmp\\" + global.downloaded_filename;
+						file_name = L"fwatch\\tmp\\" + global.downloaded_filename;
 					} else {
-						*file_name = global.current_mod_new_name + L"\\" + *file_name;
-						trash      = true;
+						file_name = global.current_mod_new_name + L"\\" + file_name;
+						trash     = true;
 					}
 				
 				
@@ -1437,74 +1441,63 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					std::vector<std::wstring> empty_dirs;
 					size_t buffer_size = 1;
 					int recursion      = -1;
+					std::wstring destination = L"fwatch\\tmp\\_backup";
 				
-					command_result = CreateFileList(*file_name, PathNoLastItem(*file_name), source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
+					command_result = CreateFileList(file_name, destination, source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
 				
 					if (command_result != ERROR_NONE)
 						break;
-				
-				
-					// Allocate buffer for the file list
-					char *file_list      = NULL;
-					size_t base_path_len = global.working_directory.length() + 1;
-					size_t buffer_pos    = 0;
-					std::wstring temp;
-					
-					if (trash) {
-						file_list = new char[buffer_size*2];
-				
-						if (!file_list) {
-							command_result = ErrorMessage(STR_ERROR_BUFFER, L"%STR% " + UInt2StrW(buffer_size));
-							break;
-						}
-					}
-				
-				  
+								  
 					// For each file in the list
 					for (size_t j=0; j<destination_list.size(); j++) {
 						if (isAborted()) {
 							command_result = ERROR_USER_ABORTED;
 							goto End_command_execution;
 						}
+
+						LogMessage(L"Deleting  " + source_list[j]);
 						
 						if (trash) {
-							size_t name_length = (destination_list[j].length()+1) * 2;
-							LogMessage(L"Trashing " + destination_list[j].substr(base_path_len));
-							memcpy(file_list+buffer_pos, destination_list[j].c_str(), name_length);
-							buffer_pos += name_length;
+							std::wstring backup_path = destination + L"\\" + source_list[j];
+							MakeDir(PathNoLastItem(backup_path), FLAG_SILENT_MODE);
+
+							DWORD backup_attr = GetFileAttributes(backup_path.c_str());
+							int backup_num    = 1;
+
+							while (backup_attr != INVALID_FILE_ATTRIBUTES) {
+								backup_path = destination + L"\\" + Int2StrW(++backup_num);
+								backup_attr = GetFileAttributes(backup_path.c_str());
+							}
+
+							if (MoveFileEx(source_list[j].c_str(), backup_path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+								OPERATION_LOG backup;
+								backup.operation_type = OPERATION_MOVE;
+								backup.source         = backup_path;
+								backup.destination    = source_list[j];
+								global.rollback.push_back(backup);
+							} else {
+								DWORD error_code = GetLastError();
+								LogMessage(L"Failed to backup " + source_list[j]);
+								command_result = ErrorMessage(STR_MOVE_ERROR,
+									L"%STR% " + source_list[j] + L" " + global.lang[STR_MOVE_TO_ERROR] + L" " + backup_path + L" - " + Int2StrW(error_code) + L" " + FormatError(error_code)
+								);
+								break;
+							}
+
 						} else {
-							LogMessage(L"Deleting  " + destination_list[j].substr(base_path_len));
 							DWORD error_code = 0;
 							
 							if (is_dir_list[j])
-								error_code = DeleteDirectory(destination_list[j]);
+								error_code = DeleteDirectory(source_list[j]);
 							else
-								if (!DeleteFile(destination_list[j].c_str()))
+								if (!DeleteFile(source_list[j].c_str()))
 									error_code = GetLastError();
 
 							if (error_code != 0) {
-								command_result = ErrorMessage(STR_DELETE_PERMANENT_ERROR, L"%STR% " + source_list[instruction_index] + L"  - " + UInt2StrW(error_code) + L" " + FormatError(error_code));
+								command_result = ErrorMessage(STR_DELETE_PERMANENT_ERROR, L"%STR% " + source_list[j] + L"  - " + UInt2StrW(error_code) + L" " + FormatError(error_code));
 								break;
 							}
 						}
-					}
-				
-					if (trash) {
-						memcpy(file_list+buffer_pos, "\0\0", 2);
-				
-						// Trash file
-						SHFILEOPSTRUCTW shfos;
-						shfos.hwnd     = NULL;
-						shfos.wFunc    = FO_DELETE;
-						shfos.pFrom    = (LPCWSTR)file_list;
-						shfos.pTo      = NULL;
-						shfos.fFlags   = FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO;
-						int result     = SHFileOperation(&shfos);
-								
-					    if (result != 0)
-							command_result = ErrorMessage(STR_DELETE_BIN_ERROR, L"%STR% - " + Int2StrW(result) + L" " + FormatError(result));
-				
-						delete[] file_list;
 					}
 
 					break;
@@ -1513,9 +1506,9 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				case COMMAND_RENAME : {
 					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_RENAMING]+L"...");
 				
-					std::wstring *source      = &current_script_command.arguments[first];
-					std::wstring *destination = &current_script_command.arguments[first + 1];
-					int options               = FLAG_MOVE_FILES;
+					std::wstring source      = current_script_command.arguments[first];
+					std::wstring destination = current_script_command.arguments[first + 1];
+					int options              = FLAG_MOVE_FILES;
 					
 					if (current_script_command.switches[instruction_index] & SWITCH_MATCH_DIR)
 						options |= FLAG_MATCH_DIRS;
@@ -1528,22 +1521,22 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 
 				
 					// Format source path
-					if ((*source).empty()) {
+					if (source.empty()) {
 						command_result = ErrorMessage(STR_RENAME_NO_NAME_ERROR, L"%STR%");
 						break;
 					}
 					
-					if (Equals(*source,L"<download>")  ||  Equals(*source,L"<dl>"))	{
+					if (Equals(source,L"<download>")  ||  Equals(source,L"<dl>"))	{
 						if (global.downloaded_filename.empty()) {
 							command_result = ErrorMessage(STR_ERROR_NO_FILE);
 							break;
 						}
 						
-						*source = L"fwatch\\tmp\\_extracted\\" + global.downloaded_filename;
+						source = L"fwatch\\tmp\\_extracted\\" + global.downloaded_filename;
 					} else
-						*source = global.current_mod_new_name + L"\\" + *source;
+						source = global.current_mod_new_name + L"\\" + source;
 				
-					std::wstring relative_path = PathNoLastItem(*source);
+					std::wstring relative_path = PathNoLastItem(source);
 				
 					if (relative_path.find(L"*") != std::wstring::npos || relative_path.find(L"?") != std::wstring::npos) {
 						command_result = ErrorMessage(STR_RENAME_WILDCARD_ERROR, L"%STR%");
@@ -1552,12 +1545,12 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					
 				
 					// Format new name
-					if ((*destination).empty()) {
+					if (destination.empty()) {
 						command_result = ErrorMessage(STR_RENAME_NO_NAME_ERROR);
 						break;
 					}
 					
-					if ((*destination).find(L"\\") != std::wstring::npos || (*destination).find(L"/") != std::wstring::npos) {
+					if (destination.find(L"\\") != std::wstring::npos || destination.find(L"/") != std::wstring::npos) {
 						command_result = ErrorMessage(STR_RENAME_DST_PATH_ERROR);
 						break;
 					}
@@ -1571,7 +1564,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					size_t buffer_size = 0;
 					int recursion      = -1;
 
-					command_result = CreateFileList(*source, relative_path+*destination, source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
+					command_result = CreateFileList(source, relative_path+destination, source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
 
 					if (command_result != 0)
 						break;
@@ -1590,7 +1583,13 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 						LogMessage(L"Renaming  " + ReplaceAll(source_list[j], L"fwatch\\tmp\\_extracted\\", L"") + L"  to  " + PathLastItem(destination_list[j]));
 
 						// Rename
-					    if (!MoveFileEx(source_list[j].c_str(), destination_list[j].c_str(), 0)) {
+					    if (MoveFileEx(source_list[j].c_str(), destination_list[j].c_str(), 0)) {
+							OPERATION_LOG backup;
+							backup.operation_type = OPERATION_MOVE;
+							backup.source         = destination_list[j];
+							backup.destination    = source_list[j];
+							global.rollback.push_back(backup);
+						} else {
 							DWORD error_code = GetLastError();
 							command_result = ErrorMessage(STR_MOVE_RENAME_ERROR, L"%STR% " + source_list[j] + L" " + global.lang[STR_MOVE_RENAME_TO_ERROR] + L" " + destination_list[j] + L" - " + UInt2StrW(error_code) + L" " + FormatError(error_code));
 							break;
@@ -1601,30 +1600,30 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				}
 				
 				case COMMAND_ASK_RUN : {
-					std::wstring *file_name = &current_script_command.arguments[first];
+					std::wstring file_name = current_script_command.arguments[first];
 					
-					if (Equals(*file_name,L"<download>") || Equals(*file_name,L"<dl>") || (*file_name).empty())
-						*file_name = global.downloaded_filename;
+					if (Equals(file_name,L"<download>") || Equals(file_name,L"<dl>") || file_name.empty())
+						file_name = global.downloaded_filename;
 				
-					if ((*file_name).empty()) {
+					if (file_name.empty()) {
 						command_result = ErrorMessage(STR_ERROR_NO_FILE);
 						break;
 					}
 				
-					if (!VerifyPath(*file_name)) {
+					if (!VerifyPath(file_name)) {
 						command_result = ErrorMessage(STR_ERROR_PATH);
 						break;
 					}
 				
 					std::wstring path_to_dir = global.working_directory;
 					
-					if ((*file_name).substr(0,6) == L"<mod>\\") {
-						*file_name   = (*file_name).substr(6);
+					if (file_name.substr(0,6) == L"<mod>\\") {
+						file_name    = file_name.substr(6);
 						path_to_dir += L"\\" + global.current_mod_new_name + L"\\";
 					} else
 						path_to_dir += L"\\fwatch\\tmp\\";
 				
-					command_result = RequestExecution(path_to_dir, *file_name);
+					command_result = RequestExecution(path_to_dir, file_name);
 					break;
 				}
 
@@ -1672,11 +1671,11 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 									download_dir = BrowseFolder(L"");
 									wprintf(L"%s", download_dir.c_str());
 									
-									std::ofstream config("fwatch\\tmp\\schedule\\DownloadDir.txt", std::ios::out | std::ios::trunc);
+									std::ofstream config_out("fwatch\\tmp\\schedule\\DownloadDir.txt", std::ios::out | std::ios::trunc);
 					
-									if (config.is_open()) {
-										config << utf8(download_dir);
-										config.close();
+									if (config_out.is_open()) {
+										config_out << utf8(download_dir);
+										config_out.close();
 									}
 								}
 				
@@ -1708,27 +1707,62 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				case COMMAND_MAKEPBO : {
 					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_PACKINGPBO]+L"...");
 					
-					std::wstring *file_name = &current_script_command.arguments[first];
+					std::wstring file_name = current_script_command.arguments[first];
 										
-					if (!VerifyPath(*file_name)) {
+					if (!VerifyPath(file_name)) {
 						command_result = ErrorMessage(STR_ERROR_PATH);
 						break;
 					}			
 				
 					// Format source path
-					if ((*file_name).empty()) {
+					if (file_name.empty()) {
 						if (global.last_pbo_file.empty()) {
 							command_result = ErrorMessage(STR_ERROR_NO_FILE);
 							break;
 						}
 					
-						*file_name = global.last_pbo_file;
+						file_name = global.last_pbo_file;
 					} else
-						*file_name = global.current_mod_new_name + L"\\" + *file_name;
+						file_name = global.current_mod_new_name + L"\\" + file_name;
 				
-				
+					std::wstring pbo_name = file_name + L".pbo";
+
+					// Make backup
+					OPERATION_LOG backup;
+
+					if (GetFileAttributes(pbo_name.c_str()) != INVALID_FILE_ATTRIBUTES) {
+						std::wstring backup_path = L"fwatch\\tmp\\_backup\\" + pbo_name;
+						MakeDir(PathNoLastItem(backup_path), FLAG_SILENT_MODE);
+
+						DWORD backup_attr = GetFileAttributes(backup_path.c_str());
+						int backup_num    = 1;
+
+						while (backup_attr != INVALID_FILE_ATTRIBUTES) {
+							backup_path = L"fwatch\\tmp\\_backup\\" + pbo_name + Int2StrW(++backup_num);
+							backup_attr = GetFileAttributes(backup_path.c_str());
+						}
+
+						if (MoveFileEx(pbo_name.c_str(), backup_path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+							backup.operation_type = OPERATION_MOVE;
+							backup.source         = backup_path;
+							backup.destination    = pbo_name;
+							global.rollback.push_back(backup);
+							backup.operation_type = OPERATION_NONE;
+						} else {
+							DWORD error_code = GetLastError();
+							LogMessage(L"Failed to backup " + pbo_name);
+							command_result = ErrorMessage(STR_MOVE_ERROR,
+								L"%STR% " + pbo_name + L" " + global.lang[STR_MOVE_TO_ERROR] + L" " + backup_path + L" - " + Int2StrW(error_code) + L" " + FormatError(error_code)
+							);
+							break;
+						}
+					} else {
+						backup.operation_type = OPERATION_DELETE;
+						backup.source         = pbo_name;
+					}
+
 					// Create log file
-					SECURITY_ATTRIBUTES sa;
+					SECURITY_ATTRIBUTES sa  = {0};
 				    sa.nLength              = sizeof(sa);
 				    sa.lpSecurityDescriptor = NULL;
 				    sa.bInheritHandle       = TRUE;       
@@ -1753,272 +1787,254 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					si.hStdOutput  = logFile;
 					si.hStdError   = logFile;
 					
-					std::wstring exename         = L"MakePbo.exe";
-					std::wstring executable      = L"fwatch\\data\\" + exename;
-					std::wstring arguments       = L" -NRK \"" + *file_name + L"\"";
-					std::wstring pbo_name        = *file_name + L".pbo";
-					std::wstring pbo_name_backup = L"";
-					
-					if (GetFileAttributes(pbo_name.c_str()) != INVALID_FILE_ATTRIBUTES) {
-						int tries        = 2;
-						DWORD last_error = ERROR_SUCCESS;
-						
-						do {
-							pbo_name_backup = pbo_name + Int2StrW(tries);
-							
-							if (MoveFileEx(pbo_name.c_str(), pbo_name_backup.c_str(), 0))
-								last_error = ERROR_SUCCESS;
-							else {
-								tries++;
-								last_error = GetLastError();
-								
-								if (last_error != ERROR_ALREADY_EXISTS) {
-									command_result = ErrorMessage(STR_MOVE_RENAME_ERROR, L"%STR% " + pbo_name + L" " + global.lang[STR_MOVE_RENAME_TO_ERROR] + L" " + pbo_name_backup + L" - " + UInt2StrW(last_error) + L" " + FormatError(last_error));
-									goto End_command_execution;
-								}
-							}
-						} while (last_error == ERROR_ALREADY_EXISTS);
-					}
+					std::wstring exename    = L"MakePbo.exe";
+					std::wstring executable = L"fwatch\\data\\" + exename;
+					std::wstring arguments  = L" -NRK \"" + file_name + L"\"";
 				
-					if (!CreateProcess(&executable[0], &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {
-						if (!pbo_name_backup.empty())
-							MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
+					if (CreateProcess(&executable[0], &arguments[0], NULL, NULL, true, 0, NULL, NULL, &si, &pi)) {
+						if (backup.operation_type != OPERATION_NONE)
+							global.rollback.push_back(backup);
 						
-						DWORD error_code = GetLastError();
-						command_result   = ErrorMessage(STR_ERROR_EXE, L"%STR% " + exename + L" - " + UInt2StrW(error_code) + L" " + FormatError(error_code));
-					} else
-						LogMessage(L"Creating a PBO file out of " + (*file_name));
-						
-					Sleep(10);
-				
+						LogMessage(L"Creating a PBO file out of " + file_name);
+						Sleep(10);
 
-					// Wait for the program to finish its job
-					DWORD exit_code = STILL_ACTIVE;
-					std::string message = "";
+						// Wait for the program to finish its job
+						DWORD exit_code = STILL_ACTIVE;
+						std::string message = "";
 					
-					do {					
-						if (isAborted()) {
-							TerminateProcess(pi.hProcess, 0);
-							CloseHandle(pi.hProcess);
-							CloseHandle(pi.hThread);
-							CloseHandle(logFile);
-							command_result = ERROR_USER_ABORTED;
-							goto End_command_execution;
-						}
+						do {					
+							if (isAborted()) {
+								TerminateProcess(pi.hProcess, 0);
+								CloseHandle(pi.hProcess);
+								CloseHandle(pi.hThread);
+								CloseHandle(logFile);
+								command_result = ERROR_USER_ABORTED;
+								goto End_command_execution;
+							}
 						
-						ParsePBOLog(message, exename, *file_name);
-						GetExitCodeProcess(pi.hProcess, &exit_code);
-						Sleep(100);
-					} while(exit_code == STILL_ACTIVE);
+							ParsePBOLog(message, exename, file_name);
+							GetExitCodeProcess(pi.hProcess, &exit_code);
+							Sleep(100);
+						} while(exit_code == STILL_ACTIVE);
 					
-					ParsePBOLog(message, exename, *file_name);
+						ParsePBOLog(message, exename, file_name);
 				
-					CloseHandle(pi.hProcess);
-					CloseHandle(pi.hThread);
-					CloseHandle(logFile);
-					Sleep(1000);
-					
-					
-					// Need to fix the pbo timestamps after makepbo
-					if (exit_code == ERROR_SUCCESS) {
-						std::vector<std::wstring> sourcedir_name;
-						std::vector<time_t> sourcedir_time;
-						command_result = CreateTimestampList(*file_name, (*file_name).length()+1, sourcedir_name, sourcedir_time);
+						CloseHandle(pi.hProcess);
+						CloseHandle(pi.hThread);
+						CloseHandle(logFile);
+						Sleep(1000);
+
+						// Need to fix the pbo timestamps after makepbo
+						if (exit_code == ERROR_SUCCESS) {
+							std::vector<std::wstring> sourcedir_name;
+							std::vector<time_t> sourcedir_time;
+							command_result = CreateTimestampList(file_name, file_name.length()+1, sourcedir_name, sourcedir_time);
 				
-						if (command_result == ERROR_NONE) {
-							FILE *f;
-							errno_t f_error = _wfopen_s(&f, pbo_name.c_str(), L"rb");
-							if (f_error == 0) {
-								fseek(f, 0, SEEK_END);
-								size_t file_size = ftell(f);
-								fseek(f, 0, SEEK_SET);
+							if (command_result == ERROR_NONE) {
+								FILE *f;
+								errno_t f_error = _wfopen_s(&f, pbo_name.c_str(), L"rb");
+								if (f_error == 0) {
+									fseek(f, 0, SEEK_END);
+									size_t file_size = ftell(f);
+									fseek(f, 0, SEEK_SET);
 								
-								char *buffer = (char*) malloc(file_size+1);
+									char *buffer = (char*) malloc(file_size+1);
 								
-								if (buffer != NULL) {
-									memset(buffer, 0, file_size+1);
-									fread(buffer, 1, file_size, f);
+									if (buffer != NULL) {
+										memset(buffer, 0, file_size+1);
+										fread(buffer, 1, file_size, f);
 									
-									const int name_max  = 512;
-									char name[name_max] = "";
-									int name_len        = 0;
-									int file_count      = 0;
-									size_t file_pos     = 0;
+										const int name_max  = 512;
+										char name[name_max] = "";
+										int name_len        = 0;
+										int file_count      = 0;
+										size_t file_pos     = 0;
 									 
-									while (file_pos < file_size) {
-										memset(name, 0, name_max);
-										name_len = 0;
+										while (file_pos < file_size) {
+											memset(name, 0, name_max);
+											name_len = 0;
 								
-										for (int i=0; i<name_max-1; i++) {
-											char c = buffer[file_pos++];
+											for (int i=0; i<name_max-1; i++) {
+												char c = buffer[file_pos++];
 								
-											if (c != '\0')
-												name[name_len++] = c;
-											else
-												break;
-										}
+												if (c != '\0')
+													name[name_len++] = c;
+												else
+													break;
+											}
 								
-										unsigned long MimeType  = *((unsigned long*)&buffer[file_pos]);
-										unsigned long TimeStamp = *((unsigned long*)&buffer[file_pos+12]);
-										unsigned long Datasize  = *((unsigned long*)&buffer[file_pos+16]);
+											unsigned long MimeType  = *((unsigned long*)&buffer[file_pos]);
+											unsigned long TimeStamp = *((unsigned long*)&buffer[file_pos+12]);
+											unsigned long Datasize  = *((unsigned long*)&buffer[file_pos+16]);
 								
-										file_pos += 20;
+											file_pos += 20;
 								
-										if (name_len == 0) {
-											if (file_count==0 && MimeType==0x56657273 && TimeStamp==0 && Datasize==0) {
-												int value_len = 0;
-												bool is_name  = true;
+											if (name_len == 0) {
+												if (file_count==0 && MimeType==0x56657273 && TimeStamp==0 && Datasize==0) {
+													int value_len = 0;
+													bool is_name  = true;
 												
-												while (file_pos < file_size) {
-													if (buffer[file_pos++] != '\0')
-														value_len++;
-													else {
-														if (is_name && value_len==0)
-															break;
+													while (file_pos < file_size) {
+														if (buffer[file_pos++] != '\0')
+															value_len++;
 														else {
-															is_name   = !is_name;
-															value_len = 0;
+															if (is_name && value_len==0)
+																break;
+															else {
+																is_name   = !is_name;
+																value_len = 0;
+															}
 														}
 													}
-												}
-											} else
-												break;
-										} else {
-											for (size_t i=0; i<sourcedir_name.size(); i++) {
-												std::string nameA  = (std::string)name;
-												std::wstring nameW = utf16(nameA);
-												if (wcscmp(sourcedir_name[i].c_str(), nameW.c_str()) == 0) {
-													if (sourcedir_time[i] != TimeStamp)
-														memcpy(buffer+file_pos-8, &sourcedir_time[i], 4);
-													
+												} else
 													break;
+											} else {
+												for (size_t i=0; i<sourcedir_name.size(); i++) {
+													std::string nameA  = (std::string)name;
+													std::wstring nameW = utf16(nameA);
+													if (wcscmp(sourcedir_name[i].c_str(), nameW.c_str()) == 0) {
+														if (sourcedir_time[i] != TimeStamp)
+															memcpy(buffer+file_pos-8, &sourcedir_time[i], 4);
+													
+														break;
+													}
 												}
 											}
-										}
 											
-										file_count++;
-									}
+											file_count++;
+										}
 									
-									fclose(f);
-									errno_t reopen       = _wfopen_s(&f, pbo_name.c_str(), L"wb");
-									size_t bytes_written = 0;
-									
-									if (reopen == 0) {
-										bytes_written = fwrite(buffer, 1, file_size, f);
 										fclose(f);
-									}
+										errno_t reopen       = _wfopen_s(&f, pbo_name.c_str(), L"wb");
+										size_t bytes_written = 0;
 									
-									free(buffer);
+										if (reopen == 0) {
+											bytes_written = fwrite(buffer, 1, file_size, f);
+											fclose(f);
+										}
+									
+										free(buffer);
 										
-									if (bytes_written != file_size) {
-										if (!pbo_name_backup.empty())
-											MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
-										
-										command_result = ErrorMessage(STR_EDIT_WRITE_ERROR, L"%STR% " + UInt2StrW(bytes_written) + L"/" + UInt2StrW(file_size));
-										break;
+										if (bytes_written != file_size) {										
+											command_result = ErrorMessage(STR_EDIT_WRITE_ERROR, L"%STR% " + UInt2StrW(bytes_written) + L"/" + UInt2StrW(file_size));
+											break;
+										}
 									}
+								} else {									
+									const int message_size              = 128;
+									wchar_t error_message[message_size] = L"";
+									_wcserror_s(error_message, message_size, f_error);
+									command_result = ErrorMessage(STR_EDIT_READ_ERROR, L"%STR% " + Int2StrW(f_error) + L" - " + error_message);
+									break;
 								}
-							} else {
-								if (!pbo_name_backup.empty())
-									MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
-									
-								const int message_size              = 128;
-								wchar_t error_message[message_size] = L"";
-								_wcserror_s(error_message, message_size, f_error);
-								command_result = ErrorMessage(STR_EDIT_READ_ERROR, L"%STR% " + Int2StrW(f_error) + L" - " + error_message);
+							} else
 								break;
-							}
-						} else {
-							if (!pbo_name_backup.empty())
-								MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
-							break;
-						}
 				
-						if (current_script_command.switches[instruction_index] & SWITCH_TIMESTAMP)
-							command_result = ChangeFileDate(pbo_name, current_script_command.timestamp[instruction_index]);
-						else
-							command_result = ChangeFileDate(pbo_name, global.current_mod_version_date);
+							if (current_script_command.switches[instruction_index] & SWITCH_TIMESTAMP)
+								command_result = ChangeFileDate(pbo_name, current_script_command.timestamp[instruction_index]);
+							else
+								command_result = ChangeFileDate(pbo_name, global.current_mod_version_date);
 
-						if (command_result == ERROR_NONE) {
-							if (~current_script_command.switches[instruction_index] & SWITCH_KEEP_SOURCE) {
+							if (command_result == ERROR_NONE && ~current_script_command.switches[instruction_index] & SWITCH_KEEP_SOURCE) {
 								WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+L"...");
-								LogMessage(L"Removing " + (*file_name) + L" directory");
+								LogMessage(L"Removing " + file_name + L" directory");
 								global.last_pbo_file = L"";
-								DeleteDirectory(*file_name);
+
+								// Make backup
+								{
+									std::wstring backup_path = L"fwatch\\tmp\\_backup\\" + file_name;
+									MakeDir(PathNoLastItem(backup_path), FLAG_SILENT_MODE);
+
+									DWORD backup_attr = GetFileAttributes(backup_path.c_str());
+									int backup_num    = 1;
+
+									while (backup_attr != INVALID_FILE_ATTRIBUTES) {
+										backup_path = L"fwatch\\tmp\\_backup\\" + file_name + Int2StrW(++backup_num);
+										backup_attr = GetFileAttributes(backup_path.c_str());
+									}
+
+									if (MoveFileEx(file_name.c_str(), backup_path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+										backup.operation_type = OPERATION_MOVE;
+										backup.source         = backup_path;
+										backup.destination    = file_name;
+										global.rollback.push_back(backup);
+									} else {
+										DWORD error_code = GetLastError();
+										LogMessage(L"Failed to backup " + file_name);
+										command_result = ErrorMessage(STR_MOVE_ERROR,
+											L"%STR% " + file_name + L" " + global.lang[STR_MOVE_TO_ERROR] + L" " + backup_path + L" - " + Int2StrW(error_code) + L" " + FormatError(error_code)
+										);
+									}
+				
+								}
 							}
-						
-							if (!pbo_name_backup.empty())
-								DeleteFile(pbo_name_backup.c_str());
-						} else
-							if (!pbo_name_backup.empty())
-								MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
+						} else						
+							command_result = ErrorMessage(STR_PBO_MAKE_ERROR, L"%STR% " + UInt2StrW(exit_code) + L" - " + utf16(message));
 					} else {
-						if (!pbo_name_backup.empty())
-							MoveFileEx(pbo_name_backup.c_str(), pbo_name.c_str(), MOVEFILE_REPLACE_EXISTING);
-							
-						command_result = ErrorMessage(STR_PBO_MAKE_ERROR, L"%STR% " + UInt2StrW(exit_code) + L" - " + utf16(message));
+						DWORD error_code = GetLastError();
+						command_result   = ErrorMessage(STR_ERROR_EXE, L"%STR% " + exename + L" - " + UInt2StrW(error_code) + L" " + FormatError(error_code));
 					}
 
 					break;
 				}
 				
 				case COMMAND_EXTRACTPBO : {
-					std::wstring *source      = &current_script_command.arguments[first];
-					std::wstring *destination = &current_script_command.arguments[first + 1];
+					std::wstring source      = current_script_command.arguments[first];
+					std::wstring destination = current_script_command.arguments[first + 1];
 					
 					// Verify source argument
-					if ((*source).empty()) {
+					if (source.empty()) {
 						command_result = ErrorMessage(STR_ERROR_NO_FILE);
 						break;
 					}
 						
-					if (!VerifyPath(*source)) {
+					if (!VerifyPath(source)) {
 						command_result = ErrorMessage(STR_UNPACKPBO_SRC_PATH_ERROR);
 						break;
 					}
 					
-					if (GetFileExtension(*source) != L"pbo") {
+					if (GetFileExtension(source) != L"pbo") {
 						command_result = ErrorMessage(STR_PBO_NAME_ERROR);
 						break;
 					}
 					
 					bool is_game_dir = false;
 					
-					if (Equals((*source).substr(0,7),L"<game>\\")) {
+					if (Equals(source.substr(0,7),L"<game>\\")) {
 						global.last_pbo_file = L"";
-						*source              = (*source).substr(7);
+						source               = source.substr(7);
 						is_game_dir          = true;
 					} else {
-						global.last_pbo_file = global.current_mod_new_name + L"\\" + (*source).substr(0, (*source).length()-4);
-						*source              = global.current_mod_new_name + L"\\" + *source;
+						global.last_pbo_file = global.current_mod_new_name + L"\\" + source.substr(0, source.length()-4);
+						source               = global.current_mod_new_name + L"\\" + source;
 					}
 				
 				
 					// Verify destination argument				
-					if (!VerifyPath(*destination)) {
+					if (!VerifyPath(destination)) {
 						command_result = ErrorMessage(STR_UNPACKPBO_DST_PATH_ERROR);
 						break;
 					}
 					
 					// Process optional 2nd argument: extraction destination
-					if (!(*destination).empty() || is_game_dir) {
-						if (*destination == L".")
-							*destination = L"";
+					if (!(destination).empty() || is_game_dir) {
+						if (destination == L".")
+							destination = L"";
 				
-						command_result = MakeDir(global.current_mod_new_name + L"\\" + *destination);
+						command_result = MakeDir(global.current_mod_new_name + L"\\" + destination);
 				
 						if (command_result != ERROR_NONE)
 							break;
 				
 						// Create path to the extracted directory for use with MakePbo function
-						global.last_pbo_file = global.current_mod_new_name + L"\\" + *destination + L"\\" + PathLastItem((*source).substr(0, (*source).length()-4));
-						*destination         = global.working_directory    + L"\\" + global.current_mod_new_name + L"\\" + *destination;
+						global.last_pbo_file = global.current_mod_new_name + L"\\" + destination + L"\\" + PathLastItem(source.substr(0, source.length()-4));
+						destination          = global.working_directory    + L"\\" + global.current_mod_new_name + L"\\" + destination;
 						
-						if ((*destination).substr((*destination).length()-1) != L"\\")
-							*destination += L"\\";
+						if (destination.substr(destination.length()-1) != L"\\")
+							destination += L"\\";
 					}
 				
-					command_result = ExtractPBO(*source, *destination);
+					command_result = ExtractPBO(source, destination);
 					break;
 				}
 				
@@ -2030,28 +2046,67 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 						break;
 					}
 					
-					std::wstring *file_name = &current_script_command.arguments[first];
+					std::wstring file_name  = current_script_command.arguments[first];
 					std::string wanted_text = utf8(current_script_command.arguments[first + 2]);
 					size_t wanted_line      = wcstoul(current_script_command.arguments[first+1].c_str(), NULL, 10);
 				
-					if ((*file_name).empty()) {
+					if (file_name.empty()) {
 						command_result = ErrorMessage(STR_ERROR_NO_FILE);
 						break;
 					}
 					
-					if (Equals(*file_name,L"<download>") || Equals(*file_name,L"<dl>")) {
+					if (Equals(file_name,L"<download>") || Equals(file_name,L"<dl>")) {
 						if (global.downloaded_filename.empty()) {
 							command_result = ErrorMessage(STR_ERROR_NO_FILE);
 							break;
 						}
 				
-						*file_name = L"fwatch\\tmp\\" + global.downloaded_filename;
+						file_name = L"fwatch\\tmp\\" + global.downloaded_filename;
 					} else 
-						*file_name = global.current_mod_new_name + L"\\" + *file_name;
+						file_name = global.current_mod_new_name + L"\\" + file_name;
 				
-					if (!VerifyPath(*file_name)) {
+					if (!VerifyPath(file_name)) {
 						command_result = ErrorMessage(STR_ERROR_PATH);
 						break;
+					}
+
+					// Make bacup
+					OPERATION_LOG backup;
+					backup.operation_type = OPERATION_NONE;
+
+					{
+						DWORD dest_attr          = GetFileAttributes(file_name.c_str());
+						std::wstring backup_path = L"fwatch\\tmp\\_backup\\" + file_name;
+
+						if (dest_attr != INVALID_FILE_ATTRIBUTES) {
+							MakeDir(PathNoLastItem(backup_path), FLAG_SILENT_MODE);
+
+							DWORD backup_attr = GetFileAttributes(backup_path.c_str());
+							int backup_num    = 1;
+
+							while (backup_attr != INVALID_FILE_ATTRIBUTES) {
+								backup_path = L"fwatch\\tmp\\_backup\\" + file_name + Int2StrW(++backup_num);
+								backup_attr = GetFileAttributes(backup_path.c_str());
+							}
+
+							if (MoveFileEx(file_name.c_str(), backup_path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+								backup.operation_type = OPERATION_MOVE;
+								backup.source         = backup_path;
+								backup.destination    = file_name;
+								global.rollback.push_back(backup);
+								backup.operation_type = OPERATION_NONE;
+							} else {
+								DWORD error_code = GetLastError();
+								LogMessage(L"Failed to backup " + file_name);
+								command_result = ErrorMessage(STR_MOVE_ERROR,
+									L"%STR% " + file_name + L" " + global.lang[STR_MOVE_TO_ERROR] + L" " + backup_path + L" - " + Int2StrW(error_code) + L" " + FormatError(error_code)
+								);
+								break;
+							}
+						} else {
+							backup.operation_type = OPERATION_DELETE;
+							backup.source         = file_name;
+						}
 					}
 				
 					std::vector<std::string> contents;
@@ -2060,9 +2115,9 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					bool ends_with_newline = true;
 				    
 				    if (~current_script_command.switches[instruction_index] & SWITCH_NEWFILE) {
-				    	LogMessage(L"Editing line " + UInt2StrW(wanted_line) + L" in " + (*file_name));
+				    	LogMessage(L"Editing line " + UInt2StrW(wanted_line) + L" in " + file_name);
 				    	
-				    	file.open((*file_name).c_str(), std::ios::in);
+				    	file.open(file_name.c_str(), std::ios::in);
 				    	
 						if (file.is_open()) {
 							std::string line;
@@ -2097,37 +2152,14 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 							break;
 						}
 					} else {
-						LogMessage(L"Creating new file " + (*file_name));
+						LogMessage(L"Creating new file " + file_name);
 						contents.push_back(wanted_text);
-						
-						// Trash the file
-						size_t buffer_size = (*file_name).length() + 3;
-						char *file_list    = new char[buffer_size*2];
-				
-						if (file_list) {
-							size_t name_length = (*file_name).length()+1 * 2;
-							memcpy(file_list, (*file_name).c_str(), name_length);
-							memcpy(file_list+name_length, "\0\0", 2);
-							
-							SHFILEOPSTRUCTW shfos;
-							shfos.hwnd   = NULL;
-							shfos.wFunc  = FO_DELETE;
-							shfos.pFrom  = (LPCWSTR)file_list;
-							shfos.pTo    = NULL;
-							shfos.fFlags = FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO;
-							int result   = SHFileOperation(&shfos);
-				
-							if (result!=0  &&  result!=1026  &&  result!=2)
-								LogMessage(L"Trashing FAILED " + Int2StrW(result) + L" " + FormatError(result));
-							
-							delete[] file_list;
-						}
 					}
 				    	
 				    	
 				    // Write file
 					std::ofstream file_new;
-					file_new.open((*file_name).c_str(), std::ios::out | std::ios::trunc);
+					file_new.open(file_name.c_str(), std::ios::out | std::ios::trunc);
 					
 					if (file_new.is_open()) {
 						for (size_t j=0; j<contents.size(); j++) {
@@ -2140,9 +2172,12 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 						file_new.close();
 						
 						if (current_script_command.switches[instruction_index] & SWITCH_TIMESTAMP)
-							command_result = ChangeFileDate(*file_name, current_script_command.timestamp[instruction_index]);
+							command_result = ChangeFileDate(file_name, current_script_command.timestamp[instruction_index]);
 						else
-				    		command_result = ChangeFileDate(*file_name, global.current_mod_version_date);
+				    		command_result = ChangeFileDate(file_name, global.current_mod_version_date);
+
+						if (backup.operation_type != OPERATION_NONE)
+							global.rollback.push_back(backup);
 					} else {
 						command_result = ErrorMessage(STR_EDIT_WRITE_ERROR);
 						break;
@@ -2157,31 +2192,52 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 						break;
 					}
 					
-					std::wstring *file_name = &current_script_command.arguments[first];
-					std::wstring *date_text = &current_script_command.arguments[first + 1];
+					std::wstring file_name = current_script_command.arguments[first];
+					std::wstring date_text = current_script_command.arguments[first + 1];
 					
-					if (!VerifyPath(*file_name)) {
+					if (!VerifyPath(file_name)) {
 						command_result = ErrorMessage(STR_ERROR_PATH);
 						break;
 					}
 
-					*file_name     = global.current_mod_new_name + L"\\" + *file_name;
-					command_result = ChangeFileDate(*file_name, *date_text);
+					file_name = global.current_mod_new_name + L"\\" + file_name;
+
+					HANDLE file_handle;
+					DWORD error_code = 0;
+					file_handle      = CreateFile(file_name.c_str(), GENERIC_READ, FILE_SHARE_READ,  NULL,  OPEN_EXISTING,  FILE_ATTRIBUTE_NORMAL, NULL);
+
+					if (file_handle != INVALID_HANDLE_VALUE) {
+						FILETIME modification_time;
+
+						if (GetFileTime(file_handle, NULL, NULL, &modification_time)) {
+							command_result = ChangeFileDate(file_name, date_text);
+
+							if (command_result == ERROR_NONE) {
+								OPERATION_LOG backup;
+								backup.operation_type = OPERATION_FILEDATE;
+								backup.source         = file_name;
+								backup.modif_time     = modification_time;
+								global.rollback.push_back(backup);
+							}
+						} else
+							error_code = GetLastError();
+
+						CloseHandle(file_handle);
+					} else
+						error_code = GetLastError();
+
+					if (error_code != 0)
+						command_result = ErrorMessage(STR_EDIT_WRITE_ERROR, L"%STR% " + file_name + L" - " + UInt2StrW(error_code) + L" " + FormatError(error_code));
+
 					break;
 				}
 			}
 		}
 
-		// If download/unpacking failed then ask to retry
-		if (
-			command_result != ERROR_USER_ABORTED && 
-			command_result != ERROR_PAUSED && 
-			current_script_command.url_num[instruction_index] > 0 && 
-			(
-				failed_downloads == current_script_command.url_num[instruction_index] || 
-				command_result == ERROR_WRONG_ARCHIVE
-			)
-		) {
+		End_command_execution:
+
+		// If command failed then ask to retry/abort
+		if (command_result != ERROR_NONE && command_result != ERROR_USER_ABORTED && command_result != ERROR_PAUSED) {
 			WriteProgressFile(INSTALL_RETRYORABORT, global.last_log_message + L"\r\n\r\n" + global.lang[STR_ASK_RETRYORABORT]);
 			global.retry_installer = false;
 			EnableMenuItem(global.window_menu, ID_PROCESS_RETRY, MF_BYCOMMAND);
@@ -2202,21 +2258,43 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					}
 
 					global.retry_installer = false;
-					command_result         = ERROR_PAUSED;
 				}
 		}
 
-		End_command_execution:
-		if (command_result == ERROR_PAUSED) {
-			instruction_index--;
-		} else
-			if (command_result == ERROR_USER_ABORTED) {
-				return command_result;
-			} else
-				if (command_result != ERROR_NONE) {
-					LogMessage(L"Installation error - aborting", OPTION_CLOSELOG);
-					return command_result;
+		if (current_script_command.id[instruction_index] == COMMAND_EXIT)
+			break;
+
+		// Rollback changes
+		if (command_result == ERROR_USER_ABORTED) {
+			for (std::vector<OPERATION_LOG>::reverse_iterator current_op=global.rollback.rbegin(); current_op!=global.rollback.rend(); ++current_op) {
+				std::wstring a = current_op->source.c_str();
+				std::wstring b = current_op->destination.c_str();
+
+				switch(current_op->operation_type) {
+					case OPERATION_MOVE: {
+						MakeDir(PathNoLastItem(current_op->destination).c_str(), FLAG_SILENT_MODE);
+						MoveFileEx(current_op->source.c_str(), current_op->destination.c_str(), MOVEFILE_REPLACE_EXISTING);
+					} break;
+
+					case OPERATION_DELETE: {
+						DeleteFile(current_op->source.c_str());
+					} break;
+
+					case OPERATION_DELETE_DIR : {
+						DeleteDirectory(current_op->source.c_str());
+					} break;
+
+					case OPERATION_FILEDATE : {
+						ChangeFileDate(current_op->source.c_str(), &(current_op->modif_time));
+					} break;
 				}
+			}
+
+			return command_result;
+		}
+
+		if (command_result == ERROR_NONE)
+			instruction_index++;
 	}
 
     // Clean up after the last mod
