@@ -77,6 +77,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		"",
 		false,
 		false,
+		false,
 		SELF_UPDATE_DISABLED,
 		0,
 		0
@@ -616,6 +617,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 			if (dedicated_server)
 				module_name = L"ijl15.dll";
 			
+			if (!input.skip_memory_arguments) {
 			DWORD result = GetOFPArguments(game.pid, &game_handle, module_name, dedicated_server ? 0x4FF20 : 0x2C154, all_game_arguments);
 			if (result == 0) {
 				std::wstring log_arguments = L"";
@@ -643,6 +645,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 					LogMessage(L"Couldn't find " + module_name);
 				else
 					LogMessage(L"Can't get module list" + FormatError(GetLastError()));
+			}
 			}
 			
 			CloseHandle(game_handle);

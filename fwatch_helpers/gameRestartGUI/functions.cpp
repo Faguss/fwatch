@@ -1245,6 +1245,11 @@ void ProcessArguments(LPWSTR command_line, INPUT_ARGUMENTS &input)
 				input.steam = Equals(value,L"true") || Equals(value,L"1");
 				continue;
 			}
+
+			if (Equals(name,L"-skipmemarg")) {
+				input.skip_memory_arguments = Equals(value,L"true") || Equals(value,L"1");
+				continue;
+			}
 		}
 	
 		input.user_arguments     += namevalue + L" ";

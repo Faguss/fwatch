@@ -350,14 +350,15 @@ case C_FILE_MODLIST:
 			bool is_mod = false;
 
 			DWORD attributes = GetFileAttributes(path2);
-			if (attributes != 1)
+			if (attributes != -1) {
 				is_mod = true;
-			else
+			} else
 				for (int i=0; i<sub_folder_num && !is_mod; i++) {
 					sprintf(path2, "%s\\%s", fd.cFileName, sub_folder[i]);
 					DWORD attributes = GetFileAttributes(path2);
-					if (attributes != -1  &&  attributes & FILE_ATTRIBUTE_DIRECTORY)
+					if (attributes != -1  &&  attributes & FILE_ATTRIBUTE_DIRECTORY) {
 						is_mod = true;
+					}
 				}
 
 			if (is_mod) {

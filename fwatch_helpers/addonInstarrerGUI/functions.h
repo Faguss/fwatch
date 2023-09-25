@@ -5,6 +5,7 @@
 std::wstring utf16(std::string input);
 std::string utf8(const wchar_t* input, int input_size);
 std::string utf8(std::wstring input);
+std::string WindowsCodePage(std::wstring input);
 std::string Trim(std::string s);
 std::wstring Trim(std::wstring s);
 std::wstring WrapInQuotes(std::wstring text);

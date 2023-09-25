@@ -86,6 +86,7 @@ struct INPUT_ARGUMENTS
 	char fwatch_build_date[64];
 	bool server_equalmodreq;
 	bool steam;
+	bool skip_memory_arguments;
 	int self_update;
 	int event_voice;
 	DWORD game_pid;

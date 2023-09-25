@@ -1,4 +1,4 @@
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include "resource.h"
 #include "common.h"
 #include "functions.h"
@@ -58,6 +58,48 @@ std::string utf8(std::wstring input)
 	}
 
 	return utf8((*ptr_input).c_str(), static_cast<int>((*ptr_input).size()));
+}
+
+std::string WindowsCodePage(std::wstring input)
+{
+	std::string output = "";
+
+	for (size_t i=0; i<input.length(); i++) {
+		unsigned char wcp;
+
+		switch(input[i]) {
+			//polish
+			case 0x104 : wcp=0xA5; break; //Ą
+			case 0x105 : wcp=0xB9; break; //ą
+			case 0x106 : wcp=0xC6; break; //Ć
+			case 0x107 : wcp=0xE6; break; //ć
+			case 0x118 : wcp=0xCA; break; //Ę
+			case 0x119 : wcp=0xEA; break; //ę
+			case 0x141 : wcp=0xA3; break; //Ł
+			case 0x142 : wcp=0xB3; break; //ł
+			case 0x143 : wcp=0xD1; break; //Ń
+			case 0x144 : wcp=0xF1; break; //ń
+			case 0x15A : wcp=0x8C; break; //Ś
+			case 0x15B : wcp=0x9C; break; //ś
+			case 0x179 : wcp=0x8F; break; //Ź
+			case 0x17A : wcp=0x9F; break; //ź
+			case 0x17B : wcp=0xAF; break; //Ż
+			case 0x17C : wcp=0xBF; break; //ż
+
+			default : 
+				if (input[i] >= 0x410 && input[i] <= 0x44F)	//cyrillic
+					wcp = (unsigned char)(input[i] - 0x350);
+				else
+					if (input[i] <= 0xFF) //ansi
+						wcp = (unsigned char)input[i];
+					else
+						wcp = 0x3F; //unknown
+		}
+
+		output += wcp;
+	}
+
+	return output;
 }
 
 std::string Trim(std::string s)
@@ -510,7 +552,7 @@ void WriteProgressFile(int status, std::wstring input)
 
 		progressLog << "_auto_restart=" << (global.restart_game ? "true" : "false") 
 					<< ";_run_voice_program=" << (global.run_voice_program ? "true" : "false")
-					<< ";_install_status=" << status << ";\"" << utf8(ReplaceAll(buffer, L"\"", L"'")) << "\"";
+					<< ";_install_status=" << status << ";\"" << WindowsCodePage(ReplaceAll(buffer, L"\"", L"'")) << "\"";
 
 		progressLog.close();
 	}

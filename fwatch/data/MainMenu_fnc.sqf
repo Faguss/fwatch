@@ -193,39 +193,62 @@ FUNCTION_DISPLAY_MOD_QUEUE = {
 
 
 FUNCTION_MOD_SHORTCUTS = {
-	private ["_index", "_output","_i","_folder"];
+	private ["_index", "_output","_i","_folder","_extra_params"];
 	_output_type = _this select 0;
 	_data_index  = _this select 1;
 	
 	_output = "";
+	
 	if (_output_type == "launch") then {
-		_output = [];
-	} else {
+		_output = [[], ""];		//0 - mod line, 1 - extra startup parameters
+	};
+	
+	if (_output_type == "preview") then {
 		_output = Format ["%1:\n\n", _mod_shortcuts_names select _data_index];
 	};
 
 	_i = 0;
+	_extra_params = "";
 	{
-		_folder = 
+		_folder = "";
+		
 		if ((_x select 0) == "id") then {
 			_index = [(_x select 1),FWATCH_MODLISTID] call FUNCTION_FIND;
 			if (_index >= 0) then {
-				(FWATCH_MODLIST select _index)
+				_folder = (FWATCH_MODLIST select _index)
 			} else {
-				""
+				_folder = ""
 			}
-		} else {
-			_x select 1
+		};
+
+		if ((_x select 0) == "name") then {
+			_folder = _x select 1
 		};
 		
+		if ((_x select 0) == "launch") then {
+			_extra_params = _x select 1;
+		};
+
 		if (_folder != "") then {
 			if (_output_type == "launch") then {
-				_output set [count _output, _folder];
-			} else {
+				(_output select 0) set [count (_output select 0), _folder];
+			};
+			
+			if (_output_type == "preview") then {
 				_output = _output + " " + _folder + "\n";
 			}
 		}
 	} forEach (_mod_shortcuts_data select _data_index);
+	
+	if (_extra_params != "") then {
+		if (_output_type == "launch") then {
+			_output set [1, _extra_params];
+		};
+	
+		if (_output_type == "preview") then {
+			_output = _output + "\n" + _extra_params;
+		}
+	};
 	
 	_output
 };
@@ -708,7 +731,8 @@ FUNCTION_STRINGTABLE = {
 			"[Utwуrz Skrуt]",		//109
 			"Nazwa skrуtu",		//110
 			"Wybierz mody dla skrуtu",		//111
-			"[Wstrzymaj]"		//112
+			"[Wstrzymaj]",		//112
+			"Opcjonalnie wpisz dodatkowe parametry uruchamiania gry"		//113
 		];
 	};
 
@@ -826,7 +850,8 @@ FUNCTION_STRINGTABLE = {
 			"[—оздать ярлык]",		//109
 			"сокращенное им€",		//110
 			"выбрать моды дл€ €рлыка",		//111
-			"[ѕауза]"		//112
+			"[ѕауза]",		//112
+			"¬ведите дополнительные параметры запуска"		//113
 		];
 	};
 
@@ -944,7 +969,8 @@ FUNCTION_STRINGTABLE = {
 			"[Create Shortcut]",		//109
 			"Shortcut name",		//110
 			"Select mods for the shortcut",		//111
-			"[Pause]"		//112
+			"[Pause]",		//112
+			"Optionally type in extra game startup parameters"		//113
 		];
 	};
 	

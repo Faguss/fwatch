@@ -1,4 +1,4 @@
-#include "stdafx.h"
+ï»¿#include "stdafx.h"
 #include "resource.h"
 #include "common.h"
 #include "functions.h"
@@ -99,214 +99,214 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 	// Load language
 	std::wstring stringtable[][STR_MAX] = {
 		{
-			L"Initializing",		//STR_ACTION_INIT
-			L"Fetching installation script",		//STR_ACTION_GETSCRIPT
-			L"Reading installation script",		//STR_ACTION_READSCRIPT
-			L"Connecting",		//STR_ACTION_CONNECTING
-			L"Downloading",		//STR_ACTION_DOWNLOADING
-			L"Downloaded",		//STR_ACTION_DOWNLOADED
-			L"Extracting",		//STR_ACTION_EXTRACTING
-			L"Unpacking PBO",		//STR_ACTION_UNPACKINGPBO
-			L"Packing PBO",		//STR_ACTION_PACKINGPBO
-			L"Copying",		//STR_ACTION_COPYING
-			L"Copying downloaded file to the fwatch\\tmp",		//STR_ACTION_COPYINGDOWNLOAD
-			L"Cleaning up",		//STR_ACTION_CLEANING
-			L"Preparing to install a mod",		//STR_ACTION_PREPARING
-			L"Deleting",		//STR_ACTION_DELETING
-			L"Renaming",		//STR_ACTION_RENAMING
-			L"Editing",		//STR_ACTION_EDITING
-			L"Installation aborted by user",		//STR_ACTION_ABORTED
-			L"Installation complete!",		//STR_ACTION_DONE
-			L"Done\\nbut mods %MOD% are still missing\\nOpen fwatch\\data\\addonInstallerLog.txt for details",		//STR_ACTION_DONEWARNING
-			L"Installation progress:",		//STR_PROGRESS
-			L"ALT+TAB to the desktop",		//STR_ALTTAB
-			L"ERROR",		//STR_ERROR
-			L"Can't create logfile",		//STR_ERROR_LOGFILE
-			L"Can't read install script",		//STR_ERROR_READSCRIPT
-			L"Incorrect script version",		//STR_ERROR_WRONG_VERSION
-			L"In version",		//STR_ERROR_INVERSION
-			L"On line",		//STR_ERROR_ONLINE
-			L"Failed to launch",		//STR_ERROR_EXE
-			L"Not enough arguments",		//STR_ERROR_ARG_COUNT
-			L"Failed to list files in ",		//STR_ERROR_FILE_LIST
-			L"Missing file name argument",		//STR_ERROR_NO_FILE
-			L"Path is leaving current directory",		//STR_ERROR_PATH
-			L"Installation script is invalid",		//STR_ERROR_INVALID_SCRIPT
-			L"Invalid installator arguments",		//STR_ERROR_INVALID_ARG
-			L"Failed to allocate buffer",		//STR_ERROR_BUFFER
-			L"left",		//STR_DOWNLOAD_LEFT
-			L"total",		//STR_DOWNLOAD_TOTAL
-			L"Invalid download destination",		//STR_DOWNLOAD_PATH_ERROR
-			L"Failed to download",		//STR_DOWNLOAD_FAILED
-			L"Failed to find",		//STR_DOWNLOAD_FIND_ERROR
-			L"remove this file and download again",		//STR_UNPACK_REDO_FILE
-			L"Failed to extract",		//STR_UNPACK_ERROR
-			L"Failed to create directory",		//STR_MDIR_ERROR
-			L"Failed to get attributes of",		//STR_AUTO_READ_ATTRI
-			L"Source path is leaving current directory",		//STR_UNPACKPBO_SRC_PATH_ERROR
-			L"Destination path is leaving current directory",		//STR_UNPACKPBO_DST_PATH_ERROR
-			L"Not allowed to move files out of the game directory",		//STR_MOVE_DST_PATH_ERROR
-			L"Failed to move",		//STR_MOVE_ERROR
-			L"to",		//STR_MOVE_TO_ERROR
-			L"Failed to copy",		//STR_COPY_ERROR
-			L"Failed to rename",		//STR_MOVE_RENAME_ERROR
-			L"to",		//STR_MOVE_RENAME_TO_ERROR
-			L"New file name contains slashes",		//STR_RENAME_DST_PATH_ERROR
-			L"Wildcards in the path",		//STR_RENAME_WILDCARD_ERROR
-			L"Missing new file name",		//STR_RENAME_NO_NAME_ERROR
-			L"Failed to delete",		//STR_DELETE_PERMANENT_ERROR
-			L"Failed to move to recycle bin",		//STR_DELETE_BIN_ERROR
-			L"You must manually run",		//STR_ASK_EXE
-			L"You must manually download",		//STR_ASK_DLOAD
-			L"Select folder with the downloaded file",		//STR_ASK_DLOAD_SELECT
-			L"Missing version number",		//STR_IF_NUMBER_ERROR
-			L"Not a PBO file",		//STR_PBO_NAME_ERROR
-			L"Failed to create PBO",		//STR_PBO_MAKE_ERROR
-			L"Failed to unpack PBO",		//STR_PBO_UNPACK_ERROR
-			L"Failed to read file",		//STR_EDIT_READ_ERROR
-			L"Failed to create file",		//STR_EDIT_WRITE_ERROR
-			L"Reading mission.sqm",		//STR_ACTION_READMISSIONSQM
-			L"Select 'Retry' or 'Abort'"		//STR_ASK_RETRYORABORT
+			L"Initializing",
+			L"Fetching installation script",
+			L"Reading installation script",
+			L"Connecting",
+			L"Downloading",
+			L"Downloaded",
+			L"Extracting",
+			L"Unpacking PBO",
+			L"Packing PBO",
+			L"Copying",
+			L"Copying downloaded file to the fwatch\\tmp",
+			L"Cleaning up",
+			L"Preparing to install a mod",
+			L"Deleting",
+			L"Renaming",
+			L"Editing",
+			L"Installation aborted by user",
+			L"Installation complete!",
+			L"Done\r\nbut mods %MOD% are still missing\r\nOpen fwatch\\data\\addonInstallerLog.txt for details",
+			L"Installation progress:",
+			L"ALT+TAB to the desktop",
+			L"ERROR",
+			L"Can't create logfile",
+			L"Can't read install script",
+			L"Incorrect script version",
+			L"In version",
+			L"On line",
+			L"Failed to launch",
+			L"Not enough arguments",
+			L"Failed to list files in ",
+			L"Missing file name argument",
+			L"Path is leaving current directory",
+			L"Installation script is invalid",
+			L"Invalid installator arguments",
+			L"Failed to allocate buffer",
+			L"left",
+			L"total",
+			L"Invalid download destination",
+			L"Failed to download",
+			L"Failed to find",
+			L"remove this file and download again",
+			L"Failed to extract",
+			L"Failed to create directory",
+			L"Failed to get attributes of",
+			L"Source path is leaving current directory",
+			L"Destination path is leaving current directory",
+			L"Not allowed to move files out of the game directory",
+			L"Failed to move",
+			L"to",
+			L"Failed to copy",
+			L"Failed to rename",
+			L"to",
+			L"New file name contains slashes",
+			L"Wildcards in the path",
+			L"Missing new file name",
+			L"Failed to delete",
+			L"Failed to move to recycle bin",
+			L"You must manually run",
+			L"You must manually download",
+			L"Select folder with the downloaded file",
+			L"Missing version number",
+			L"Not a PBO file",
+			L"Failed to create PBO",
+			L"Failed to unpack PBO",
+			L"Failed to read file",
+			L"Failed to create file",
+			L"Reading mission.sqm",
+			L"Select 'Retry' or 'Abort'"
 		},
 		{
-			L"Çàïóñê",		//STR_ACTION_INIT
-			L"Ïîëó÷åíèå ñêðèïòà óñòàíîâêè",		//STR_ACTION_GETSCRIPT
-			L"Ñ÷èòûâàíèå ôàéëîâ",		//STR_ACTION_READSCRIPT
-			L"Ïîäêëþ÷åíèå",		//STR_ACTION_CONNECTING
-			L"Çàãðóçêà",		//STR_ACTION_DOWNLOADING
-			L"Çàãðóçêà çàâåðøåíà",		//STR_ACTION_DOWNLOADED
-			L"Èçâëå÷åíèå ôàéëîâ",		//STR_ACTION_EXTRACTING
-			L"Ðàñïàêîâêà àðõèâà PBO",		//STR_ACTION_UNPACKINGPBO
-			L"Ñîçäàíèå àðõèâà PBO",		//STR_ACTION_PACKINGPBO
-			L"Êîïèðîâàíèå",		//STR_ACTION_COPYING
-			L"Êîïèðîâàíèå çàãðóæåííîãî ôàéëà â fwatch\\tmp",		//STR_ACTION_COPYINGDOWNLOAD
-			L"Óäàëåíèå âðåìåííûõ ôàéëîâ",		//STR_ACTION_CLEANING
-			L"Íà÷àëî óñòàíîâêè ìîäà",		//STR_ACTION_PREPARING
-			L"Óäàëåíèå ôàéëîâ ìîäà",		//STR_ACTION_DELETING
-			L"Ïåðåèìåíîâàíèå ôàéëîâ ìîäà",		//STR_ACTION_RENAMING
-			L"Ðåäàêòèðîâàíèå ôàéëîâ ìîäà",		//STR_ACTION_EDITING
-			L"Óñòàíîâêà ïðåðâàíà ïîëüçîâàòåëåì",		//STR_ACTION_ABORTED
-			L"Óñòàíîâêà çàâåðøåíà!",		//STR_ACTION_DONE
-			L"Óñòàíîâêà çàâåðøåíà\\níî îòñóòñòâóþò ìîäû %MOD%. Äîïîëíèòåëüíàÿ èíôîðìàöèÿ â fwatch\\data\\addonInstallerLog.txt",		//STR_ACTION_DONEWARNING
-			L"Ïðîöåññ óñòàíîâêè:",		//STR_PROGRESS
-			L"Íàæìèòå ALT+TAB, ÷òîáû ñâåðíóòü èãðó",		//STR_ALTTAB
-			L"ÎØÈÁÊÀ",		//STR_ERROR
-			L"Íåâîçìîæíî ñîçäàòü ôàéë æóðíàëà óñòàíîâêè",		//STR_ERROR_LOGFILE
-			L"Íåâîçìîæíî ñ÷èòàòü ñêðèïò óñòàíîâêè",		//STR_ERROR_READSCRIPT
-			L"Íåâåðíàÿ âåðñèÿ ñêðèïòà óñòàíîâêè",		//STR_ERROR_WRONG_VERSION
-			L"Â âåðñèè",		//STR_ERROR_INVERSION
-			L"Â ñòðîêå",		//STR_ERROR_ONLINE
-			L"Îøèáêà ïðè çàïóñêå",		//STR_ERROR_EXE
-			L"Íåäîñòàòî÷íî àðãóìåíòîâ ôóíêöèè",		//STR_ERROR_ARG_COUNT
-			L"Îøèáêà ïðè ñîçäàíèè ñïèñêà ôàéëîâ â ïàïêå ",		//STR_ERROR_FILE_LIST
-			L"Îòñóòñòâóåò èìÿ ôàéëà àðãóìåíòà",		//STR_ERROR_NO_FILE
-			L"Ïóòü íå ñîîòâåòñòâóåò òåêóùåé ïàïêå",		//STR_ERROR_PATH
-			L"Íåâåðíûé ñêðèïò óñòàíîâêè",		//STR_ERROR_INVALID_SCRIPT
-			L"Íåâåðíûå àðãóìåíòû ìàñòåðà óñòàíîâêè",		//STR_ERROR_INVALID_ARG
-			L"Îøèáêà ïðè âûäåëåíèè ïîíÿòèé",		//STR_ERROR_BUFFER
-			L"îñòàëîñü",		//STR_DOWNLOAD_LEFT
-			L"âñåãî",		//STR_DOWNLOAD_TOTAL
-			L"Íåâåðíûé ïóòü óñòàíîâêè",		//STR_DOWNLOAD_PATH_ERROR
-			L"Îøèáêà ïðè çàãðóçêå",		//STR_DOWNLOAD_FAILED
-			L"Ñîâïàäåíèé íå íàéäåíî",		//STR_DOWNLOAD_FIND_ERROR
-			L"óäàëèòå ýòîò ôàéë è çàãðóçèòå ñíîâà",		//STR_UNPACK_REDO_FILE
-			L"Îøèáêà ïðè èçâëå÷åíèè",		//STR_UNPACK_ERROR
-			L"Îøèáêà ïðè ñîçäàíèè ïàïêè",		//STR_MDIR_ERROR
-			L"Îøèáêà ïðè ñ÷èòûâàíèè àòðèáóòîâ ôàéëà",		//STR_AUTO_READ_ATTRI
-			L"Èñõîäíûé ïóòü íå ñîîòâåòñòâóåò òåêóùåé ïàïêå",		//STR_UNPACKPBO_SRC_PATH_ERROR
-			L"Ïóòü íàçíà÷åíèÿ íå ñîîòâåòñòâóåò òåêóùåé ïàïêå",		//STR_UNPACKPBO_DST_PATH_ERROR
-			L"Íåâîçìîæíî ïåðåìåñòèòü ôàéëû èç ïàïêè èãðû",		//STR_MOVE_DST_PATH_ERROR
-			L"Îøèáêà ïðè ïåðåìåùåíèè",		//STR_MOVE_ERROR
-			L"â",		//STR_MOVE_TO_ERROR
-			L"Îøèáêà ïðè êîïèðîâàíèè",		//STR_COPY_ERROR
-			L"Îøèáêà ïðè ïåðåèìåíîâàíèè ôàéëà",		//STR_MOVE_RENAME_ERROR
-			L"â",		//STR_MOVE_RENAME_TO_ERROR
-			L"Íîâîå èìÿ ôàéëà ñîäåðæèò ñëåøè",		//STR_RENAME_DST_PATH_ERROR
-			L"Ïóòü ñîäåðæèò ñèìâîëû ïîäñòàíîâêè",		//STR_RENAME_WILDCARD_ERROR
-			L"Îòñóòñòâóåò íîâîå èìÿ ôàéëà",		//STR_RENAME_NO_NAME_ERROR
-			L"Îøèáêà ïðè óäàëåíèè",		//STR_DELETE_PERMANENT_ERROR
-			L"Îøèáêà ïðè ïåðåìåùåíèè â Êîðçèíó",		//STR_DELETE_BIN_ERROR
-			L"Íåîáõîäèìî çàïóñòèòü âðó÷íóþ",		//STR_ASK_EXE
-			L"Íåîáõîäèìî çàãðóçèòü âðó÷íóþ",		//STR_ASK_DLOAD
-			L"Âûáåðèòå ïàïêó ñ çàãðóæåííûì ôàéëîì",		//STR_ASK_DLOAD_SELECT
-			L"Îòñóòñòâóåò íîìåð âåðñèè",		//STR_IF_NUMBER_ERROR
-			L"Íå ôàéë òèïà PBO",		//STR_PBO_NAME_ERROR
-			L"Îøèáêà ïðè ñîçäàíèè ôàéëà PBO",		//STR_PBO_MAKE_ERROR
-			L"Îøèáêà ïðè èçâëå÷åíèè èç àðõèâà PBO",		//STR_PBO_UNPACK_ERROR
-			L"Îøèáêà ïðè ñ÷èòûâàíèè",		//STR_EDIT_READ_ERROR
-			L"Îøèáêà ïðè ñîçäàíèè ôàéëà",		//STR_EDIT_WRITE_ERROR
-			L"Ñ÷èòûâàíèå mission.sqm",		//STR_ACTION_READMISSIONSQM
-			L"Âûáåðèòå 'Çàíîâî' èëè 'Îòìåíà'"		//STR_ASK_RETRYORABORT
+			L"Ð—Ð°Ð¿ÑƒÑÐº",
+			L"ÐŸÐ¾Ð»ÑƒÑ‡ÐµÐ½Ð¸Ðµ ÑÐºÑ€Ð¸Ð¿Ñ‚Ð° ÑƒÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ¸",
+			L"Ð¡Ñ‡Ð¸Ñ‚Ñ‹Ð²Ð°Ð½Ð¸Ðµ Ñ„Ð°Ð¹Ð»Ð¾Ð²",
+			L"ÐŸÐ¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸Ðµ",
+			L"Ð—Ð°Ð³Ñ€ÑƒÐ·ÐºÐ°",
+			L"Ð—Ð°Ð³Ñ€ÑƒÐ·ÐºÐ° Ð·Ð°Ð²ÐµÑ€ÑˆÐµÐ½Ð°",
+			L"Ð˜Ð·Ð²Ð»ÐµÑ‡ÐµÐ½Ð¸Ðµ Ñ„Ð°Ð¹Ð»Ð¾Ð²",
+			L"Ð Ð°ÑÐ¿Ð°ÐºÐ¾Ð²ÐºÐ° Ð°Ñ€Ñ…Ð¸Ð²Ð° PBO",
+			L"Ð¡Ð¾Ð·Ð´Ð°Ð½Ð¸Ðµ Ð°Ñ€Ñ…Ð¸Ð²Ð° PBO",
+			L"ÐšÐ¾Ð¿Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð¸Ðµ",
+			L"ÐšÐ¾Ð¿Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð¸Ðµ Ð·Ð°Ð³Ñ€ÑƒÐ¶ÐµÐ½Ð½Ð¾Ð³Ð¾ Ñ„Ð°Ð¹Ð»Ð° Ð² fwatch\\tmp",
+			L"Ð£Ð´Ð°Ð»ÐµÐ½Ð¸Ðµ Ð²Ñ€ÐµÐ¼ÐµÐ½Ð½Ñ‹Ñ… Ñ„Ð°Ð¹Ð»Ð¾Ð²",
+			L"ÐÐ°Ñ‡Ð°Ð»Ð¾ ÑƒÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ¸ Ð¼Ð¾Ð´Ð°",
+			L"Ð£Ð´Ð°Ð»ÐµÐ½Ð¸Ðµ Ñ„Ð°Ð¹Ð»Ð¾Ð² Ð¼Ð¾Ð´Ð°",
+			L"ÐŸÐµÑ€ÐµÐ¸Ð¼ÐµÐ½Ð¾Ð²Ð°Ð½Ð¸Ðµ Ñ„Ð°Ð¹Ð»Ð¾Ð² Ð¼Ð¾Ð´Ð°",
+			L"Ð ÐµÐ´Ð°ÐºÑ‚Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð¸Ðµ Ñ„Ð°Ð¹Ð»Ð¾Ð² Ð¼Ð¾Ð´Ð°",
+			L"Ð£ÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ° Ð¿Ñ€ÐµÑ€Ð²Ð°Ð½Ð° Ð¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»ÐµÐ¼",
+			L"Ð£ÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ° Ð·Ð°Ð²ÐµÑ€ÑˆÐµÐ½Ð°!",
+			L"Ð£ÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ° Ð·Ð°Ð²ÐµÑ€ÑˆÐµÐ½Ð°\r\nÐ½Ð¾ Ð¾Ñ‚ÑÑƒÑ‚ÑÑ‚Ð²ÑƒÑŽÑ‚ Ð¼Ð¾Ð´Ñ‹ %MOD%. Ð”Ð¾Ð¿Ð¾Ð»Ð½Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð°Ñ Ð¸Ð½Ñ„Ð¾Ñ€Ð¼Ð°Ñ†Ð¸Ñ Ð² fwatch\\data\\addonInstallerLog.txt",
+			L"ÐŸÑ€Ð¾Ñ†ÐµÑÑ ÑƒÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ¸:",
+			L"ÐÐ°Ð¶Ð¼Ð¸Ñ‚Ðµ ALT+TAB, Ñ‡Ñ‚Ð¾Ð±Ñ‹ ÑÐ²ÐµÑ€Ð½ÑƒÑ‚ÑŒ Ð¸Ð³Ñ€Ñƒ",
+			L"ÐžÐ¨Ð˜Ð‘ÐšÐ",
+			L"ÐÐµÐ²Ð¾Ð·Ð¼Ð¾Ð¶Ð½Ð¾ ÑÐ¾Ð·Ð´Ð°Ñ‚ÑŒ Ñ„Ð°Ð¹Ð» Ð¶ÑƒÑ€Ð½Ð°Ð»Ð° ÑƒÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ¸",
+			L"ÐÐµÐ²Ð¾Ð·Ð¼Ð¾Ð¶Ð½Ð¾ ÑÑ‡Ð¸Ñ‚Ð°Ñ‚ÑŒ ÑÐºÑ€Ð¸Ð¿Ñ‚ ÑƒÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ¸",
+			L"ÐÐµÐ²ÐµÑ€Ð½Ð°Ñ Ð²ÐµÑ€ÑÐ¸Ñ ÑÐºÑ€Ð¸Ð¿Ñ‚Ð° ÑƒÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ¸",
+			L"Ð’ Ð²ÐµÑ€ÑÐ¸Ð¸",
+			L"Ð’ ÑÑ‚Ñ€Ð¾ÐºÐµ",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ Ð·Ð°Ð¿ÑƒÑÐºÐµ",
+			L"ÐÐµÐ´Ð¾ÑÑ‚Ð°Ñ‚Ð¾Ñ‡Ð½Ð¾ Ð°Ñ€Ð³ÑƒÐ¼ÐµÐ½Ñ‚Ð¾Ð² Ñ„ÑƒÐ½ÐºÑ†Ð¸Ð¸",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ð¸ ÑÐ¿Ð¸ÑÐºÐ° Ñ„Ð°Ð¹Ð»Ð¾Ð² Ð² Ð¿Ð°Ð¿ÐºÐµ ",
+			L"ÐžÑ‚ÑÑƒÑ‚ÑÑ‚Ð²ÑƒÐµÑ‚ Ð¸Ð¼Ñ Ñ„Ð°Ð¹Ð»Ð° Ð°Ñ€Ð³ÑƒÐ¼ÐµÐ½Ñ‚Ð°",
+			L"ÐŸÑƒÑ‚ÑŒ Ð½Ðµ ÑÐ¾Ð¾Ñ‚Ð²ÐµÑ‚ÑÑ‚Ð²ÑƒÐµÑ‚ Ñ‚ÐµÐºÑƒÑ‰ÐµÐ¹ Ð¿Ð°Ð¿ÐºÐµ",
+			L"ÐÐµÐ²ÐµÑ€Ð½Ñ‹Ð¹ ÑÐºÑ€Ð¸Ð¿Ñ‚ ÑƒÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ¸",
+			L"ÐÐµÐ²ÐµÑ€Ð½Ñ‹Ðµ Ð°Ñ€Ð³ÑƒÐ¼ÐµÐ½Ñ‚Ñ‹ Ð¼Ð°ÑÑ‚ÐµÑ€Ð° ÑƒÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ¸",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ Ð²Ñ‹Ð´ÐµÐ»ÐµÐ½Ð¸Ð¸ Ð¿Ð¾Ð½ÑÑ‚Ð¸Ð¹",
+			L"Ð¾ÑÑ‚Ð°Ð»Ð¾ÑÑŒ",
+			L"Ð²ÑÐµÐ³Ð¾",
+			L"ÐÐµÐ²ÐµÑ€Ð½Ñ‹Ð¹ Ð¿ÑƒÑ‚ÑŒ ÑƒÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ¸",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ Ð·Ð°Ð³Ñ€ÑƒÐ·ÐºÐµ",
+			L"Ð¡Ð¾Ð²Ð¿Ð°Ð´ÐµÐ½Ð¸Ð¹ Ð½Ðµ Ð½Ð°Ð¹Ð´ÐµÐ½Ð¾",
+			L"ÑƒÐ´Ð°Ð»Ð¸Ñ‚Ðµ ÑÑ‚Ð¾Ñ‚ Ñ„Ð°Ð¹Ð» Ð¸ Ð·Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚Ðµ ÑÐ½Ð¾Ð²Ð°",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ Ð¸Ð·Ð²Ð»ÐµÑ‡ÐµÐ½Ð¸Ð¸",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ð¸ Ð¿Ð°Ð¿ÐºÐ¸",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ ÑÑ‡Ð¸Ñ‚Ñ‹Ð²Ð°Ð½Ð¸Ð¸ Ð°Ñ‚Ñ€Ð¸Ð±ÑƒÑ‚Ð¾Ð² Ñ„Ð°Ð¹Ð»Ð°",
+			L"Ð˜ÑÑ…Ð¾Ð´Ð½Ñ‹Ð¹ Ð¿ÑƒÑ‚ÑŒ Ð½Ðµ ÑÐ¾Ð¾Ñ‚Ð²ÐµÑ‚ÑÑ‚Ð²ÑƒÐµÑ‚ Ñ‚ÐµÐºÑƒÑ‰ÐµÐ¹ Ð¿Ð°Ð¿ÐºÐµ",
+			L"ÐŸÑƒÑ‚ÑŒ Ð½Ð°Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ñ Ð½Ðµ ÑÐ¾Ð¾Ñ‚Ð²ÐµÑ‚ÑÑ‚Ð²ÑƒÐµÑ‚ Ñ‚ÐµÐºÑƒÑ‰ÐµÐ¹ Ð¿Ð°Ð¿ÐºÐµ",
+			L"ÐÐµÐ²Ð¾Ð·Ð¼Ð¾Ð¶Ð½Ð¾ Ð¿ÐµÑ€ÐµÐ¼ÐµÑÑ‚Ð¸Ñ‚ÑŒ Ñ„Ð°Ð¹Ð»Ñ‹ Ð¸Ð· Ð¿Ð°Ð¿ÐºÐ¸ Ð¸Ð³Ñ€Ñ‹",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ Ð¿ÐµÑ€ÐµÐ¼ÐµÑ‰ÐµÐ½Ð¸Ð¸",
+			L"Ð²",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ ÐºÐ¾Ð¿Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð¸Ð¸",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ Ð¿ÐµÑ€ÐµÐ¸Ð¼ÐµÐ½Ð¾Ð²Ð°Ð½Ð¸Ð¸ Ñ„Ð°Ð¹Ð»Ð°",
+			L"Ð²",
+			L"ÐÐ¾Ð²Ð¾Ðµ Ð¸Ð¼Ñ Ñ„Ð°Ð¹Ð»Ð° ÑÐ¾Ð´ÐµÑ€Ð¶Ð¸Ñ‚ ÑÐ»ÐµÑˆÐ¸",
+			L"ÐŸÑƒÑ‚ÑŒ ÑÐ¾Ð´ÐµÑ€Ð¶Ð¸Ñ‚ ÑÐ¸Ð¼Ð²Ð¾Ð»Ñ‹ Ð¿Ð¾Ð´ÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ¸",
+			L"ÐžÑ‚ÑÑƒÑ‚ÑÑ‚Ð²ÑƒÐµÑ‚ Ð½Ð¾Ð²Ð¾Ðµ Ð¸Ð¼Ñ Ñ„Ð°Ð¹Ð»Ð°",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ ÑƒÐ´Ð°Ð»ÐµÐ½Ð¸Ð¸",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ Ð¿ÐµÑ€ÐµÐ¼ÐµÑ‰ÐµÐ½Ð¸Ð¸ Ð² ÐšÐ¾Ñ€Ð·Ð¸Ð½Ñƒ",
+			L"ÐÐµÐ¾Ð±Ñ…Ð¾Ð´Ð¸Ð¼Ð¾ Ð·Ð°Ð¿ÑƒÑÑ‚Ð¸Ñ‚ÑŒ Ð²Ñ€ÑƒÑ‡Ð½ÑƒÑŽ",
+			L"ÐÐµÐ¾Ð±Ñ…Ð¾Ð´Ð¸Ð¼Ð¾ Ð·Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ Ð²Ñ€ÑƒÑ‡Ð½ÑƒÑŽ",
+			L"Ð’Ñ‹Ð±ÐµÑ€Ð¸Ñ‚Ðµ Ð¿Ð°Ð¿ÐºÑƒ Ñ Ð·Ð°Ð³Ñ€ÑƒÐ¶ÐµÐ½Ð½Ñ‹Ð¼ Ñ„Ð°Ð¹Ð»Ð¾Ð¼",
+			L"ÐžÑ‚ÑÑƒÑ‚ÑÑ‚Ð²ÑƒÐµÑ‚ Ð½Ð¾Ð¼ÐµÑ€ Ð²ÐµÑ€ÑÐ¸Ð¸",
+			L"ÐÐµ Ñ„Ð°Ð¹Ð» Ñ‚Ð¸Ð¿Ð° PBO",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ð¸ Ñ„Ð°Ð¹Ð»Ð° PBO",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ Ð¸Ð·Ð²Ð»ÐµÑ‡ÐµÐ½Ð¸Ð¸ Ð¸Ð· Ð°Ñ€Ñ…Ð¸Ð²Ð° PBO",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ ÑÑ‡Ð¸Ñ‚Ñ‹Ð²Ð°Ð½Ð¸Ð¸",
+			L"ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ð¸ Ñ„Ð°Ð¹Ð»Ð°",
+			L"Ð¡Ñ‡Ð¸Ñ‚Ñ‹Ð²Ð°Ð½Ð¸Ðµ mission.sqm",
+			L"Ð’Ñ‹Ð±ÐµÑ€Ð¸Ñ‚Ðµ 'Ð—Ð°Ð½Ð¾Ð²Ð¾' Ð¸Ð»Ð¸ 'ÐžÑ‚Ð¼ÐµÐ½Ð°'"
 		},
 		{
-			L"Przygotowywanie",		//STR_ACTION_INIT
-			L"Pobieraniu skryptu instalacyjnego",		//STR_ACTION_GETSCRIPT
-			L"Przetwarzanie skryptu instalacyjnego",		//STR_ACTION_READSCRIPT
-			L"£¹czenie",		//STR_ACTION_CONNECTING
-			L"Pobieranie",		//STR_ACTION_DOWNLOADING
-			L"Pobrano",		//STR_ACTION_DOWNLOADED
-			L"Wypakowywanie",		//STR_ACTION_EXTRACTING
-			L"Wypakowywanie PBO",		//STR_ACTION_UNPACKINGPBO
-			L"Pakowanie PBO",		//STR_ACTION_PACKINGPBO
-			L"Kopiowanie plików",		//STR_ACTION_COPYING
-			L"Kopiowanie plików do fwatch\\tmp",		//STR_ACTION_COPYINGDOWNLOAD
-			L"Porz¹dkowanie",		//STR_ACTION_CLEANING
-			L"Przygotowywanie do instalacji modu",		//STR_ACTION_PREPARING
-			L"Usuwanie plików",		//STR_ACTION_DELETING
-			L"Zmienianie nazwy plików",		//STR_ACTION_RENAMING
-			L"Edytowanie plików",		//STR_ACTION_EDITING
-			L"Instalacja przerwana przez u¿ytkownika",		//STR_ACTION_ABORTED
-			L"Instalacja zakoñczona!",		//STR_ACTION_DONE
-			L"Koniec instalacji\\nale brakuje modów %MOD%\\nSzczegó³y w pliku fwatch\\data\\addonInstallerLog.txt",		//STR_ACTION_DONEWARNING
-			L"Postêp instalacji:",		//STR_PROGRESS
-			L"ALT+TAB ¿eby przejœæ do pulpitu",		//STR_ALTTAB
-			L"B£¥D",		//STR_ERROR
-			L"Nie mo¿na utworzyæ zapisu instalacji",		//STR_ERROR_LOGFILE
-			L"Nie mo¿na odczytaæ skryptu instalacyjnego",		//STR_ERROR_READSCRIPT
-			L"Niepoprawna wersja skryptu instalacyjnego",		//STR_ERROR_WRONG_VERSION
-			L"W wersji",		//STR_ERROR_INVERSION
-			L"W linijce",		//STR_ERROR_ONLINE
-			L"Nie mo¿na uruchomiæ",		//STR_ERROR_EXE
-			L"Brakuje argumentów",		//STR_ERROR_ARG_COUNT
-			L"Nie mo¿na utworzyæ listy plików z ",		//STR_ERROR_FILE_LIST
-			L"Brakuje nazwy pliku",		//STR_ERROR_NO_FILE
-			L"Œcie¿ka wychodzi poza obecny katalog",		//STR_ERROR_PATH
-			L"Skrypt instalacyjny jest b³êdny",		//STR_ERROR_INVALID_SCRIPT
-			L"B³êdne argumenty instalatora",		//STR_ERROR_INVALID_ARG
-			L"Nie mo¿na zarezerwowaæ pamiêci",		//STR_ERROR_BUFFER
-			L"zosta³o",		//STR_DOWNLOAD_LEFT
-			L"w sumie",		//STR_DOWNLOAD_TOTAL
-			L"Nieprawid³owy katalog docelowy dla œci¹gniêtego pliku",		//STR_DOWNLOAD_PATH_ERROR
-			L"Nie mo¿na pobraæ",		//STR_DOWNLOAD_FAILED
-			L"Nie znaleziono",		//STR_DOWNLOAD_FIND_ERROR
-			L"usuñ ten plik i œci¹gnij ponownie",		//STR_UNPACK_REDO_FILE
-			L"Nie mo¿na rozpakowaæ",		//STR_UNPACK_ERROR
-			L"Nie mo¿na utworzyæ katalogu",		//STR_MDIR_ERROR
-			L"Nie mo¿na odczytaæ atrybutów",		//STR_AUTO_READ_ATTRI
-			L"Œcie¿ka Ÿród³owa wychodzi poza obecny katalog",		//STR_UNPACKPBO_SRC_PATH_ERROR
-			L"Œcie¿ka docelowa wychodzi poza obecny katalog",		//STR_UNPACKPBO_DST_PATH_ERROR
-			L"Nie mo¿na przenosiæ plików poza katalog z gr¹",		//STR_MOVE_DST_PATH_ERROR
-			L"Nie mo¿na przenieœæ",		//STR_MOVE_ERROR
-			L"do",		//STR_MOVE_TO_ERROR
-			L"Nie mo¿na skopiowaæ",		//STR_COPY_ERROR
-			L"Nie mo¿na zmieniæ nazwy",		//STR_MOVE_RENAME_ERROR
-			L"na",		//STR_MOVE_RENAME_TO_ERROR
-			L"Nowa nazwa pliku zawiera ukoœniki",		//STR_RENAME_DST_PATH_ERROR
-			L"Œcie¿ka zawiera symbole zastêpcze",		//STR_RENAME_WILDCARD_ERROR
-			L"Brakuje nowej nazwy pliku",		//STR_RENAME_NO_NAME_ERROR
-			L"Nie mo¿na skasowaæ",		//STR_DELETE_PERMANENT_ERROR
-			L"Nie mo¿na przenieœæ do kosza",		//STR_DELETE_BIN_ERROR
-			L"Musisz rêcznie uruchomiæ",		//STR_ASK_EXE
-			L"Musisz rêcznie pobraæ",		//STR_ASK_DLOAD
-			L"Wybierz katalog z pobranym plikiem",		//STR_ASK_DLOAD_SELECT
-			L"Brakuje numeru wersji",		//STR_IF_NUMBER_ERROR
-			L"Plik nie jest PBO",		//STR_PBO_NAME_ERROR
-			L"Nie mo¿na utworzyæ PBO",		//STR_PBO_MAKE_ERROR
-			L"Nie mo¿na rozpakowaæ PBO",		//STR_PBO_UNPACK_ERROR
-			L"Nie mo¿na wczytaæ pliku",		//STR_EDIT_READ_ERROR
-			L"Nie mo¿na utworzyæ pliku",		//STR_EDIT_WRITE_ERROR
-			L"Przetwarzanie mission.sqm",		//STR_ACTION_READMISSIONSQM
-			L"Wybierz 'Kontynuuj' lub 'Przerwij'"		//STR_ASK_RETRYORABORT
+			L"Przygotowywanie",
+			L"Pobieraniu skryptu instalacyjnego",
+			L"Przetwarzanie skryptu instalacyjnego",
+			L"ÅÄ…czenie",
+			L"Pobieranie",
+			L"Pobrano",
+			L"Wypakowywanie",
+			L"Wypakowywanie PBO",
+			L"Pakowanie PBO",
+			L"Kopiowanie plikÃ³w",
+			L"Kopiowanie plikÃ³w do fwatch\\tmp",
+			L"PorzÄ…dkowanie",
+			L"Przygotowywanie do instalacji modu",
+			L"Usuwanie plikÃ³w",
+			L"Zmienianie nazwy plikÃ³w",
+			L"Edytowanie plikÃ³w",
+			L"Instalacja przerwana przez uÅ¼ytkownika",
+			L"Instalacja zakoÅ„czona!",
+			L"Koniec instalacji\r\nale brakuje modÃ³w %MOD%\r\nSzczegÃ³Å‚y w pliku fwatch\\data\\addonInstallerLog.txt",
+			L"PostÄ™p instalacji:",
+			L"ALT+TAB Å¼eby przejÅ›Ä‡ do pulpitu",
+			L"BÅÄ„D",
+			L"Nie moÅ¼na utworzyÄ‡ zapisu instalacji",
+			L"Nie moÅ¼na odczytaÄ‡ skryptu instalacyjnego",
+			L"Niepoprawna wersja skryptu instalacyjnego",
+			L"W wersji",
+			L"W linijce",
+			L"Nie moÅ¼na uruchomiÄ‡",
+			L"Brakuje argumentÃ³w",
+			L"Nie moÅ¼na utworzyÄ‡ listy plikÃ³w z ",
+			L"Brakuje nazwy pliku",
+			L"ÅšcieÅ¼ka wychodzi poza obecny katalog",
+			L"Skrypt instalacyjny jest bÅ‚Ä™dny",
+			L"BÅ‚Ä™dne argumenty instalatora",
+			L"Nie moÅ¼na zarezerwowaÄ‡ pamiÄ™ci",
+			L"zostaÅ‚o",
+			L"w sumie",
+			L"NieprawidÅ‚owy katalog docelowy dla Å›ciÄ…gniÄ™tego pliku",
+			L"Nie moÅ¼na pobraÄ‡",
+			L"Nie znaleziono",
+			L"usuÅ„ ten plik i Å›ciÄ…gnij ponownie",
+			L"Nie moÅ¼na rozpakowaÄ‡",
+			L"Nie moÅ¼na utworzyÄ‡ katalogu",
+			L"Nie moÅ¼na odczytaÄ‡ atrybutÃ³w",
+			L"ÅšcieÅ¼ka ÅºrÃ³dÅ‚owa wychodzi poza obecny katalog",
+			L"ÅšcieÅ¼ka docelowa wychodzi poza obecny katalog",
+			L"Nie moÅ¼na przenosiÄ‡ plikÃ³w poza katalog z grÄ…",
+			L"Nie moÅ¼na przenieÅ›Ä‡",
+			L"do",
+			L"Nie moÅ¼na skopiowaÄ‡",
+			L"Nie moÅ¼na zmieniÄ‡ nazwy",
+			L"na",
+			L"Nowa nazwa pliku zawiera ukoÅ›niki",
+			L"ÅšcieÅ¼ka zawiera symbole zastÄ™pcze",
+			L"Brakuje nowej nazwy pliku",
+			L"Nie moÅ¼na skasowaÄ‡",
+			L"Nie moÅ¼na przenieÅ›Ä‡ do kosza",
+			L"Musisz rÄ™cznie uruchomiÄ‡",
+			L"Musisz rÄ™cznie pobraÄ‡",
+			L"Wybierz katalog z pobranym plikiem",
+			L"Brakuje numeru wersji",
+			L"Plik nie jest PBO",
+			L"Nie moÅ¼na utworzyÄ‡ PBO",
+			L"Nie moÅ¼na rozpakowaÄ‡ PBO",
+			L"Nie moÅ¼na wczytaÄ‡ pliku",
+			L"Nie moÅ¼na utworzyÄ‡ pliku",
+			L"Przetwarzanie mission.sqm",
+			L"Wybierz 'Kontynuuj' lub 'Przerwij'"
 		}
 	};
 	global.lang_eng = stringtable[0];
@@ -916,8 +916,10 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 			||
 			// if inside condition block
 			(global.condition_index >= 0 && !global.condition[global.condition_index] && !current_script_command.ctrl_flow[instruction_index])
-		)
+		) {
+			instruction_index++;
 			continue;
+		}
 		
 		int command_result   = ERROR_NONE;
 		int failed_downloads = 0;
