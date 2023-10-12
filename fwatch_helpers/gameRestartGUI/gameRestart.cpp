@@ -147,7 +147,6 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 			} break;
 
 			case TASK_TIME_TRIGGER_WEEKLY : {
-				int index = -1;
 				std::wstring days[] = {
 					L"Sunday",
 					L"Monday",
@@ -158,13 +157,14 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 					L"Saturday"
 				};
 
-				for(int i=0, j=1; i<(sizeof(days)/sizeof(days[0])) && index<0; i++,j<<=1)
-					if (local.trigger.Type.Weekly.rgfDaysOfTheWeek & j)
-						index = i;
-
-				messages[0] += L"\r\nGame time: " + days[index] + L" " +
-					Int2StrW(local.trigger.wStartHour, OPTION_LEADINGZERO) + L":" + 
-					Int2StrW(local.trigger.wStartMinute, OPTION_LEADINGZERO);
+				for(WORD i=0, j=1; i<(sizeof(days)/sizeof(days[0])); i++,j<<=1)
+					if (local.trigger.Type.Weekly.rgfDaysOfTheWeek & j) {
+						time_scheduled.wDayOfWeek = i;
+						messages[0] += L"\r\nGame time: " + days[i] + L" " +
+							Int2StrW(local.trigger.wStartHour, OPTION_LEADINGZERO) + L":" + 
+							Int2StrW(local.trigger.wStartMinute, OPTION_LEADINGZERO);
+						break;
+					}
 			} break;
 		}
 
@@ -254,19 +254,18 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 
 						case GR_TAG_EVENT_DATE_START: {
 							fread(&downloaded_event_start, sizeof(downloaded_event_start), 1, f);
-							trigger_downloaded.wBeginYear                   = downloaded_event_start.wYear;
-							trigger_downloaded.wBeginMonth                  = downloaded_event_start.wMonth;
-							trigger_downloaded.wBeginDay                    = downloaded_event_start.wDay;
-							trigger_downloaded.wStartHour                   = downloaded_event_start.wHour;
-							trigger_downloaded.wStartMinute                 = downloaded_event_start.wMinute;
-							trigger_downloaded.Type.Weekly.rgfDaysOfTheWeek = 1 << downloaded_event_start.wDayOfWeek;
+							trigger_downloaded.wBeginYear   = downloaded_event_start.wYear;
+							trigger_downloaded.wBeginMonth  = downloaded_event_start.wMonth;
+							trigger_downloaded.wBeginDay    = downloaded_event_start.wDay;
+							trigger_downloaded.wStartHour   = downloaded_event_start.wHour;
+							trigger_downloaded.wStartMinute = downloaded_event_start.wMinute;
 						} break;
 
 						case GR_TAG_EVENT_TYPE: {
 							fread(&trigger_downloaded.TriggerType, sizeof(int), 1, f);
 							switch(trigger_downloaded.TriggerType) {
 								case TASK_TIME_TRIGGER_WEEKLY: trigger_downloaded.Type.Weekly.WeeksInterval = 1;break;
-								case TASK_TIME_TRIGGER_DAILY: trigger_downloaded.Type.Daily.DaysInterval = 1; break;
+								case TASK_TIME_TRIGGER_DAILY : trigger_downloaded.Type.Daily.DaysInterval = 1; break;
 							}
 						} break;
 
@@ -302,6 +301,9 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 						} break;
 					}
 				}
+
+				if (trigger_downloaded.TriggerType == TASK_TIME_TRIGGER_WEEKLY)
+					trigger_downloaded.Type.Weekly.rgfDaysOfTheWeek = 1 << downloaded_event_start.wDayOfWeek;
 			}
 
 			fclose(f);
@@ -323,34 +325,44 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 					}
 
 				if (server_version == game_version) {
-					FILETIME time_scheduled_ft = {0};
-					SystemTimeToFileTime(&time_scheduled,&time_scheduled_ft);
+					SYSTEMTIME now = {0};
+					GetLocalTime(&now);
+					now.wSecond = 0;
+					now.wMilliseconds = 0;
+
+					FILETIME now_ft;
+					SystemTimeToFileTime(&now, &now_ft);
 
 					FILETIME downloaded_event_start_ft = {0};
 					SystemTimeToFileTime(&downloaded_event_start,&downloaded_event_start_ft);
-					LONG event_start = CompareFileTime(&downloaded_event_start_ft, &time_scheduled_ft);
+					LONG event_start = CompareFileTime(&downloaded_event_start_ft, &now_ft);
 
 					enum COMPARE_FILE_TIME_RESULT {
-						PAST   = -1,
-						SAME   = 0,
-						FUTURE = 1
+						PAST    = -1,
+						PRESENT = 0,
+						FUTURE  = 1
 					};
 
-					if (event_start == SAME) {
+					if (event_start == PRESENT) {
 						launch_game = true;
 					} else {
 						task_update = 
-								local.trigger.TriggerType != TASK_TIME_TRIGGER_ONCE || 
-								(local.trigger.TriggerType == TASK_TIME_TRIGGER_ONCE && event_start == FUTURE);
+								memcmp(&local.trigger, &trigger_downloaded, sizeof(TASK_TRIGGER)) != 0 && 
+								(
+									local.trigger.TriggerType != TASK_TIME_TRIGGER_ONCE || 
+									(local.trigger.TriggerType == TASK_TIME_TRIGGER_ONCE && event_start == FUTURE)
+								);
 
 						if (event_start == PAST) {
 							FILETIME downloaded_event_end_ft = {0};
 							SystemTimeToFileTime(&downloaded_event_end,&downloaded_event_end_ft);
-							launch_game = CompareFileTime(&downloaded_event_end_ft, &time_scheduled_ft) == FUTURE;
+							launch_game = CompareFileTime(&downloaded_event_end_ft, &now_ft) == FUTURE;
 						}
 
-						std::wstring description = vacation_mode ? L"Event is on pause until " : L"Event date has changed to ";
-						messages.push_back(description + FormatSystemTime(downloaded_event_start, OPTION_MESSAGEBOX));
+						if (task_update) {
+							std::wstring description = vacation_mode ? L"Event is on pause until " : L"Event date has changed to ";
+							messages.push_back(description + FormatSystemTime(downloaded_event_start, OPTION_MESSAGEBOX));
+						}
 					}
 
 					if (trigger_downloaded.TriggerType != local.trigger.TriggerType) {
@@ -458,7 +470,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 
 			LogMessage(FormatMessageArray(messages));
 
-			UINT flags = MB_OK;
+			UINT flags = MB_SYSTEMMODAL | MB_OK;
 
 			if (launch_game) {
 				flags |= MB_ICONQUESTION | MB_YESNO;
@@ -618,34 +630,34 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 				module_name = L"ijl15.dll";
 			
 			if (!input.skip_memory_arguments) {
-			DWORD result = GetOFPArguments(game.pid, &game_handle, module_name, dedicated_server ? 0x4FF20 : 0x2C154, all_game_arguments);
-			if (result == 0) {
-				std::wstring log_arguments = L"";
-				
-				for (size_t i=0; i<all_game_arguments.size(); i++) {
-					if (
-						!Equals(all_game_arguments[i].substr(0,9),L"-connect=") &&
-						!Equals(all_game_arguments[i].substr(0,6),L"-port=") &&
-						!Equals(all_game_arguments[i].substr(0,10),L"-password=")
-					)
-						log_arguments = log_arguments + all_game_arguments[i] + L" ";	// log params except for the ones that should be hidden
+				DWORD result = GetOFPArguments(game.pid, &game_handle, module_name, dedicated_server ? 0x4FF20 : 0x2C154, all_game_arguments);
+				if (result == 0) {
+					std::wstring log_arguments = L"";
 					
-					if (
-						!Equals(all_game_arguments[i].substr(0,5),L"-mod=") &&
-						!Equals(all_game_arguments[i].substr(0,9),L"-connect=") &&
-						!Equals(all_game_arguments[i].substr(0,6),L"-port=") &&
-						!Equals(all_game_arguments[i].substr(0,10),L"-password=")
-					)
-						filtered_game_arguments += all_game_arguments[i] + L" ";
+					for (size_t i=0; i<all_game_arguments.size(); i++) {
+						if (
+							!Equals(all_game_arguments[i].substr(0,9),L"-connect=") &&
+							!Equals(all_game_arguments[i].substr(0,6),L"-port=") &&
+							!Equals(all_game_arguments[i].substr(0,10),L"-password=")
+						)
+							log_arguments = log_arguments + all_game_arguments[i] + L" ";	// log params except for the ones that should be hidden
+						
+						if (
+							!Equals(all_game_arguments[i].substr(0,5),L"-mod=") &&
+							!Equals(all_game_arguments[i].substr(0,9),L"-connect=") &&
+							!Equals(all_game_arguments[i].substr(0,6),L"-port=") &&
+							!Equals(all_game_arguments[i].substr(0,10),L"-password=")
+						)
+							filtered_game_arguments += all_game_arguments[i] + L" ";
+					}
+					
+					LogMessage(L"Game arguments: " + log_arguments);
+				} else {
+					if (result == ERROR_MOD_NOT_FOUND)
+						LogMessage(L"Couldn't find " + module_name);
+					else
+						LogMessage(L"Can't get module list" + FormatError(GetLastError()));
 				}
-				
-				LogMessage(L"Game arguments: " + log_arguments);
-			} else {
-				if (result == ERROR_MOD_NOT_FOUND)
-					LogMessage(L"Couldn't find " + module_name);
-				else
-					LogMessage(L"Can't get module list" + FormatError(GetLastError()));
-			}
 			}
 			
 			CloseHandle(game_handle);
