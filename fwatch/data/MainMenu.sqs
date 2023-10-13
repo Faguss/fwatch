@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2023,10,12,4,17,23,45,618,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2023,10,13,5,20,17,42,501,120,FALSE]
 	GS_MY_VERSION        = 0.61
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -25,8 +25,11 @@
 	IS_CWA               = _fwatch_version select 1
 	_my_game_version     = _fwatch_version select 4
 	? _fwatch_test_version < 3 : titleText ["New test version of Fwatch 1.16 required.\n\nPlease update your version.\n\nofp-faguss.com/fwatch/116test","PLAIN",1.5]; exit
+
+	? Format ["%1",GS_DOWNLOAD_THREADS] == "scalar bool array string 0xfcffffef" : GS_DOWNLOAD_THREADS=0; GS_SILENT_MODE_THREAD=false
 	
 	? "download" in _this                : goto "DownloadImageThread"
+	? GS_DOWNLOAD_THREADS > 0            : if (!GS_SILENT_MODE_THREAD) then {exit}
 	? MAINMENU_INPUT || ctrlVisible 6900 : exit
 	? ctrlVisible 6657                   : if (!(lbValue[6657,0] in [1,4])) then {LOADMOD_MODSELECTOR=true} else {closeDialog 0}; exit
 
@@ -130,6 +133,7 @@
 	_mod_shortcuts_data  = []
 	_current_shortcut_id = -1
 	_scheduled_events    = []
+	_in_download_thread  = false
     
 	if (!_m_moved && (_mx<_x || _mx>_w || _my<_y || _my>_h)) then {loadFile Format [":mem setcursor %1 %2", _w, _y]; _m_moved=nil}
 	goto "ModLauncher_Display"
@@ -139,16 +143,19 @@
 	
 	; Loop checking mouse cursor position -------------------------------------------------------------------------------
 	#ResetLMB
-	? _silent_mode : exit
+	? _silent_mode : call FUNCTION_EXIT_DOWNLOAD_THREAD; exit
 	_LMBtime = 0
 	_release = false
 	
 	#MainLoop
 	~0.03
-	? !ctrlVisible 6657    : exit
+	? !ctrlVisible 6657 : call FUNCTION_EXIT_DOWNLOAD_THREAD; exit
+	
+	? _in_download_thread : goto "DisableMainMenuButtons"
 	? LOADMOD_MODSELECTOR  : LOADMOD_MODSELECTOR =false; "ctrlShow [_x,false]" forEach _info_window; _lastCur=-1; goto "ModLauncher_Display"
 	? LOADMOD_MASTERSERVER : LOADMOD_MASTERSERVER=false; "ctrlShow [_x,false]" forEach _info_window; _lastCur=1 ; goto "MasterServer"
 	? LOADMOD_SCHEDULE     : LOADMOD_SCHEDULE    =false; goto "Schedule"
+	#DisableMainMenuButtons
 	
 	; If selection changed in the listbox
 	_cur = lbCurSel 6657
@@ -247,7 +254,7 @@
 	? _value == 224 : loadFile ("\:EXE WEBSITE "+([_url,_missing_mods_id,_missing_mods_myversion] call FUNCTION_BUILD_PREVIEW_LINK))
 	? _value == 225 : loadFile ("\:EXE WEBSITE "+([_url,(call "_array=[]; {_array set [count _array, _x select 0]} foreach _server_modfolders; _array"),[]] call FUNCTION_BUILD_PREVIEW_LINK))
 	? _value == 226 : _ok=call loadFile Format ["\:RESTART CLIENT -updateresource=%1",_my_game_version]; if (!(_ok select 0)) then {titleText [_ok select 3, "PLAIN DOWN", 1.5]} else {closeDialog 0; exit}
-	? _value == 227 : closeDialog 0; exit
+	? _value == 227 : call FUNCTION_EXIT_DOWNLOAD_THREAD; closeDialog 0; exit
 	? _value == 228 : _Input= _access_code_mod; _Label="SaveModAccessCode"; _Input_Note=MAINMENU_STR select 90; goto "INPUT"
 	? _value == 229 : _Input= _mod_search_phrase; _Label="SaveModSearchPhrase"; _Input_Note=MAINMENU_STR select 92; goto "INPUT"
 	? _value == 230 : goto "Schedule_ListServerEvents"
@@ -830,8 +837,8 @@
 		? _auto_restart && _voice_name!=""         : if (!(GS_VOICE select (_server_voice select 0) select 1)) then {lbSetValue [6657, lbAdd [6657, Format ["[%1: %2]", _voice_name, (if (_run_voice_program) then {MAINMENU_STR select 43} else {MAINMENU_STR select 44})]], 219]}
 		? _auto_restart && _server_uniqueid!="mod" : lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 31], 206]
 
-		lbSetValue  [6657, lbAdd [6657, ""], -1]
-		lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 85], 227]
+		lbSetValue [6657, lbAdd [6657, ""], -1]
+		lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 85], 227]
 
 		_current_auto_restart = _auto_restart
 		_current_run_voice    = _run_voice_program
@@ -1028,13 +1035,18 @@
 	_extension = loadFile Format ["\:STRING CUT start:-3 text:%1", _url]
 	? _extension!="jpg"  &&  _extension!="paa" &&  _extension!="pac" : exit
 	
+	@GS_DOWNLOAD_THREADS == 0
+	GS_DOWNLOAD_THREADS = GS_DOWNLOAD_THREADS + 1
 	GS_DOWNLOAD_RESULT = []
 	["--tries=1 "+_url, Format["schedule\%1\%2.%3", _img_folder, _record_id, _extension], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 	@count GS_DOWNLOAD_RESULT != 0
 
-	? !(GS_DOWNLOAD_RESULT select 0) : exit
+	? !(GS_DOWNLOAD_RESULT select 0) : goto "DownloadImageThread_End"
 	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1  key:%2write:_extension={%3};_logohash={%4};", _database, _record_id, _extension, _global_hash]
 	? dialog  &&  ctrlText 6462==_record_title  &&  lbCurSel 6657==_cursel : ctrlSetText [6461, Format["..\fwatch\tmp\schedule\%1\%2.%3", _img_folder, _record_id, _extension]]
+	
+	#DownloadImageThread_End
+	GS_DOWNLOAD_THREADS = GS_DOWNLOAD_THREADS - 1
 	exit
 
 
@@ -1072,12 +1084,13 @@
 		call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\restart_info.sqf"
 		? _pid!=-1 : _ok=call loadFile Format ["\:EXE ADDONINSTALL  check %1", _pid]; if (_ok select 0) then {if (_silent_mode) then {_progress=call loadFile "\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\install_progress.sqf"; titleText [_progress, "PLAIN", 0.1]; exit} else {goto "InstallDisplay"}} else {_pid=-1; _install_status=-1; loadFile ":IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  remove:savestate"; loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\install_progress.sqf"}
 	
-	; Silent mode - download only once per game launch
+	; Silent mode - download once in two minutes
 	_now = call loadFile ":info date"
 	? !_silent_mode : goto "DownloadDatabase_SkipSilentCheck"
 	_last_silent_mode = []
+	_was_silent_mode_recently = false
 	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:silentmode"
-	? count _last_silent_mode > 0 : if ([_last_silent_mode,_now,"fraction"] call FLIB_DATEDIFFDAY < 0.0014) then {goto "SilentMode_Display"}
+	? count _last_silent_mode > 0 : if ([_last_silent_mode,_now,"fraction"] call FLIB_DATEDIFFDAY < 0.0014) then {_was_silent_mode_recently=true; goto "SilentMode_Display"}
 	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  key:silentmodewrite:_last_silent_mode=%1;", _now]
 	#DownloadDatabase_SkipSilentCheck
 	
@@ -1102,9 +1115,15 @@
 	? _saved_version < GS_MY_VERSION : 	loadFile "\:IGSE NEW  mode:delete  file:..\fwatch\tmp\schedule\schedule.bin"
 	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\schedule.bin  read:generalread:hash"
 
+	@GS_DOWNLOAD_THREADS == 0
+	GS_DOWNLOAD_THREADS = GS_DOWNLOAD_THREADS + 1
+	_in_download_thread = true
+	? _silent_mode : GS_SILENT_MODE_THREAD=true;
+	
 	_i          = 0
 	_downloaded = 0
 	_mirror     = 0
+	_all_ok     = false
 
 		#DownloadDatabase_ForEachURL
 		_url = (GS_DEFAULT_URL select _i) select _mirror
@@ -1119,16 +1138,16 @@
 
 		? !_silent_mode : (MAINMENU_STR select 14) call FUNCTION_MSG_LB
 		GS_DOWNLOAD_RESULT = []
-		[Format ["--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 https://ofp-faguss.com/schedule/sqf.php?mode=mods_v2_last_modified",_mode,CURRENT_LANGUAGE,_now select 8], Format["schedule\dl_%1.sqf",_mode], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+		[Format ["--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 %1?mode=mods_v2_last_modified",_url,_mode,CURRENT_LANGUAGE,_now select 8], Format["schedule\dl_%1.sqf",_mode], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
-		? !(GS_DOWNLOAD_RESULT select 0) : if (_mirror < count (GS_DEFAULT_URL select _i)-1) then {_mirror=_mirror+1; goto "DownloadDatabase_ForEachURL"} else {goto "DownloadDatabase_Done"}
+		? !(GS_DOWNLOAD_RESULT select 0) : if (!_silent_mode) then {lbAdd [6657, GS_DOWNLOAD_RESULT select 3]}; if (_mirror < count (GS_DEFAULT_URL select _i)-1) then {_mirror=_mirror+1; goto "DownloadDatabase_ForEachURL"} else {goto "DownloadDatabase_Read"}
 		_result = call loadFile Format["..\fwatch\tmp\schedule\dl_%1.sqf",_mode]
 		? Format ["%1",_result] != "true" : goto "DownloadDatabase_Full"
 
-		if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="scalar") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0; if (_update_available) then {goto "DownloadDatabase_Done"}}
+		if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="scalar") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0; if (_update_available) then {_all_ok=true; goto "DownloadDatabase_Done"}}
 		? GS_VERSION != GS_MY_VERSION : [MAINMENU_STR select 20,""] call FUNCTION_DOWNLOAD_INFO; goto "ResetLMB"
 		
-		if (GS_LAST_MODIFIED==_last_modified && _saved_modhash==FWATCH_MODLISTHASH) then {goto "DownloadDatabase_Done"}
+		if (GS_LAST_MODIFIED==_last_modified && _saved_modhash==FWATCH_MODLISTHASH) then {_all_ok=true; goto "DownloadDatabase_Done"}
 		
 		; Download full info
 		#DownloadDatabase_Full
@@ -1136,9 +1155,9 @@
 		
 		? !_silent_mode : (MAINMENU_STR select 16) call FUNCTION_MSG_LB
 		GS_DOWNLOAD_RESULT = []
-		[Format ["--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 https://ofp-faguss.com/schedule/sqf.php?mode=%1_v2&server=current&language=%2&timeoffset=%3",_mode,CURRENT_LANGUAGE,_now select 8]+(["allusermods"] call FUNCTION_BUILD_QUERY_STRING), Format["schedule\dl_%1.db",_mode], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+		[Format ["--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 %1?mode=%2_v2&server=current&language=%3&timeoffset=%4",_url,_mode,CURRENT_LANGUAGE,_now select 8]+(["allusermods"] call FUNCTION_BUILD_QUERY_STRING), Format["schedule\dl_%1.db",_mode], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
-		? !(GS_DOWNLOAD_RESULT select 0) : if (_mirror < count (GS_DEFAULT_URL select _i)-1) then {_mirror=_mirror+1; goto "DownloadDatabase_ForEachURL"} else {goto "DownloadDatabase_Done"}
+		? !(GS_DOWNLOAD_RESULT select 0) : if (!_silent_mode) then {lbAdd [6657, GS_DOWNLOAD_RESULT select 3]}; if (_mirror < count (GS_DEFAULT_URL select _i)-1) then {_mirror=_mirror+1; goto "DownloadDatabase_ForEachURL"} else {goto "DownloadDatabase_Read"}
 		? _mode == "schedule" : GS_SCHEDULE_DOWNLOAD_TIME=time+10
 
 		? !_silent_mode : (MAINMENU_STR select 17) call FUNCTION_MSG_LB
@@ -1159,6 +1178,9 @@
 		? _i < count GS_DEFAULT_URL-1 : _i=_i+1; _mirror=0; goto "DownloadDatabase_ForEachURL"
 		
 	#DownloadDatabase_Done
+	call FUNCTION_EXIT_DOWNLOAD_THREAD
+	
+	? !_all_ok : goto "ResetLMB"
 	? _update_available : if (_silent_mode) then {titleText [MAINMENU_STR select 86,"PLAIN DOWN",1]; exit} else {goto "DisplayUpdateInformation"}
 	? _silent_mode : goto "SilentMode_Display"
 	
@@ -1192,6 +1214,6 @@
 	_mod_update_count = 0
 	call loadFile Format ["\:IGSE DB file:..\fwatch\tmp\schedule\dl_%1.db read:modupdatecountread:playercount", _mode]
 	
-	? _mode == "mods" : if (_mod_update_count>0) then {titleText [Format [MAINMENU_STR select 87, _mod_update_count], "PLAIN DOWN", 0.2]}; _mode="schedule"; goto "DownloadDatabase_SkipSilentCheck"
+	? _mode == "mods" : if (_mod_update_count>0) then {titleText [Format [MAINMENU_STR select 87, _mod_update_count], "PLAIN DOWN", 0.2]}; _mode="schedule"; if (!_was_silent_mode_recently) then {goto "DownloadDatabase_SkipSilentCheck"}
 	? _mode == "schedule" : if (_player_count>0) then {cutText [Format ["\n%1 %2", localize "STR_DISP_MP_PLAYERS", _player_count], "PLAIN DOWN", 0.2]}
 	

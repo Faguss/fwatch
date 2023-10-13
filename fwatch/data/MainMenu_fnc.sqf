@@ -513,7 +513,8 @@ FUNCTION_DOWNLOAD_INFO = {
 			ctrlSetText [6463, Format [MAINMENU_STR select 75, GS_VERSION, GS_MY_VERSION]];
 		};
 		
-		lbSetValue [6657, lbAdd [6657,MAINMENU_STR select 64], 223];
+		lbAdd [6657, ""];
+		lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 85], 227]
 	}
 };
 
@@ -539,8 +540,10 @@ FUNCTION_READ_DOWNLOADED_FILE = {
 			_error_title     = MAINMENU_STR select 18;
 			_error_message   = if (!(_ok select 0)) then {_ok select 3} else {"Missing general key"};
 			_file_to_display = "";
+		} else {
+			_all_ok = true;
 		};
-	};	
+	};
 	
 	// Display error
 	if (_error) then {
@@ -548,18 +551,22 @@ FUNCTION_READ_DOWNLOADED_FILE = {
 			if ((GS_DOWNLOAD_RESULT select 2) in [5,186]) then {
 				GS_DOWNLOAD_RESULT set [3, (GS_DOWNLOAD_RESULT select 3)+"\n\nCheck if firewall or antivirus aren't blocking\n\nGo to fwatch.exe properties and set it to run as an administrator"];
 			};
-			
+
 			[_error_title, GS_DOWNLOAD_RESULT select 3] call FUNCTION_DOWNLOAD_INFO;
 			goto "ResetLMB";
 		} else {
 			// Download from the next mirror
-			if (_mirror<count (_all_url select _i)-1) then {
+			if (_mirror<count (GS_DEFAULT_URL select _i)-1) then {
 				if (!_silent_mode) then {lbSetValue [6657, lbAdd [6657,"["+_error_title+"]"], 0]};
 				_mirror = _mirror + 1;
 				goto _continue;
 			} else {
 				// No more mirrors
-				[_error_title,(GS_DOWNLOAD_RESULT select 3)+"\n\n"+(loadFile Format ["\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\%1",_file_to_display])] call FUNCTION_DOWNLOAD_INFO;
+				if (_file_to_display != "") then {
+					_error_message = loadFile Format ["\:IGSE LOAD  mode:execute  file:..\fwatch\tmp\schedule\%1",_file_to_display];
+				};
+				
+				[_error_title,(GS_DOWNLOAD_RESULT select 3)+"\n\n"+_error_message] call FUNCTION_DOWNLOAD_INFO;
 				goto "ResetLMB";
 			};		
 		};
@@ -649,7 +656,7 @@ FUNCTION_STRINGTABLE = {
 			"[Do³¹cz]",		//27
 			"[Œci¹gnij wymagane mody %1]",		//28
 			"[Poka¿ zmiany w modach]",		//29
-			"[WejdŸ na stronê serwera]",		//30
+			"[OdwiedŸ stronê]",		//30
 			"[Dodatkowe opcje uruchamiania]",		//31
 			"[Cofnij]",		//32
 			"[Uruchom %1]",		//33
@@ -1193,4 +1200,14 @@ FUNCTION_LIST_EVENTS_FOR_AUTO_CONNECTION = {
 	};
 	
 	_i = _i + 1;
+};
+
+
+
+FUNCTION_EXIT_DOWNLOAD_THREAD = {
+	if (_in_download_thread) then {
+		_in_download_thread = false;
+		if (_silent_mode) then {GS_SILENT_MODE_THREAD=false};
+		GS_DOWNLOAD_THREADS = GS_DOWNLOAD_THREADS - 1;
+	}
 };
