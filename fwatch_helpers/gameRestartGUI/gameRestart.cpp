@@ -919,6 +919,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		download_mirrors.push_back(L"http://faguss.paradoxstudio.uk/fwatch/download/fwatch_self_update.7z");
 		
 		for (size_t i=0; i<download_mirrors.size(); i++) {
+			DeleteFile(L"fwatch_self_update.7z");
 			result = Download(download_mirrors[i]);
 			
 			if (result != ERROR_SUCCESS && i == download_mirrors.size()-1) {
@@ -959,8 +960,10 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 			
 			result = Unpack(global.downloaded_filename, L"fwatch");
 			
-			if (result == ERROR_SUCCESS)
+			if (result == ERROR_SUCCESS) {
+				DeleteFile(global.downloaded_filename.c_str());
 				break;
+			}
 			
 			if (result != ERROR_SUCCESS && i==download_mirrors.size()-1) {
 				LogMessage(L"Unpacking failed", OPTION_CLOSELOG);
@@ -1048,6 +1051,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		download_mirrors2.push_back(L"http://faguss.paradoxstudio.uk/fwatch/download/ofp_aspect_ratio207.7z");
 		
 		for (size_t i=0; i<download_mirrors2.size(); i++) {
+			DeleteFile(L"ofp_aspect_ratio207.7z");
 			result = Download(download_mirrors2[i]);
 			if (result == ERROR_SUCCESS)
 				break;
