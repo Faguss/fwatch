@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2023,10,20,5,23,21,8,548,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2023,10,22,0,23,36,37,538,120,FALSE]
 	GS_MY_VERSION        = 0.61
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -166,8 +166,8 @@
 		_value   = lbValue [6657, _cur]
 		_lastCur = _cur
 		
-		? _value in [2,3,12,13] : [_data, "local"] call FUNCTION_SHOW_MOD_INFO
-		? _value == 6           : [_data, "global"] call FUNCTION_SHOW_MOD_INFO
+		? _value in [2,3,12,13] : [_data, "local", _my_game_version] call FUNCTION_SHOW_MOD_INFO
+		? _value == 6           : [_data, "global", _my_game_version] call FUNCTION_SHOW_MOD_INFO
 		? _value == 15          : goto "ModLauncher_Shortcut_Preview"
 		? _value == 201         : if (ctrlVisible 6463) then {goto "DisplayServerStatus"} else {goto "DisplayServer"}
 		#SkipSelectionCheck
@@ -368,19 +368,19 @@
     _server_uniqueid   = "mod"
 	call loadFile "\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  read:modsearch"
 	
-	_missing_mods_id            = []
-	_missing_mods_name          = []
-	_missing_mods_assign        = []
-	_missing_mods_version       = []
-	_missing_mods_myversion     = []
-	_missing_mods_forcename     = []
-	_missing_mods_sizearray     = [0,0,0]
-	_missing_mods_size          = ""
+	_missing_mods_id        = []
+	_missing_mods_name      = []
+	_missing_mods_assign    = []
+	_missing_mods_version   = []
+	_missing_mods_myversion = []
+	_missing_mods_forcename = []
+	_missing_mods_sizearray = [0,0,0]
+	_missing_mods_size      = ""
 
 	#DownloadMods_ShowOptions
 	lbClear 6657
 	lbSetCurSel [6657, -1]
-	[MAINMENU_STR select 32, 5, _color_gingerbrown] call FUNCTION_LBADD
+	[MAINMENU_STR select 32, 5,   _color_gingerbrown] call FUNCTION_LBADD
 	[MAINMENU_STR select 91, 229, _color_gingerbrown] call FUNCTION_LBADD
 	[MAINMENU_STR select 89, 228, _color_gingerbrown] call FUNCTION_LBADD
 	"ctrlShow [_x,false]" forEach [6460, 6463]

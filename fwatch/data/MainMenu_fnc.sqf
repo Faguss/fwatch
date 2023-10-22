@@ -739,7 +739,8 @@ FUNCTION_STRINGTABLE = {
 			"Nazwa skrуtu",		//110
 			"Wybierz mody dla skrуtu",		//111
 			"[Wstrzymaj]",		//112
-			"Opcjonalnie wpisz dodatkowe parametry uruchamiania gry"		//113
+			"Opcjonalnie wpisz dodatkowe parametry uruchamiania gry",		//113
+			"Wersja gry:" 		//114
 		];
 	};
 
@@ -858,7 +859,8 @@ FUNCTION_STRINGTABLE = {
 			"сокращенное имя",		//110
 			"выбрать моды для ярлыка",		//111
 			"[Пауза]",		//112
-			"Введите дополнительные параметры запуска"		//113
+			"Введите дополнительные параметры запуска",		//113
+			"Версия игры:" 		//114
 		];
 	};
 
@@ -977,7 +979,8 @@ FUNCTION_STRINGTABLE = {
 			"Shortcut name",		//110
 			"Select mods for the shortcut",		//111
 			"[Pause]",		//112
-			"Optionally type in extra game startup parameters"		//113
+			"Optionally type in extra game startup parameters",		//113
+			"Game ver:" 		//114
 		];
 	};
 	
@@ -1025,12 +1028,14 @@ FUNCTION_LBADD = {
 
 
 FUNCTION_SHOW_MOD_INFO = {
-	private ["_ok", "_mod_id", "_source", "_description", "_index_local"];
+	private ["_ok", "_mod_id", "_source", "_my_game_version", "_description", "_index_local"];
 	_mod_id          = _this select 0;
 	_source          = _this select 1;
+	_my_game_version = _this select 2;
 	_mod_name        = "";
 	_mod_type        = 0;
 	_mod_version     = 0;
+	_mod_req_version = 0;
 	_mod_forcename   = false;
 	_mod_size        = "";
 	_mod_sizearray   = [0,0,0];
@@ -1064,6 +1069,10 @@ FUNCTION_SHOW_MOD_INFO = {
 		
 		[6550, _mod_description] call FUNCTION_CTRLSETTEXT;
 		ctrlSetText [6550, MAINMENU_STR select 96];
+		
+		{ctrlSetText [_x, MAINMENU_STR select 114]} forEach [6500, 6502];
+		[6500, Format ["%1",_mod_req_version]] call FUNCTION_CTRLSETTEXT;
+		[6502, _my_game_version < _mod_req_version] call FUNCTION_SHOW_RED_TEXT;
 		
 		[6540, (call loadFile Format ["\:STRING DOMAIN url:%1", _mod_website]) select 3] call FUNCTION_CTRLSETTEXT;
 		

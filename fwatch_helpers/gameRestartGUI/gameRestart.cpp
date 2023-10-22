@@ -961,7 +961,10 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 			result = Unpack(global.downloaded_filename, L"fwatch");
 			
 			if (result == ERROR_SUCCESS) {
-				DeleteFile(global.downloaded_filename.c_str());
+				if (!DeleteFile(global.downloaded_filename.c_str())) {
+					DWORD error = GetLastError();
+					LogMessage(L"Failed to delete file " + global.downloaded_filename + L" - " + Int2StrW(error) + L" - " + FormatError(error));
+				}
 				break;
 			}
 			
