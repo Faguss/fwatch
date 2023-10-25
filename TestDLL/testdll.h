@@ -656,6 +656,7 @@ int  DeleteWrapper(char *refcstrRootDirectory);
 void             createPathSqf(LPCSTR lpFileName, size_t len, int offset);
 void             db_pid_save(WatchProgramInfo input);
 WatchProgramInfo db_pid_load(int db_id_wanted);
+void             FindCustomFaceTexture(const char *input_path, char *custom_filename, DWORD *bytes_biggest_file);
 
 // math
 double             rad2deg(double num);

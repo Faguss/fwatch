@@ -3025,3 +3025,34 @@ void QWritesq(String input) {
 	
 	QWrites(input);
 }
+
+
+
+
+void FindCustomFaceTexture(const char *input_path, char *custom_filename, DWORD *bytes_biggest_file)
+{
+	WIN32_FIND_DATA fd;
+	HANDLE hFind         = INVALID_HANDLE_VALUE;
+	char extensions[][4] = {"paa", "jpg"};
+	
+	for (int i=0; i<sizeof(extensions)/sizeof(extensions[0]); i++) {
+		char path_to_face[256] = "";
+		sprintf(path_to_face, "%s\\face.%s", input_path, extensions[i]);
+
+		HANDLE hFind = FindFirstFile(path_to_face, &fd);
+		if (hFind != INVALID_HANDLE_VALUE) {
+			if (fd.nFileSizeLow > *bytes_biggest_file && fd.nFileSizeLow <= 102400) {
+
+				if (strncmpi(path_to_face, "Users", 5) == 0)
+					sprintf(custom_filename, "face.%s", extensions[i]);
+				else
+					strncpy(custom_filename, path_to_face, 255);
+
+				*bytes_biggest_file = fd.nFileSizeLow;
+				break;
+			}
+
+			FindClose(hFind);
+		}
+	}
+}

@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2023,10,22,0,23,36,37,538,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2023,10,25,3,20,38,5,91,120,FALSE]
 	GS_MY_VERSION        = 0.61
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -286,10 +286,7 @@
 	FWATCH_MODLIST     = []
 	FWATCH_MODLISTID   = []
 	FWATCH_MODLISTCFG  = []
-	FWATCH_CUSTOMFILE  = "";
-	FWATCH_CUSTOMSIZE  = [];
 	FWATCH_MODLISTHASH = "";
-	FWATCH_USERNAME    = "";
 	FWATCH_CURRMOD     = call loadFile ":mem modlist"
 	call FUNCTION_REFRESH_MODLIST
 	
@@ -624,19 +621,18 @@
 
 	_domain        = call loadFile Format ["\:STRING DOMAIN url:%1", _server_website]
 	_versionString = if (_server_version == 0) then {""} else {Format ["%1",_server_version]}
+	_voice_name    = if (count _server_voice > 0) then {(GS_VOICE select (_server_voice select 0)) select 0} else {""}
 	_too_big       = false
-
-	_voice_name = if (count _server_voice > 0) then {(GS_VOICE select (_server_voice select 0)) select 0} else {""}
 
 	"ctrlShow [_x,true]" forEach _info_window
 	ctrlShow [6463, false]
 
 	["logo_server", "scheduleserverlogo.bin", _server_logo, _server_uniqueid, _server_logohash, _server_name, lbCurSel 6657] call FUNCTION_DISPLAY_LOGO
-
+	
 	ctrlSetText [6462, (if (_server_name!="") then {_server_name} else {_server_uniqueid})]
 	[6470, _versionString                                      ] call FUNCTION_CTRLSETTEXT
 	[6480, [_server_modfolders, "\n"] call FUNCTION_MODS2STRING] call FUNCTION_CTRLSETTEXT
-	[6490, _server_maxcustomfilesize call FUNCTION_CUSTOM_SIZE ] call FUNCTION_CTRLSETTEXT
+	[6490, call FUNCTION_CUSTOM_SIZE                           ] call FUNCTION_CTRLSETTEXT
 	[6510, _voice_name                                         ] call FUNCTION_CTRLSETTEXT
 	[6520, [_server_languages, ", "] call FUNCTION_ARRAY2STRING] call FUNCTION_CTRLSETTEXT
 	[6530, _server_location                                    ] call FUNCTION_CTRLSETTEXT
@@ -1152,6 +1148,7 @@
 		; Download full info
 		#DownloadDatabase_Full
 		? _mode=="schedule" && Format["%1",GS_SCHEDULE_DOWNLOAD_TIME]!="scalar bool array string 0xfcffffef" : if (time<GS_SCHEDULE_DOWNLOAD_TIME) then {goto "DownloadDatabase_Read"}
+		? _mode=="schedule" : GS_CUSTOM_FILE_CACHE=[]
 		
 		? !_silent_mode : (MAINMENU_STR select 16) call FUNCTION_MSG_LB
 		GS_DOWNLOAD_RESULT = []

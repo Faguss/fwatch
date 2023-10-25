@@ -444,28 +444,43 @@ FUNCTION_FORMAT_FILESIZE = {
 
 
 FUNCTION_CUSTOM_SIZE = {
-	private ["_text", "_server_limit"];
-	_text = "";
+	private ["_output_text", "_custom_file_info", "_biggest_file_name", "_biggest_file_size", "_server_limit"];
+	_output_text = "";
 	
-	if (count _server_maxcustomfilesize > 0) then {
-		_too_big = (((FWATCH_CUSTOMSIZE select 2) * 1024 * 1024) + ((FWATCH_CUSTOMSIZE select 1) * 1024) + (FWATCH_CUSTOMSIZE select 0)) > (((_server_maxcustomfilesize select 2) * 1024 * 1024) + ((_server_maxcustomfilesize select 1) * 1024) + (_server_maxcustomfilesize select 0));
+	if (count _server_maxcustomfilesize > 0) then {	
+		{
+			if ((_x select 0) == _server_uniqueid) then {
+				_output_text = _x select 1;
+				_too_big     = _x select 2;
+			}
+		} forEach GS_CUSTOM_FILE_CACHE;
 		
-		_server_limit =
-		if ("_x>0" count _server_maxcustomfilesize > 0) then {
-			_server_maxcustomfilesize call FUNCTION_FORMAT_FILESIZE
-		} else {
-			MAINMENU_STR select 62
-		};
-	
-		_text = 	
-		if (_too_big) then {
-			Format ["%1 - %2 (%3)", _server_limit, FWATCH_CUSTOMFILE, FWATCH_CUSTOMSIZE call FUNCTION_FORMAT_FILESIZE]
-		} else {
-			_server_limit
-		};
+		if (_output_text == "") then {
+			_custom_file_info  = call loadFile Format ["\:FILE CUSTOMCOUNTSIZE ""%1"" %2" , [_server_modfolders,";"] call FUNCTION_MODS2STRING, _server_maxcustombytes];
+			_too_big           = !(_custom_file_info select 4);
+			_biggest_file_name = _custom_file_info select 5;
+			_biggest_file_size = _custom_file_info select 6;
+			FWATCH_USERNAME    = _custom_file_info select 7;
+		
+			_server_limit =
+			if ("_x>0" count _server_maxcustomfilesize > 0) then {
+				_server_maxcustomfilesize call FUNCTION_FORMAT_FILESIZE
+			} else {
+				MAINMENU_STR select 62
+			};
+		
+			_output_text = 	
+			if (_too_big) then {
+				Format ["%1 < %2 (%3)", _server_limit, _biggest_file_name, _biggest_file_size call FUNCTION_FORMAT_FILESIZE]
+			} else {
+				_server_limit
+			};
+			
+			GS_CUSTOM_FILE_CACHE set [count GS_CUSTOM_FILE_CACHE, [_server_uniqueid, _output_text, _too_big]];
+		}
 	};
 	
-	_text
+	_output_text
 };
 
 
@@ -485,10 +500,7 @@ FUNCTION_REFRESH_MODLIST = {
 		FWATCH_MODLIST      = _ok select 4; 
 		FWATCH_MODLISTID    = _ok select 5;
 		FWATCH_MODLISTCFG   = _ok select 6; 
-		FWATCH_CUSTOMFILE   = _ok select 7; 
-		FWATCH_CUSTOMSIZE   = _ok select 8; 
-		FWATCH_MODLISTHASH  = _ok select 9;
-		FWATCH_USERNAME     = _ok select 10;
+		FWATCH_MODLISTHASH  = _ok select 7;
 	} else {
 		titleText [((MAINMENU_STR select 63)+(_ok select 3)),"PLAIN DOWN",0.1]
 	}

@@ -295,22 +295,6 @@ break;
 case C_FILE_MODLIST:		
 { // Return list of modfolders in the game folder
 
-	int base		  = 0;
-	int pointer       = 0;
-	char username[30] = "";
-
-	switch(global_exe_version[global.exe_index]) {
-		case VER_196 : base=0x7DD184; break;
-		case VER_199 : base=0x7CC144; break;
-		case VER_201 : base=global.exe_address+0x714C10; break;
-	}
-
-	if (base) {
-		ReadProcessMemory(phandle, (LPVOID)base,		  &pointer,  4, &stBytes);
-		ReadProcessMemory(phandle, (LPVOID)(pointer+0x8), &username, 30, &stBytes);
-	}
-
-
 	WIN32_FIND_DATA fd;
 	HANDLE hFind = INVALID_HANDLE_VALUE;
 	hFind		 = FindFirstFile("*", &fd);
@@ -408,92 +392,19 @@ case C_FILE_MODLIST:
 		} while (FindNextFile(hFind, &fd));
 		FindClose(hFind);
 
-		double bytes              = 0;
-		char custom_filename[256] = "";
-		char path_to_user[256]    = "";
-
-		// Check if profile is using a custom face
-		sprintf(path_to_user, "Users\\%s\\UserInfo.cfg", username);
-		FILE *f = fopen(path_to_user,"r");
-
-		if (f) {
-			fseek(f, 0, SEEK_END);
-			int fsize = ftell(f);
-			fseek(f, 0, SEEK_SET);
-
-			char *settings	 = new char[fsize+1];
-			int result		 = fread(settings, 1, fsize, f);
-			settings[result] = '\0';
-
-			// Check custom face file size
-			if (strstr(settings, "face=\"Custom\"")) {
-				sprintf(path_to_user, "Users\\%s\\face.paa", username);
-
-				hFind = FindFirstFile(path_to_user, &fd);
-
-				if (hFind != INVALID_HANDLE_VALUE) {
-					if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 102400) {
-						strncpy(custom_filename, fd.cFileName, 255);
-						bytes = fd.nFileSizeLow;
-					}
-
-					FindClose(hFind);
-				} else {
-					sprintf(path_to_user, "Users\\%s\\face.jpg", username);
-					hFind = FindFirstFile(path_to_user, &fd);
-
-					if (hFind != INVALID_HANDLE_VALUE)
-						if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 102400) {
-							strncpy(custom_filename, fd.cFileName, 255);
-							bytes = fd.nFileSizeLow;
-						}
-
-					FindClose(hFind);
-				}
-			}
-
-			delete[] settings;
-			fclose(f);
-		}
-
-
-		// Check custom sounds file sizes
-		sprintf(path_to_user, "Users\\%s\\sound\\*.*", username);
-		hFind = FindFirstFile(path_to_user, &fd);
-
-		if (hFind != INVALID_HANDLE_VALUE) {
-			do {
-				if (fd.cFileName[0] == '.')
-					continue;
-
-				if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-					continue;
-
-				if (fd.nFileSizeLow > bytes && fd.nFileSizeLow <= 51200) {
-					bytes = fd.nFileSizeLow;
-					strncpy(custom_filename, fd.cFileName, 255);
-				}
-			} while (FindNextFile(hFind, &fd) != 0);
-			FindClose(hFind);
-		}
-
-		
 		// Output result
-		QWrite_err(FWERROR_NONE, 0);
-		QWritef("[%s],[%s],[%s],\"%s", ModNames.text, ModID.text, ModCfg.text, custom_filename);
-
-		FileSize size = DivideBytes(bytes);
-
 		unsigned int hash = FNV_BASIS;
 		hash              = fnv1a_hash(hash, ModCfg.text, ModCfg.length, OPTION_NONE);
 
-		QWritef("\",[%f,%f,%f],\"%u\",\"%s\"]", size.bytes, size.kilobytes, size.megabytes, hash, username);
+		QWrite_err(FWERROR_NONE, 0);
+		QWritef("[%s],[%s],[%s],\"%u\"]", ModNames.text, ModID.text, ModCfg.text, hash);
+
 		StringDynamic_end(ModNames);
 		StringDynamic_end(ModID);
 		StringDynamic_end(ModCfg);
 	} else {
-		QWrite_err(FWERROR_WINAPI, 2, GetLastError(), username);
-		QWrite("[],[]]"); 
+		QWrite_err(FWERROR_WINAPI, 1, GetLastError());
+		QWrite("[],[],[],\"\"]"); 
 		return;
 	}
 }
@@ -648,5 +559,116 @@ case C_FILE_PBO:
 	}
 	
 	StringDynamic_end(buf_filename);
+}
+break;
+
+
+
+
+
+
+case C_FILE_CUSTOMCOUNTSIZE:
+{
+	if (argument_num < 4) {
+		QWrite_err(FWERROR_PARAM_FEW, 2, argument_num, 4);
+		QWrite("false,\"\",[0,0,0],\"\"]");
+		break;
+	}
+
+	String_trim_quotes(argument[2]);
+	DWORD server_max_custom_size = strtoul(argument[3].text, NULL, 0);
+
+	// Read current player's name
+	int base		  = 0;
+	int pointer       = 0;
+	char username[30] = "";
+
+	switch(global_exe_version[global.exe_index]) {
+		case VER_196 : base=0x7DD184; break;
+		case VER_199 : base=0x7CC144; break;
+		case VER_201 : base=global.exe_address+0x714C10; break;
+	}
+
+	if (base) {
+		ReadProcessMemory(phandle, (LPVOID)base,		  &pointer,  4, &stBytes);
+		ReadProcessMemory(phandle, (LPVOID)(pointer+0x8), &username, 30, &stBytes);
+	}
+
+	DWORD bytes_biggest_file  = 0;
+	char custom_filename[256] = "";
+	char path_to_user[256]    = "";
+	bool is_custom_face       = false;
+
+
+	// Check if profile is using a custom face
+	sprintf(path_to_user, "Users\\%s\\UserInfo.cfg", username);
+	FILE *f = fopen(path_to_user,"r");
+
+	if (f) {
+		fseek(f, 0, SEEK_END);
+		int fsize = ftell(f);
+		fseek(f, 0, SEEK_SET);
+
+		char *settings	 = new char[fsize+1];
+		int result		 = fread(settings, 1, fsize, f);
+		settings[result] = '\0';
+		is_custom_face   = strstr(settings, "face=\"Custom\"") != NULL;
+
+		delete[] settings;
+		fclose(f);
+	}
+
+
+	// Search for custom faces in modfolders and in the user folder
+	if (is_custom_face) {
+		
+		String mod;
+		size_t pos = 0;
+
+		while ((mod = String_tokenize(argument[2], ";", pos, OPTION_NONE)).length > 0) {
+			FindCustomFaceTexture(mod.text, &custom_filename[0], &bytes_biggest_file);
+		}
+
+		if (bytes_biggest_file == 0) {
+			sprintf(path_to_user, "Users\\%s", username);
+			FindCustomFaceTexture(path_to_user, &custom_filename[0], &bytes_biggest_file);			
+		}
+	}
+
+
+	// Check custom sounds file sizes
+	WIN32_FIND_DATA fd;
+	sprintf(path_to_user, "Users\\%s\\sound\\*.*", username);
+	HANDLE hFind = FindFirstFile(path_to_user, &fd);
+
+	if (hFind != INVALID_HANDLE_VALUE) {
+		do {
+			if (fd.cFileName[0] == '.')
+				continue;
+
+			if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+				continue;
+
+			if (fd.nFileSizeLow > bytes_biggest_file && fd.nFileSizeLow <= 51200) {
+				bytes_biggest_file = fd.nFileSizeLow;
+				strncpy(custom_filename, fd.cFileName, 255);
+			}
+		} while (FindNextFile(hFind, &fd) != 0);
+		FindClose(hFind);
+	}
+
+	
+	// Output result
+	FileSize size = DivideBytes(bytes_biggest_file);
+
+	QWrite_err(FWERROR_NONE, 0);
+	QWritef("%s,\"%s\",[%f,%f,%f],\"%s\"]", 
+		getBool(bytes_biggest_file<=server_max_custom_size), 
+		custom_filename, 
+		size.bytes, 
+		size.kilobytes, 
+		size.megabytes,
+		username
+	);
 }
 break;
