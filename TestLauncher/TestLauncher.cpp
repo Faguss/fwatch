@@ -1064,7 +1064,7 @@ void CustomFilesReturn()
 // While the game is running access its memory, move mission files, handle signals from dll
 void FwatchPresence(ThreadArguments *arg)
 {
-	HANDLE phandle;
+	HANDLE phandle      = INVALID_HANDLE_VALUE;
 	SIZE_T stBytes      = 0;
 	DWORD game_pid      = 0;
 	DWORD game_pid_last = 0;
@@ -1187,122 +1187,154 @@ void FwatchPresence(ThreadArguments *arg)
 		Sleep(250);
 
 		// Search for the game window
-		HWND hwnd = NULL;
-		hwnd      = GetTopWindow(hwnd);
-		game_pid  = 0;
+		if (game_pid == 0) {
+			HWND hwnd = NULL;
+			hwnd      = GetTopWindow(hwnd);
 
-		while (hwnd && game_pid==0) {
-			char current_window_name[32] = "";
-			GetWindowText(hwnd, current_window_name, 32);
+			while (hwnd && game_pid==0) {
+				char current_window_name[32] = "";
+				GetWindowText(hwnd, current_window_name, 32);
 
-			for (int i=0; i<global_window_num && game_pid==0; i++) {
-				if (strcmp(current_window_name, global_window_name[i]) == 0) {
-					DWORD pid = 0;
-					GetWindowThreadProcessId(hwnd, &pid);
-					HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
+				for (int i=0; i<global_window_num && game_pid==0; i++) {
+					if (strcmp(current_window_name, global_window_name[i]) == 0) {
+						DWORD pid = 0;
+						GetWindowThreadProcessId(hwnd, &pid);
+						HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
  
-					if (hSnap != INVALID_HANDLE_VALUE) {
-						MODULEENTRY32 xModule;
-						memset(&xModule, 0, sizeof(xModule));
-						xModule.dwSize = sizeof(xModule);
+						if (hSnap != INVALID_HANDLE_VALUE) {
+							MODULEENTRY32 xModule;
+							memset(&xModule, 0, sizeof(xModule));
+							xModule.dwSize = sizeof(xModule);
 
-						// First process module must match game executable name
-						if (Module32First(hSnap, &xModule)) {							
-							for (int i=0; i<global_exe_num && game_pid==0; i++) {
-								if ((!arg->is_dedicated_server && !strstr(global_exe_name[i],"_server.exe") || arg->is_dedicated_server && strstr(global_exe_name[i],"_server.exe")) && lstrcmpi(xModule.szModule, (LPCTSTR)global_exe_name[i]) == 0) {
-									game_pid = pid;
+							// First process module must match game executable name
+							if (Module32First(hSnap, &xModule)) {							
+								for (int i=0; i<global_exe_num && game_pid==0; i++) {
+									if ((!arg->is_dedicated_server && !strstr(global_exe_name[i],"_server.exe") || arg->is_dedicated_server && strstr(global_exe_name[i],"_server.exe")) && strcmpi(xModule.szModule, global_exe_name[i]) == 0) {
+										game_pid = pid;
 
-									// If this a new game instance then also get address for exe parameters
-									if (game_pid != game_pid_last) {
-										game_exe_address     = (int)xModule.modBaseAddr;
-										game_exe_index       = i;
-										game_param_address   = 0;
-										char module_name[16] = "ifc22.dll";
+										// If this a new game instance then also get address for exe parameters
+										if (game_pid != game_pid_last) {
+											game_exe_address     = (int)xModule.modBaseAddr;
+											game_exe_index       = i;
+											game_param_address   = 0;
+											char module_name[16] = "ifc22.dll";
 
-										if (arg->is_dedicated_server)
-											strcpy(module_name, "ijl15.dll");
+											if (arg->is_dedicated_server)
+												strcpy(module_name, "ijl15.dll");
 
-										do {
-											if (lstrcmpi(xModule.szModule, (LPCTSTR)module_name) == 0) {	
-												game_param_address = (int)xModule.modBaseAddr + (!arg->is_dedicated_server ? 0x2C154 : 0x4FF20);
-												break;
-											}
-										} while(Module32Next(hSnap, &xModule));
+											do {
+												if (strcmpi(xModule.szModule, module_name) == 0) {	
+													game_param_address = (int)xModule.modBaseAddr + (!arg->is_dedicated_server ? 0x2C154 : 0x4FF20);
+													break;
+												}
+											} while(Module32Next(hSnap, &xModule));
+										}
 									}
 								}
 							}
-						}
 
-						CloseHandle(hSnap);
+							CloseHandle(hSnap);
+						}
 					}
 				}
+
+				if (game_pid == 0)
+					hwnd = GetNextWindow(hwnd, GW_HWNDNEXT);
 			}
 
-			if (game_pid == 0)
-				hwnd = GetNextWindow(hwnd, GW_HWNDNEXT);
-		}
-
-		// If there's no game
-		if (game_pid==0 || game_param_address==0) {
-			if (!transfer_missions) {
-				transfered_missions = 0;
-				transfer_missions   = true;
-				ModfolderMissionsReturn(arg->is_dedicated_server);
+			// Keep searching until I have both game and its module address so I can read launch arguments
+			if (game_pid == 0 || game_param_address == 0) {
+				game_pid = 0;
+				continue;
 			}
 
-			continue;
-		}
+			phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, game_pid);
+			if (phandle == INVALID_HANDLE_VALUE) {
+				game_pid = 0;
+				continue;
+			}
 
-		phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, game_pid);
+			// Test memory to see if the game is loaded
+			int stringtable_start  = 0;
+			int stringtable_result = 0;
 
-		if (phandle == INVALID_HANDLE_VALUE)
-			continue;
+			switch(global_exe_version[game_exe_index]) {
+				case VER_196        : stringtable_start=0x7D5280; break;
+				case VER_199        : stringtable_start=0x7C4248; break;
+				case VER_201        : stringtable_start=game_exe_address+0x6C9A60; break;
+				case VER_196_SERVER : stringtable_start=0x754D78; break;
+				case VER_199_SERVER : stringtable_start=0x754E08; break;
+				case VER_201_SERVER : stringtable_start=game_exe_address+0x5C08A0; break;
+			}
 
-		// If this is a new game instance
-		if (game_pid != game_pid_last) {
+			if (stringtable_start)
+				ReadProcessMemory(phandle, (LPVOID)stringtable_start, &stringtable_result, 4, &stBytes);
+
+			if (stringtable_result == 0) {
+				CloseHandle(phandle);
+				game_pid = 0;
+				continue;
+			}
+
+			// Find where UI coordinates are stored
 			if (!arg->is_dedicated_server) {
-				// Find where UI coordinates are stored
 				ui_address      = 0;
 				ui_address_chat = 0;
 
 				switch(global_exe_version[game_exe_index]) {
-					case VER_196 : ui_address=0x79F8D0; break;
-					case VER_199 : ui_address=0x78E9C8; break;
-					case VER_201 : ui_address=game_exe_address+0x6D8240; break;
+					case VER_196 : ui_address=0x79F8D0; ui_address_chat=0x7831B0; break;
+					case VER_199 : ui_address=0x78E9C8; ui_address_chat=0x7722A0; break;
+					case VER_201 : ui_address=game_exe_address+0x6D8240; ui_address_chat=game_exe_address+0x6FFCC0; break;
 				}
 
 				ReadProcessMemory(phandle, (LPVOID)(ui_address+0x0), &ui_address, 4, &stBytes);
 				ReadProcessMemory(phandle, (LPVOID)(ui_address+0x8), &ui_address, 4, &stBytes);
 
-				if (ui_address != 0) {
-					// Chat has a different address than the rest of UI
-					switch(global_exe_version[game_exe_index]) {
-						case VER_196 : ui_address_chat=0x7831B0; break;
-						case VER_199 : ui_address_chat=0x7722A0; break;
-						case VER_201 : ui_address_chat=game_exe_address+0x6FFCC0; break;
-					}
-				} else {
-					// Wait until game fills that memory
+				// Wait until game fills that memory
+				if (ui_address == 0) {
 					CloseHandle(phandle);
+					game_pid = 0;
 					continue;
 				}
+			}
+		} else {
+			// Check if the game is still running
+			DWORD exit_code = STILL_ACTIVE;
+			GetExitCodeProcess(phandle, &exit_code);
 
-				// Reset UI state
-				memset(ui_current    , 0, sizeof(ui_current));
-				memset(ui_currentINT , 0, sizeof(ui_currentINT));
-				memset(ui_written    , 0, sizeof(ui_written));
-				memset(ui_writtenINT , 0, sizeof(ui_writtenINT));
-				memset(ui_custom     , 0, sizeof(ui_custom));
-				memset(ui_customINT  , 0, sizeof(ui_customINT));
-				memset(ui_no_ar      , 0, sizeof(ui_no_ar));
-				memset(ui_is_custom  , 0, sizeof(ui_is_custom));
+			if (exit_code != STILL_ACTIVE) {
+				CloseHandle(phandle);
+				game_pid = 0;
+
+				if (!transfer_missions) {
+					transfered_missions = 0;
+					transfer_missions   = true;
+					ModfolderMissionsReturn(arg->is_dedicated_server);
+				}
+
+				continue;
+			}
+		}
+
+		// If this is a new game instance
+		if (game_pid != game_pid_last) {
+
+			// Reset UI state
+			if (!arg->is_dedicated_server) {
+				memset(ui_current   , 0, sizeof(ui_current));
+				memset(ui_currentINT, 0, sizeof(ui_currentINT));
+				memset(ui_written   , 0, sizeof(ui_written));
+				memset(ui_writtenINT, 0, sizeof(ui_writtenINT));
+				memset(ui_custom    , 0, sizeof(ui_custom));
+				memset(ui_customINT , 0, sizeof(ui_customINT));
+				memset(ui_no_ar     , 0, sizeof(ui_no_ar));
+				memset(ui_is_custom , 0, sizeof(ui_is_custom));
 
 				ReadUIConfig((global_exe_version[game_exe_index]==VER_196 ? "Res\\bin\\config_fwatch_hud.cfg" : "bin\\config_fwatch_hud.cfg"), ui_no_ar, ui_is_custom, ui_custom, ui_customINT);
 
 				if (ui_portrait_mode)
 					ui_portrait_calculate = true;
 			}
-
 
 			// Get list of arguments passed to the game executable
 			ReadProcessMemory(phandle, (LPVOID)game_param_address, &game_param_address, 4, &stBytes);
@@ -1460,7 +1492,6 @@ void FwatchPresence(ThreadArguments *arg)
 				ReadProcessMemory(phandle, (LPVOID)(player_name_addr+0x8), &player_name     , 25, &stBytes);
 			}
 			
-			// If it's a game instance that we have accessed before
 			// Transfer mission files from each mod
 			if (transfer_missions && game_mods_num>0) {
 				transfer_missions = false;
@@ -1669,7 +1700,7 @@ void FwatchPresence(ThreadArguments *arg)
 			}
 
 
-			// Check messages from fwatch.dll
+			// Check for messages from the fwatch.dll
 			if (*arg->mailslot != INVALID_HANDLE_VALUE) {
 				DWORD message_size   = 0;
 				DWORD message_number = 0;
@@ -1680,8 +1711,6 @@ void FwatchPresence(ThreadArguments *arg)
 				}
 			}
 		}
-
-		CloseHandle(phandle);
 	}
 
 	_endthread();
