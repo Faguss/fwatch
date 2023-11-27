@@ -173,7 +173,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		if (result == TIME_ZONE_ID_INVALID) {
 			messages.push_back(L"Failed to get time zone information: " + FormatError(GetLastError()));
 			LogMessage(FormatMessageArray(messages), OPTION_CLOSELOG);
-			MessageBox(NULL, FormatMessageArray(messages, OPTION_MESSAGEBOX).c_str(), L"Scheduled OFP Launch", MB_OK | MB_ICONSTOP);
+			MessageBox(global.window, FormatMessageArray(messages, OPTION_MESSAGEBOX).c_str(), L"Scheduled OFP Launch", MB_OK | MB_ICONSTOP);
 			WTS_CloseTask(local);
 			PostMessage(global.window, WM_CLOSE, 0, 0);
 			return 1;
@@ -192,7 +192,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		if (result != ERROR_SUCCESS) {
 			messages.push_back(L"Failed to download event information");
 			LogMessage(FormatMessageArray(messages), OPTION_CLOSELOG);
-			MessageBox(NULL, FormatMessageArray(messages, OPTION_MESSAGEBOX).c_str(), L"Scheduled OFP Launch", MB_OK | MB_ICONSTOP);
+			MessageBox(global.window, FormatMessageArray(messages, OPTION_MESSAGEBOX).c_str(), L"Scheduled OFP Launch", MB_OK | MB_ICONSTOP);
 			WTS_CloseTask(local);
 			PostMessage(global.window, WM_CLOSE, 0, 0);
 			return 1;
@@ -475,13 +475,14 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 			if (launch_game) {
 				flags |= MB_ICONQUESTION | MB_YESNO;
 				messages.push_back(missing_mods ? L"They can be downloaded from the main menu. Launch game?" : L"Connect?");
+				MessageBeep(MB_ICONEXCLAMATION);
 			} else
 				if (task_update)
 					flags |= MB_ICONEXCLAMATION;
 				else
 					flags |= MB_ICONSTOP;
 
-			int pressed = MessageBox(NULL, FormatMessageArray(messages, OPTION_MESSAGEBOX).c_str(), L"Scheduled OFP Launch", flags);
+			int pressed = MessageBox(global.window, FormatMessageArray(messages, OPTION_MESSAGEBOX).c_str(), L"Scheduled OFP Launch", flags);
 
 			if (pressed == IDCANCEL || pressed == IDNO)
 				launch_game = false;
@@ -502,7 +503,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 			if (!missing_mods && !input.event_voice)
 				input.voice_server.clear();
 		} else {
-			int pressed = MessageBox(NULL, L"New Fwatch version is required. Do you want to update? The game will be closed.", L"Scheduled OFP Launch", MB_ICONEXCLAMATION | MB_YESNO);
+			int pressed = MessageBox(global.window, L"New Fwatch version is required. Do you want to update? The game will be closed.", L"Scheduled OFP Launch", MB_ICONEXCLAMATION | MB_YESNO);
 			if (pressed == IDNO) {
 				LogMessage(L"User decided not to update", OPTION_CLOSELOG);
 				PostMessage(global.window, WM_CLOSE, 0, 0);
@@ -864,7 +865,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 					recommendation
 				);
 
-				MessageBox(NULL, recommendation.c_str(), L"Fwatch self-update ERROR", MB_OK | MB_ICONSTOP);
+				MessageBox(global.window, recommendation.c_str(), L"Fwatch self-update ERROR", MB_OK | MB_ICONSTOP);
 				
 				if (GetLastError() == ERROR_ACCESS_DENIED)
 					SelectFileInExplorer(L"\\fwatch\\data\\gameRestart.exe");
@@ -886,7 +887,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 					L"You have to download and update manually",
 					OPTION_CLOSELOG
 				);
-				MessageBox(NULL, L"You have to download and update manually", L"Fwatch self-update ERROR", MB_OK | MB_ICONSTOP);
+				MessageBox(global.window, L"You have to download and update manually", L"Fwatch self-update ERROR", MB_OK | MB_ICONSTOP);
 				ShellExecute(NULL, L"open", url, NULL, NULL, SW_SHOWNORMAL);
 				return 1;
 			}
@@ -909,7 +910,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		DeleteFile(rename_dst.c_str());
 		if (!MoveFileEx(rename_src.c_str(), rename_dst.c_str(), MOVEFILE_REPLACE_EXISTING)) {
 			LogMessage(L"Failed to rename " + rename_src + L" to " + rename_dst + FormatError(GetLastError()) + L"You have to download and update manually", OPTION_CLOSELOG);
-			MessageBox(NULL, L"You have to download and update manually", L"Fwatch self-update ERROR", MB_OK | MB_ICONSTOP);
+			MessageBox(global.window, L"You have to download and update manually", L"Fwatch self-update ERROR", MB_OK | MB_ICONSTOP);
 			ShellExecute(NULL, L"open", url, NULL, NULL, SW_SHOWNORMAL);
 			return GetLastError();
 		}
@@ -924,7 +925,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 			
 			if (result != ERROR_SUCCESS && i == download_mirrors.size()-1) {
 				LogMessage(L"Download failed\r\nYou have to download and update manually", OPTION_CLOSELOG);
-				MessageBox(NULL, L"You have to download and update manually", L"Fwatch self-update ERROR", MB_OK | MB_ICONSTOP);
+				MessageBox(global.window, L"You have to download and update manually", L"Fwatch self-update ERROR", MB_OK | MB_ICONSTOP);
 				ShellExecute(NULL, L"open", url, NULL, NULL, SW_SHOWNORMAL);
 				return result;
 			}
@@ -953,7 +954,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 			
 			if (result != ERROR_SUCCESS) {
 				LogMessage(L"Delete failed", OPTION_CLOSELOG);
-				MessageBox(NULL, L"You have to unpack the archive manually (password is \"fwatch\")", L"Fwatch self-update ERROR", MB_OK | MB_ICONSTOP);
+				MessageBox(global.window, L"You have to unpack the archive manually (password is \"fwatch\")", L"Fwatch self-update ERROR", MB_OK | MB_ICONSTOP);
 				SelectFileInExplorer(global.downloaded_filename);
 				return result;
 			}
@@ -980,7 +981,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 				} else
 					recommendation += L"You have to unpack the archive manually (password is \"fwatch\")";
 				
-				MessageBox(NULL, recommendation.c_str(), L"Fwatch self-update ERROR", MB_OK | MB_ICONSTOP);
+				MessageBox(global.window, recommendation.c_str(), L"Fwatch self-update ERROR", MB_OK | MB_ICONSTOP);
 				
 				if (corrupted_archive)
 					ShellExecute(NULL, L"open", url, NULL, NULL, SW_SHOWNORMAL);
@@ -1018,7 +1019,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		
 		if (steam) {
 			LogMessage(L"Operation successful", OPTION_CLOSELOG);
-			MessageBox(NULL, L"Update complete. Restart Fwatch", L"Fwatch self-update", MB_OK | MB_ICONINFORMATION);
+			MessageBox(global.window, L"Update complete. Restart Fwatch", L"Fwatch self-update", MB_OK | MB_ICONINFORMATION);
 			PostMessage(global.window, WM_CLOSE, 0, 0);
 			return 0;
 		}
@@ -1061,7 +1062,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		}
 		
 		if (result != ERROR_SUCCESS) {
-			MessageBox(NULL, L"You have to download and update manually", L"Resource update", MB_OK | MB_ICONSTOP);
+			MessageBox(global.window, L"You have to download and update manually", L"Resource update", MB_OK | MB_ICONSTOP);
 			ShellExecute(NULL, L"open", url, NULL, NULL, SW_SHOWNORMAL);
 			return result;
 		}
@@ -1070,7 +1071,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		DeleteFile(global.downloaded_filename.c_str());
 		
 		if (result != ERROR_SUCCESS) {
-			MessageBox(NULL, L"You have to download and update manually", L"Resource update", MB_OK | MB_ICONSTOP);
+			MessageBox(global.window, L"You have to download and update manually", L"Resource update", MB_OK | MB_ICONSTOP);
 			ShellExecute(NULL, L"open", url, NULL, NULL, SW_SHOWNORMAL);
 			return result;
 		}
@@ -1096,13 +1097,13 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		
 		if (!RenameWithBackup(source, destination)) {
 			LogMessage(L"Rename failed", OPTION_CLOSELOG);
-			MessageBox(NULL, L"You have to download and update manually", L"Resource update", MB_OK | MB_ICONSTOP);
+			MessageBox(global.window, L"You have to download and update manually", L"Resource update", MB_OK | MB_ICONSTOP);
 			ShellExecute(NULL, L"open", url, NULL, NULL, SW_SHOWNORMAL);
 			return 7;
 		}
 		
 		if (steam) {
-			MessageBox(NULL, L"Update complete. Start Fwatch again", L"Fwatch self-update", MB_OK | MB_ICONINFORMATION);
+			MessageBox(global.window, L"Update complete. Start Fwatch again", L"Fwatch self-update", MB_OK | MB_ICONINFORMATION);
 			LogMessage(L"Operation successful", OPTION_CLOSELOG);
 			PostMessage(global.window, WM_CLOSE, 0, 0);
 			return 0;
@@ -1434,7 +1435,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 
 		if (!CreateProcess(&launch_exe[0], &launch_arg[0], NULL, NULL, false, 0, NULL, NULL, &si, &pi)) {
 			LogMessage(L"Couldn't start the game" + FormatError(GetLastError()), OPTION_CLOSELOG);
-			MessageBox(NULL, L"Failed to launch the game.\r\nPlease refer to the fwatch\\data\\gameRestartLog.txt.", L"gameRestart", MB_OK|MB_ICONERROR );
+			MessageBox(global.window, L"Failed to launch the game.\r\nPlease refer to the fwatch\\data\\gameRestartLog.txt.", L"gameRestart", MB_OK|MB_ICONERROR );
 			return 8;
 		}
 	

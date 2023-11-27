@@ -17,6 +17,16 @@
 #define IDC_SHOW_STATUS                 115
 #define IDC_PAUSE                       116
 #define IDR_MAINFRAME                   128
+#define IDD_CONVERT_DL                  130
+#define ID_SELECT_ALL                   150
+#define IDC_EDIT_URL                    1010
+#define IDC_EDIT_FNAME                  1011
+#define IDC_CHECK_CONFIRM               1012
+#define IDC_TXT_URL                     1013
+#define IDC_TXT_FNAME                   1014
+#define IDC_TXT_CONFIRM                 1015
+#define IDC_TXT_CONFIRM2                1016
+#define IDC_FINAL_URL                   1017
 #define ID_PROCESS_ABORT                32771
 #define ID_OPTIONS_RESTARTGAME          32772
 #define ID_PROCESS_PAUSE                32773

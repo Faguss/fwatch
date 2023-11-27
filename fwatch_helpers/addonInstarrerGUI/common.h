@@ -14,69 +14,87 @@
 #include <tchar.h>		// ansi/wide macro
 #include <functional>   // notl, ptr_fun
 #include <shellapi.h>	// shell execute
+#include <cmath>		// round
 
-struct OPERATION_LOG {
-	int operation_type;
+enum WINDOW_CONTROLS {
+	TAB,
+	GRAY_BACKGROUND,
+	LOG_GENERAL,
+	LOG_DETAIL,
+
+	TXT_MOD_NAME,
+	INPUT_MOD_NAME,
+	TXT_DIR_NAME,
+	INPUT_DIR_NAME,
+	TXT_GAME_VER,
+	INPUT_GAME_VER,
+	TXT_COMMANDS,
+	TXT_DL_SIZE,
+	LIST_COMMANDS,
+	BUTTON_OPEN_MOD,
+	BUTTON_OPEN_TMP,
+	BUTTON_REWIND,
+	BUTTON_BACK,
+	BUTTON_NEXT,
+	BUTTON_PLAY,
+	TESTING_SEPARATOR,
+	TXT_COMMAND_INFO0,
+	TXT_COMMAND_INFO1,
+	TXT_COMMAND_INFO2,
+	TXT_COMMAND_INFO3,
+	TXT_DOWNLOADS,
+	LIST_DOWNLOADS,
+	TXT_FILENAME,
+	TXT_DL_ARGS,
+	LIST_DL_ARGS,
+	BUTTON_OPEN_DOC,
+	BUTTON_JUMP_TO_LINE,
+
+	EDIT_SCRIPT,
+	TXT_LINE_NUMBER,
+	BUTTON_RELOAD,
+	BUTTON_OPEN_DOC_GENERAL,
+	BUTTON_CONVERT_DL,
+
+	CONTROLS_MAX
+};
+
+enum INSTALLER_TAB {
+	INSTALLER_TAB_LOG,
+	INSTALLER_TAB_INSTRUCTIONS,
+	INSTALLER_TAB_SCRIPT
+};
+
+enum INSTALLER_OPERATION {
+	OPERATION_NONE,
+	OPERATION_MOVE,
+	OPERATION_DELETE,
+	OPERATION_DELETE_DIR,
+	OPERATION_FILEDATE,
+	OPERATION_ALIAS
+};
+
+struct INSTALLER_OPERATION_LOG {
+	size_t instruction_index;
+	INSTALLER_OPERATION operation_type;
 	std::wstring source;
 	std::wstring destination;
 	FILETIME modif_time;
 };
 
-struct GLOBAL_VARIABLES
-{
-	HANDLE thread_installer;
-	HANDLE thread_receiver;
-	HMENU window_menu;
-	HWND control_generallog;
-	HWND control_detaillog;
-	bool test_mode;
-	bool retry_installer;
-	bool abort_installer;
-	bool pause_installer;
-	bool skip_modfolder;
-	bool restart_game;
-	bool end_thread;
-	bool run_voice_program;
-	bool download_phase;
-	bool last_download_attempt;
-	int condition_index;
-	int command_line_num;
-	int installation_steps_current;
-	int installation_steps_max;
-	size_t saved_alias_array_size;
-	int download_iterator;
-	time_t current_mod_version_date;
-	double installer_version;
-	double script_version;
-	std::wstring program_arguments;
-	std::wstring buffer_log;
-	std::wstring buffer_status;
-	std::wstring gamerestart_arguments;
-	std::wstring downloaded_filename;
-	std::wstring current_mod;
-	std::wstring missing_modfolders;
-	std::wstring last_pbo_file;
-	std::wstring working_directory;
-	std::wstring command_line;
-	std::wstring current_mod_new_name;
-	std::wstring current_mod_version;
-	std::wstring current_mod_id;
-	std::wstring current_mod_keepname;
-	std::wstring downloaded_filename_last;
-	std::wstring last_log_message;
-	std::vector<bool> condition;
-	std::vector<std::wstring> downloads;
-	std::vector<std::wstring> mod_id;
-	std::vector<std::wstring> mod_name;
-	std::vector<std::wstring> current_mod_alias;
-	std::wstring *lang;
-	std::wstring *lang_eng;
-	std::map<std::wstring, std::wstring> arguments_table;
-	std::ofstream logfile;
-	std::vector<OPERATION_LOG> rollback;
+enum INSTALLER_ORDER {
+	ORDER_NONE,
+	ORDER_PREV,
+	ORDER_NEXT,
+	ORDER_REWIND,
+	ORDER_PLAY,
+	ORDER_PAUSE,
+	ORDER_RELOAD,
+	ORDER_RETRY,
+	ORDER_ABORT
 };
 
-enum INSTALL_STATUS 
+enum INSTALLER_STATUS 
 {
 	INSTALL_PROGRESS,
 	INSTALL_WAITINGFORUSER,
@@ -109,7 +127,7 @@ enum FUNCTION_FLAGS
 	FLAG_DONT_BACKUP     = 0x8000
 };
 
-enum ERROR_CODES 
+enum INSTALLER_ERROR_CODE
 {
 	ERROR_NONE,
 	ERROR_USER_ABORTED,
@@ -248,17 +266,140 @@ struct DIRECTORY_INFO {
 	std::vector<bool> is_mod_list;
 };
 
-extern GLOBAL_VARIABLES global;
-extern std::wstring mod_subfolders[];
-extern void DisableMenu();
-
-#define OPTION_LEADINGZERO 1
-#define OPTION_CLOSELOG 1
-
-enum ROLLBACK_OPERATION_TYPE {
-	OPERATION_NONE,
-	OPERATION_MOVE,
-	OPERATION_DELETE,
-	OPERATION_DELETE_DIR,
-	OPERATION_FILEDATE
+enum INSTALLER_COMMAND_ID {
+	COMMAND_AUTO_INSTALL,
+	COMMAND_DOWNLOAD,
+	COMMAND_UNPACK,
+	COMMAND_MOVE,
+	COMMAND_COPY,
+	COMMAND_MAKEDIR,
+	COMMAND_ASK_RUN,
+	COMMAND_BEGIN_MOD,
+	COMMAND_DELETE,
+	COMMAND_RENAME,
+	COMMAND_ASK_DOWNLOAD,
+	COMMAND_IF_VERSION,
+	COMMAND_ELSE,
+	COMMAND_ENDIF,
+	COMMAND_MAKEPBO,
+	COMMAND_EXTRACTPBO,
+	COMMAND_EDIT,
+	COMMAND_BEGIN_VERSION,
+	COMMAND_ALIAS,
+	COMMAND_FILEDATE,
+	COMMAND_INSTALL_VERSION,
+	COMMAND_EXIT,
+	COMMAND_MAX
 };
+
+struct DownloadURL {
+	int line_num;
+	std::wstring url;
+	std::vector<std::wstring> arguments;
+};
+
+struct Command {
+	INSTALLER_COMMAND_ID id;
+	int line_num;
+	int step_num;
+	int switches;
+	bool ctrl_flow;
+	bool disable;
+	std::wstring name;
+	std::wstring password;
+	std::wstring timestamp;
+	std::vector<std::wstring> arguments;
+	std::vector<DownloadURL> downloads;
+};
+
+enum COMMAND_SWITCHES {
+	SWITCH_NONE,
+	SWITCH_PASSWORD       = 0x1,
+	SWITCH_NO_OVERWRITE   = 0x2,
+	SWITCH_MATCH_DIR      = 0x4,
+	SWITCH_KEEP_SOURCE    = 0x8,
+	SWITCH_INSERT         = 0x10,
+	SWITCH_NEWFILE        = 0x20,
+	SWITCH_APPEND         = 0x40,
+	SWITCH_MATCH_DIR_ONLY = 0x80,
+	SWITCH_TIMESTAMP      = 0x100,
+	SWITCH_MAX            = 0x200
+};
+
+enum INSTALLATION_PHASE {
+	PHASE_WAITING,
+	PHASE_DOWNLOADING,
+	PHASE_EXECUTING
+};
+
+struct GLOBAL_VARIABLES
+{
+	HWND window;
+	HANDLE thread_installer;
+	HANDLE thread_receiver;
+	HMENU window_menu;
+	bool test_mode;
+	bool skip_modfolder;
+	bool restart_game;
+	bool run_voice_program;
+	bool last_download_attempt;
+	int condition_index;
+	int command_line_num;
+	int installation_steps_max;
+	INSTALLATION_PHASE installation_phase;
+	INSTALLER_ORDER order;
+	size_t saved_alias_array_size;
+	size_t download_iterator;
+	size_t instruction_index;
+	time_t current_mod_version_date;
+	double installer_version;
+	double script_version;
+	std::wstring program_arguments;
+	std::wstring buffer_log;
+	std::wstring buffer_status;
+	std::wstring gamerestart_arguments;
+	std::wstring downloaded_filename;
+	std::wstring current_mod;
+	std::wstring missing_modfolders;
+	std::wstring last_pbo_file;
+	std::wstring working_directory;
+	std::wstring current_mod_new_name;
+	std::wstring current_mod_version;
+	std::wstring current_mod_id;
+	std::wstring current_mod_keepname;
+	std::wstring downloaded_filename_last;
+	std::wstring last_log_message;
+	std::wstring game_version;
+	std::vector<bool> condition;
+	std::vector<std::wstring> downloads;
+	std::vector<std::wstring> mod_id;
+	std::vector<std::wstring> mod_name;
+	std::vector<std::wstring> current_mod_alias;
+	const std::wstring *lang;
+	const std::wstring *lang_eng;
+	std::map<std::wstring, std::wstring> arguments_table;
+	std::ofstream logfile;
+	std::vector<INSTALLER_OPERATION_LOG> rollback;
+	HWND controls[CONTROLS_MAX];
+	std::vector<Command> commands;
+	std::vector<std::wstring> commands_lines;
+};
+
+extern const std::wstring command_names[];
+extern const int match_command_name_to_id[];
+extern const int control_flow_commands[];
+extern const size_t command_minimal_arg[];
+extern const std::wstring command_switches_names[];
+extern const std::wstring mod_subfolders[];
+extern GLOBAL_VARIABLES global;
+extern const std::wstring stringtable[][STR_MAX];
+
+#define ID_BASE              200
+#define DOCUMENTATION_URL    L"https://ofp-faguss.com/schedule/install_scripts"
+#define PATH_TO_TEST_CFG     L"fwatch\\data\\addonInstaller_cfg.bin"
+#define PATH_TO_TEST_SCRIPT  L"fwatch\\data\\addonInstaller_test.txt"
+#define LEADING_ZERO         true
+#define CLOSE_LOG            true
+#define COMPARE_OLD_WITH_NEW true
+#define DATE_START           true
+#define DATE_END             false

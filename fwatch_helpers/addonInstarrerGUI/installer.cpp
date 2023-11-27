@@ -8,10 +8,16 @@ DWORD WINAPI addonInstallerWrapper(__in LPVOID lpParameter)
 {
 	UNREFERENCED_PARAMETER(lpParameter);
 	DWORD threadID1 = 0;
+	DWORD threadID2 = 0;
 
-	global.thread_installer = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)addonInstallerMain, 0, 0,&threadID1);
-	if (global.thread_installer)
+	global.thread_installer = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)addonInstallerMain, 0, 0,&threadID2);
+
+	if (global.thread_installer) {
+		if (!global.test_mode)
+			global.thread_receiver = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ReceiveInstructions, 0, 0,&threadID1);
 		WaitForSingleObject(global.thread_installer, INFINITE);
+	}
+
 	DisableMenu();
 
 	// If user wants to restart the game after installation
@@ -37,13 +43,15 @@ DWORD WINAPI addonInstallerWrapper(__in LPVOID lpParameter)
 	 
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
-		
 	}
 
-	LogMessage(L"", OPTION_CLOSELOG);
+	LogMessage(L"", CLOSE_LOG);
 
-	if (global.restart_game)
-		PostQuitMessage(0);
+	DWORD thread_return = 0;
+	GetExitCodeThread(global.thread_installer, &thread_return);
+
+	if (global.restart_game || (thread_return==ERROR_USER_ABORTED && global.test_mode))
+		SendMessage(global.window, WM_CLOSE, 0, 0);
 
 	return 0;
 }
@@ -51,301 +59,10 @@ DWORD WINAPI addonInstallerWrapper(__in LPVOID lpParameter)
 DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 {
 	UNREFERENCED_PARAMETER(lpParameter);
-	
-	// Process arguments
-	global.arguments_table.insert(std::pair<std::wstring,std::wstring>(L"gameversion",L"1.99"));
-	global.arguments_table.insert(std::pair<std::wstring,std::wstring>(L"assignid",L""));
-	global.arguments_table.insert(std::pair<std::wstring,std::wstring>(L"assignidpath",L""));
-	global.arguments_table.insert(std::pair<std::wstring,std::wstring>(L"assignname",L""));
-	global.arguments_table.insert(std::pair<std::wstring,std::wstring>(L"assignkeepname",L""));
-	global.arguments_table.insert(std::pair<std::wstring,std::wstring>(L"testmod",L""));
-	global.arguments_table.insert(std::pair<std::wstring,std::wstring>(L"testdir",L""));
-	global.arguments_table.insert(std::pair<std::wstring,std::wstring>(L"installid",L""));
-	global.arguments_table.insert(std::pair<std::wstring,std::wstring>(L"installdir",L""));
-	global.arguments_table.insert(std::pair<std::wstring,std::wstring>(L"downloadscript",L""));
-	global.arguments_table.insert(std::pair<std::wstring,std::wstring>(L"evoice",L""));
-	global.arguments_table.insert(std::pair<std::wstring,std::wstring>(L"language",L"English"));
-
-	// Separate arguments:
-	// arguments for this program go to the table
-	// arguments for gameRestart.exe go to a separate string
-	{
-		std::vector<std::wstring> argv;
-		Tokenize(global.program_arguments, L" ", argv);
-	
-		for (size_t i=0; i<argv.size(); i++) {
-			bool found = false;
-		
-			for (std::map<std::wstring,std::wstring>::iterator it=global.arguments_table.begin(); it!=global.arguments_table.end(); ++it) {
-				std::wstring table_argument = L"-" + it->first + L"=";
-			
-				if (Equals(argv[i].substr(0, table_argument.length()), table_argument)) {
-					it->second = argv[i].substr(table_argument.length());
-					found      = true;
-					break;
-				}
-			}
-		
-			if (!found)
-				global.gamerestart_arguments += argv[i] + L" ";
-		}
-	
-		global.test_mode = !(global.arguments_table[L"testmod"].empty());
-	
-		Tokenize(global.arguments_table[L"installid"] , L",", global.mod_id);
-		Tokenize(global.arguments_table[L"installdir"], L",", global.mod_name);
-	}
-
-	// Load language
-	std::wstring stringtable[][STR_MAX] = {
-		{
-			L"Initializing",
-			L"Fetching installation script",
-			L"Reading installation script",
-			L"Connecting",
-			L"Downloading",
-			L"Downloaded",
-			L"Extracting",
-			L"Unpacking PBO",
-			L"Packing PBO",
-			L"Copying",
-			L"Copying downloaded file to the fwatch\\tmp",
-			L"Cleaning up",
-			L"Preparing to install a mod",
-			L"Deleting",
-			L"Renaming",
-			L"Editing",
-			L"Installation aborted by user",
-			L"Installation complete!",
-			L"Done\r\nbut mods %MOD% are still missing\r\nOpen fwatch\\data\\addonInstallerLog.txt for details",
-			L"Installation progress:",
-			L"ALT+TAB to the desktop",
-			L"ERROR",
-			L"Can't create logfile",
-			L"Can't read install script",
-			L"Incorrect script version",
-			L"In version",
-			L"On line",
-			L"Failed to launch",
-			L"Not enough arguments",
-			L"Failed to list files in ",
-			L"Missing file name argument",
-			L"Path is leaving current directory",
-			L"Installation script is invalid",
-			L"Invalid installator arguments",
-			L"Failed to allocate buffer",
-			L"left",
-			L"total",
-			L"Invalid download destination",
-			L"Failed to download",
-			L"Failed to find",
-			L"remove this file and download again",
-			L"Failed to extract",
-			L"Failed to create directory",
-			L"Failed to get attributes of",
-			L"Source path is leaving current directory",
-			L"Destination path is leaving current directory",
-			L"Not allowed to move files out of the game directory",
-			L"Failed to move",
-			L"to",
-			L"Failed to copy",
-			L"Failed to rename",
-			L"to",
-			L"New file name contains slashes",
-			L"Wildcards in the path",
-			L"Missing new file name",
-			L"Failed to delete",
-			L"Failed to move to recycle bin",
-			L"You must manually run",
-			L"You must manually download",
-			L"Select folder with the downloaded file",
-			L"Missing version number",
-			L"Not a PBO file",
-			L"Failed to create PBO",
-			L"Failed to unpack PBO",
-			L"Failed to read file",
-			L"Failed to create file",
-			L"Reading mission.sqm",
-			L"Select 'Retry' or 'Abort'"
-		},
-		{
-			L"Запуск",
-			L"Получение скрипта установки",
-			L"Считывание файлов",
-			L"Подключение",
-			L"Загрузка",
-			L"Загрузка завершена",
-			L"Извлечение файлов",
-			L"Распаковка архива PBO",
-			L"Создание архива PBO",
-			L"Копирование",
-			L"Копирование загруженного файла в fwatch\\tmp",
-			L"Удаление временных файлов",
-			L"Начало установки мода",
-			L"Удаление файлов мода",
-			L"Переименование файлов мода",
-			L"Редактирование файлов мода",
-			L"Установка прервана пользователем",
-			L"Установка завершена!",
-			L"Установка завершена\r\nно отсутствуют моды %MOD%. Дополнительная информация в fwatch\\data\\addonInstallerLog.txt",
-			L"Процесс установки:",
-			L"Нажмите ALT+TAB, чтобы свернуть игру",
-			L"ОШИБКА",
-			L"Невозможно создать файл журнала установки",
-			L"Невозможно считать скрипт установки",
-			L"Неверная версия скрипта установки",
-			L"В версии",
-			L"В строке",
-			L"Ошибка при запуске",
-			L"Недостаточно аргументов функции",
-			L"Ошибка при создании списка файлов в папке ",
-			L"Отсутствует имя файла аргумента",
-			L"Путь не соответствует текущей папке",
-			L"Неверный скрипт установки",
-			L"Неверные аргументы мастера установки",
-			L"Ошибка при выделении понятий",
-			L"осталось",
-			L"всего",
-			L"Неверный путь установки",
-			L"Ошибка при загрузке",
-			L"Совпадений не найдено",
-			L"удалите этот файл и загрузите снова",
-			L"Ошибка при извлечении",
-			L"Ошибка при создании папки",
-			L"Ошибка при считывании атрибутов файла",
-			L"Исходный путь не соответствует текущей папке",
-			L"Путь назначения не соответствует текущей папке",
-			L"Невозможно переместить файлы из папки игры",
-			L"Ошибка при перемещении",
-			L"в",
-			L"Ошибка при копировании",
-			L"Ошибка при переименовании файла",
-			L"в",
-			L"Новое имя файла содержит слеши",
-			L"Путь содержит символы подстановки",
-			L"Отсутствует новое имя файла",
-			L"Ошибка при удалении",
-			L"Ошибка при перемещении в Корзину",
-			L"Необходимо запустить вручную",
-			L"Необходимо загрузить вручную",
-			L"Выберите папку с загруженным файлом",
-			L"Отсутствует номер версии",
-			L"Не файл типа PBO",
-			L"Ошибка при создании файла PBO",
-			L"Ошибка при извлечении из архива PBO",
-			L"Ошибка при считывании",
-			L"Ошибка при создании файла",
-			L"Считывание mission.sqm",
-			L"Выберите 'Заново' или 'Отмена'"
-		},
-		{
-			L"Przygotowywanie",
-			L"Pobieraniu skryptu instalacyjnego",
-			L"Przetwarzanie skryptu instalacyjnego",
-			L"Łączenie",
-			L"Pobieranie",
-			L"Pobrano",
-			L"Wypakowywanie",
-			L"Wypakowywanie PBO",
-			L"Pakowanie PBO",
-			L"Kopiowanie plików",
-			L"Kopiowanie plików do fwatch\\tmp",
-			L"Porządkowanie",
-			L"Przygotowywanie do instalacji modu",
-			L"Usuwanie plików",
-			L"Zmienianie nazwy plików",
-			L"Edytowanie plików",
-			L"Instalacja przerwana przez użytkownika",
-			L"Instalacja zakończona!",
-			L"Koniec instalacji\r\nale brakuje modów %MOD%\r\nSzczegóły w pliku fwatch\\data\\addonInstallerLog.txt",
-			L"Postęp instalacji:",
-			L"ALT+TAB żeby przejść do pulpitu",
-			L"BŁĄD",
-			L"Nie można utworzyć zapisu instalacji",
-			L"Nie można odczytać skryptu instalacyjnego",
-			L"Niepoprawna wersja skryptu instalacyjnego",
-			L"W wersji",
-			L"W linijce",
-			L"Nie można uruchomić",
-			L"Brakuje argumentów",
-			L"Nie można utworzyć listy plików z ",
-			L"Brakuje nazwy pliku",
-			L"Ścieżka wychodzi poza obecny katalog",
-			L"Skrypt instalacyjny jest błędny",
-			L"Błędne argumenty instalatora",
-			L"Nie można zarezerwować pamięci",
-			L"zostało",
-			L"w sumie",
-			L"Nieprawidłowy katalog docelowy dla ściągniętego pliku",
-			L"Nie można pobrać",
-			L"Nie znaleziono",
-			L"usuń ten plik i ściągnij ponownie",
-			L"Nie można rozpakować",
-			L"Nie można utworzyć katalogu",
-			L"Nie można odczytać atrybutów",
-			L"Ścieżka źródłowa wychodzi poza obecny katalog",
-			L"Ścieżka docelowa wychodzi poza obecny katalog",
-			L"Nie można przenosić plików poza katalog z grą",
-			L"Nie można przenieść",
-			L"do",
-			L"Nie można skopiować",
-			L"Nie można zmienić nazwy",
-			L"na",
-			L"Nowa nazwa pliku zawiera ukośniki",
-			L"Ścieżka zawiera symbole zastępcze",
-			L"Brakuje nowej nazwy pliku",
-			L"Nie można skasować",
-			L"Nie można przenieść do kosza",
-			L"Musisz ręcznie uruchomić",
-			L"Musisz ręcznie pobrać",
-			L"Wybierz katalog z pobranym plikiem",
-			L"Brakuje numeru wersji",
-			L"Plik nie jest PBO",
-			L"Nie można utworzyć PBO",
-			L"Nie można rozpakować PBO",
-			L"Nie można wczytać pliku",
-			L"Nie można utworzyć pliku",
-			L"Przetwarzanie mission.sqm",
-			L"Wybierz 'Kontynuuj' lub 'Przerwij'"
-		}
-	};
-	global.lang_eng = stringtable[0];
-	global.lang     = stringtable[0];
-	
-	if (Equals(global.arguments_table[L"language"],L"Russian"))
-		global.lang = stringtable[1];
-	
-	if (Equals(global.arguments_table[L"language"],L"Polish"))
-		global.lang = stringtable[2];
-
-	// Find current directory
-	{
-		wchar_t pwd[MAX_PATH];
-		GetCurrentDirectory(MAX_PATH, pwd);
-		global.working_directory = (std::wstring)pwd;
-
-		// When testing outside of the game change path to the game root dir
-		if (global.test_mode) {
-			global.working_directory = ReplaceAll(global.working_directory, L"\\fwatch\\data", L"");
-			SetCurrentDirectory(global.working_directory.c_str());
-		}
-	}
-
-	// If ordered to create id file for a mod
-	if (!global.arguments_table[L"assignidpath"].empty() && !global.arguments_table[L"assignid"].empty()) {
-		global.current_mod = global.arguments_table[L"assignname"];
-		WriteModID(global.arguments_table[L"assignidpath"], global.arguments_table[L"assignid"], global.arguments_table[L"assignkeepname"]);
-		PostQuitMessage(0);
-		return 0;
-	}
 
 	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_INIT]);
 
-	// Start listen thread
-	DWORD threadID1 = 0;
-	global.thread_receiver = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ReceiveInstructions, 0, 0,&threadID1);
-
-	// Create a log file
+	// Create log file
 	{
 		global.logfile.open("fwatch\\data\\addonInstallerLog.txt", std::ios::out | std::ios::app | std::ios::binary);
 
@@ -354,199 +71,60 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 			return ERROR_LOGFILE;
 		}
 
-		SYSTEMTIME st;
-		GetLocalTime(&st);
-		LogMessage(L"\r\n--------------\r\n\r\n" + 
-			Int2StrW(st.wYear) + L"." + 
-			Int2StrW(st.wMonth, OPTION_LEADINGZERO) + L"." + 
-			Int2StrW(st.wDay, OPTION_LEADINGZERO) + L"  " + 
-			Int2StrW(st.wHour, OPTION_LEADINGZERO) + L":" + 
-			Int2StrW(st.wMinute, OPTION_LEADINGZERO) + L":" + 
-			Int2StrW(st.wSecond, OPTION_LEADINGZERO)
-		);
+		if (!global.test_mode)
+			LogMessageDate(DATE_START);
 	}
-			
-	// Set up global variables for testing mode
+
+	// Open test mode config
 	if (global.test_mode) {
-		global.current_mod              = global.arguments_table[L"testmod"];
+		//std::wstring GetFileContents(L"fwatch\\data\\addonInstaller_test.cfg");
+		HANDLE hFile = CreateFile(PATH_TO_TEST_CFG, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (hFile != INVALID_HANDLE_VALUE) {
+			int id_to_write[] = {INPUT_MOD_NAME, INPUT_DIR_NAME, INPUT_GAME_VER};
+			std::wstring *ptr[] = {&global.current_mod, &global.current_mod_new_name, &global.game_version};
+			DWORD bytesRead;
+			BOOL result;
+
+			for(;;) {
+				int signature = 0;
+				result = ReadFile(hFile, &signature, sizeof(signature), &bytesRead, NULL);
+				if (!result || bytesRead == 0)
+					break;
+
+				int index = -1;
+				for (int i=0; i<sizeof(id_to_write)/sizeof(id_to_write[0]) && index==-1; i++)
+					if (signature == id_to_write[i])
+						index = i;
+
+				DWORD length = 0;
+				result = ReadFile(hFile, &length, sizeof(length), &bytesRead, NULL);
+				if (!result)
+					break;
+
+				if (index >= 0) {
+					ptr[index]->reserve(length/sizeof(wchar_t));
+					ptr[index]->resize((length-2)/sizeof(wchar_t));
+
+					result = ReadFile(hFile, (LPVOID)ptr[index]->c_str(), length, &bytesRead, NULL);
+					if (!result)
+						break;
+
+					SetWindowText(global.controls[signature], ptr[index]->c_str());
+				} else {
+					SetFilePointer(hFile, length, NULL, FILE_CURRENT);
+				}
+			}
+
+			CloseHandle(hFile);
+
+			if (global.current_mod_new_name.empty())
+				global.current_mod_new_name = global.current_mod;
+		}
+
 		global.current_mod_version      = L"1";
 		global.current_mod_version_date = time(0);
-		
-		if (global.arguments_table[L"testdir"].empty())
-			global.current_mod_new_name = global.arguments_table[L"testmod"];
-		else
-			global.current_mod_new_name = global.arguments_table[L"testdir"];
-			
-		LogMessage(L"Test Mode - " + global.current_mod);
-		
-		if (!Equals(global.current_mod,global.current_mod_new_name))
-			LogMessage(L" as " + global.current_mod_new_name);
 	}
-
-	// Define allowed commands
-	enum SCRIPTING_COMMANDS_ID {
-		COMMAND_AUTO_INSTALL,
-		COMMAND_DOWNLOAD,
-		COMMAND_UNPACK,
-		COMMAND_MOVE,
-		COMMAND_COPY,
-		COMMAND_MAKEDIR,
-		COMMAND_ASK_RUN,
-		COMMAND_BEGIN_MOD,
-		COMMAND_DELETE,
-		COMMAND_RENAME,
-		COMMAND_ASK_DOWNLOAD,
-		COMMAND_IF_VERSION,
-		COMMAND_ELSE,
-		COMMAND_ENDIF,
-		COMMAND_MAKEPBO,
-		COMMAND_EXTRACTPBO,
-		COMMAND_EDIT,
-		COMMAND_BEGIN_VERSION,
-		COMMAND_ALIAS,
-		COMMAND_FILEDATE,
-		COMMAND_INSTALL_VERSION,
-		COMMAND_EXIT
-	};
-	
-	std::wstring command_names[] = {
-		L"auto_install",	
-		L"download",		
-		L"get", 			
-		L"unpack", 		
-		L"extract", 		
-		L"move", 		
-		L"copy", 		
-		L"makedir",		
-		L"newfolder", 	
-		L"ask_run", 		
-		L"ask_execute", 	
-		L"begin_mod",	
-		L"delete",		
-		L"remove",		
-		L"rename",		
-		L"ask_download",	
-		L"ask_get",		
-		L"if_version",	
-		L"else",			
-		L"endif",		
-		L"makepbo",		
-		L"extractpbo",	
-		L"unpackpbo",	
-		L"unpbo",		
-		L"edit",			
-		L"begin_ver",	
-		L"alias",
-		L"merge_with",
-		L"filedate",
-		L"install_version",
-		L"exit",
-		L"quit"
-	};
-
-	int match_command_name_to_id[] = {
-		COMMAND_AUTO_INSTALL,
-		COMMAND_DOWNLOAD,
-		COMMAND_DOWNLOAD,
-		COMMAND_UNPACK,
-		COMMAND_UNPACK,
-		COMMAND_MOVE,
-		COMMAND_COPY,
-		COMMAND_MAKEDIR,
-		COMMAND_MAKEDIR,
-		COMMAND_ASK_RUN,
-		COMMAND_ASK_RUN,
-		COMMAND_BEGIN_MOD,
-		COMMAND_DELETE,
-		COMMAND_DELETE,
-		COMMAND_RENAME,
-		COMMAND_ASK_DOWNLOAD,
-		COMMAND_ASK_DOWNLOAD,
-		COMMAND_IF_VERSION,
-		COMMAND_ELSE,
-		COMMAND_ENDIF,
-		COMMAND_MAKEPBO,
-		COMMAND_EXTRACTPBO,
-		COMMAND_EXTRACTPBO,
-		COMMAND_EXTRACTPBO,
-		COMMAND_EDIT,
-		COMMAND_BEGIN_VERSION,
-		COMMAND_ALIAS,
-		COMMAND_ALIAS,
-		COMMAND_FILEDATE,
-		COMMAND_INSTALL_VERSION,
-		COMMAND_EXIT,
-		COMMAND_EXIT
-	};
-	
-	int control_flow_commands[] = {
-		COMMAND_BEGIN_MOD,
-		COMMAND_BEGIN_VERSION,
-		COMMAND_IF_VERSION,
-		COMMAND_ELSE,
-		COMMAND_ENDIF,
-		COMMAND_INSTALL_VERSION,
-		COMMAND_EXIT
-	};
-	
-	enum COMMAND_SWITCHES {
-		SWITCH_NONE,
-		SWITCH_PASSWORD       = 0x1,
-		SWITCH_NO_OVERWRITE   = 0x2,
-		SWITCH_MATCH_DIR      = 0x4,
-		SWITCH_KEEP_SOURCE    = 0x8,
-		SWITCH_INSERT         = 0x10,
-		SWITCH_NEWFILE        = 0x20,
-		SWITCH_APPEND         = 0x40,
-		SWITCH_MATCH_DIR_ONLY = 0x80,
-		SWITCH_TIMESTAMP      = 0x100,
-		SWITCH_MAX            = 0x200
-	};
-	
-	std::wstring command_switches_names[] = {
-		L"",
-		L"/password:",
-		L"/no_overwrite",
-		L"/match_dir",
-		L"/keep_source",
-		L"/insert",
-		L"/newfile",
-		L"/append",
-		L"/match_dir_only",
-		L"/timestamp:"
-	};
-	
-	// Automatic filling with empty strings for a command when not enough arguments were passed
-	// This is for the commands that can be used with or without arguments
-	int command_minimal_arg[] = {
-		0, // auto_install
-		0, // download
-		1, // unpack
-		3, // move
-		3, // copy
-		1, // makedir
-		1, // ask_run
-		0, // begin_mod
-		1, // delete
-		2, // rename
-		0, // ask_download
-		0, // if_version
-		0, // else
-		0, // endif
-		1, // makepbo
-		2, // extractpbo
-		0, // edit
-		0, // begin_version
-		0, // alias
-		0, // filedate
-		1, // install_version
-		0  // exit
-	};
-
-	int number_of_commands = sizeof(command_names) / sizeof(command_names[0]);
-	int number_of_switches = sizeof(command_switches_names) / sizeof(command_switches_names[0]);
-	int number_of_ctrlflow = sizeof(control_flow_commands) / sizeof(control_flow_commands[0]);
-
+			
 	// Download installation script
 	if (!global.arguments_table[L"downloadscript"].empty()) {
 		WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_GETSCRIPT]);
@@ -555,7 +133,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 		int result       = Download(url, FLAG_OVERWRITE | FLAG_SILENT_MODE);
 
 		if (result > 0) {
-			LogMessage(L"", OPTION_CLOSELOG);
+			LogMessage(L"", CLOSE_LOG);
 			return ERROR_NO_SCRIPT;
 		}
 	}
@@ -564,399 +142,364 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 	std::wstring script_file_content;
 	{
 		WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_READSCRIPT]);
-		std::wstring script_file_name = global.test_mode ? L"fwatch\\data\\addonInstaller_test.txt" : L"fwatch\\tmp\\installation script";
+		std::wstring script_file_name = global.test_mode ? PATH_TO_TEST_SCRIPT : L"fwatch\\tmp\\installation script";
 		script_file_content           = GetFileContents(script_file_name);
 	
 		if (script_file_content.empty()) {
-			LogMessage(L"Failed to open " + script_file_name, OPTION_CLOSELOG);
-			WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR]+L"\r\n"+global.lang[STR_ERROR_READSCRIPT]));
-			return ERROR_NO_SCRIPT;
+			if (global.test_mode) {
+				LogMessage(L"Failed to open " + script_file_name, CLOSE_LOG);
+				WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR]+L"\r\n"+global.lang[STR_ERROR_READSCRIPT]));
+				return ERROR_NO_SCRIPT;
+			}
 		}
+
+		SetWindowText(global.controls[EDIT_SCRIPT], script_file_content.c_str());
 	}
 	
-	// Table storing commands from the script
-	struct {
-		std::vector<int>          id;        //command enum
-		std::vector<bool>         ctrl_flow; //is it a control flow command
-		std::vector<int>          line_num;  //position in the text file
-		std::vector<int>          step_num;  //progress number
-		std::vector<int>          switches;  //bit mask
-		std::vector<size_t>       arg_start; //arguments starting index in the other table
-		std::vector<int>          arg_num;   //number of arguments passed to this command
-		std::vector<size_t>       url_start; //urls starting index in the other table
-		std::vector<int>          url_num;   //number of urls passed to this command
-		std::vector<std::wstring> password;  //password switch passed to this command
-		std::vector<std::wstring> arguments; //table storing arguments associated with commands (not parallel)
-		std::vector<std::wstring> timestamp; //timestamp switch passed to this command
-	} current_script_command;
+	ParseInstallationScript(script_file_content, global.commands);
 
-	// Table storing download urls associated with the commands	
-	struct {
-		std::vector<size_t>       arg_start; //arguments starting index in the other table
-		std::vector<int>          arg_num;   //number of arguments passed to this url
-		std::vector<int>          line_num;  //position in the text file
-		std::vector<std::wstring> link;      //actual url
-		std::vector<std::wstring> arguments; //table storing url arguments associated with the urls (not parallel)
-	} current_script_command_urls;
+	if (global.commands.size() == 0) {
+		if (global.test_mode) {
+			SwitchTab(INSTALLER_TAB_SCRIPT);
+		} else {
+			LogMessage(L"Script is empty", CLOSE_LOG);
+			WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR]+L"\r\n"+global.lang[STR_ERROR_READSCRIPT]));
+			return ERROR_WRONG_SCRIPT;
+		}
+	}
 
-	// Parse installation script and store instructions in vectors
-	{
-		size_t word_begin          = 0;  //number of column where a phrase begins
-		int word_count             = 1;  //number of found phrases in the current line
-		int word_line_num          = 1;	 //line count for the entire script
-		int word_line_num_local    = 1;  //line count for single version of the mod
-		int command_id             = -1;
-		int last_command_line_num  = -1;
-		size_t last_url_list_id    = 0;
-		bool in_quote              = false;
-		bool remove_quotes         = true;
-		bool url_block             = false;
-		bool url_line              = false;
-		bool word_started          = false;
-		bool last_url_list_started = false;
+	// If wrong version
+	if (!global.test_mode && (global.script_version == 0 || global.installer_version < global.script_version)) {
+		LogMessage(L"Version mismatch. Script version: " + Double2StrW(global.script_version) + L"  Program version: " + Double2StrW(global.installer_version), CLOSE_LOG);
+		WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR_WRONG_VERSION] + L"\r\n" + Double2StrW(global.script_version) + L" vs " + Double2StrW(global.installer_version)));
+		return ERROR_WRONG_SCRIPT;
+	}
 
-		for (size_t i=0; i<=script_file_content.length(); i++) {
-			bool end_of_word = i == script_file_content.length() || iswspace(script_file_content[i]);
-		
-			// When quote
-			if (script_file_content[i] == L'"')
-				in_quote = !in_quote;
-		
-			// If beginning of an url block
-			if (script_file_content[i] == L'{' && !word_started) {
-				url_block = true;
-	
-				// if bracket is the first thing in the line then it's auto installation
-				if (word_count == 1) {
-					last_command_line_num = word_line_num;
-					current_script_command.id.push_back(COMMAND_AUTO_INSTALL);
-					current_script_command.ctrl_flow.push_back(false);
-					current_script_command.line_num.push_back(word_line_num_local);
-					current_script_command.step_num.push_back(0);
-					current_script_command.switches.push_back(SWITCH_NONE);
-					size_t temp = current_script_command.arguments.size();  //dealing with std::_Vbase
-					current_script_command.arg_start.push_back(temp);
-					current_script_command.arg_num.push_back(0);				
-					temp = current_script_command_urls.link.size();
-					current_script_command.url_start.push_back(temp);				
-					current_script_command.url_num.push_back(0);
-					current_script_command.password.push_back(L"");
-					current_script_command.timestamp.push_back(L"");
-				} else
-					// if bracket is an argument for the command
-					if (command_id != -1) {
-						current_script_command.arguments.push_back(L"<dl>");
-						current_script_command.arg_num[current_script_command.arg_num.size()-1]++;
-					}
-			
-				continue;
+	// Install for Real
+	bool play_automatically             = !global.test_mode;
+	global.instruction_index            = 0;
+	global.order                        = ORDER_NONE;
+	INSTALLER_ERROR_CODE command_result = ERROR_NONE;
+	std::vector<LARGE_INTEGER> download_sizes;
+	download_sizes.resize(global.commands.size());
+
+	for (;;) {
+		global.installation_phase = PHASE_WAITING;
+
+		// Update command listbox
+		{
+			LRESULT command_list_selection = SendMessage(global.controls[LIST_COMMANDS], LB_GETCURSEL, 0, 0);
+			SendMessage(global.controls[LIST_COMMANDS], LB_RESETCONTENT, 0, 0);
+
+			for (size_t i=0; i<global.commands_lines.size(); i++) {
+				std::wstring listbox_text = (i==global.instruction_index ? L">>" : L"") + global.commands_lines[i];
+				SendMessageW(global.controls[LIST_COMMANDS], LB_ADDSTRING, 0, (LPARAM)listbox_text.c_str());
 			}
-		
-			// If ending of an url block
-			if (script_file_content[i] == L'}' && url_block) {
-				end_of_word = true;
-			
-				// If there's space between last word and the closing bracket
-				if (!word_started) {	
-					url_block = false;
-					url_line  = false;
-					word_count++;
+
+			if (command_list_selection != LB_ERR)
+				SendMessage(global.controls[LIST_COMMANDS], LB_SETCURSEL, (WPARAM)command_list_selection, 0);
+		}
+
+		if (command_result == ERROR_NONE) {
+			if (global.instruction_index >= global.commands.size())
+				play_automatically = false;
+			else
+				if (global.test_mode) {
+					WriteProgressFile(INSTALL_PROGRESS, L"");
+					Sleep(500); // I slow down the test mode to show that the arrow is moving in the command list
+				}
+		}
+
+		// Stop and wait for user's instruction
+		if (global.order!=ORDER_NONE || command_result!=ERROR_NONE || !play_automatically) {
+			EnableWindow(global.controls[BUTTON_REWIND], command_result!=ERROR_NONE || global.instruction_index>0);
+			EnableWindow(global.controls[BUTTON_BACK], global.instruction_index>0);
+			EnableWindow(global.controls[BUTTON_NEXT], command_result==ERROR_NONE && global.instruction_index<global.commands.size());
+			EnableWindow(global.controls[BUTTON_PLAY], global.instruction_index<global.commands.size());
+			EnableWindow(global.controls[BUTTON_RELOAD], command_result==ERROR_NONE);
+			EnableWindow(global.controls[INPUT_MOD_NAME], command_result==ERROR_NONE && global.instruction_index==0);
+			EnableWindow(global.controls[INPUT_DIR_NAME], command_result==ERROR_NONE && global.instruction_index==0);
+			EnableWindow(global.controls[INPUT_GAME_VER], command_result==ERROR_NONE && global.instruction_index==0);
+			SetWindowText(global.controls[BUTTON_PLAY], play_automatically && command_result==ERROR_NONE ? L"||" : L">");
+			SumDownloadSizes(download_sizes, global.instruction_index);
+
+			if (command_result == ERROR_COMMAND_FAILED) {
+				WriteProgressFile(INSTALL_RETRYORABORT, global.last_log_message + L"\r\n\r\n" + global.lang[STR_ASK_RETRYORABORT]);
+				EnableMenuItem(global.window_menu, ID_PROCESS_RETRY, MF_BYCOMMAND);
+			} else
+				// Installation finished
+				if (global.instruction_index >= global.commands.size()) {
+					// Clean up after the last mod
+					EndMod();
+
+					if (global.missing_modfolders.empty()) {
+						WriteProgressFile(INSTALL_DONE, global.lang[STR_ACTION_DONE]);
+						LogMessageDate(DATE_END);
+					} else {
+						std::wstring message = ReplaceAll(global.lang[STR_ACTION_DONEWARNING], L"%MOD%", global.missing_modfolders);
+						WriteProgressFile(INSTALL_WARNING, message);
+						LogMessage(L"WARNING: Installation completed but modfolders " + global.missing_modfolders + L" are still missing");
+						global.restart_game = false;
+					}
+
+					if (global.test_mode)
+						global.missing_modfolders.clear();
+					else
+						break;
+				} else 
+					if (global.order==ORDER_PAUSE || command_result==ERROR_PAUSED)
+						WriteProgressFile(INSTALL_PAUSED, L"Installation paused");
+					else
+						if (global.order==ORDER_ABORT || command_result==ERROR_USER_ABORTED) {
+							RollBackInstallation();
+							WriteProgressFile(INSTALL_ABORTED, global.lang[STR_ACTION_ABORTED]);
+							LogMessage(L"Installation aborted by user", CLOSE_LOG);
+							return ERROR_USER_ABORTED;
+						} else 
+							if (global.order == ORDER_PLAY) {
+								play_automatically = !play_automatically;
+								SetWindowText(global.controls[BUTTON_PLAY], play_automatically ? L"||" : L">");
+							}
+
+			global.order = ORDER_NONE;
+
+			while (global.order == ORDER_NONE)
+				Sleep(100);
+
+			// Reload settings when beginning a new installation process in test mode
+			if (global.test_mode && global.instruction_index==0 && command_result==ERROR_NONE && (global.order==ORDER_PLAY || global.order==ORDER_NEXT)) {
+				std::wstring new_mod = L"";
+				WindowTextToString(global.controls[INPUT_MOD_NAME], new_mod);
+				Trim(new_mod);
+
+				if (new_mod.empty()) {
+					MessageBox(global.window, L"Mod name cannot be empty!", L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
 					continue;
 				}
-			}
-		
-			// Remember beginning of the word
-			if (!end_of_word && !word_started) {
-				word_begin   = i;
-				word_started = true;
-			
-				// If custom delimeter - jump to the end of the argument
-				if (script_file_content.substr(word_begin,2) == L">>") {
-					word_begin   += 3;
-					size_t end    = script_file_content.find(script_file_content[i+2], i+3);
-					end_of_word   = true;
-					i             = end==std::wstring::npos ? script_file_content.length() : end;
-					remove_quotes = false;
-				}
-			}
-		
-			// When hit end of the word
-			if (end_of_word && word_started && !in_quote) {
-				std::wstring word = script_file_content.substr(word_begin, i-word_begin);
 
-				if (remove_quotes)
-					word = UnQuote(word);
+				wchar_t is_forbidden = VerifyWindowsFileName(new_mod);
+				if (is_forbidden != NULL) {
+					std::wstring msg = L"Mod name cannot contain |";
+					msg[msg.length()-1] = is_forbidden;
+					MessageBox(global.window, msg.c_str(), L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
+					continue;
+				}
+
+				std::wstring new_dir_name = L"";
+				WindowTextToString(global.controls[INPUT_DIR_NAME], new_dir_name);
+				Trim(new_dir_name);
+
+				if (!new_dir_name.empty()) {
+					is_forbidden = VerifyWindowsFileName(new_dir_name);
+					if (is_forbidden != NULL) {
+						std::wstring msg = L"Dir name cannot contain |";
+						msg[msg.length()-1] = is_forbidden;
+						MessageBox(global.window, msg.c_str(), L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
+						global.order = ORDER_NONE;
+						continue;
+					}
+				}
+
+				std::wstring new_game_version = L"";
+				WindowTextToString(global.controls[INPUT_GAME_VER], new_game_version);
+				Trim(new_game_version);
+
+				if (new_game_version != global.game_version) {
+					if (new_game_version.empty()) {
+						MessageBox(global.window, L"Game version cannot be empty!", L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
+						global.order = ORDER_NONE;
+						continue;
+					}
+
+					bool is_number = true;
+					for (size_t i=0; i<new_game_version.length(); i++) {
+						if (!iswdigit(new_game_version[i]) && new_game_version[i]!=L'.') {
+							is_number = false;
+							break;
+						}
+					}
+
+					if (!is_number) {
+						MessageBox(global.window, L"Game version must be a number", L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
+						global.order = ORDER_NONE;
+						continue;
+					}
+
+					ParseInstallationScript(script_file_content, global.commands);
+				}
+
+				global.current_mod  = new_mod;
+				global.game_version = new_game_version;
+
+				if (new_dir_name.empty())
+					global.current_mod_new_name = global.current_mod;
 				else
-					remove_quotes = true;
-				
-				// If first word in the line
-				if (word_count == 1 && !url_block) {
-					command_id = -1;
-				
-					// Check if it's a valid command
-					if (IsURL(word))
-						command_id = COMMAND_AUTO_INSTALL;
-					else
-						for (int j=0; j<number_of_commands && command_id==-1; j++)
-							if (Equals(word, command_names[j]))
-								command_id = match_command_name_to_id[j];
-				
-					// If so then add it to database, otherwise skip this line
-					if (command_id != -1) {
-						last_command_line_num = word_line_num;
-						current_script_command.id.push_back(command_id);
-						current_script_command.ctrl_flow.push_back(false);
-						current_script_command.line_num.push_back(word_line_num_local);
-						current_script_command.step_num.push_back(0);
-						current_script_command.switches.push_back(SWITCH_NONE);
-						size_t temp = current_script_command.arguments.size();  //dealing with std::_Vbase
-						current_script_command.arg_start.push_back(temp);
-						current_script_command.arg_num.push_back(0);
-						temp = current_script_command_urls.link.size();
-						current_script_command.url_start.push_back(temp);
-						current_script_command.url_num.push_back(0);
-						current_script_command.password.push_back(L"");
-						current_script_command.timestamp.push_back(L"");
-					
-						// Check if it's a control flow type of command
-						for (int j=0; j<number_of_ctrlflow; j++)
-							if (command_id == control_flow_commands[j])
-								current_script_command.ctrl_flow[current_script_command.ctrl_flow.size()-1] = true;
-					
-						// If command is an URL then add it to the url database
-						if (IsURL(word)) {
-							url_line              = true;
-							last_url_list_id      = current_script_command_urls.link.size();
-							last_url_list_started = true;
-							size_t temp2          = current_script_command_urls.arguments.size(); //dealing with std::_Vbase
-							current_script_command_urls.arg_start.push_back(temp2);
-							current_script_command_urls.arg_num.push_back(0);
-							current_script_command_urls.line_num.push_back(word_line_num);
-							current_script_command_urls.link.push_back(word);
-							current_script_command.url_num[current_script_command.url_num.size()-1]++;
-						}
-					
-						if (command_id == COMMAND_BEGIN_MOD || command_id == COMMAND_BEGIN_VERSION)
-							word_line_num_local = 0;
+					global.current_mod_new_name = new_dir_name;
+
+				// Save config
+				HANDLE hFile = CreateFile(PATH_TO_TEST_CFG, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+				if (hFile != INVALID_HANDLE_VALUE) {
+					int id_to_write[] = {INPUT_MOD_NAME, INPUT_DIR_NAME, INPUT_GAME_VER};
+					std::wstring *ptr[] = {&global.current_mod, &global.current_mod_new_name, &global.game_version};
+					DWORD bytesWritten;
+
+					for (int i=0; i<sizeof(id_to_write)/sizeof(id_to_write[0]); i++) {
+						WriteFile(hFile, &id_to_write[i], sizeof(id_to_write[0]), &bytesWritten, NULL);
+						DWORD length = (DWORD)(ptr[i]->length()+1) * sizeof(wchar_t);
+						WriteFile(hFile, &length, sizeof(length), &bytesWritten, NULL);
+						WriteFile(hFile, ptr[i]->c_str(), length, &bytesWritten, NULL);
+					}
+
+					CloseHandle(hFile);
+				}
+
+				for (size_t i=0; i<download_sizes.size(); i++)
+					download_sizes[i].QuadPart = 0;
+
+				SumDownloadSizes(download_sizes, global.instruction_index);
+				LogMessageDate(DATE_START);
+			}
+
+			EnableWindow(global.controls[BUTTON_REWIND], 0);
+			EnableWindow(global.controls[BUTTON_BACK], 0);
+			EnableWindow(global.controls[BUTTON_NEXT], 0);
+			EnableWindow(global.controls[BUTTON_PLAY], 1);
+			EnableWindow(global.controls[BUTTON_RELOAD], 0);
+			EnableWindow(global.controls[INPUT_MOD_NAME], 0);
+			EnableWindow(global.controls[INPUT_DIR_NAME], 0);
+			EnableWindow(global.controls[INPUT_GAME_VER], 0);
+			EnableMenuItem(global.window_menu, ID_PROCESS_RETRY, MF_BYCOMMAND | MF_GRAYED);
+
+			INSTALLER_ORDER order = global.order;
+			global.order = ORDER_NONE;
+
+			switch(order) {
+				case ORDER_RETRY : {
+					RollBackInstallation(global.instruction_index);
+				} break;
+				case ORDER_ABORT : {
+					if (global.test_mode) {
+						EnableWindow(global.controls[BUTTON_PLAY], 0);
 					} else {
-						size_t end = script_file_content.find(L"\n", i);
-						i          = (end==std::wstring::npos ? script_file_content.length() : end) - 1;
+						RollBackInstallation();
+						WriteProgressFile(INSTALL_ABORTED, global.lang[STR_ACTION_ABORTED]);
+						LogMessage(L"Installation aborted by user", CLOSE_LOG);
 					}
-				} else {
-					// Check if URL starts here
-					if (!url_line && command_id != COMMAND_ASK_DOWNLOAD)
-						url_line = IsURL(word);
+
+					return ERROR_USER_ABORTED;
+				} break;
+				case ORDER_PREV : {
+					if (global.instruction_index > 0) {
+						do {
+							global.instruction_index--;
+						} while (global.instruction_index>0 && (global.instruction_index>=global.commands.size() || (global.instruction_index<global.commands.size() && global.commands[global.instruction_index].disable)));
+					}
+					command_result = ERROR_NONE;
+					play_automatically = false;
+					RollBackInstallation(global.instruction_index);
+					continue;
+				} break;
+				case ORDER_NEXT : {
+					if (global.instruction_index >= global.commands.size())
+						continue;
+				} break;
+				case ORDER_REWIND : {
+					RollBackInstallation();
+					global.instruction_index = 0;
+					command_result = ERROR_NONE;
+					play_automatically = false;
+					continue;
+				} break;
+				case ORDER_PLAY : {
+					if (command_result == ERROR_NONE) {
+						play_automatically = !play_automatically;
+						SetWindowText(global.controls[BUTTON_PLAY], play_automatically ? L"||" : L">");
+						if (global.instruction_index >= global.commands.size())
+							continue;
+					} else {
+						RollBackInstallation(global.instruction_index);
+					}
+				} break;
+				case ORDER_PAUSE : command_result=ERROR_NONE;continue;
+				case ORDER_RELOAD : {
+					script_file_content.clear();
+					WindowTextToString(global.controls[EDIT_SCRIPT], script_file_content);
 					
-					// Check if it's a valid command switch
-					bool is_switch           = false;
-					size_t colon             = word.find(L":");
-					std::wstring switch_name = word;
-					std::wstring switch_arg  = L"";
-				
-					if (colon != std::wstring::npos) {
-						switch_name = word.substr(0,colon+1);
-						switch_arg  = word.substr(colon+1);
+					std::ofstream out(PATH_TO_TEST_SCRIPT, std::ios::out | std::ios::binary | std::ios::trunc);
+					if (out.is_open()) {
+						out << utf8(script_file_content);
+						out.close();
 					}
-				
-					for (int switch_index=1, switch_enum=1; switch_index<number_of_switches && !is_switch; switch_enum*=2, switch_index++)
-						if (Equals(switch_name, command_switches_names[switch_index])) {
-							is_switch   = true;
-							size_t last = current_script_command.switches.size() - 1;
-							current_script_command.switches[last] |= switch_enum;
-						
-							if (switch_enum == SWITCH_PASSWORD)
-								current_script_command.password[last] = switch_arg;
-							
-							if (switch_enum == SWITCH_TIMESTAMP)
-								current_script_command.timestamp[last] = switch_arg;
-						}
 
-					// Add word to the URL database or the arguments database
-					if (!is_switch) {
-						if (url_line) {
-							if (!last_url_list_started) {
-								last_url_list_id      = word_line_num;
-								last_url_list_started = true;
-								size_t temp           = current_script_command_urls.arguments.size();
-
-								current_script_command_urls.arg_start.push_back(temp); //dealing with std::_Vbase
-								current_script_command_urls.arg_num.push_back(0);
-								current_script_command_urls.line_num.push_back(word_line_num);
-								current_script_command_urls.link.push_back(word);
-								current_script_command.url_num[current_script_command.url_num.size()-1]++;
-							} else {							
-								current_script_command_urls.arguments.push_back(word);
-								current_script_command_urls.arg_num[current_script_command_urls.arg_num.size()-1]++;
-							}
-						} else {
-							current_script_command.arguments.push_back(word);
-							current_script_command.arg_num[current_script_command.arg_num.size()-1]++;
-						}
-					}
-				}
-			
-				// If ending of an url block
-				if (script_file_content[i] == L'}' && url_block) {
-					url_block = false;
-					url_line  = false;
-				}
-
-				word_started = false;
-				word_count++;
-			}
-		
-			// When new line
-			if (!in_quote && (script_file_content[i] == L'\n' || script_file_content[i] == L'\0')) {
-				size_t last = current_script_command.id.size() - 1;
-			
-				// Maintain minimal number of arguments
-				while (!url_block && command_id != -1 && current_script_command.arg_num[last] < command_minimal_arg[current_script_command.id[last]]) {
-					current_script_command.arguments.push_back(L"");
-					current_script_command.arg_num[last]++;
-				}
-			
-				word_count            = 1;
-				url_line              = false;
-				last_url_list_started = false;
-				word_line_num++;
-				word_line_num_local++;
+					global.instruction_index = ParseInstallationScript(script_file_content, global.commands, COMPARE_OLD_WITH_NEW);
+					RollBackInstallation(global.instruction_index);
+					SwitchTab(INSTALLER_TAB_INSTRUCTIONS);
+					download_sizes.resize(global.commands.size());
+					SumDownloadSizes(download_sizes, global.instruction_index);
+					command_result = ERROR_NONE;
+					play_automatically = false;
+					continue;
+				} break;
 			}
 		}
-	}
 
-	// Pretend to Install
-	// Figure out how many steps this installation script has so later we can display progress for the user
-	for (size_t i=0;  i<current_script_command.id.size(); i++) {
-		if (
-			// if modfolder wasn't formally started OR skipping this mod
-			((global.current_mod.empty() || global.skip_modfolder) && current_script_command.id[i] != COMMAND_BEGIN_MOD && current_script_command.id[i] != COMMAND_INSTALL_VERSION)
-			||
-			// if version wasn't formally started
-			(!global.current_mod.empty() && global.current_mod_version.empty() && current_script_command.id[i] != COMMAND_BEGIN_VERSION && current_script_command.id[i] != COMMAND_INSTALL_VERSION)
-			||
-			// if inside condition block
-			(global.condition_index >= 0 && !global.condition[global.condition_index] && !current_script_command.ctrl_flow[i])
-		)
-			continue;
-
-		// Execute only control flow instructions
-		switch(current_script_command.id[i]) {
-			case COMMAND_INSTALL_VERSION : global.script_version=_wtof(current_script_command.arguments[current_script_command.arg_start[i]].c_str()); break;
-			case COMMAND_BEGIN_MOD       : global.current_mod=L"?pretendtoinstall"; break;
-			case COMMAND_BEGIN_VERSION   : global.current_mod_version=L"-1"; break;
-			case COMMAND_IF_VERSION      : Condition_If_version(current_script_command.arguments, current_script_command.arg_start[i], current_script_command.arg_num[i]); break;
-			case COMMAND_ELSE            : Condition_Else(); break;
-			case COMMAND_ENDIF           : Condition_Endif(); break;
-			default                      : global.installation_steps_max++;
-		}
-
-		//if (i < current_script_command.id.size())
-		current_script_command.step_num[i] = global.installation_steps_max;
-
-		if (current_script_command.id[i] == COMMAND_EXIT)
-			break;
-	}
-	
-	// Reset variables
-	{
-		global.current_mod         = L"";
-		global.current_mod_version = L"";
-		global.condition_index     = -1;
-		global.condition.clear();
-		global.current_mod_alias.clear();
-	
-		if (global.test_mode) {
-			global.current_mod              = global.arguments_table[L"testmod"];
-			global.current_mod_version      = L"1";
-			global.current_mod_version_date = time(0);
-		
-			if (global.arguments_table[L"testdir"].empty())
-				global.current_mod_new_name = global.arguments_table[L"testmod"];
-			else
-				global.current_mod_new_name = global.arguments_table[L"testdir"];
-		} else
-			// If wrong version
-			if (global.script_version == 0 || global.installer_version < global.script_version) {
-				LogMessage(L"Version mismatch. Script version: " + Float2StrW(global.script_version) + L"  Program version: " + Float2StrW(global.installer_version), OPTION_CLOSELOG);
-				WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR_WRONG_VERSION] + L"\r\n" + Float2StrW(global.script_version) + L" vs " + Float2StrW(global.installer_version)));
-				return ERROR_WRONG_SCRIPT;
-			}
-	}
-	
-	// Install for Real
-	size_t instruction_index = 0;
-	while (instruction_index < current_script_command.id.size()) {
-		global.installation_steps_current = current_script_command.step_num[instruction_index];
-
-		if (global.pause_installer && !global.abort_installer) {
-			WriteProgressFile(INSTALL_PAUSED, L"Installation paused");
-
-			while(global.pause_installer && !global.abort_installer)
-				Sleep(200);
-		}
-
-		if (isAborted())
-			return ERROR_USER_ABORTED;
-
-		// Update global variables
-		for (int j=0; j<number_of_commands; j++)
-			if (current_script_command.id[instruction_index] == match_command_name_to_id[j])
-				global.command_line = command_names[j];
-
-		global.command_line_num      = current_script_command.line_num[instruction_index];
-		global.download_iterator     = current_script_command.url_start[instruction_index];
+		global.command_line_num      = global.commands[global.instruction_index].line_num;
+		global.download_iterator     = 0;
 		global.last_download_attempt = true;
 
 		if (
 			// if modfolder wasn't formally started OR skipping this mod
-			((global.current_mod.empty() || global.skip_modfolder) && current_script_command.id[instruction_index] != COMMAND_BEGIN_MOD)
+			((global.current_mod.empty() || global.skip_modfolder) && global.commands[global.instruction_index].id != COMMAND_BEGIN_MOD)
 			||
 			// if version wasn't formally started
-			(!global.current_mod.empty() && global.current_mod_version.empty() && current_script_command.id[instruction_index] != COMMAND_BEGIN_VERSION)
+			(!global.current_mod.empty() && global.current_mod_version.empty() && global.commands[global.instruction_index].id != COMMAND_BEGIN_VERSION)
 			||
 			// if inside condition block
-			(global.condition_index >= 0 && !global.condition[global.condition_index] && !current_script_command.ctrl_flow[instruction_index])
+			(global.condition_index >= 0 && !global.condition[global.condition_index] && !global.commands[global.instruction_index].ctrl_flow)
+			||
+			global.commands[global.instruction_index].disable
 		) {
-			instruction_index++;
+			do {
+				global.instruction_index++;
+			} while (global.instruction_index < global.commands.size() && global.commands[global.instruction_index].disable);
 			continue;
 		}
 		
-		int command_result   = ERROR_NONE;
-		int failed_downloads = 0;
+		command_result          = ERROR_NONE;
+		size_t failed_downloads = 0;
 
 		// Check if there's an URL list for this command
-		if (current_script_command.url_num[instruction_index] > 0) {
+		if (global.commands[global.instruction_index].downloads.size() > 0) {
 			Download_Phase:
-			global.download_phase = true;
-			int last_url          = current_script_command.url_start[instruction_index] + current_script_command.url_num[instruction_index] - 1;
+			global.installation_phase = PHASE_DOWNLOADING;
 			
 			// For each url
-			for (;  global.download_iterator<=last_url;  global.download_iterator++) {
-				int j                        = global.download_iterator;
-				int download_flags           = FLAG_CONTINUE | (current_script_command.id[instruction_index] == COMMAND_DOWNLOAD ? FLAG_CLEAN_DL_LATER : FLAG_CLEAN_DL_NOW);
-				global.last_download_attempt = j == last_url;
-				global.command_line_num      = current_script_command_urls.line_num[j];
+			for (;  global.download_iterator<global.commands[global.instruction_index].downloads.size();  global.download_iterator++) {
+				size_t j                     = global.download_iterator;
+				int download_flags           = FLAG_CONTINUE | (global.commands[global.instruction_index].id == COMMAND_DOWNLOAD ? FLAG_CLEAN_DL_LATER : FLAG_CLEAN_DL_NOW);
+				global.last_download_attempt = j == global.commands[global.instruction_index].downloads.size() - 1;
+				global.command_line_num      = global.commands[j].line_num;
 				
 				// Check how many url arguments
-				if (current_script_command_urls.arg_num[j] == 0)
-					command_result = Download(current_script_command_urls.link[j], download_flags);
+				if (global.commands[global.instruction_index].downloads[j].arguments.size() == 0)
+					command_result = Download(global.commands[global.instruction_index].downloads[j].url, download_flags);
 				else 
-				if (current_script_command_urls.arg_num[j] == 1)
-					command_result = Download(current_script_command_urls.link[j] + L" \"--output-document=" + current_script_command_urls.arguments[current_script_command_urls.arg_start[j]] + L"\"", download_flags);
+				if (global.commands[global.instruction_index].downloads[j].arguments.size() == 1)
+					command_result = Download(global.commands[global.instruction_index].downloads[j].url + L" \"--output-document=" + global.commands[global.instruction_index].downloads[j].arguments[0] + L"\"", download_flags);
 				else {
-					std::wstring original_url     = current_script_command_urls.link[j];
+					std::wstring original_url     = global.commands[global.instruction_index].downloads[j].url;
 					std::wstring cookie_file_name = L"fwatch\\tmp\\__cookies.txt";
 					std::wstring token_file_name  = L"fwatch\\tmp\\__downloadtoken";
 					std::wstring wget_arguments   = L"";
 					std::wstring new_url          = original_url;
 					std::wstring POST             = L"";
-					size_t last_url_arg           = current_script_command_urls.arg_start[j] + current_script_command_urls.arg_num[j] - 1;
 					bool found_phrase             = false;
 				
 					DeleteFile(cookie_file_name.c_str());
 					DeleteFile(token_file_name.c_str());
 				
-					for (size_t k=current_script_command_urls.arg_start[j]; k<last_url_arg; k++) {
+					for (size_t k=0; k<global.commands[global.instruction_index].downloads[j].arguments.size()-1; k++) {
 						wget_arguments = L"";
 						
 						if (!POST.empty()) {
@@ -964,7 +507,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 							POST            = L"";
 						}
 					
-						wget_arguments += (k==current_script_command_urls.arg_start[j] ? L"--keep-session-cookies --save-cookies " : L"--load-cookies ") + cookie_file_name + L" --output-document=" + token_file_name + L" " + new_url;
+						wget_arguments += (k==0 ? L"--keep-session-cookies --save-cookies " : L"--load-cookies ") + cookie_file_name + L" --output-document=" + token_file_name + L" " + new_url;
 						command_result  = Download(wget_arguments, FLAG_OVERWRITE, new_url);
 				
 						if (command_result != ERROR_NONE)
@@ -972,8 +515,8 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				
 						// Parse downloaded file and find link
 						std::wstring token_file_buffer = GetFileContents(token_file_name);
-					    bool is_href                   = Equals(current_script_command_urls.arguments[k].substr(0,6),L"href=\"") || Equals(current_script_command_urls.arguments[k].substr(0,6),L"href=''");
-						size_t find                    = token_file_buffer.find(current_script_command_urls.arguments[k]);
+					    bool is_href                   = Equals(global.commands[global.instruction_index].downloads[j].arguments[k].substr(0,6),L"href=\"") || Equals(global.commands[global.instruction_index].downloads[j].arguments[k].substr(0,6),L"href=''");
+						size_t find                    = token_file_buffer.find(global.commands[global.instruction_index].downloads[j].arguments[k]);
 			
 						if (find != std::wstring::npos) {
 							size_t left_quote  = std::wstring::npos;
@@ -1054,7 +597,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 												}
 											}
 											
-											POST += (POST.empty() ? L"" : L"&") + url_encode(name) + L"=" + url_encode(value);
+											POST += (POST.empty() ? L"" : L"&") + UrlEncode(name) + L"=" + UrlEncode(value);
 										}
 										
 										input = GetTextBetween(form, L"<input", L">", offset);
@@ -1066,11 +609,11 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 						}
 
 						if (!found_phrase) {
-							command_result = ErrorMessage(STR_DOWNLOAD_FIND_ERROR, L"%STR% " + current_script_command_urls.arguments[k]);
+							command_result = ErrorMessage(STR_DOWNLOAD_FIND_ERROR, L"%STR% " + global.commands[global.instruction_index].downloads[j].arguments[k]);
 							goto Finished_downloading;
 						}
 							
-						token_file_name += UInt2StrW(k - current_script_command_urls.arg_start[j]);
+						token_file_name += UInt2StrW(k);
 					}
 
 					wget_arguments = L"--load-cookies " + cookie_file_name;
@@ -1078,8 +621,9 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					if (!POST.empty())
 						wget_arguments += L" --post-data=\"" + POST + L"\" ";
 					
-					wget_arguments +=  L" \"--output-document=" + current_script_command_urls.arguments[last_url_arg] + L"\" " + new_url;
-					command_result  = Download(wget_arguments, download_flags, new_url);
+					size_t last_url_arg = global.commands[global.instruction_index].downloads[j].arguments.size() - 1;
+					wget_arguments     +=  L" \"--output-document=" + global.commands[global.instruction_index].downloads[j].arguments[last_url_arg] + L"\" " + new_url;
+					command_result      = Download(wget_arguments, download_flags, new_url);
 				
 					if (!global.test_mode) {
 						DeleteFile(cookie_file_name.c_str());
@@ -1088,12 +632,22 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				}
 		
 				Finished_downloading:
-				if (global.pause_installer || global.abort_installer)
+				if (global.order==ORDER_PAUSE || global.order==ORDER_ABORT)
 					break;
 				else
-					if (command_result == ERROR_NONE)
+					if (command_result == ERROR_NONE) {
+						std::wstring path = L"fwatch\\tmp\\" + global.downloaded_filename;
+						HANDLE hFile = CreateFile(path.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, NULL, NULL);
+						if (hFile != INVALID_HANDLE_VALUE) {
+							LARGE_INTEGER lFileSize = {0};
+							if (GetFileSizeEx(hFile, &lFileSize)) {
+								download_sizes[global.instruction_index].QuadPart = lFileSize.QuadPart;
+								SumDownloadSizes(download_sizes, global.instruction_index);
+							}
+							CloseHandle(hFile);
+						}
 						break;
-					else
+					} else
 						failed_downloads++;
 			}
 		}
@@ -1106,19 +660,18 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				command_result != ERROR_PAUSED
 			) && 
 			(
-				current_script_command.url_num[instruction_index] == 0 || 
+				global.commands[global.instruction_index].downloads.size() == 0 || 
 				(
-					current_script_command.url_num[instruction_index] > 0 && 
-					failed_downloads < current_script_command.url_num[instruction_index]
+					global.commands[global.instruction_index].downloads.size() > 0 && 
+					failed_downloads < global.commands[global.instruction_index].downloads.size()
 				)
 			)
 		) {
-			int first             = current_script_command.arg_num[instruction_index]>0 ? current_script_command.arg_start[instruction_index] : -1;
-			global.download_phase = false;
+			global.installation_phase = PHASE_EXECUTING;
 			
-			switch(current_script_command.id[instruction_index]) {
+			switch(global.commands[global.instruction_index].id) {
 				case COMMAND_BEGIN_MOD : {
-					if (current_script_command.arg_num[instruction_index] < 4) {
+					if (global.commands[global.instruction_index].arguments.size() < 4) {
 						command_result = ErrorMessage(STR_ERROR_INVALID_SCRIPT, L"%STR%", ERROR_WRONG_SCRIPT);
 						break;
 					}
@@ -1128,15 +681,15 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 						
 					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_PREPARING]);
 				
-					global.current_mod          = current_script_command.arguments[first];
-					global.current_mod_id       = current_script_command.arguments[first + 1];
-					global.current_mod_keepname = current_script_command.arguments[first + 2];
+					global.current_mod          = global.commands[global.instruction_index].arguments[0];
+					global.current_mod_id       = global.commands[global.instruction_index].arguments[1];
+					global.current_mod_keepname = global.commands[global.instruction_index].arguments[2];
 					global.command_line_num     = 0;
 					global.current_mod_version  = L"";
 					
 					// Make a list of mod aliases for the entire installation
 					std::vector<std::wstring> aliases;
-					Tokenize(current_script_command.arguments[first + 3], L" ", aliases);
+					Tokenize(global.commands[global.instruction_index].arguments[3], L" ", aliases);
 					
 					for (size_t j=0; j<aliases.size(); j++)
 						global.current_mod_alias.push_back(aliases[j]);
@@ -1207,12 +760,12 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				}
 
 				case COMMAND_BEGIN_VERSION : {
-					if (current_script_command.arg_num[instruction_index] >= 2) {
+					if (global.commands[global.instruction_index].arguments.size() >= 2) {
 						if (!global.current_mod_version.empty())
 							EndModVersion();
 						
-						global.current_mod_version      = current_script_command.arguments[first];
-						global.current_mod_version_date = _wtoi(current_script_command.arguments[first+1].c_str());
+						global.current_mod_version      = global.commands[global.instruction_index].arguments[0];
+						global.current_mod_version_date = _wtoi(global.commands[global.instruction_index].arguments[1].c_str());
 						global.command_line_num         = 0;
 					} else
 						command_result = ErrorMessage(STR_ERROR_INVALID_SCRIPT, L"%STR%", ERROR_WRONG_SCRIPT);
@@ -1221,31 +774,41 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				}
 				
 				case COMMAND_ALIAS : {
-					if (current_script_command.arg_num[instruction_index] == 0)
+					INSTALLER_OPERATION_LOG backup = {0};
+					backup.instruction_index       = global.instruction_index;
+					backup.operation_type          = OPERATION_ALIAS;
+					backup.source                  = L"";
+
+					for (size_t i=0; i<global.current_mod_alias.size(); i++)
+						backup.source += L" " + global.current_mod_alias[i];
+
+					global.rollback.push_back(backup);
+
+					if (global.commands[global.instruction_index].arguments.size() == 0)
 						global.current_mod_alias.clear();
 					else 
-						for (size_t j=current_script_command.arg_start[instruction_index]; j<current_script_command.arg_start[instruction_index]+current_script_command.arg_num[instruction_index]; j++)
-							global.current_mod_alias.push_back(current_script_command.arguments[j]);
+						for (size_t j=0; j<global.commands[global.instruction_index].arguments.size(); j++)
+							global.current_mod_alias.push_back(global.commands[global.instruction_index].arguments[j]);
 					break;
 				}
 
-				case COMMAND_IF_VERSION : command_result=Condition_If_version(current_script_command.arguments, current_script_command.arg_start[instruction_index], current_script_command.arg_num[instruction_index]); break;
+				case COMMAND_IF_VERSION : command_result=Condition_If_version(global.commands[global.instruction_index].arguments); break;
 				case COMMAND_ELSE       : command_result=Condition_Else(); break;
 				case COMMAND_ENDIF      : command_result=Condition_Endif(); break;
-				case COMMAND_EXIT       : break;
+				case COMMAND_EXIT       : global.instruction_index=global.commands.size(); break;
 
 				case COMMAND_AUTO_INSTALL :  {
 					LogMessage(L"Auto installation"); 
 					std::wstring file = global.downloaded_filename;
 					
-					if (current_script_command.arg_num[instruction_index] > 0)
-						file = current_script_command.arguments[first];
+					if (global.commands[global.instruction_index].arguments.size() > 0)
+						file = global.commands[global.instruction_index].arguments[0];
 					
 					std::wstring file_with_path = L"fwatch\\tmp\\" + file;
 					DWORD attributes            = GetFileAttributes(file_with_path.c_str());
 					
 					if (attributes != INVALID_FILE_ATTRIBUTES) {
-						command_result = Auto_Install(file, attributes, FLAG_RUN_EXE, current_script_command.password[instruction_index]);
+						command_result = Auto_Install(file, attributes, FLAG_RUN_EXE, global.commands[global.instruction_index].password);
 						
 						// If not an archive but there are still backup links then go back to download
 						if (!global.last_download_attempt && command_result == ERROR_WRONG_ARCHIVE) {
@@ -1265,13 +828,13 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				}
 
 				case COMMAND_UNPACK : {
-					std::wstring file_name = current_script_command.arguments[first];
+					std::wstring file_name = global.commands[global.instruction_index].arguments[0];
 
 					if (Equals(file_name,L"<download>") || Equals(file_name,L"<dl>") || (file_name).empty())
 						file_name = global.downloaded_filename;
 
 					if (!(file_name).empty()) {
-						command_result = Unpack(file_name, current_script_command.password[instruction_index]);
+						command_result = Unpack(file_name, global.commands[global.instruction_index].password);
 						
 						// If not an archive but there are still backup links then go back to download
 						if (!global.last_download_attempt && command_result == ERROR_WRONG_ARCHIVE) {
@@ -1290,9 +853,9 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				
 				case COMMAND_MOVE :  
 				case COMMAND_COPY : {
-					std::wstring source      = current_script_command.arguments[first];
-					std::wstring destination = current_script_command.arguments[first + 1];
-					std::wstring new_name    = current_script_command.arguments[first + 2];
+					std::wstring source      = global.commands[global.instruction_index].arguments[0];
+					std::wstring destination = global.commands[global.instruction_index].arguments[1];
+					std::wstring new_name    = global.commands[global.instruction_index].arguments[2];
 
 					if (source.empty()) {
 						command_result = ErrorMessage(STR_ERROR_NO_FILE);
@@ -1300,19 +863,19 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					}
 
 					bool is_download_dir = true;
-					int options          = FLAG_OVERWRITE | (current_script_command.id[instruction_index]==COMMAND_MOVE ? FLAG_MOVE_FILES : FLAG_NONE);
+					int options          = FLAG_OVERWRITE | (global.commands[global.instruction_index].id==COMMAND_MOVE ? FLAG_MOVE_FILES : FLAG_NONE);
 
-					if (current_script_command.switches[instruction_index] & SWITCH_NO_OVERWRITE)
+					if (global.commands[global.instruction_index].switches & SWITCH_NO_OVERWRITE)
 						options &= ~FLAG_OVERWRITE;
 
-					if (current_script_command.switches[instruction_index] & SWITCH_MATCH_DIR)
+					if (global.commands[global.instruction_index].switches & SWITCH_MATCH_DIR)
 						options |= FLAG_MATCH_DIRS;
 						
-					if (current_script_command.switches[instruction_index] & SWITCH_MATCH_DIR_ONLY)
+					if (global.commands[global.instruction_index].switches & SWITCH_MATCH_DIR_ONLY)
 						options |= FLAG_MATCH_DIRS | FLAG_MATCH_DIRS_ONLY;
 
-					for (int j=first; j<=first+2; j++)
-						if (!VerifyPath(current_script_command.arguments[j])) {
+					for (int j=0; j<=2; j++)
+						if (!VerifyPath(global.commands[global.instruction_index].arguments[j])) {
 							command_result = ErrorMessage(STR_ERROR_PATH);
 							goto End_command_execution;
 						}
@@ -1396,7 +959,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				}
 				
 				case COMMAND_MAKEDIR : {
-					std::wstring *path = &current_script_command.arguments[first];
+					std::wstring *path = &global.commands[global.instruction_index].arguments[0];
 					
 					if (VerifyPath(*path))
 						command_result = MakeDir(global.current_mod_new_name + L"\\" + *path);
@@ -1409,10 +972,10 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				case COMMAND_DELETE : {
 					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+L"...");
 					
-					std::wstring file_name = current_script_command.arguments[first];
+					std::wstring file_name = global.commands[global.instruction_index].arguments[0];
 					int options            = FLAG_MOVE_FILES | FLAG_ALLOW_ERROR;
 					
-					if (current_script_command.switches[instruction_index] & SWITCH_MATCH_DIR)
+					if (global.commands[global.instruction_index].switches & SWITCH_MATCH_DIR)
 						options |= FLAG_MATCH_DIRS;
 						
 					if (!VerifyPath(file_name)) {
@@ -1452,7 +1015,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 								  
 					// For each file in the list
 					for (size_t j=0; j<destination_list.size(); j++) {
-						if (isAborted()) {
+						if (global.order == ORDER_ABORT) {
 							command_result = ERROR_USER_ABORTED;
 							goto End_command_execution;
 						}
@@ -1472,10 +1035,11 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 							}
 
 							if (MoveFileEx(source_list[j].c_str(), backup_path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
-								OPERATION_LOG backup;
-								backup.operation_type = OPERATION_MOVE;
-								backup.source         = backup_path;
-								backup.destination    = source_list[j];
+								INSTALLER_OPERATION_LOG backup = {0};
+								backup.instruction_index = global.instruction_index;
+								backup.operation_type    = OPERATION_MOVE;
+								backup.source            = backup_path;
+								backup.destination       = source_list[j];
 								global.rollback.push_back(backup);
 							} else {
 								DWORD error_code = GetLastError();
@@ -1508,15 +1072,15 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				case COMMAND_RENAME : {
 					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_RENAMING]+L"...");
 				
-					std::wstring source      = current_script_command.arguments[first];
-					std::wstring destination = current_script_command.arguments[first + 1];
+					std::wstring source      = global.commands[global.instruction_index].arguments[0];
+					std::wstring destination = global.commands[global.instruction_index].arguments[1];
 					int options              = FLAG_MOVE_FILES;
 					
-					if (current_script_command.switches[instruction_index] & SWITCH_MATCH_DIR)
+					if (global.commands[global.instruction_index].switches & SWITCH_MATCH_DIR)
 						options |= FLAG_MATCH_DIRS;
 						
-					for (int j=first; j<=first+1; j++)
-						if (!VerifyPath(current_script_command.arguments[j])) {
+					for (int j=0; j<2; j++)
+						if (!VerifyPath(global.commands[global.instruction_index].arguments[j])) {
 							command_result = ErrorMessage(STR_ERROR_PATH);
 							goto End_command_execution;
 						}
@@ -1576,7 +1140,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 
 					// For each file on the list
 					for (size_t j=0;  j<source_list.size(); j++) {
-						if (isAborted()) {
+						if (global.order == ORDER_ABORT) {
 							command_result = ERROR_USER_ABORTED;
 							break;
 						}
@@ -1586,10 +1150,11 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 
 						// Rename
 					    if (MoveFileEx(source_list[j].c_str(), destination_list[j].c_str(), 0)) {
-							OPERATION_LOG backup;
-							backup.operation_type = OPERATION_MOVE;
-							backup.source         = destination_list[j];
-							backup.destination    = source_list[j];
+							INSTALLER_OPERATION_LOG backup = {0};
+							backup.instruction_index = global.instruction_index;
+							backup.operation_type    = OPERATION_MOVE;
+							backup.source            = destination_list[j];
+							backup.destination       = source_list[j];
 							global.rollback.push_back(backup);
 						} else {
 							DWORD error_code = GetLastError();
@@ -1602,7 +1167,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				}
 				
 				case COMMAND_ASK_RUN : {
-					std::wstring file_name = current_script_command.arguments[first];
+					std::wstring file_name = global.commands[global.instruction_index].arguments[0];
 					
 					if (Equals(file_name,L"<download>") || Equals(file_name,L"<dl>") || file_name.empty())
 						file_name = global.downloaded_filename;
@@ -1630,13 +1195,13 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				}
 
 				case COMMAND_ASK_DOWNLOAD : {
-					if (current_script_command.arg_num[instruction_index] < 2) {
+					if (global.commands[global.instruction_index].arguments.size() < 2) {
 						command_result = ErrorMessage(STR_ERROR_ARG_COUNT);
 						break;
 					}
 					
-					std::wstring *file_name   = &current_script_command.arguments[first];
-					std::wstring *url         = &current_script_command.arguments[first + 1];
+					std::wstring *file_name   = &global.commands[global.instruction_index].arguments[0];
+					std::wstring *url         = &global.commands[global.instruction_index].arguments[1];
 					std::wstring tmp          = L"fwatch\\tmp\\schedule\\DownloadDir.txt";
 					std::wstring download_dir = GetFileContents(tmp);
 					bool move                 = false;
@@ -1709,7 +1274,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				case COMMAND_MAKEPBO : {
 					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_PACKINGPBO]+L"...");
 					
-					std::wstring file_name = current_script_command.arguments[first];
+					std::wstring file_name = global.commands[global.instruction_index].arguments[0];
 										
 					if (!VerifyPath(file_name)) {
 						command_result = ErrorMessage(STR_ERROR_PATH);
@@ -1730,7 +1295,8 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					std::wstring pbo_name = file_name + L".pbo";
 
 					// Make backup
-					OPERATION_LOG backup;
+					INSTALLER_OPERATION_LOG backup = {0};
+					backup.instruction_index       = global.instruction_index;
 
 					if (GetFileAttributes(pbo_name.c_str()) != INVALID_FILE_ATTRIBUTES) {
 						std::wstring backup_path = L"fwatch\\tmp\\_backup\\" + pbo_name;
@@ -1805,7 +1371,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 						std::string message = "";
 					
 						do {					
-							if (isAborted()) {
+							if (global.order == ORDER_ABORT) {
 								TerminateProcess(pi.hProcess, 0);
 								CloseHandle(pi.hProcess);
 								CloseHandle(pi.hThread);
@@ -1932,12 +1498,12 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 							} else
 								break;
 				
-							if (current_script_command.switches[instruction_index] & SWITCH_TIMESTAMP)
-								command_result = ChangeFileDate(pbo_name, current_script_command.timestamp[instruction_index]);
+							if (global.commands[global.instruction_index].switches & SWITCH_TIMESTAMP)
+								command_result = ChangeFileDate(pbo_name, global.commands[global.instruction_index].timestamp);
 							else
 								command_result = ChangeFileDate(pbo_name, global.current_mod_version_date);
 
-							if (command_result == ERROR_NONE && ~current_script_command.switches[instruction_index] & SWITCH_KEEP_SOURCE) {
+							if (command_result == ERROR_NONE && ~global.commands[global.instruction_index].switches & SWITCH_KEEP_SOURCE) {
 								WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_DELETING]+L"...");
 								LogMessage(L"Removing " + file_name + L" directory");
 								global.last_pbo_file = L"";
@@ -1981,8 +1547,8 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				}
 				
 				case COMMAND_EXTRACTPBO : {
-					std::wstring source      = current_script_command.arguments[first];
-					std::wstring destination = current_script_command.arguments[first + 1];
+					std::wstring source      = global.commands[global.instruction_index].arguments[0];
+					std::wstring destination = global.commands[global.instruction_index].arguments[1];
 					
 					// Verify source argument
 					if (source.empty()) {
@@ -2043,14 +1609,14 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				case COMMAND_EDIT : {
 					WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_EDITING]+L"...");
 				
-					if (current_script_command.arg_num[instruction_index] < 3) {
+					if (global.commands[global.instruction_index].arguments.size() < 3) {
 						command_result = ErrorMessage(STR_ERROR_ARG_COUNT);
 						break;
 					}
 					
-					std::wstring file_name  = current_script_command.arguments[first];
-					std::string wanted_text = utf8(current_script_command.arguments[first + 2]);
-					size_t wanted_line      = wcstoul(current_script_command.arguments[first+1].c_str(), NULL, 10);
+					std::wstring file_name  = global.commands[global.instruction_index].arguments[0];
+					std::string wanted_text = utf8(global.commands[global.instruction_index].arguments[2]);
+					size_t wanted_line      = wcstoul(global.commands[global.instruction_index].arguments[1].c_str(), NULL, 10);
 				
 					if (file_name.empty()) {
 						command_result = ErrorMessage(STR_ERROR_NO_FILE);
@@ -2073,8 +1639,9 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					}
 
 					// Make bacup
-					OPERATION_LOG backup;
-					backup.operation_type = OPERATION_NONE;
+					INSTALLER_OPERATION_LOG backup = {0};
+					backup.instruction_index       = global.instruction_index;
+					backup.operation_type          = OPERATION_NONE;
 
 					{
 						DWORD dest_attr          = GetFileAttributes(file_name.c_str());
@@ -2116,7 +1683,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					size_t line_number     = 0;
 					bool ends_with_newline = true;
 				    
-				    if (~current_script_command.switches[instruction_index] & SWITCH_NEWFILE) {
+				    if (~global.commands[global.instruction_index].switches & SWITCH_NEWFILE) {
 				    	LogMessage(L"Editing line " + UInt2StrW(wanted_line) + L" in " + file_name);
 				    	
 				    	file.open(file_name.c_str(), std::ios::in);
@@ -2131,11 +1698,11 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 									ends_with_newline = false;
 								
 								if (line_number == wanted_line) {
-									std::string new_line = current_script_command.switches[instruction_index] & SWITCH_APPEND ? line+wanted_text : wanted_text;
+									std::string new_line = global.commands[global.instruction_index].switches & SWITCH_APPEND ? line+wanted_text : wanted_text;
 								
 									contents.push_back(new_line);
 									
-									if (current_script_command.switches[instruction_index] & SWITCH_INSERT) {
+									if (global.commands[global.instruction_index].switches & SWITCH_INSERT) {
 										contents.push_back(line);
 										line_number++;
 									}
@@ -2143,7 +1710,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 									contents.push_back(line);
 							}
 							
-							if (current_script_command.switches[instruction_index] & SWITCH_INSERT  &&  (wanted_line==0 || wanted_line > line_number)) {
+							if (global.commands[global.instruction_index].switches & SWITCH_INSERT  &&  (wanted_line==0 || wanted_line > line_number)) {
 								contents.push_back(wanted_text);
 								line_number++;
 							}
@@ -2173,8 +1740,8 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				
 						file_new.close();
 						
-						if (current_script_command.switches[instruction_index] & SWITCH_TIMESTAMP)
-							command_result = ChangeFileDate(file_name, current_script_command.timestamp[instruction_index]);
+						if (global.commands[global.instruction_index].switches & SWITCH_TIMESTAMP)
+							command_result = ChangeFileDate(file_name, global.commands[global.instruction_index].timestamp);
 						else
 				    		command_result = ChangeFileDate(file_name, global.current_mod_version_date);
 
@@ -2189,13 +1756,13 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				}
 				
 				case COMMAND_FILEDATE : {
-					if (current_script_command.arg_num[instruction_index] < 2) {
+					if (global.commands[global.instruction_index].arguments.size() < 2) {
 						command_result = ErrorMessage(STR_ERROR_ARG_COUNT);
 						break;
 					}
 					
-					std::wstring file_name = current_script_command.arguments[first];
-					std::wstring date_text = current_script_command.arguments[first + 1];
+					std::wstring file_name = global.commands[global.instruction_index].arguments[0];
+					std::wstring date_text = global.commands[global.instruction_index].arguments[1];
 					
 					if (!VerifyPath(file_name)) {
 						command_result = ErrorMessage(STR_ERROR_PATH);
@@ -2215,10 +1782,11 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 							command_result = ChangeFileDate(file_name, date_text);
 
 							if (command_result == ERROR_NONE) {
-								OPERATION_LOG backup;
-								backup.operation_type = OPERATION_FILEDATE;
-								backup.source         = file_name;
-								backup.modif_time     = modification_time;
+								INSTALLER_OPERATION_LOG backup = {0};
+								backup.instruction_index       = global.instruction_index;
+								backup.operation_type          = OPERATION_FILEDATE;
+								backup.source                  = file_name;
+								backup.modif_time              = modification_time;
 								global.rollback.push_back(backup);
 							}
 						} else
@@ -2237,93 +1805,67 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 		}
 
 		End_command_execution:
-
-		// If command failed then ask to retry/abort
-		if (command_result != ERROR_NONE && command_result != ERROR_USER_ABORTED && command_result != ERROR_PAUSED) {
-			WriteProgressFile(INSTALL_RETRYORABORT, global.last_log_message + L"\r\n\r\n" + global.lang[STR_ASK_RETRYORABORT]);
-			global.retry_installer = false;
-			EnableMenuItem(global.window_menu, ID_PROCESS_RETRY, MF_BYCOMMAND);
-
-			while (!global.abort_installer && !global.retry_installer)
-				Sleep(200);
-
-			EnableMenuItem(global.window_menu, ID_PROCESS_RETRY, MF_BYCOMMAND | MF_GRAYED);
-
-			if (isAborted()) {
-				command_result = ERROR_USER_ABORTED;
-			} else
-				if (global.retry_installer) {
-					if (command_result == ERROR_WRONG_ARCHIVE) {
-						std::wstring file_name = L"fwatch\\tmp\\" + global.downloaded_filename;
-						DeleteFile(file_name.c_str());
-						global.downloads.pop_back();
-					}
-
-					global.retry_installer = false;
-				}
+		if (command_result == ERROR_WRONG_ARCHIVE) {
+			std::wstring file_name = L"fwatch\\tmp\\" + global.downloaded_filename;
+			DeleteFile(file_name.c_str());
+			global.downloads.pop_back();
+			command_result = ERROR_COMMAND_FAILED;
 		}
 
-		if (current_script_command.id[instruction_index] == COMMAND_EXIT)
-			break;
-
-		// Rollback changes
-		if (command_result == ERROR_USER_ABORTED) {
-			for (std::vector<OPERATION_LOG>::reverse_iterator current_op=global.rollback.rbegin(); current_op!=global.rollback.rend(); ++current_op) {
-				std::wstring a = current_op->source.c_str();
-				std::wstring b = current_op->destination.c_str();
-
-				switch(current_op->operation_type) {
-					case OPERATION_MOVE: {
-						MakeDir(PathNoLastItem(current_op->destination).c_str(), FLAG_SILENT_MODE);
-						MoveFileEx(current_op->source.c_str(), current_op->destination.c_str(), MOVEFILE_REPLACE_EXISTING);
-					} break;
-
-					case OPERATION_DELETE: {
-						DeleteFile(current_op->source.c_str());
-					} break;
-
-					case OPERATION_DELETE_DIR : {
-						DeleteDirectory(current_op->source.c_str());
-					} break;
-
-					case OPERATION_FILEDATE : {
-						ChangeFileDate(current_op->source.c_str(), &(current_op->modif_time));
-					} break;
-				}
-			}
-
-			return command_result;
+		if (command_result == ERROR_NONE) {
+			do {
+				global.instruction_index++;
+			} while (global.instruction_index < global.commands.size() && global.commands[global.instruction_index].disable);
 		}
-
-		if (command_result == ERROR_NONE)
-			instruction_index++;
 	}
-
-    // Clean up after the last mod
-	if (!global.current_mod.empty())
-		EndMod();
-
-	// Finish log file
-	if (global.missing_modfolders.empty()) {
-		WriteProgressFile(INSTALL_DONE, global.lang[STR_ACTION_DONE]);
-		SYSTEMTIME st;
-		GetLocalTime(&st);
-		LogMessage(
-			L"All done  " + 
-			Int2StrW(st.wHour, OPTION_LEADINGZERO) + L":" + 
-			Int2StrW(st.wMinute, OPTION_LEADINGZERO) + L":" + 
-			Int2StrW(st.wSecond, OPTION_LEADINGZERO)
-		);
-	} else {
-		std::wstring message = ReplaceAll(global.lang[STR_ACTION_DONEWARNING], L"%MOD%", global.missing_modfolders);
-		WriteProgressFile(INSTALL_WARNING, message);
-		LogMessage(L"WARNING: Installation completed but modfolders " + global.missing_modfolders + L" are still missing");
-		global.restart_game = false;
-	}
-	
-	// Close listen thread
-	global.end_thread = true;
-	WaitForSingleObject(global.thread_receiver, INFINITE);
 
     return ERROR_NONE;
+}
+
+	// Separate thread for checking user feedback
+DWORD WINAPI ReceiveInstructions(__in LPVOID lpParameter)
+{
+	UNREFERENCED_PARAMETER(lpParameter);
+	
+	while (WaitForSingleObject(global.thread_installer, 0) != WAIT_OBJECT_0) {
+		std::wstring file_name = L"fwatch\\tmp\\schedule\\InstallerInstruction.txt";
+		std::wstring contents  = GetFileContents(file_name);
+
+		if (!contents.empty()) {
+			if (contents == L"abort") {
+				if (global.order == ORDER_NONE)
+					global.order = ORDER_ABORT;
+				DisableMenu();
+			}
+
+			if (contents == L"restart") {
+				global.restart_game = !global.restart_game;
+				CheckMenuItem(global.window_menu, ID_OPTIONS_RESTARTGAME, global.restart_game ? MF_CHECKED : MF_UNCHECKED);
+			}
+				
+			if (contents == L"voice")
+				global.run_voice_program = !global.run_voice_program;
+
+			if (contents == L"retry")
+				if (global.order == ORDER_NONE)
+					global.order = ORDER_RETRY;
+
+			if (contents == L"pause") {
+				if (global.order == ORDER_NONE)
+					global.order = ORDER_PAUSE;
+				CheckMenuItem(global.window_menu, ID_PROCESS_PAUSE, MF_CHECKED);
+			}
+
+			if (contents == L"resume") {
+				if (global.order == ORDER_NONE)
+					global.order = ORDER_PLAY;
+				CheckMenuItem(global.window_menu, ID_PROCESS_PAUSE, MF_UNCHECKED);
+			}
+
+			DeleteFile(L"fwatch\\tmp\\schedule\\InstallerInstruction.txt");
+		}
+
+		Sleep(100);
+	}
+	return 0;
 }
