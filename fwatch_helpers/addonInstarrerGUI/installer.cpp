@@ -18,6 +18,7 @@ DWORD WINAPI addonInstallerWrapper(__in LPVOID lpParameter)
 		WaitForSingleObject(global.thread_installer, INFINITE);
 	}
 
+	DeleteDirectory(L"fwatch\\tmp\\_backup");
 	DisableMenu();
 
 	// If user wants to restart the game after installation
@@ -48,7 +49,8 @@ DWORD WINAPI addonInstallerWrapper(__in LPVOID lpParameter)
 	LogMessage(L"", CLOSE_LOG);
 
 	DWORD thread_return = 0;
-	GetExitCodeThread(global.thread_installer, &thread_return);
+	if (global.thread_installer != 0)
+		GetExitCodeThread(global.thread_installer, &thread_return);
 
 	if (global.restart_game || (thread_return==ERROR_USER_ABORTED && global.test_mode))
 		SendMessage(global.window, WM_CLOSE, 0, 0);
@@ -157,6 +159,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 	}
 	
 	ParseInstallationScript(script_file_content, global.commands);
+	FillCommandsList();
 
 	if (global.commands.size() == 0) {
 		if (global.test_mode) {
@@ -186,18 +189,23 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 	for (;;) {
 		global.installation_phase = PHASE_WAITING;
 
-		// Update command listbox
+		InvalidateRect(global.controls[LIST_COMMANDS], NULL, false); //trigger WM_DRAWITEM for the listbox
+
+		// Scroll listbox to show current command
 		{
-			LRESULT command_list_selection = SendMessage(global.controls[LIST_COMMANDS], LB_GETCURSEL, 0, 0);
-			SendMessage(global.controls[LIST_COMMANDS], LB_RESETCONTENT, 0, 0);
+			size_t top = (size_t)SendMessage(global.controls[LIST_COMMANDS], LB_GETTOPINDEX, 0, 0);
+			LRESULT item_height = SendMessage(global.controls[LIST_COMMANDS], LB_GETITEMHEIGHT, 0, 0);
+			RECT listbox;
+			GetWindowRect(global.controls[LIST_COMMANDS], &listbox);
+			int visible_items = (listbox.bottom - listbox.top) / item_height;
 
-			for (size_t i=0; i<global.commands_lines.size(); i++) {
-				std::wstring listbox_text = (i==global.instruction_index ? L">>" : L"") + global.commands_lines[i];
-				SendMessageW(global.controls[LIST_COMMANDS], LB_ADDSTRING, 0, (LPARAM)listbox_text.c_str());
+			if (global.instruction_index < global.commands.size()) {
+				if (global.instruction_index < top)
+					SendMessage(global.controls[LIST_COMMANDS], LB_SETTOPINDEX, (WPARAM)global.instruction_index, 0);
+				else
+					if (global.instruction_index >= (top+visible_items))
+						SendMessage(global.controls[LIST_COMMANDS], LB_SETTOPINDEX, (WPARAM)(global.instruction_index-visible_items+1), 0);
 			}
-
-			if (command_list_selection != LB_ERR)
-				SendMessage(global.controls[LIST_COMMANDS], LB_SETCURSEL, (WPARAM)command_list_selection, 0);
 		}
 
 		if (command_result == ERROR_NONE) {
@@ -216,10 +224,11 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 			EnableWindow(global.controls[BUTTON_BACK], global.instruction_index>0);
 			EnableWindow(global.controls[BUTTON_NEXT], command_result==ERROR_NONE && global.instruction_index<global.commands.size());
 			EnableWindow(global.controls[BUTTON_PLAY], global.instruction_index<global.commands.size());
-			EnableWindow(global.controls[BUTTON_RELOAD], command_result==ERROR_NONE);
+			EnableWindow(global.controls[BUTTON_SAVETEST], command_result==ERROR_NONE);
 			EnableWindow(global.controls[INPUT_MOD_NAME], command_result==ERROR_NONE && global.instruction_index==0);
 			EnableWindow(global.controls[INPUT_DIR_NAME], command_result==ERROR_NONE && global.instruction_index==0);
 			EnableWindow(global.controls[INPUT_GAME_VER], command_result==ERROR_NONE && global.instruction_index==0);
+			EnableWindow(global.controls[BUTTON_JUMP_TO_STEP], command_result==ERROR_NONE && global.instruction_index<global.commands.size() && !global.commands[global.instruction_index].disable);
 			SetWindowText(global.controls[BUTTON_PLAY], play_automatically && command_result==ERROR_NONE ? L"||" : L">");
 			SumDownloadSizes(download_sizes, global.instruction_index);
 
@@ -341,14 +350,16 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 
 				if (hFile != INVALID_HANDLE_VALUE) {
 					int id_to_write[] = {INPUT_MOD_NAME, INPUT_DIR_NAME, INPUT_GAME_VER};
-					std::wstring *ptr[] = {&global.current_mod, &global.current_mod_new_name, &global.game_version};
 					DWORD bytesWritten;
 
 					for (int i=0; i<sizeof(id_to_write)/sizeof(id_to_write[0]); i++) {
+						std::wstring text = L"";
+						WindowTextToString(global.controls[id_to_write[i]], text);
+
 						WriteFile(hFile, &id_to_write[i], sizeof(id_to_write[0]), &bytesWritten, NULL);
-						DWORD length = (DWORD)(ptr[i]->length()+1) * sizeof(wchar_t);
+						DWORD length = (DWORD)(text.length()+1) * sizeof(wchar_t);
 						WriteFile(hFile, &length, sizeof(length), &bytesWritten, NULL);
-						WriteFile(hFile, ptr[i]->c_str(), length, &bytesWritten, NULL);
+						WriteFile(hFile, text.c_str(), length, &bytesWritten, NULL);
 					}
 
 					CloseHandle(hFile);
@@ -365,10 +376,11 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 			EnableWindow(global.controls[BUTTON_BACK], 0);
 			EnableWindow(global.controls[BUTTON_NEXT], 0);
 			EnableWindow(global.controls[BUTTON_PLAY], 1);
-			EnableWindow(global.controls[BUTTON_RELOAD], 0);
+			EnableWindow(global.controls[BUTTON_SAVETEST], 0);
 			EnableWindow(global.controls[INPUT_MOD_NAME], 0);
 			EnableWindow(global.controls[INPUT_DIR_NAME], 0);
 			EnableWindow(global.controls[INPUT_GAME_VER], 0);
+			EnableWindow(global.controls[BUTTON_JUMP_TO_STEP], 0);
 			EnableMenuItem(global.window_menu, ID_PROCESS_RETRY, MF_BYCOMMAND | MF_GRAYED);
 
 			INSTALLER_ORDER order = global.order;
@@ -378,6 +390,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				case ORDER_RETRY : {
 					RollBackInstallation(global.instruction_index);
 				} break;
+
 				case ORDER_ABORT : {
 					if (global.test_mode) {
 						EnableWindow(global.controls[BUTTON_PLAY], 0);
@@ -389,21 +402,27 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 
 					return ERROR_USER_ABORTED;
 				} break;
+
 				case ORDER_PREV : {
-					if (global.instruction_index > 0) {
-						do {
-							global.instruction_index--;
-						} while (global.instruction_index>0 && (global.instruction_index>=global.commands.size() || (global.instruction_index<global.commands.size() && global.commands[global.instruction_index].disable)));
-					}
-					command_result = ERROR_NONE;
+					if (command_result == ERROR_NONE) {
+						if (global.instruction_index > 0) {
+							do {
+								global.instruction_index--;
+							} while (global.instruction_index>0 && (global.instruction_index>=global.commands.size() || (global.instruction_index<global.commands.size() && global.commands[global.instruction_index].disable)));
+						}
+					} else
+						command_result = ERROR_NONE;
+					
 					play_automatically = false;
 					RollBackInstallation(global.instruction_index);
 					continue;
 				} break;
+
 				case ORDER_NEXT : {
 					if (global.instruction_index >= global.commands.size())
 						continue;
 				} break;
+
 				case ORDER_REWIND : {
 					RollBackInstallation();
 					global.instruction_index = 0;
@@ -411,6 +430,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					play_automatically = false;
 					continue;
 				} break;
+
 				case ORDER_PLAY : {
 					if (command_result == ERROR_NONE) {
 						play_automatically = !play_automatically;
@@ -421,7 +441,9 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 						RollBackInstallation(global.instruction_index);
 					}
 				} break;
+
 				case ORDER_PAUSE : command_result=ERROR_NONE;continue;
+
 				case ORDER_RELOAD : {
 					script_file_content.clear();
 					WindowTextToString(global.controls[EDIT_SCRIPT], script_file_content);
@@ -433,6 +455,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					}
 
 					global.instruction_index = ParseInstallationScript(script_file_content, global.commands, COMPARE_OLD_WITH_NEW);
+					FillCommandsList();
 					RollBackInstallation(global.instruction_index);
 					SwitchTab(INSTALLER_TAB_INSTRUCTIONS);
 					download_sizes.resize(global.commands.size());
@@ -441,6 +464,15 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					play_automatically = false;
 					continue;
 				} break;
+
+				case ORDER_JUMP : {
+					size_t selected = (size_t)SendMessage(global.controls[LIST_COMMANDS], LB_GETCURSEL, 0, 0);
+					if (selected<global.commands.size() && !global.commands[selected].disable && command_result==ERROR_NONE && selected!=global.instruction_index) {
+						global.instruction_index = selected;
+						RollBackInstallation(global.instruction_index);
+					}
+					continue;
+				};
 			}
 		}
 
@@ -1658,7 +1690,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 								backup_attr = GetFileAttributes(backup_path.c_str());
 							}
 
-							if (MoveFileEx(file_name.c_str(), backup_path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+							if (CopyFile(file_name.c_str(), backup_path.c_str(), 1)) {
 								backup.operation_type = OPERATION_MOVE;
 								backup.source         = backup_path;
 								backup.destination    = file_name;

@@ -12,3 +12,4 @@ INT_PTR CALLBACK ConvertDownloadLink(HWND hwndDlg, UINT message, WPARAM wParam, 
 LRESULT CALLBACK EditScript(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 DWORD WINAPI UpdateLineNumber(__in LPVOID lpParameter);
 void CalculateWindowSizes(HWND window);
+BOOL DrawListofCommands(HWND hwnd, UINT uCtrlId, DRAWITEMSTRUCT *dis);

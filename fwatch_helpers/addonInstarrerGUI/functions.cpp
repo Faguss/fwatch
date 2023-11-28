@@ -734,10 +734,12 @@ void LogMessageDate(bool start_date)
 		LogMessage(L"\r\n--------------\r\n\r\n" + SystemTimeToReadableDate(st));
 		
 		if (global.test_mode) {
-			LogMessage(L"Test Mode - " + global.current_mod);
+			std::wstring msg = L"Test Mode - " + global.current_mod;
 		
 			if (!Equals(global.current_mod,global.current_mod_new_name))
-				LogMessage(L" as " + global.current_mod_new_name);
+				msg += L" as " + global.current_mod_new_name;
+
+			LogMessage(msg);
 		}
 	} else {
 		LogMessage(
@@ -1241,16 +1243,13 @@ int ParseUnpackLog(std::string &error, std::wstring &file_name)
 			size_t percent = text.find_last_of("%");
 
 			if (percent != std::string::npos) {
-				if (percent < 3)
-					percent = 0;
-				else
-					percent -= 3;
+				size_t percent_start = percent<3 ? 0 : percent-3;
 
-				percentage  = Trim(text.substr(percent, 4));
+				percentage  = Trim(text.substr(percent_start, percent-percent_start+1));
 				size_t dash = text.find("- ");
 
 				if (dash != std::string::npos)
-					current_file = text.substr(dash+2);					
+					current_file = text.substr(dash+2);	
 			}
 
 			// Get error message
@@ -1984,12 +1983,57 @@ INSTALLER_ERROR_CODE Unpack(std::wstring file_name, std::wstring password, int o
 		relative_path = relative_path.substr(11) += L"_extracted";
 
 	// Clean destination directory
-	std::wstring destination = L"fwatch\\tmp\\_extracted";
+	std::wstring unpack_destination = L"fwatch\\tmp\\_extracted";
 	
 	if (relative_path != L"")
-		destination += L"\\" + relative_path;
+		unpack_destination += L"\\" + relative_path;
 
-	DeleteDirectory(destination);
+	// Backup files in test mode; otherwise clean directory
+	if (global.test_mode) {
+		std::vector<std::wstring> source_list;
+		std::vector<std::wstring> destination_list;
+		std::vector<bool>         is_dir_list;
+		std::vector<std::wstring> empty_dirs;
+		size_t buffer_size            = 0;
+		int recursion                 = -1;
+
+		INSTALLER_ERROR_CODE result = CreateFileList(unpack_destination, L"fwatch\\tmp\\_backup\\__extracted", source_list, destination_list, is_dir_list, FLAG_MOVE_FILES | FLAG_MATCH_DIRS, empty_dirs, buffer_size, recursion);
+		if (result != ERROR_NONE)
+			return result;
+
+		for (size_t i=0;  i<source_list.size(); i++) {
+			if (global.order == ORDER_ABORT)
+				return ERROR_USER_ABORTED;
+
+			MakeDir(PathNoLastItem(destination_list[i]), FLAG_SILENT_MODE);
+
+			std::wstring final_destination = destination_list[i];
+			DWORD backup_attr              = GetFileAttributes(final_destination.c_str());
+			int backup_num                 = 1;
+
+			while (backup_attr != INVALID_FILE_ATTRIBUTES) {
+				final_destination = destination_list[i] + Int2StrW(++backup_num);
+				backup_attr       = GetFileAttributes(final_destination.c_str());
+			}
+
+			if (MoveFileEx(source_list[i].c_str(), final_destination.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+				INSTALLER_OPERATION_LOG backup = {0};
+				backup.instruction_index       = global.instruction_index;
+				backup.operation_type          = OPERATION_MOVE;
+				backup.source                  = final_destination;
+				backup.destination             = source_list[i];
+				global.rollback.push_back(backup);
+			} else {
+				DWORD error_code = GetLastError();
+				LogMessage(L"Failed to backup " + source_list[i]);
+				result = ErrorMessage(STR_MOVE_ERROR,
+					L"%STR% " + source_list[i] + L" " + global.lang[STR_MOVE_TO_ERROR] + L" " + destination_list[i] + L" - " + Int2StrW(error_code) + L" " + FormatError(error_code)
+				);
+				return ERROR_COMMAND_FAILED;
+			}
+		}
+	} else
+		DeleteDirectory(unpack_destination);
 
 
 	// Create log file
@@ -2022,7 +2066,7 @@ INSTALLER_ERROR_CODE Unpack(std::wstring file_name, std::wstring password, int o
 		WrapInQuotes(global.working_directory) + 
 		(password.empty() ? L"" : L" -p"+password) + 
 		L" x -y -o\"" + 
-		destination + 
+		unpack_destination + 
 		L"\\\" -bb3 -bsp1 " + 
 		L"\"fwatch\\tmp\\" + 
 		file_name + 
@@ -2080,6 +2124,14 @@ INSTALLER_ERROR_CODE Unpack(std::wstring file_name, std::wstring password, int o
 	CloseHandle(pi.hProcess);
 	CloseHandle(pi.hThread);
 	CloseHandle(logFile);
+
+	if (global.test_mode) {
+		INSTALLER_OPERATION_LOG backup = {0};
+		backup.instruction_index       = global.instruction_index;
+		backup.source                  = unpack_destination;
+		backup.operation_type          = OPERATION_DELETE_DIR;
+		global.rollback.push_back(backup);
+	}
 
 	return output;
 }
@@ -3140,6 +3192,8 @@ void ShowCommandInfo()
 
 	ShowWindow(global.controls[BUTTON_OPEN_DOC], SW_SHOW);
 	ShowWindow(global.controls[BUTTON_JUMP_TO_LINE], SW_SHOW);
+	ShowWindow(global.controls[BUTTON_JUMP_TO_STEP], SW_SHOW);
+	EnableWindow(global.controls[BUTTON_JUMP_TO_STEP], !global.commands[sel].disable);
 
 	switch(global.commands[sel].id) {
 		case COMMAND_AUTO_INSTALL : {
@@ -3315,7 +3369,8 @@ void ShowCommandInfo()
 					if (global.commands[sel].switches & SWITCH_INSERT)
 						switch_txt = L"insert line";
 					else
-						switch_txt = L"append to the end";
+						if (global.commands[sel].switches & SWITCH_APPEND)
+							switch_txt = L"append to the end";
 
 				if (!global.commands[sel].timestamp.empty()) {
 					if (!switch_txt.empty())
@@ -3445,5 +3500,12 @@ void SumDownloadSizes(std::vector<LARGE_INTEGER> &download_sizes, size_t instruc
         formatted += L"0 " + (std::wstring)names[0];
 
 	SetWindowText(global.controls[TXT_DL_SIZE], formatted.c_str());
+}
+
+void FillCommandsList() {
+	SendMessage(global.controls[LIST_COMMANDS], LB_RESETCONTENT, 0, 0);
+
+	for (size_t i=0; i<global.commands_lines.size(); i++)
+		SendMessageW(global.controls[LIST_COMMANDS], LB_ADDSTRING, 0, (LPARAM)global.commands_lines[i].c_str());
 }
 // -------------------------------------------------------------------------------------------------------

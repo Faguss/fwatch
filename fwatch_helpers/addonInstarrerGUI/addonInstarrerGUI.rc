@@ -162,29 +162,30 @@ END
 // Dialog
 //
 
-IDD_CONVERT_DL DIALOGEX 0, 0, 451, 224
+IDD_CONVERT_DL DIALOGEX 0, 0, 451, 242
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Convert download link"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    DEFPUSHBUTTON   "Insert",IDOK,108,204,50,14
+    DEFPUSHBUTTON   "Insert",IDOK,108,220,50,14
     LTEXT           "Convert link (from any of the sites listed below) to a format usable by the installer",IDC_STATIC,6,6,287,8
-    LTEXT           "• Google Drive - https://drive.google.com/file/d/1_53Xmwek8ffHlHElhKb8vNaQEkJ0PWFj/view?usp=sharing",IDC_STATIC,18,24,432,8
-    LTEXT           "• ModDB - https://www.moddb.com/mods/sanctuary1/downloads/ww4-modpack-25",IDC_STATIC,18,36,268,8
-    LTEXT           "• Mediafire - http://www.mediafire.com/file/4rm6uf16ihe36ce/wgl512_2006-11-12.rar/file",IDC_STATIC,18,48,288,8
-    LTEXT           "• DSServers - https://ds-servers.com/gf/operation-flashpoint/modifications/miscellaneous/fdf-mod-v1-4.html",IDC_STATIC,18,60,348,8
-    LTEXT           "• OFPEC - https://www.ofpec.com/addons_depot/index.php?action=details&id=69",IDC_STATIC,18,72,262,8
-    LTEXT           "• SendSpace - https://www.sendspace.com/file/8r9g4z",IDC_STATIC,18,84,178,8
-    LTEXT           "• LoneBullet - https://www.lonebullet.com/mods/download-ecp-1085e-tgs-operation-flashpoint-resistance-mod-free-52029.htm",IDC_STATIC,18,96,409,8
-    LTEXT           "• DropBox - https://www.dropbox.com/s/aswdz81mxhc909b/Bw85%20pack%201.3.rar?dl=0",IDC_STATIC,18,108,301,8
-    LTEXT           "URL",IDC_TXT_URL,18,138,78,14
-    LTEXT           "File name",IDC_TXT_FNAME,18,156,78,14
-    LTEXT           "Requires confirmation",IDC_TXT_CONFIRM,18,174,78,14
-    EDITTEXT        IDC_EDIT_URL,108,138,324,14,ES_AUTOHSCROLL
-    EDITTEXT        IDC_EDIT_FNAME,108,156,324,14,ES_AUTOHSCROLL
-    CONTROL         "",IDC_CHECK_CONFIRM,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,108,174,16,10
-    LTEXT           "(usually for files above 100 MB)",IDC_TXT_CONFIRM2,108,186,246,14
+    LTEXT           "• Google Drive - https://drive.google.com/file/d/1_53Xmwek8ffHlHElhKb8vNaQEkJ0PWFj/view?usp=sharing",IDC_STATIC,18,24,426,8
+    LTEXT           "• ModDB - https://www.moddb.com/mods/sanctuary1/downloads/ww4-modpack-25",IDC_STATIC,18,36,426,8
+    LTEXT           "• Mediafire - http://www.mediafire.com/file/4rm6uf16ihe36ce/wgl512_2006-11-12.rar/file",IDC_STATIC,18,48,426,8
+    LTEXT           "• DSServers - https://ds-servers.com/gf/operation-flashpoint/modifications/miscellaneous/fdf-mod-v1-4.html",IDC_STATIC,18,60,426,8
+    LTEXT           "• OFPEC - https://www.ofpec.com/addons_depot/index.php?action=details&id=69",IDC_STATIC,18,72,426,8
+    LTEXT           "• SendSpace - https://www.sendspace.com/file/8r9g4z",IDC_STATIC,18,84,426,8
+    LTEXT           "• LoneBullet - https://www.lonebullet.com/mods/download-ecp-1085e-tgs-operation-flashpoint-resistance-mod-free-52029.htm",IDC_STATIC,18,96,426,8
+    LTEXT           "• DropBox - https://www.dropbox.com/s/aswdz81mxhc909b/Bw85%20pack%201.3.rar?dl=0",IDC_STATIC,18,108,426,8
+    LTEXT           "URL",IDC_TXT_URL,18,154,78,14
+    LTEXT           "File name",IDC_TXT_FNAME,18,172,78,14
+    LTEXT           "Requires confirmation",IDC_TXT_CONFIRM,18,190,78,14
+    EDITTEXT        IDC_EDIT_URL,108,154,324,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT_FNAME,108,172,324,14,ES_AUTOHSCROLL
+    CONTROL         "",IDC_CHECK_CONFIRM,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,108,190,16,10
+    LTEXT           "(usually for files above 100 MB)",IDC_TXT_CONFIRM2,108,202,246,14
     LTEXT           "",IDC_FINAL_URL,323,186,8,8,NOT WS_VISIBLE
+    LTEXT           "Incompatible sites: mega.nz, gamefront.com",IDC_STATIC,18,122,426,8
 END
 
 
@@ -201,7 +202,7 @@ BEGIN
         LEFTMARGIN, 7
         RIGHTMARGIN, 444
         TOPMARGIN, 7
-        BOTTOMMARGIN, 217
+        BOTTOMMARGIN, 235
     END
 END
 #endif    // APSTUDIO_INVOKED

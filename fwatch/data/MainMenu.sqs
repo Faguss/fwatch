@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2023,11,27,1,1,56,20,453,60,FALSE]
+	GS_FWATCH_MY_VERSION = [2023,11,28,2,21,52,42,484,60,FALSE]
 	GS_MY_VERSION        = 0.61
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -135,7 +135,7 @@
 	_scheduled_events    = []
 	_in_download_thread  = false
     
-	if (!_m_moved && (_mx<_x || _mx>_w || _my<_y || _my>_h)) then {loadFile Format [":mem setcursor %1 %2", _w, _y]; _m_moved=nil}
+	;if (!_m_moved && (_mx<_x || _mx>_w || _my<_y || _my>_h)) then {loadFile Format [":mem setcursor %1 %2", _w, _y]; _m_moved=nil}
 	goto "ModLauncher_Display"
 	
 

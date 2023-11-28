@@ -88,4 +88,5 @@ void ShowDownloadInfo();
 void SwitchTab(INSTALLER_TAB tab);
 void WindowTextToString(HWND control, std::wstring &str);
 void SumDownloadSizes(std::vector<LARGE_INTEGER> &download_sizes, size_t instruction_index);
+void FillCommandsList();
 // -------------------------------------------------------------------------------------------------------

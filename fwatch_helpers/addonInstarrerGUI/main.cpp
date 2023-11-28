@@ -239,7 +239,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			initWT(INPUT_GAME_VER, WC_EDITW, L"1.99", WS_DLGFRAME | WS_TABSTOP);
 			initWT(TXT_COMMANDS, WC_STATICW, L"Commands:", SS_CENTERIMAGE);
 			initWT(TXT_DL_SIZE, WC_STATICW, L"Total Download Size: 0 B", SS_RIGHT);
-			initWT(LIST_COMMANDS, WC_LISTBOXW, L"", WS_DLGFRAME | LBS_NOTIFY | WS_VSCROLL | LBS_NOINTEGRALHEIGHT | WS_TABSTOP);
+			initWT(LIST_COMMANDS, WC_LISTBOXW, L"", WS_DLGFRAME | LBS_NOTIFY | WS_VSCROLL | LBS_NOINTEGRALHEIGHT | LBS_OWNERDRAWFIXED | WS_TABSTOP);
 
 			initWT(BUTTON_OPEN_MOD, WC_BUTTONW, L"Open mod folder", WS_TABSTOP);
 			initWT(BUTTON_OPEN_TMP, WC_BUTTONW, L"Open fwatch\\tmp\\_extracted", WS_TABSTOP);
@@ -260,14 +260,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			initWT(TXT_DL_ARGS, WC_STATICW, L"Intermediate pages:", SS_LEFT);
 			initWT(LIST_DL_ARGS, WC_LISTBOXW, L"", WS_DLGFRAME | LBS_NOTIFY | WS_VSCROLL | LBS_NOINTEGRALHEIGHT | WS_TABSTOP);
 
+			initWT(BUTTON_JUMP_TO_STEP, WC_BUTTONW, L"Jump to this step", WS_TABSTOP);
+			initWT(BUTTON_JUMP_TO_LINE, WC_BUTTONW, L"Show in script", WS_TABSTOP);
 			initWT(BUTTON_OPEN_DOC, WC_BUTTONW, L"Open Documentation", WS_TABSTOP);
-			initWT(BUTTON_JUMP_TO_LINE, WC_BUTTONW, L"Jump to line", WS_TABSTOP);
 
 			initWT(EDIT_SCRIPT, WC_EDITW, L"", SS_LEFT | ES_MULTILINE | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP);
 			initWT(TXT_LINE_NUMBER, WC_STATICW, L"Line:", SS_CENTERIMAGE);
-			initWT(BUTTON_RELOAD, WC_BUTTONW, L"Save and Test", WS_TABSTOP);
-			initWT(BUTTON_OPEN_DOC_GENERAL, WC_BUTTONW, L"Open Documentation", WS_TABSTOP);
+			initWT(BUTTON_SAVETEST, WC_BUTTONW, L"Save and Test", WS_TABSTOP);
+			initWT(BUTTON_RELOAD, WC_BUTTONW, L"Reload file", WS_TABSTOP);
+			initWT(BUTTON_OPEN_DOC_GENERAL, WC_BUTTONW, L"Documentation", WS_TABSTOP);
 			initWT(BUTTON_CONVERT_DL, WC_BUTTONW, L"Convert download link", WS_TABSTOP);
+			initWT(BUTTON_INSERT_DTA, WC_BUTTONW, L"Insert DTA template", WS_TABSTOP);
 
 			for (int i=0; i<CONTROLS_MAX; i++) {
 				global.controls[i] = CreateWindow(list[i].type, list[i].title, WS_CHILD | WS_VISIBLE | list[i].style, controls_pos[i].left,controls_pos[i].top,controls_pos[i].right,controls_pos[i].bottom, hWnd, (HMENU)(UINT_PTR)(ID_BASE+i), NULL, NULL);
@@ -331,9 +334,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					}
 				} break;
 
-				case (ID_BASE+BUTTON_RELOAD) : {
+				case (ID_BASE+BUTTON_SAVETEST) : {
 					if (global.order == ORDER_NONE)
 						global.order = ORDER_RELOAD;
+				} break;
+
+				case (ID_BASE+BUTTON_RELOAD) : {
+					int pressed = MessageBox(global.window, L"You'll lose changes. Are you sure?", L"Script Editor", MB_ICONQUESTION | MB_YESNO);
+					if (pressed == IDYES) {
+						std::wstring script_file_content = GetFileContents(PATH_TO_TEST_SCRIPT);
+						SetWindowText(global.controls[EDIT_SCRIPT], script_file_content.c_str());
+					}
 				} break;
 
 				case (ID_BASE+BUTTON_OPEN_MOD) : {
@@ -354,6 +365,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				case (ID_BASE+BUTTON_CONVERT_DL) : {
 					DialogBox(hInst, MAKEINTRESOURCE(IDD_CONVERT_DL), hWnd, ConvertDownloadLink);
+				} break;
+
+				case (ID_BASE+BUTTON_INSERT_DTA) : {
+					wchar_t dta_template[] = L"IF_VERSION  <=  1.96\r\n\tUNPBO <game>\\Res\\Dta\\HWTL\\data.pbo  dta\\HWTL\r\n\tMOVE new_textures\\*.pa?  dta\\HWTL\\Data\r\n\tMAKEPBO\r\n\t\r\n\tUNPBO <game>\\Res\\Dta\\HWTL\\data3d.pbo  dta\\HWTL\r\n\tMOVE new_models\\*.p3d  dta\\HWTL\\data3d\r\n\tMAKEPBO\r\nELSE\r\n\tUNPBO <game>\\DTA\\Data.pbo  dta\r\n\tMOVE new_textures\\*.pa?  dta\\Data\r\n\tMAKEPBO\r\n\t\r\n\tUNPBO <game>\\DTA\\Data3D.pbo  dta\r\n\tMOVE new_models\\*.p3d  dta\\Data3D\r\n\tMAKEPBO\r\nENDIF";
+					SendMessage(global.controls[EDIT_SCRIPT], EM_REPLACESEL, TRUE, (LPARAM)dta_template);
 				} break;
 
 				case (ID_BASE+BUTTON_OPEN_DOC) : {
@@ -405,6 +421,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 							SetFocus(global.controls[EDIT_SCRIPT]);
 						}
 					}
+				} break;
+
+				case (ID_BASE+BUTTON_JUMP_TO_STEP) : {
+					if (global.order == ORDER_NONE)
+						global.order = ORDER_JUMP;
 				} break;
 
 				case (ID_BASE+LIST_COMMANDS) : {
@@ -478,6 +499,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					global.order = ORDER_ABORT;
 					DisableMenu();
 				}
+		} break;
+
+		case WM_DRAWITEM: {
+			if (wParam == (ID_BASE+LIST_COMMANDS)) {
+				DrawListofCommands(hWnd, (UINT)wParam, (DRAWITEMSTRUCT *)lParam);
+			}
+		} break;
+
+		case WM_MEASUREITEM: {
+			PMEASUREITEMSTRUCT pmis = (PMEASUREITEMSTRUCT) lParam; 
+			pmis->itemHeight = 16; 
+			return TRUE;
 		} break;
 
 		default:
@@ -917,13 +950,16 @@ void CalculateWindowSizes(HWND window)
 	controls_pos[LIST_DL_ARGS].top    = controls_pos[TXT_DL_ARGS].top + controls_pos[TXT_DL_ARGS].bottom;
 	controls_pos[LIST_DL_ARGS].bottom = 40;
 
-	controls_pos[BUTTON_OPEN_DOC]        = controls_pos[LIST_DL_ARGS];
-	controls_pos[BUTTON_OPEN_DOC].top    = controls_pos[LIST_DL_ARGS].top + controls_pos[LIST_DL_ARGS].bottom + 10;
-	controls_pos[BUTTON_OPEN_DOC].right  = 140;
-	controls_pos[BUTTON_OPEN_DOC].bottom = 20;
+	controls_pos[BUTTON_JUMP_TO_STEP]        = controls_pos[LIST_DL_ARGS];
+	controls_pos[BUTTON_JUMP_TO_STEP].top    = controls_pos[LIST_DL_ARGS].top + controls_pos[LIST_DL_ARGS].bottom + 10;
+	controls_pos[BUTTON_JUMP_TO_STEP].right  = 140;
+	controls_pos[BUTTON_JUMP_TO_STEP].bottom = 20;
 
-	controls_pos[BUTTON_JUMP_TO_LINE]      = controls_pos[BUTTON_OPEN_DOC];
-	controls_pos[BUTTON_JUMP_TO_LINE].left = controls_pos[BUTTON_OPEN_DOC].left + controls_pos[BUTTON_OPEN_DOC].right + 10;
+	controls_pos[BUTTON_JUMP_TO_LINE]      = controls_pos[BUTTON_JUMP_TO_STEP];
+	controls_pos[BUTTON_JUMP_TO_LINE].left = controls_pos[BUTTON_JUMP_TO_STEP].left + controls_pos[BUTTON_JUMP_TO_STEP].right + 10;
+
+	controls_pos[BUTTON_OPEN_DOC]      = controls_pos[BUTTON_JUMP_TO_LINE];
+	controls_pos[BUTTON_OPEN_DOC].left = controls_pos[BUTTON_JUMP_TO_LINE].left + controls_pos[BUTTON_JUMP_TO_LINE].right + 10;
 
 	controls_pos[EDIT_SCRIPT].left   = 0;
 	controls_pos[EDIT_SCRIPT].top    = controls_pos[TAB].bottom;
@@ -936,13 +972,63 @@ void CalculateWindowSizes(HWND window)
 	controls_pos[TXT_LINE_NUMBER].top    = controls_pos[EDIT_SCRIPT].top + controls_pos[EDIT_SCRIPT].bottom;
 	controls_pos[TXT_LINE_NUMBER].bottom = dialogspace.bottom - controls_pos[TXT_LINE_NUMBER].top;
 
-	controls_pos[BUTTON_RELOAD]       = controls_pos[TXT_LINE_NUMBER];
-	controls_pos[BUTTON_RELOAD].left  = controls_pos[TXT_LINE_NUMBER].left + controls_pos[TXT_LINE_NUMBER].right + 10;
-	controls_pos[BUTTON_RELOAD].right = 140;
+	controls_pos[BUTTON_SAVETEST]       = controls_pos[TXT_LINE_NUMBER];
+	controls_pos[BUTTON_SAVETEST].left  = controls_pos[TXT_LINE_NUMBER].left + controls_pos[TXT_LINE_NUMBER].right + 10;
+	controls_pos[BUTTON_SAVETEST].right = 100;
+
+	controls_pos[BUTTON_RELOAD]      = controls_pos[BUTTON_SAVETEST];
+	controls_pos[BUTTON_RELOAD].left = controls_pos[BUTTON_SAVETEST].left + controls_pos[BUTTON_SAVETEST].right + 20;
 
 	controls_pos[BUTTON_OPEN_DOC_GENERAL]      = controls_pos[BUTTON_RELOAD];
 	controls_pos[BUTTON_OPEN_DOC_GENERAL].left = controls_pos[BUTTON_RELOAD].left + controls_pos[BUTTON_RELOAD].right + 20;
 
 	controls_pos[BUTTON_CONVERT_DL]      = controls_pos[BUTTON_OPEN_DOC_GENERAL];
 	controls_pos[BUTTON_CONVERT_DL].left = controls_pos[BUTTON_OPEN_DOC_GENERAL].left + controls_pos[BUTTON_OPEN_DOC_GENERAL].right + 20;
+	controls_pos[BUTTON_CONVERT_DL].right = 140;
+
+	controls_pos[BUTTON_INSERT_DTA]       = controls_pos[BUTTON_CONVERT_DL];
+	controls_pos[BUTTON_INSERT_DTA].left  = controls_pos[BUTTON_CONVERT_DL].left + controls_pos[BUTTON_CONVERT_DL].right + 20;
+}
+
+BOOL DrawListofCommands(HWND hwnd, UINT uCtrlId, DRAWITEMSTRUCT *dis)
+{	
+	UNREFERENCED_PARAMETER(uCtrlId);
+	UNREFERENCED_PARAMETER(hwnd);
+
+	switch(dis->itemAction) {
+		case ODA_SELECT:        
+		case ODA_DRAWENTIRE: {
+			if (dis->itemState & ODS_SELECTED) {
+				SetTextColor(dis->hDC, GetSysColor(COLOR_HIGHLIGHTTEXT));
+				SetBkColor(dis->hDC, GetSysColor(COLOR_HIGHLIGHT));
+			} else {
+				SetTextColor(dis->hDC, GetSysColor(dis->itemID < global.instruction_index ? COLOR_GRAYTEXT : COLOR_WINDOWTEXT));
+				SetBkColor(dis->hDC, GetSysColor(COLOR_WINDOW));
+			}
+
+			HFONT font;
+			font = CreateFont(
+				14, //cHeight
+				0,  //cWidth
+				0,  //cEscapement
+				0,  //cOrientation
+				dis->itemID == global.instruction_index ? FW_BOLD : FW_DONTCARE,  //cWeight
+				0,  //bItalic
+				dis->itemID == global.instruction_index,  //bUnderline
+				global.commands[dis->itemID].disable,  //bStrikeOut
+				0,  //iCharSet
+				0,  //iOutPrecision
+				0,  //iClipPrecision
+				0,  //iQuality
+				0,  //iPitchAndFamily
+				L"Aptos" //pszFaceName
+			);
+
+			SelectObject(dis->hDC, font);
+			ExtTextOut(dis->hDC, 0 , dis->rcItem.top, ETO_OPAQUE, &dis->rcItem, global.commands_lines[dis->itemID].c_str(), (UINT)global.commands_lines[dis->itemID].length(), 0);
+			DeleteObject(font);
+		} break;
+	}
+
+	return TRUE;
 }

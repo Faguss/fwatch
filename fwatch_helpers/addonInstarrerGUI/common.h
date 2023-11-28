@@ -14,7 +14,7 @@
 #include <tchar.h>		// ansi/wide macro
 #include <functional>   // notl, ptr_fun
 #include <shellapi.h>	// shell execute
-#include <cmath>		// round
+#include <cmath>        // round
 
 enum WINDOW_CONTROLS {
 	TAB,
@@ -47,14 +47,17 @@ enum WINDOW_CONTROLS {
 	TXT_FILENAME,
 	TXT_DL_ARGS,
 	LIST_DL_ARGS,
-	BUTTON_OPEN_DOC,
+	BUTTON_JUMP_TO_STEP,
 	BUTTON_JUMP_TO_LINE,
+	BUTTON_OPEN_DOC,
 
 	EDIT_SCRIPT,
 	TXT_LINE_NUMBER,
+	BUTTON_SAVETEST,
 	BUTTON_RELOAD,
 	BUTTON_OPEN_DOC_GENERAL,
 	BUTTON_CONVERT_DL,
+	BUTTON_INSERT_DTA,
 
 	CONTROLS_MAX
 };
@@ -91,7 +94,8 @@ enum INSTALLER_ORDER {
 	ORDER_PAUSE,
 	ORDER_RELOAD,
 	ORDER_RETRY,
-	ORDER_ABORT
+	ORDER_ABORT,
+	ORDER_JUMP
 };
 
 enum INSTALLER_STATUS 
