@@ -442,7 +442,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				case ID_PROCESS_ABORT: {
 						global.order = ORDER_ABORT;
-					DisableMenu();
+					EnableWindowMenu(false);
 				} break;
 
 				case ID_OPTIONS_RESTARTGAME: {
@@ -497,7 +497,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			else
 				if (global.order != ORDER_ABORT) {
 					global.order = ORDER_ABORT;
-					DisableMenu();
+					EnableWindowMenu(false);
 				}
 		} break;
 
@@ -922,7 +922,7 @@ void CalculateWindowSizes(HWND window)
 
 	controls_pos[LIST_COMMANDS]        = controls_pos[TXT_COMMANDS];
 	controls_pos[LIST_COMMANDS].top   += controls_pos[TXT_COMMANDS].bottom;
-	controls_pos[LIST_COMMANDS].right  = (int)((double)dialogspace.right / 4);
+	controls_pos[LIST_COMMANDS].right  = (int)((double)dialogspace.right / 3.5);
 	controls_pos[LIST_COMMANDS].bottom = controls_pos[LOG_DETAIL].top - controls_pos[LIST_COMMANDS].top;
 
 	controls_pos[TXT_COMMAND_INFO0] = controls_pos[TXT_COMMANDS];

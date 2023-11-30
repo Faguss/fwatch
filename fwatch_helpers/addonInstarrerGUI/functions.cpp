@@ -1645,7 +1645,7 @@ DWORD DeleteDirectory(const std::wstring &refcstrRootDirectory, bool bDeleteSubd
 					return GetLastError();
 
 				// Delete directory
-				if (refcstrRootDirectory != L"fwatch\\tmp\\_extracted") {
+				if (refcstrRootDirectory != L"fwatch\\tmp\\_extracted" && refcstrRootDirectory != L"fwatch\\tmp\\_backup") {
 					if (RemoveDirectoryW(refcstrRootDirectory.c_str()) == FALSE)
 						return GetLastError();
 				} else
@@ -1657,7 +1657,7 @@ DWORD DeleteDirectory(const std::wstring &refcstrRootDirectory, bool bDeleteSubd
 	return ERROR_SUCCESS;
 }
 
-INSTALLER_ERROR_CODE CreateFileList(std::wstring source, std::wstring destination, std::vector<std::wstring> &sources, std::vector<std::wstring> &destinations, std::vector<bool> &dirs, int options, std::vector<std::wstring> &empty_dirs, size_t &buffer_size, int &recursion)
+INSTALLER_ERROR_CODE CreateFileList(std::wstring source, std::wstring destination, std::vector<std::wstring> &sources, std::vector<std::wstring> &destinations, std::vector<bool> &dirs, int options, std::vector<std::wstring> &empty_dirs, int &recursion)
 {
 	WIN32_FIND_DATAW fd;
 	HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -1712,15 +1712,8 @@ INSTALLER_ERROR_CODE CreateFileList(std::wstring source, std::wstring destinatio
 			attributes      = GetFileAttributes(new_destination.c_str());
 		}
 
-		// If we need full paths and their totaled length
-		if (buffer_size != 0) {
-			new_destination = global.working_directory + L"\\" + new_destination;
-			buffer_size    += new_destination.length() + 1;
-		}
-
-
 		// Check if destination directory already exists
-		if (is_dir  &&  ((attributes != INVALID_FILE_ATTRIBUTES  &&  attributes & FILE_ATTRIBUTE_DIRECTORY)  ||  ~options & FLAG_MOVE_FILES)  &&  buffer_size==0) {
+		if (is_dir  &&  ((attributes != INVALID_FILE_ATTRIBUTES  &&  attributes & FILE_ATTRIBUTE_DIRECTORY)  ||  ~options & FLAG_MOVE_FILES)) {
 			if (options & FLAG_MOVE_FILES)
 				empty_dirs.push_back(new_source);
 			else
@@ -1729,7 +1722,7 @@ INSTALLER_ERROR_CODE CreateFileList(std::wstring source, std::wstring destinatio
 			// If dir already exists then browse its contents
 			new_source      += L"\\*";
 			new_destination += L"\\";
-			result           = CreateFileList(new_source, new_destination, sources, destinations, dirs, options, empty_dirs, buffer_size, recursion);
+			result           = CreateFileList(new_source, new_destination, sources, destinations, dirs, options, empty_dirs, recursion);
 			
 			if (result != ERROR_NONE)
 				break;
@@ -1994,10 +1987,9 @@ INSTALLER_ERROR_CODE Unpack(std::wstring file_name, std::wstring password, int o
 		std::vector<std::wstring> destination_list;
 		std::vector<bool>         is_dir_list;
 		std::vector<std::wstring> empty_dirs;
-		size_t buffer_size            = 0;
-		int recursion                 = -1;
+		int recursion = -1;
 
-		INSTALLER_ERROR_CODE result = CreateFileList(unpack_destination, L"fwatch\\tmp\\_backup\\__extracted", source_list, destination_list, is_dir_list, FLAG_MOVE_FILES | FLAG_MATCH_DIRS, empty_dirs, buffer_size, recursion);
+		INSTALLER_ERROR_CODE result = CreateFileList(unpack_destination, L"fwatch\\tmp\\_backup\\__extracted", source_list, destination_list, is_dir_list, FLAG_MOVE_FILES | FLAG_MATCH_DIRS, empty_dirs, recursion);
 		if (result != ERROR_NONE)
 			return result;
 
@@ -2185,10 +2177,9 @@ INSTALLER_ERROR_CODE MoveFiles(std::wstring source, std::wstring destination, st
 	std::vector<std::wstring> destination_list;
 	std::vector<bool>         is_dir_list;
 	std::vector<std::wstring> empty_dirs;
-	size_t buffer_size = 0;
-	int recursion      = -1;
+	int recursion = -1;
 
-	INSTALLER_ERROR_CODE result = CreateFileList(source, destination+new_name, source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
+	INSTALLER_ERROR_CODE result = CreateFileList(source, destination+new_name, source_list, destination_list, is_dir_list, options, empty_dirs, recursion);
 
 	if (result != ERROR_NONE)
 		return result;
@@ -3122,11 +3113,11 @@ void EditMultilineUpdateText(HWND control, std::wstring &text)
 	}
 }
 
-void DisableMenu()
+void EnableWindowMenu(bool yes)
 {
-	EnableMenuItem(global.window_menu, ID_PROCESS_ABORT, MF_BYCOMMAND | MF_GRAYED);
-	EnableMenuItem(global.window_menu, ID_PROCESS_PAUSE, MF_BYCOMMAND | MF_GRAYED);
-	EnableMenuItem(global.window_menu, ID_OPTIONS_RESTARTGAME, MF_BYCOMMAND | MF_GRAYED);
+	int id[] = {ID_PROCESS_ABORT, ID_PROCESS_PAUSE, ID_OPTIONS_RESTARTGAME};
+	for (int i=0; i<sizeof(id)/sizeof(id[0]); i++)
+		EnableMenuItem(global.window_menu, id[i], yes ? 0 : MF_GRAYED);
 }
 
 void SetCommandInfo(int index, std::wstring title, std::wstring content) 
@@ -3507,5 +3498,94 @@ void FillCommandsList() {
 
 	for (size_t i=0; i<global.commands_lines.size(); i++)
 		SendMessageW(global.controls[LIST_COMMANDS], LB_ADDSTRING, 0, (LPARAM)global.commands_lines[i].c_str());
+}
+
+bool ReadTextInputs() {
+	std::wstring new_mod = L"";
+	WindowTextToString(global.controls[INPUT_MOD_NAME], new_mod);
+	Trim(new_mod);
+
+	if (new_mod.empty()) {
+		MessageBox(global.window, L"Mod name cannot be empty!", L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
+		return false;
+	}
+
+	wchar_t is_forbidden = VerifyWindowsFileName(new_mod);
+	if (is_forbidden != NULL) {
+		std::wstring msg = L"Mod name cannot contain |";
+		msg[msg.length()-1] = is_forbidden;
+		MessageBox(global.window, msg.c_str(), L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
+		return false;
+	}
+
+	std::wstring new_dir_name = L"";
+	WindowTextToString(global.controls[INPUT_DIR_NAME], new_dir_name);
+	Trim(new_dir_name);
+
+	if (!new_dir_name.empty()) {
+		is_forbidden = VerifyWindowsFileName(new_dir_name);
+		if (is_forbidden != NULL) {
+			std::wstring msg = L"Dir name cannot contain |";
+			msg[msg.length()-1] = is_forbidden;
+			MessageBox(global.window, msg.c_str(), L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
+			return false;
+		}
+	}
+
+	std::wstring new_game_version = L"";
+	WindowTextToString(global.controls[INPUT_GAME_VER], new_game_version);
+	Trim(new_game_version);
+
+	if (new_game_version != global.game_version) {
+		if (new_game_version.empty()) {
+			MessageBox(global.window, L"Game version cannot be empty!", L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
+			global.order = ORDER_NONE;
+			return false;
+		}
+
+		bool is_number = true;
+		for (size_t i=0; i<new_game_version.length(); i++) {
+			if (!iswdigit(new_game_version[i]) && new_game_version[i]!=L'.') {
+				is_number = false;
+				break;
+			}
+		}
+
+		if (!is_number) {
+			MessageBox(global.window, L"Game version must be a number", L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
+			global.order = ORDER_NONE;
+			return false;
+		}
+	}
+
+	global.game_version = new_game_version;
+	global.current_mod = new_mod;
+
+	if (new_dir_name.empty())
+		global.current_mod_new_name = global.current_mod;
+	else
+		global.current_mod_new_name = new_dir_name;
+
+	// Save config
+	HANDLE hFile = CreateFile(PATH_TO_TEST_CFG, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if (hFile != INVALID_HANDLE_VALUE) {
+		int id_to_write[] = {INPUT_MOD_NAME, INPUT_DIR_NAME, INPUT_GAME_VER};
+		DWORD bytesWritten;
+
+		for (int i=0; i<sizeof(id_to_write)/sizeof(id_to_write[0]); i++) {
+			std::wstring text = L"";
+			WindowTextToString(global.controls[id_to_write[i]], text);
+
+			WriteFile(hFile, &id_to_write[i], sizeof(id_to_write[0]), &bytesWritten, NULL);
+			DWORD length = (DWORD)(text.length()+1) * sizeof(wchar_t);
+			WriteFile(hFile, &length, sizeof(length), &bytesWritten, NULL);
+			WriteFile(hFile, text.c_str(), length, &bytesWritten, NULL);
+		}
+
+		CloseHandle(hFile);
+	}
+
+	return true;
 }
 // -------------------------------------------------------------------------------------------------------

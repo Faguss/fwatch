@@ -19,7 +19,7 @@ DWORD WINAPI addonInstallerWrapper(__in LPVOID lpParameter)
 	}
 
 	DeleteDirectory(L"fwatch\\tmp\\_backup");
-	DisableMenu();
+	EnableWindowMenu(false);
 
 	// If user wants to restart the game after installation
 	if (global.restart_game) {
@@ -260,10 +260,18 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 						WriteProgressFile(INSTALL_PAUSED, L"Installation paused");
 					else
 						if (global.order==ORDER_ABORT || command_result==ERROR_USER_ABORTED) {
-							RollBackInstallation();
-							WriteProgressFile(INSTALL_ABORTED, global.lang[STR_ACTION_ABORTED]);
-							LogMessage(L"Installation aborted by user", CLOSE_LOG);
-							return ERROR_USER_ABORTED;
+							if (command_result == ERROR_USER_ABORTED && global.test_mode) {
+								WriteProgressFile(INSTALL_PROGRESS, L"");
+								RollBackInstallation(global.instruction_index);
+								command_result = ERROR_NONE;
+								play_automatically = false;
+								EnableWindowMenu(true);
+							} else {
+								WriteProgressFile(INSTALL_ABORTED, global.lang[STR_ACTION_ABORTED]);
+								LogMessage(L"Installation aborted by user", CLOSE_LOG);
+								RollBackInstallation();
+								return ERROR_USER_ABORTED;
+							}
 						} else 
 							if (global.order == ORDER_PLAY) {
 								play_automatically = !play_automatically;
@@ -277,92 +285,13 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 
 			// Reload settings when beginning a new installation process in test mode
 			if (global.test_mode && global.instruction_index==0 && command_result==ERROR_NONE && (global.order==ORDER_PLAY || global.order==ORDER_NEXT)) {
-				std::wstring new_mod = L"";
-				WindowTextToString(global.controls[INPUT_MOD_NAME], new_mod);
-				Trim(new_mod);
-
-				if (new_mod.empty()) {
-					MessageBox(global.window, L"Mod name cannot be empty!", L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
-					continue;
-				}
-
-				wchar_t is_forbidden = VerifyWindowsFileName(new_mod);
-				if (is_forbidden != NULL) {
-					std::wstring msg = L"Mod name cannot contain |";
-					msg[msg.length()-1] = is_forbidden;
-					MessageBox(global.window, msg.c_str(), L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
-					continue;
-				}
-
-				std::wstring new_dir_name = L"";
-				WindowTextToString(global.controls[INPUT_DIR_NAME], new_dir_name);
-				Trim(new_dir_name);
-
-				if (!new_dir_name.empty()) {
-					is_forbidden = VerifyWindowsFileName(new_dir_name);
-					if (is_forbidden != NULL) {
-						std::wstring msg = L"Dir name cannot contain |";
-						msg[msg.length()-1] = is_forbidden;
-						MessageBox(global.window, msg.c_str(), L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
-						global.order = ORDER_NONE;
-						continue;
-					}
-				}
-
-				std::wstring new_game_version = L"";
-				WindowTextToString(global.controls[INPUT_GAME_VER], new_game_version);
-				Trim(new_game_version);
-
-				if (new_game_version != global.game_version) {
-					if (new_game_version.empty()) {
-						MessageBox(global.window, L"Game version cannot be empty!", L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
-						global.order = ORDER_NONE;
-						continue;
-					}
-
-					bool is_number = true;
-					for (size_t i=0; i<new_game_version.length(); i++) {
-						if (!iswdigit(new_game_version[i]) && new_game_version[i]!=L'.') {
-							is_number = false;
-							break;
-						}
-					}
-
-					if (!is_number) {
-						MessageBox(global.window, L"Game version must be a number", L"Addon Installer", MB_OK | MB_ICONEXCLAMATION);
-						global.order = ORDER_NONE;
-						continue;
-					}
-
+				bool result = ReadTextInputs();
+				if (result) {
 					ParseInstallationScript(script_file_content, global.commands);
-				}
-
-				global.current_mod  = new_mod;
-				global.game_version = new_game_version;
-
-				if (new_dir_name.empty())
-					global.current_mod_new_name = global.current_mod;
-				else
-					global.current_mod_new_name = new_dir_name;
-
-				// Save config
-				HANDLE hFile = CreateFile(PATH_TO_TEST_CFG, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-
-				if (hFile != INVALID_HANDLE_VALUE) {
-					int id_to_write[] = {INPUT_MOD_NAME, INPUT_DIR_NAME, INPUT_GAME_VER};
-					DWORD bytesWritten;
-
-					for (int i=0; i<sizeof(id_to_write)/sizeof(id_to_write[0]); i++) {
-						std::wstring text = L"";
-						WindowTextToString(global.controls[id_to_write[i]], text);
-
-						WriteFile(hFile, &id_to_write[i], sizeof(id_to_write[0]), &bytesWritten, NULL);
-						DWORD length = (DWORD)(text.length()+1) * sizeof(wchar_t);
-						WriteFile(hFile, &length, sizeof(length), &bytesWritten, NULL);
-						WriteFile(hFile, text.c_str(), length, &bytesWritten, NULL);
-					}
-
-					CloseHandle(hFile);
+					FillCommandsList();
+				} else {
+					global.order = ORDER_NONE;
+					continue;
 				}
 
 				for (size_t i=0; i<download_sizes.size(); i++)
@@ -445,6 +374,12 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				case ORDER_PAUSE : command_result=ERROR_NONE;continue;
 
 				case ORDER_RELOAD : {
+					bool result = ReadTextInputs();
+					if (!result) {
+						SwitchTab(INSTALLER_TAB_INSTRUCTIONS);
+						continue;
+					}
+
 					script_file_content.clear();
 					WindowTextToString(global.controls[EDIT_SCRIPT], script_file_content);
 					
@@ -1016,7 +951,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					}
 				
 					// Format source path
-					bool trash = false;
+					bool trash = true;
 				
 					if (Equals(file_name,L"<download>") || Equals(file_name,L"<dl>") || file_name.empty()) {
 						if (global.downloaded_filename.empty()) {
@@ -1025,27 +960,24 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 						}
 					
 						file_name = L"fwatch\\tmp\\" + global.downloaded_filename;
+						trash     = global.test_mode;
 					} else {
 						file_name = global.current_mod_new_name + L"\\" + file_name;
-						trash     = true;
 					}
 				
-				
-					// Find files and save them to a list
+
 					std::vector<std::wstring> source_list;
 					std::vector<std::wstring> destination_list;
 					std::vector<bool>         is_dir_list;
 					std::vector<std::wstring> empty_dirs;
-					size_t buffer_size = 1;
-					int recursion      = -1;
+					int recursion = -1;
 					std::wstring destination = L"fwatch\\tmp\\_backup";
 				
-					command_result = CreateFileList(file_name, destination, source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
+					command_result = CreateFileList(file_name, destination, source_list, destination_list, is_dir_list, options, empty_dirs, recursion);
 				
 					if (command_result != ERROR_NONE)
 						break;
 								  
-					// For each file in the list
 					for (size_t j=0; j<destination_list.size(); j++) {
 						if (global.order == ORDER_ABORT) {
 							command_result = ERROR_USER_ABORTED;
@@ -1081,7 +1013,6 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 								);
 								break;
 							}
-
 						} else {
 							DWORD error_code = 0;
 							
@@ -1159,10 +1090,9 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					std::vector<std::wstring> destination_list;
 					std::vector<bool>         is_dir_list;
 					std::vector<std::wstring> empty_dirs;
-					size_t buffer_size = 0;
-					int recursion      = -1;
+					int recursion = -1;
 
-					command_result = CreateFileList(source, relative_path+destination, source_list, destination_list, is_dir_list, options, empty_dirs, buffer_size, recursion);
+					command_result = CreateFileList(source, relative_path+destination, source_list, destination_list, is_dir_list, options, empty_dirs, recursion);
 
 					if (command_result != 0)
 						break;
@@ -1865,9 +1795,8 @@ DWORD WINAPI ReceiveInstructions(__in LPVOID lpParameter)
 
 		if (!contents.empty()) {
 			if (contents == L"abort") {
-				if (global.order == ORDER_NONE)
-					global.order = ORDER_ABORT;
-				DisableMenu();
+				global.order = ORDER_ABORT;
+				EnableWindowMenu(false);
 			}
 
 			if (contents == L"restart") {

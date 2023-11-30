@@ -53,12 +53,12 @@ std::wstring GetMissionDestinationFromSQM(std::wstring path);
 static int CALLBACK BrowseCallbackProc(HWND hwnd,UINT uMsg, LPARAM lParam, LPARAM lpData);
 std::wstring BrowseFolder(std::wstring saved_path);
 DIRECTORY_INFO ScanDirectory(std::wstring path);
-DWORD DeleteDirectory(const std::wstring &refcstrRootDirectory, bool bDeleteSubdirectories=true);//func,inst
-INSTALLER_ERROR_CODE CreateFileList(std::wstring source, std::wstring destination, std::vector<std::wstring> &sources, std::vector<std::wstring> &destinations, std::vector<bool> &dirs, int options, std::vector<std::wstring> &empty_dirs, size_t &buffer_size, int &recursion);
+DWORD DeleteDirectory(const std::wstring &refcstrRootDirectory, bool bDeleteSubdirectories=true);
+INSTALLER_ERROR_CODE CreateFileList(std::wstring source, std::wstring destination, std::vector<std::wstring> &sources, std::vector<std::wstring> &destinations, std::vector<bool> &dirs, int options, std::vector<std::wstring> &empty_dirs, int &recursion);
 INSTALLER_ERROR_CODE CreateTimestampList(std::wstring path, size_t path_cut, std::vector<std::wstring> &namelist, std::vector<time_t> &timelist);
 INSTALLER_ERROR_CODE Download(std::wstring url, int options=FLAG_NONE, std::wstring log_file_name=L"");
-INSTALLER_ERROR_CODE Unpack(std::wstring file_name, std::wstring password=L"", int options=FLAG_NONE);//func,inst
-INSTALLER_ERROR_CODE MakeDir(std::wstring path, int options=FLAG_NONE);//inst,func
+INSTALLER_ERROR_CODE Unpack(std::wstring file_name, std::wstring password=L"", int options=FLAG_NONE);
+INSTALLER_ERROR_CODE MakeDir(std::wstring path, int options=FLAG_NONE);
 INSTALLER_ERROR_CODE MoveFiles(std::wstring source, std::wstring destination, std::wstring new_name, int options);
 INSTALLER_ERROR_CODE ExtractPBO(std::wstring source, std::wstring destination=L"", std::wstring file_to_unpack=L"", bool silent=false);
 INSTALLER_ERROR_CODE ChangeFileDate(std::wstring file_name, FILETIME *ft);
@@ -74,6 +74,7 @@ void EndMod();
 void RollBackInstallation(size_t wanted_pos=UINT_MAX);
 void ResetInstallationState();
 HWND GetWindowHandle(DWORD input_pid);
+bool ReadTextInputs();
 // -------------------------------------------------------------------------------------------------------
 
 
@@ -81,7 +82,7 @@ HWND GetWindowHandle(DWORD input_pid);
 
 // Interface ---------------------------------------------------------------------------------------------
 void EditMultilineUpdateText(HWND control, std::wstring &text);
-void DisableMenu();
+void EnableWindowMenu(bool yes);
 void SetCommandInfo(int index, std::wstring title, std::wstring content);
 void ShowCommandInfo();
 void ShowDownloadInfo();
