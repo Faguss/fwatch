@@ -747,17 +747,18 @@ INT_PTR CALLBACK ConvertDownloadLink(HWND hwndDlg, UINT message, WPARAM wParam, 
 
                 case IDOK: {
 					std::wstring url = L"";
-					WindowTextToString(GetDlgItem(hwndDlg, IDC_EDIT_URL), url);
-					Trim(url);
+					WindowTextToString(GetDlgItem(hwndDlg, IDC_FINAL_URL), url);
 
 					std::wstring filename = L"";
 					WindowTextToString(GetDlgItem(hwndDlg, IDC_EDIT_FNAME), filename);
 					Trim(filename);
 
 					if (!url.empty() && !filename.empty()) {
-			
 						if (filename.find(L" ") != std::wstring::npos)
 							filename = L"\"" + filename + L"\"";
+			
+						if (IsWindowVisible(GetDlgItem(hwndDlg, IDC_CHECK_CONFIRM)) && IsDlgButtonChecked(hwndDlg, IDC_CHECK_CONFIRM))
+							url += L" confirm=";
 			
 						url += L" " + filename + L"\r\n";
 

@@ -2758,7 +2758,6 @@ INSTALLER_ERROR_CODE Auto_Install(std::wstring file, DWORD attributes, int optio
 							}
 						}
 					} else
-						//return dir.error_code;
 						return ERROR_COMMAND_FAILED;
 				}
 			} else
@@ -2785,7 +2784,6 @@ INSTALLER_ERROR_CODE Auto_Install(std::wstring file, DWORD attributes, int optio
 			DIRECTORY_INFO dir = ScanDirectory(file_with_path);
 			
 			if (dir.error_code != ERROR_NONE)
-				//return dir.error_code;
 				return ERROR_COMMAND_FAILED;
 
 			// If archive contains a single dir then set option to force to scan it

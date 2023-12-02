@@ -65,7 +65,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 	WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_INIT]);
 
 	// Create log file
-	{
+	if (!global.test_mode) {
 		global.logfile.open("fwatch\\data\\addonInstallerLog.txt", std::ios::out | std::ios::app | std::ios::binary);
 
 		if (!global.logfile.is_open()) {
@@ -73,13 +73,11 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 			return ERROR_LOGFILE;
 		}
 
-		if (!global.test_mode)
-			LogMessageDate(DATE_START);
+		LogMessageDate(DATE_START);
 	}
 
 	// Open test mode config
 	if (global.test_mode) {
-		//std::wstring GetFileContents(L"fwatch\\data\\addonInstaller_test.cfg");
 		HANDLE hFile = CreateFile(PATH_TO_TEST_CFG, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 		if (hFile != INVALID_HANDLE_VALUE) {
 			int id_to_write[] = {INPUT_MOD_NAME, INPUT_DIR_NAME, INPUT_GAME_VER};
@@ -147,12 +145,10 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 		std::wstring script_file_name = global.test_mode ? PATH_TO_TEST_SCRIPT : L"fwatch\\tmp\\installation script";
 		script_file_content           = GetFileContents(script_file_name);
 	
-		if (script_file_content.empty()) {
-			if (global.test_mode) {
-				LogMessage(L"Failed to open " + script_file_name, CLOSE_LOG);
-				WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR]+L"\r\n"+global.lang[STR_ERROR_READSCRIPT]));
-				return ERROR_NO_SCRIPT;
-			}
+		if (script_file_content.empty() && !global.test_mode) {
+			LogMessage(L"Failed to open " + script_file_name, CLOSE_LOG);
+			WriteProgressFile(INSTALL_ERROR, (global.lang[STR_ERROR]+L"\r\n"+global.lang[STR_ERROR_READSCRIPT]));
+			return ERROR_NO_SCRIPT;
 		}
 
 		SetWindowText(global.controls[EDIT_SCRIPT], script_file_content.c_str());
