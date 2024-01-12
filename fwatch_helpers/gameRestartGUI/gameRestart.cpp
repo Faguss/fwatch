@@ -84,6 +84,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 	};
 
 	std::vector<MODLIST> local_mods;
+	bool run_installer = false;
 
 	// Process arguments
 	ProcessArguments(global.program_arguments, input);
@@ -313,6 +314,10 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		bool task_delete  = false;
 		bool task_update  = false;
 		bool missing_mods = false;
+		std::wstring installid  = L"";
+		std::wstring installdir = L"";
+		std::wstring url_mod    = L"";
+		std::wstring url_ver    = L"";
 
 		if (strcmp(global.fwatch_build_date, fwatch_last_update) == 0) {
 			if (event_status == GR_OK) {
@@ -410,10 +415,17 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 				messages.push_back(saved ? L"Task was automatically updated" : L"Failed to automatically update the task");
 			}
 
-			if (task_delete) {
+			if (task_delete || (launch_game && trigger_downloaded.TriggerType == TASK_TIME_TRIGGER_ONCE)) {
 				local.result = local.scheduler->Delete(local.task_name.c_str());
-				messages.push_back(SUCCEEDED(local.result) ? L"Task was automatically removed" : L"Failed to automatically remove the task");
+
+				if (SUCCEEDED(local.result)) {
+					if (task_delete)
+						messages.push_back(L"Task was automatically removed");
+				} else
+					messages.push_back(L"Failed to automatically remove the task");
 			}
+
+			WTS_CloseTask(local);
 
 			if (!task_delete && event_mods.size() > 0) {
 				DWORD readmods = ReadLocalMods(local_mods);
@@ -431,23 +443,28 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 
 						double global_version = wcstod(event_mods[i].version.c_str(), NULL);
 						double local_version = 0;
+						size_t local_index    = 0;
 			
-						for(size_t j=0; j<local_mods.size() && local_version==0; j++)
-							if (event_mods[i].id == local_mods[j].id)
-								local_version = wcstod(local_mods[j].version.c_str(), NULL);
+						for(; local_index<local_mods.size(); local_index++)
+							if (event_mods[i].id == local_mods[local_index].id) {
+								local_version = wcstod(local_mods[local_index].version.c_str(), NULL);
+								break;
+							}
 
 						if (local_version != 0) {
 							if (local_version < global_version) {
-								if (!list_outdated.empty()) 
-									list_outdated += L";";
-
-								list_outdated += event_mods[i].real_name;
+								list_outdated += (list_outdated.empty() ? L"" : L";") + event_mods[i].real_name;
+								installid     += (installid.empty() ? L"" : L",") + event_mods[i].id;
+								installdir    += (installdir.empty() ? L"" : L",") + local_mods[local_index].folder_name;
+								url_mod       += (url_mod.empty() ? L"" : L",") + event_mods[i].id;
+								url_ver       += (url_ver.empty() ? L"" : L",") + local_mods[local_index].version;
 							}
 						} else {
-							if (!list_missing.empty()) 
-								list_missing += L";";
-
-							list_missing += event_mods[i].real_name;
+							list_missing += (list_missing.empty() ? L"" : L";") + event_mods[i].real_name;
+							installid    += (installid.empty() ? L"" : L",") + event_mods[i].id;
+							installdir   += (installdir.empty() ? L"" : L",") + event_mods[i].real_name;
+							url_mod      += (url_mod.empty() ? L"" : L",") + event_mods[i].id;
+							url_ver      += (url_ver.empty() ? L"0" : L",0");
 						}
 					}
 
@@ -472,9 +489,17 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 
 			UINT flags = MB_SYSTEMMODAL | MB_OK;
 
-			if (launch_game) {
+			if (launch_game || missing_mods) {
 				flags |= MB_ICONQUESTION | MB_YESNO;
-				messages.push_back(missing_mods ? L"They can be downloaded from the main menu. Launch game?" : L"Connect?");
+
+				if (launch_game && missing_mods)
+					messages.push_back(L"Install mods and connect?");
+				else
+					if (missing_mods)
+						messages.push_back(L"Install mods?");
+					else
+						messages.push_back(L"Connect?");
+				
 				MessageBeep(MB_ICONEXCLAMATION);
 			} else
 				if (task_update)
@@ -484,23 +509,48 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 
 			int pressed = MessageBox(global.window, FormatMessageArray(messages, OPTION_MESSAGEBOX).c_str(), L"Scheduled OFP Launch", flags);
 
-			if (pressed == IDCANCEL || pressed == IDNO)
-				launch_game = false;
+			if (!(flags & MB_YESNO) || (flags & MB_YESNO && (pressed == IDCANCEL || pressed == IDNO))) {
+				if (flags & MB_YESNO)
+					LogMessage(L"User decided not to launch", OPTION_CLOSELOG);
 
-			WTS_CloseTask(local);
-
-			if (!launch_game) {
-				LogMessage(L"User decided not to launch", OPTION_CLOSELOG);
 				PostMessage(global.window, WM_CLOSE, 0, 0);
 				return 1;
 			}
 
-			if (missing_mods)
-				exe_arguments = L"-nosplash";
+			if (missing_mods) {
+				FILE *f;
+				size_t bytes_written = 0;
+				errno_t f_error      = _wfopen_s(&f, L"fwatch\\tmp\\schedule\\installurl.txt", L"wb");
+
+				if (f_error == 0) {
+					std::wstring install_url_ut16 = ReplaceAll(input.event_url,L"mode=gamerestart",L"mode=install") + L"&mod=" + url_mod + L"&ver=" + url_ver;
+					std::string install_url_utf8  = utf8(install_url_ut16);
+					bytes_written                 = fwrite(install_url_utf8.c_str(), 1, install_url_utf8.length(), f);
+					fclose(f);
+				}
+
+				if (bytes_written > 0) {
+					if (launch_game) {
+						f_error = _wfopen_s(&f, L"fwatch\\tmp\\schedule\\InstallerInstruction.txt", L"wb");
+						if (f_error == 0) {
+							fprintf(f, "restart");
+							fclose(f);
+						}
+					}
+
+					exe_arguments += L"-installid=" + installid + L" -installdir=" + installdir + L" -downloadscript=fwatch\\tmp\\schedule\\installurl.txt ";
+					run_installer  = true;
+				} else {
+					MessageBox(global.window, L"Failed to prepare installer", L"Scheduled OFP Launch", MB_SYSTEMMODAL | MB_OK);
+					LogMessage(L"Failed to write installurl.txt", OPTION_CLOSELOG);
+				PostMessage(global.window, WM_CLOSE, 0, 0);
+				return 1;
+			}
+			}
 		
 			ProcessArguments(&exe_arguments[0], input);
 
-			if (!missing_mods && !input.event_voice)
+			if (!input.event_voice || (missing_mods && !launch_game))
 				input.voice_server.clear();
 		} else {
 			int pressed = MessageBox(global.window, L"New Fwatch version is required. Do you want to update? The game will be closed.", L"Scheduled OFP Launch", MB_ICONEXCLAMATION | MB_YESNO);
@@ -1361,6 +1411,9 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		std::wstring launch_exe     = global.working_directory + L"\\" + (nolaunch ? game_exe : L"fwatch.exe");
 		std::wstring launch_arg     = L" \"" + global.working_directory + L"\" ";
 		std::wstring launch_arg_log = L"";
+
+		if (run_installer)
+			launch_exe = global.working_directory + L"\\fwatch\\data\\addonInstarrer.exe";
 
 		launch_arg     += filtered_game_arguments + input.user_arguments + L" " + (nolaunch ? L"" : fwatch_arguments);
 		launch_arg_log += filtered_game_arguments + input.user_arguments_log + L" " + (nolaunch ? L"" : fwatch_arguments);

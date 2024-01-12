@@ -647,9 +647,6 @@ case C_RESTART_SCHEDULE:
 				TASK_FLAG_RUN_ONLY_IF_LOGGED_ON | 
 				TASK_FLAG_SYSTEM_REQUIRED | 
 				TASK_FLAG_INTERACTIVE;
-
-			if (trigger_options.TriggerType == TASK_TIME_TRIGGER_ONCE)
-				flags |= TASK_FLAG_DELETE_WHEN_DONE;
 			
 			ITaskScheduler *scheduler = NULL;
 			IUnknown       *unknown   = NULL;

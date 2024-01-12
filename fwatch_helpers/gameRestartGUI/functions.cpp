@@ -1328,15 +1328,6 @@ bool WTS_SaveTask(WINDOWS_TASK_SCHEDULER &wts, TASK_TRIGGER &new_trigger)
 	wts.result = wts.trigger_interface->SetTrigger(&new_trigger);
 
 	if (SUCCEEDED(wts.result)) {
-		if (new_trigger.TriggerType == TASK_TIME_TRIGGER_ONCE) {
-			DWORD flags = 0;
-			wts.result = wts.task->GetFlags(&flags);
-			if (SUCCEEDED(wts.result)) {
-				flags |= TASK_FLAG_DELETE_WHEN_DONE;
-				wts.task->SetFlags(flags);
-			}
-		}
-
 		IPersistFile *job_file = NULL;
 		wts.result = wts.task->QueryInterface(IID_IPersistFile, (void **)&job_file);
 
