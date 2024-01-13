@@ -310,26 +310,24 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 			fclose(f);
 		}
 
-		bool launch_game  = false;
-		bool task_delete  = false;
-		bool task_update  = false;
-		bool missing_mods = false;
-		std::wstring installid  = L"";
-		std::wstring installdir = L"";
-		std::wstring url_mod    = L"";
-		std::wstring url_ver    = L"";
-
 		if (strcmp(global.fwatch_build_date, fwatch_last_update) == 0) {
-			if (event_status == GR_OK) {
-				int game_version = VER_UNKNOWN;
+			bool launch_game    = false;
+			bool task_delete    = false;
+			bool task_update    = false;
+			bool missing_mods   = false;
+			int my_game_version = VER_UNKNOWN;
+			std::wstring mods_to_install_id_list  = L"";
+			std::wstring mods_to_install_dir_list = L"";
+			std::wstring mods_to_install_ver_list = L"";
 
+			if (event_status == GR_OK) {
 				for (int i=0; i<exe_num; i++)
 					if (Equals(exe_name_list[i],input.game_exe)) {
-						game_version = exe_version_list[i];
+						my_game_version = exe_version_list[i];
 						break;
 					}
 
-				if (server_version == game_version) {
+				if (server_version == my_game_version) {
 					SYSTEMTIME now = {0};
 					GetLocalTime(&now);
 					now.wSecond = 0;
@@ -394,7 +392,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 
 					messages.push_back(
 						L"Server has changed version (from " + 
-						game_version_string[game_version] + 
+						game_version_string[my_game_version] + 
 						L" to " + 
 						game_version_string[server_version] + L")"
 					);
@@ -427,7 +425,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 
 			WTS_CloseTask(local);
 
-			if (!task_delete && event_mods.size() > 0) {
+			if (!task_delete && event_status==GR_OK && event_mods.size() > 0) {
 				DWORD readmods = ReadLocalMods(local_mods);
 
 				if (readmods == ERROR_SUCCESS) {
@@ -436,13 +434,10 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 					std::wstring list_outdated = L"";
 
 					for(size_t i=0; i<event_mods.size(); i++) {
-						if (!list_all.empty())
-							list_all += L";";
-
-						list_all += event_mods[i].real_name;
+						list_all += (list_all.empty() ? L"" : L", ") + event_mods[i].real_name;
 
 						double global_version = wcstod(event_mods[i].version.c_str(), NULL);
-						double local_version = 0;
+						double local_version  = 0;
 						size_t local_index    = 0;
 			
 						for(; local_index<local_mods.size(); local_index++)
@@ -453,18 +448,16 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 
 						if (local_version != 0) {
 							if (local_version < global_version) {
-								list_outdated += (list_outdated.empty() ? L"" : L";") + event_mods[i].real_name;
-								installid     += (installid.empty() ? L"" : L",") + event_mods[i].id;
-								installdir    += (installdir.empty() ? L"" : L",") + local_mods[local_index].folder_name;
-								url_mod       += (url_mod.empty() ? L"" : L",") + event_mods[i].id;
-								url_ver       += (url_ver.empty() ? L"" : L",") + local_mods[local_index].version;
+								list_outdated            += (list_outdated.empty() ? L"" : L", ") + event_mods[i].real_name;
+								mods_to_install_id_list  += (mods_to_install_id_list.empty() ? L"" : L",") + event_mods[i].id;
+								mods_to_install_dir_list += (mods_to_install_dir_list.empty() ? L"" : L",") + local_mods[local_index].folder_name;
+								mods_to_install_ver_list += (mods_to_install_ver_list.empty() ? L"" : L",") + local_mods[local_index].version;
 							}
 						} else {
-							list_missing += (list_missing.empty() ? L"" : L";") + event_mods[i].real_name;
-							installid    += (installid.empty() ? L"" : L",") + event_mods[i].id;
-							installdir   += (installdir.empty() ? L"" : L",") + event_mods[i].real_name;
-							url_mod      += (url_mod.empty() ? L"" : L",") + event_mods[i].id;
-							url_ver      += (url_ver.empty() ? L"0" : L",0");
+							list_missing             += (list_missing.empty() ? L"" : L", ") + event_mods[i].real_name;
+							mods_to_install_id_list  += (mods_to_install_id_list.empty() ? L"" : L",") + event_mods[i].id;
+							mods_to_install_dir_list += (mods_to_install_dir_list.empty() ? L"" : L",") + event_mods[i].real_name;
+							mods_to_install_ver_list += (mods_to_install_ver_list.empty() ? L"0" : L",0");
 						}
 					}
 
@@ -523,7 +516,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 				errno_t f_error      = _wfopen_s(&f, L"fwatch\\tmp\\schedule\\installurl.txt", L"wb");
 
 				if (f_error == 0) {
-					std::wstring install_url_ut16 = ReplaceAll(input.event_url,L"mode=gamerestart",L"mode=install") + L"&mod=" + url_mod + L"&ver=" + url_ver;
+					std::wstring install_url_ut16 = ReplaceAll(input.event_url,L"mode=gamerestart",L"mode=install") + L"&mod=" + mods_to_install_id_list + L"&ver=" + mods_to_install_ver_list;
 					std::string install_url_utf8  = utf8(install_url_ut16);
 					bytes_written                 = fwrite(install_url_utf8.c_str(), 1, install_url_utf8.length(), f);
 					fclose(f);
@@ -538,16 +531,43 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 						}
 					}
 
-					exe_arguments += L"-installid=" + installid + L" -installdir=" + installdir + L" -downloadscript=fwatch\\tmp\\schedule\\installurl.txt ";
+					// Pass game version and language to the installer; default is 1.99 English
+					std::string config_name = "coldwarassault.cfg";
+
+					switch(my_game_version) {
+						case VER_196: config_name="flashpoint.cfg"; exe_arguments+=L"-gameversion=1.96 "; break;
+						case VER_201: config_name="armaresistance.cfg"; exe_arguments+=L"-gameversion=2.01 "; break;
+					}
+
+					std::ifstream config(config_name.c_str(), std::ios::in | std::ios::binary);
+					std::string config_buffer((std::istreambuf_iterator<char>(config)), std::istreambuf_iterator<char>());
+					config.close();
+
+					std::string language_property = "Language=";
+					size_t language_property_pos  = config_buffer.find(language_property);
+		
+					if (language_property_pos != std::string::npos) {
+						size_t terminator = config_buffer.find(";",language_property_pos);
+
+						if (terminator != std::string::npos) {
+							size_t start         = language_property_pos + language_property.length();
+							std::string language = UnQuote(config_buffer.substr(start, terminator-start));
+
+							if (!Equals(language,"english"))
+								exe_arguments += L"-language=" + utf16(language) + L" ";
+						}
+					}
+
+					exe_arguments += L"-installid=" + mods_to_install_id_list + L" -installdir=" + mods_to_install_dir_list + L" -downloadscript=fwatch\\tmp\\schedule\\installurl.txt ";
 					run_installer  = true;
 				} else {
 					MessageBox(global.window, L"Failed to prepare installer", L"Scheduled OFP Launch", MB_SYSTEMMODAL | MB_OK);
 					LogMessage(L"Failed to write installurl.txt", OPTION_CLOSELOG);
-				PostMessage(global.window, WM_CLOSE, 0, 0);
-				return 1;
+					PostMessage(global.window, WM_CLOSE, 0, 0);
+					return 1;
+				}
 			}
-			}
-		
+
 			ProcessArguments(&exe_arguments[0], input);
 
 			if (!input.event_voice || (missing_mods && !launch_game))
@@ -684,7 +704,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 				DWORD result = GetOFPArguments(game.pid, &game_handle, module_name, dedicated_server ? 0x4FF20 : 0x2C154, all_game_arguments);
 				if (result == 0) {
 					std::wstring log_arguments = L"";
-					
+				
 					for (size_t i=0; i<all_game_arguments.size(); i++) {
 						if (
 							!Equals(all_game_arguments[i].substr(0,9),L"-connect=") &&
@@ -692,7 +712,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 							!Equals(all_game_arguments[i].substr(0,10),L"-password=")
 						)
 							log_arguments = log_arguments + all_game_arguments[i] + L" ";	// log params except for the ones that should be hidden
-						
+					
 						if (
 							!Equals(all_game_arguments[i].substr(0,5),L"-mod=") &&
 							!Equals(all_game_arguments[i].substr(0,9),L"-connect=") &&
@@ -701,7 +721,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 						)
 							filtered_game_arguments += all_game_arguments[i] + L" ";
 					}
-					
+				
 					LogMessage(L"Game arguments: " + log_arguments);
 				} else {
 					if (result == ERROR_MOD_NOT_FOUND)
