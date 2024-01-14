@@ -758,7 +758,7 @@ INT_PTR CALLBACK ConvertDownloadLink(HWND hwndDlg, UINT message, WPARAM wParam, 
 							filename = L"\"" + filename + L"\"";
 			
 						if (IsWindowVisible(GetDlgItem(hwndDlg, IDC_CHECK_CONFIRM)) && IsDlgButtonChecked(hwndDlg, IDC_CHECK_CONFIRM))
-							url += L" confirm=";
+							url += L" /download";
 			
 						url += L" " + filename + L"\r\n";
 

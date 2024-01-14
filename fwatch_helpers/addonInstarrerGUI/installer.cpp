@@ -457,6 +457,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					std::wstring wget_arguments   = L"";
 					std::wstring new_url          = original_url;
 					std::wstring POST             = L"";
+					bool is_get                   = false;
 					bool found_phrase             = false;
 				
 					DeleteFile(cookie_file_name.c_str());
@@ -529,6 +530,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 								if (left_quote > 8 && token_file_buffer.substr(left_quote-8, 7) == L"action=") {
 									size_t offset      = 0;
 									std::wstring form  = GetTextBetween(token_file_buffer, L"</form>", L"<form", left_quote, true);
+									is_get             = form.find(L"method=\"get\"") != std::wstring::npos;
 									std::wstring input = GetTextBetween(form, L"<input", L">", offset);
 									
 									while (!input.empty()) {
@@ -581,8 +583,14 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 
 					wget_arguments = L"--load-cookies " + cookie_file_name;
 					
-					if (!POST.empty())
-						wget_arguments += L" --post-data=\"" + POST + L"\" ";
+					if (is_get) {
+						size_t question_mark = new_url.find(L"?");
+						if (question_mark == std::wstring::npos)
+							new_url += L"?";
+						new_url += POST;
+					} else 
+						if (!POST.empty())
+							wget_arguments += L" --post-data=\"" + POST + L"\" ";
 					
 					size_t last_url_arg = global.commands[global.instruction_index].downloads[j].arguments.size() - 1;
 					wget_arguments     +=  L" \"--output-document=" + global.commands[global.instruction_index].downloads[j].arguments[last_url_arg] + L"\" " + new_url;

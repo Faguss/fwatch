@@ -3182,7 +3182,7 @@ void ShowCommandInfo()
 	ShowWindow(global.controls[BUTTON_OPEN_DOC], SW_SHOW);
 	ShowWindow(global.controls[BUTTON_JUMP_TO_LINE], SW_SHOW);
 	ShowWindow(global.controls[BUTTON_JUMP_TO_STEP], SW_SHOW);
-	EnableWindow(global.controls[BUTTON_JUMP_TO_STEP], !global.commands[sel].disable);
+	EnableWindow(global.controls[BUTTON_JUMP_TO_STEP], !global.commands[sel].disable && global.instruction_index!=sel);
 
 	switch(global.commands[sel].id) {
 		case COMMAND_AUTO_INSTALL : {
