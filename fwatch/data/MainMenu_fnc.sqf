@@ -730,7 +730,7 @@ FUNCTION_STRINGTABLE = {
 			"[Poka¿ prywatne mody]",		//89
 			"Napisz has³a do prywatnych modów",		//90
 			"[Wyszukaj]",		//91
-			"Wpisz nazwê moda lub kategorii (rozszerzenie; zbióraddonów; uzupe³nienie; zbiórmisji; narzêdzia)",		//92
+			"Wpisz nazwê moda lub kategorii (rozszerzenie; zbiór addonów; uzupe³nienie; zbiór misji; narzêdzia)",		//92
 			"Typ:",		//93
 			"Do pobrania:",		//94
 			"Doda³:",		//95
@@ -970,7 +970,7 @@ FUNCTION_STRINGTABLE = {
 			"[Show Private Mods]",		//89
 			"Type in password(s) to show private mod(s)",		//90
 			"[Search]",		//91
-			"Type mod or category name (replacement; addonpack; supplement; missionpack; tools)",		//92
+			"Type mod or category name (replacement; addon pack; supplement; mission pack; tools)",		//92
 			"Type:",		//93
 			"Download:",		//94
 			"Added by:",		//95
@@ -1092,6 +1092,9 @@ FUNCTION_SHOW_MOD_INFO = {
 		ctrlSetText [6464, MAINMENU_STR select 104];
 			
 		_index_local = [_mod_id, FWATCH_MODLISTID] call FUNCTION_FIND;
+		
+		ctrlSetText [6470, MAINMENU_STR select 65];
+		ctrlSetText [6540, MAINMENU_STR select 72];
 		
 		// Showing info for users mods
 		if (_source == "local") then {

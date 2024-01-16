@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2024,1,13,6,16,4,5,165,60,FALSE]
+	GS_FWATCH_MY_VERSION = [2024,1,16,2,23,31,44,634,60,FALSE]
 	GS_MY_VERSION        = 0.61
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -104,7 +104,7 @@
 	_install_status      = -1
 	_install_timing      = 0
 	_install_hanged      = false
-	_install_madechoice  = false
+	_install_retried     = false
 	_jump_to_server      = ""
 	_timeout             = 0
 	_color_red           = [1,0,0,0.5]
@@ -260,7 +260,7 @@
 	? _value == 230 : goto "Schedule_ListServerEvents"
 	? _value == 231 : _selected_event=call _data; _action="auto"; goto "Voice"
 	? _value == 232 : loadFile "\:EXE WEBSITE https://ofp-faguss.com/fwatch/modmanager/details"
-	? _value == 233 : loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:retry"]; lbClear 6657; lbSetCurSel [6657,-1]; _install_madechoice=true
+	? _value == 233 : loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:retry"]; lbClear 6657; lbSetCurSel [6657,-1]; _install_retried=true
 	? _value == 234 : loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:pause"]
 	? _value == 235 : loadFile Format ["\:IGSE WRITE  file:..\fwatch\tmp\schedule\InstallerInstruction.txt  text:resume"]
 	goto "ResetLMB"
@@ -851,11 +851,14 @@
 		ctrlSetText [6463, _progress]
 
 		; waiting for user input
+		; 208 - abort
+		; 233 - retry
+		; 234 - pause
+		; 235 - continue
 		? _install_status == 1  &&  lbSize 6657 > 0 : lbClear 6657; lbSetCurSel [6657,-1]
-		? _install_status == 2  &&  lbValue [6657,0]!=233  &&  !_install_madechoice : lbClear 6657; lbSetCurSel [6657,-1]; lbSetValue [6657, lbAdd [6657, "["+(localize "STR_DISP_INT_RETRY")+"]"], 233]; lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 36], 208]
-		? _install_status != 2 : _install_madechoice=false
+		? _install_status == 2 : if (lbValue [6657,0]!=233 && !_install_retried) then {lbClear 6657; lbSetCurSel [6657,-1]; lbSetValue [6657, lbAdd [6657, "["+(localize "STR_DISP_INT_RETRY")+"]"], 233]; lbSetValue  [6657, lbAdd [6657, MAINMENU_STR select 36], 208]}; if (lbValue [6657,0]==233 && _install_retried) then {lbClear 6657; lbSetCurSel [6657,-1]}
 		? _install_status == 3 && lbValue[6657,0]==234 : goto "InstallDisplay"
-		? _install_status == 0 && lbValue[6657,0]==235 : goto "installDisplay"
+		? _install_status == 0 && (lbValue[6657,0]==235 || (lbSize 6657)==0) : _install_retried=false; goto "InstallDisplay"
 		
 		; installer finished
 		? _install_status > 3 && lbSize 6657 > 1 : lbClear 6657; lbSetCurSel [6657,-1]; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 32], 210]
@@ -927,6 +930,7 @@
 	_access_code = _Input
 	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  key:accesscodewrite:_access_code=""%1""", _Input]
 	@!(ctrlVisible 6901)
+	GS_SCHEDULE_DOWNLOAD_TIME = 0
 	goto "Schedule"
 
 
@@ -937,7 +941,10 @@
 	_access_code_mod     = _Input
 	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\params.bin  key:accesscodemodwrite:_access_code_mod=""%1""", _Input]
 	@!(ctrlVisible 6901)
-	goto "DownloadMods"
+	_mode="mods"; 
+	_server_uniqueid="mod"; 
+	call loadFile Format ["\:IGSE DB file:..\fwatch\tmp\schedule\dl_%1.db remove:timestamp", _mode]
+	goto "DownloadDatabase"
 
 
 
