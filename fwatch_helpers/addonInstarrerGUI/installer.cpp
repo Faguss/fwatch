@@ -52,7 +52,7 @@ DWORD WINAPI addonInstallerWrapper(__in LPVOID lpParameter)
 	if (global.thread_installer != 0)
 		GetExitCodeThread(global.thread_installer, &thread_return);
 
-	if (global.restart_game || (thread_return==ERROR_USER_ABORTED && global.test_mode))
+	if (global.restart_game || global.test_mode)
 		SendMessage(global.window, WM_CLOSE, 0, 0);
 
 	return 0;
@@ -224,16 +224,17 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 			EnableWindow(global.controls[INPUT_MOD_NAME], command_result==ERROR_NONE && global.instruction_index==0);
 			EnableWindow(global.controls[INPUT_DIR_NAME], command_result==ERROR_NONE && global.instruction_index==0);
 			EnableWindow(global.controls[INPUT_GAME_VER], command_result==ERROR_NONE && global.instruction_index==0);
-			EnableWindow(global.controls[BUTTON_JUMP_TO_STEP], command_result==ERROR_NONE && global.instruction_index<global.commands.size() && !global.commands[global.instruction_index].disable);
+			EnableWindow(global.controls[BUTTON_JUMP_TO_STEP], global.instruction_index<global.commands.size() && !global.commands[global.instruction_index].disable);
 			SetWindowText(global.controls[BUTTON_PLAY], play_automatically && command_result==ERROR_NONE ? L"||" : L">");
 			SumDownloadSizes(download_sizes, global.instruction_index);
 
 			if (command_result == ERROR_COMMAND_FAILED) {
 				WriteProgressFile(INSTALL_RETRYORABORT, global.last_log_message + L"\r\n\r\n" + global.lang[STR_ASK_RETRYORABORT]);
 				EnableMenuItem(global.window_menu, ID_PROCESS_RETRY, MF_BYCOMMAND);
+				EnableMenuItem(global.window_menu, ID_PROCESS_ABORT, MF_BYCOMMAND);
 			} else
 				// Installation finished
-				if (global.instruction_index >= global.commands.size()) {
+				if (global.instruction_index >= global.commands.size() && global.commands.size() > 0) {
 					// Clean up after the last mod
 					EndMod();
 
@@ -318,15 +319,15 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 
 				case ORDER_ABORT : {
 					if (global.test_mode) {
-						EnableWindow(global.controls[BUTTON_PLAY], 0);
+						if (command_result == ERROR_NONE)
+							return ERROR_NONE;
 					} else {
 						RollBackInstallation();
 						WriteProgressFile(INSTALL_ABORTED, global.lang[STR_ACTION_ABORTED]);
 						LogMessage(L"Installation aborted by user", CLOSE_LOG);
+						return ERROR_USER_ABORTED;
 					}
-
-					return ERROR_USER_ABORTED;
-				} break;
+				} // fallthrough if error in test mode
 
 				case ORDER_PREV : {
 					if (command_result == ERROR_NONE) {
@@ -397,8 +398,14 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				} break;
 
 				case ORDER_JUMP : {
+					if (command_result != ERROR_NONE) {						
+						play_automatically = false;
+						RollBackInstallation(global.instruction_index);
+						command_result = ERROR_NONE;
+					}
+
 					size_t selected = (size_t)SendMessage(global.controls[LIST_COMMANDS], LB_GETCURSEL, 0, 0);
-					if (selected<global.commands.size() && !global.commands[selected].disable && command_result==ERROR_NONE && selected!=global.instruction_index) {
+					if (selected<global.commands.size() && !global.commands[selected].disable && selected!=global.instruction_index) {
 						global.instruction_index = selected;
 						RollBackInstallation(global.instruction_index);
 					}

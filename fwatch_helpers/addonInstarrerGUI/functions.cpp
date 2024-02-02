@@ -1027,6 +1027,8 @@ size_t ParseInstallationScript(std::wstring &script_file_content, std::vector<Co
 
 		if (match)
 			new_instruction_index = i+1;
+		else
+			break;
 	}
 
 	output = new_script;
@@ -3492,10 +3494,16 @@ void SumDownloadSizes(std::vector<LARGE_INTEGER> &download_sizes, size_t instruc
 }
 
 void FillCommandsList() {
+	size_t selected = (size_t)SendMessage(global.controls[LIST_COMMANDS], LB_GETCURSEL, 0, 0);
+
 	SendMessage(global.controls[LIST_COMMANDS], LB_RESETCONTENT, 0, 0);
 
 	for (size_t i=0; i<global.commands_lines.size(); i++)
 		SendMessageW(global.controls[LIST_COMMANDS], LB_ADDSTRING, 0, (LPARAM)global.commands_lines[i].c_str());
+
+	// Bring back user's selection
+	if (selected >= 0 && selected <= 32767)
+		SendMessage(global.controls[LIST_COMMANDS], LB_SETCURSEL, selected, 0);
 }
 
 bool ReadTextInputs() {

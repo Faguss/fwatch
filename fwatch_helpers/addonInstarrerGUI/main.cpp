@@ -783,51 +783,59 @@ LRESULT CALLBACK EditScript(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, 
 	UNREFERENCED_PARAMETER(uIdSubclass);
 	UNREFERENCED_PARAMETER(dwRefData);
 
-    if (uMsg == WM_KEYDOWN) {
-		if (GetKeyState(VK_CONTROL) & 0x8000) {
-			switch(wParam) {
-				// Select all
-				case 'A': SendMessage(hWnd, EM_SETSEL, 0, -1); break;
+	switch (uMsg) {
+		case WM_CHAR : {
+			if (wParam == 1 || wParam == 4) //disable beeping for ctrl+a and ctrl+d
+				return 0;
+		} break;
 
-				// Duplicate line
-				case 'D': {
-					DWORD sel_start = 0;
-					DWORD sel_end   = 0;
-					SendMessageW(global.controls[EDIT_SCRIPT], EM_GETSEL, (LPARAM)&sel_start, (LPARAM)&sel_end);
+		case WM_KEYDOWN : {
+			if (GetKeyState(VK_CONTROL) & 0x8000) {
+				switch(wParam) {
+					// Select all
+					case 'A': SendMessage(hWnd, EM_SETSEL, 0, -1); break;
 
-					DWORD line_num    = (DWORD)SendMessageW(global.controls[EDIT_SCRIPT], EM_LINEFROMCHAR, UINT_MAX, 0);
-					DWORD line_index  = (DWORD)SendMessageW(global.controls[EDIT_SCRIPT], EM_LINEINDEX, UINT_MAX, 0);
-					DWORD line_length = (DWORD)SendMessage(global.controls[EDIT_SCRIPT], EM_LINELENGTH, sel_start, -1);
-					DWORD line_count  = (DWORD)SendMessage(global.controls[EDIT_SCRIPT], EM_GETLINECOUNT, 0, 0);
+					// Duplicate line
+					case 'D': {
+						DWORD sel_start = 0;
+						DWORD sel_end   = 0;
+						SendMessageW(global.controls[EDIT_SCRIPT], EM_GETSEL, (LPARAM)&sel_start, (LPARAM)&sel_end);
 
-					std::wstring text;
-					text.reserve(line_length+3);
-					text.resize(line_length);
-					*reinterpret_cast<WORD *>(&text[0]) = (WORD)text.size();
-					SendMessage(global.controls[EDIT_SCRIPT], EM_GETLINE, line_num, (LPARAM)&text[0]);
+						DWORD line_num    = (DWORD)SendMessageW(global.controls[EDIT_SCRIPT], EM_LINEFROMCHAR, UINT_MAX, 0);
+						DWORD line_index  = (DWORD)SendMessageW(global.controls[EDIT_SCRIPT], EM_LINEINDEX, UINT_MAX, 0);
+						DWORD line_length = (DWORD)SendMessage(global.controls[EDIT_SCRIPT], EM_LINELENGTH, sel_start, -1);
+						DWORD line_count  = (DWORD)SendMessage(global.controls[EDIT_SCRIPT], EM_GETLINECOUNT, 0, 0);
 
-					if (line_num < line_count-1) {
-						text += L"\r\n";
-						SendMessage(global.controls[EDIT_SCRIPT], EM_SETSEL, line_index+line_length+2, line_index+line_length+2); //move caret to the next line
-						SendMessage(global.controls[EDIT_SCRIPT], EM_REPLACESEL, TRUE, (LPARAM)(LPCSTR)text.c_str()); //duplicate line
-						DWORD new_selection = line_index+line_length+2 + (sel_start-line_index); // set caret to the same line column but line below the original pos
-						SendMessage(global.controls[EDIT_SCRIPT], EM_SETSEL, new_selection, new_selection);
-					} else {
-						SendMessage(global.controls[EDIT_SCRIPT], EM_SETSEL, line_index+line_length, line_index+line_length); //move caret to the end of the current line
-						wchar_t new_line[] = L"\r\n";
-						SendMessage(global.controls[EDIT_SCRIPT], EM_REPLACESEL, TRUE, (LPARAM)new_line); //insert new line
-						SendMessage(global.controls[EDIT_SCRIPT], EM_REPLACESEL, TRUE, (LPARAM)(LPCSTR)text.c_str()); //duplicate line
-					}
-				} break;
+						std::wstring text;
+						text.reserve(line_length+3);
+						text.resize(line_length);
+						*reinterpret_cast<WORD *>(&text[0]) = (WORD)text.size();
+						SendMessage(global.controls[EDIT_SCRIPT], EM_GETLINE, line_num, (LPARAM)&text[0]);
 
-				// Save
-				case 'S': {
-					if (global.order == ORDER_NONE)
-						global.order = ORDER_RELOAD;
-				} break;
+						if (line_num < line_count-1) {
+							text += L"\r\n";
+							SendMessage(global.controls[EDIT_SCRIPT], EM_SETSEL, line_index+line_length+2, line_index+line_length+2); //move caret to the next line
+							SendMessage(global.controls[EDIT_SCRIPT], EM_REPLACESEL, TRUE, (LPARAM)(LPCSTR)text.c_str()); //duplicate line
+							DWORD new_selection = line_index+line_length+2 + (sel_start-line_index); // set caret to the same line column but line below the original pos
+							SendMessage(global.controls[EDIT_SCRIPT], EM_SETSEL, new_selection, new_selection);
+						} else {
+							SendMessage(global.controls[EDIT_SCRIPT], EM_SETSEL, line_index+line_length, line_index+line_length); //move caret to the end of the current line
+							wchar_t new_line[] = L"\r\n";
+							SendMessage(global.controls[EDIT_SCRIPT], EM_REPLACESEL, TRUE, (LPARAM)new_line); //insert new line
+							SendMessage(global.controls[EDIT_SCRIPT], EM_REPLACESEL, TRUE, (LPARAM)(LPCSTR)text.c_str()); //duplicate line
+						}
+					} break;
+
+					// Save
+					case 'S': {
+						if (global.order == ORDER_NONE)
+							global.order = ORDER_RELOAD;
+					} break;
+				}
 			}
-		}
-    }
+		} break;
+	}
+
 	return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 

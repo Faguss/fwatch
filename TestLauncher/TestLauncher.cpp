@@ -996,11 +996,18 @@ void CustomFilesReturn()
 			int separator_pos               = separator - destination.text;
 			char *source                    = destination.text + separator_pos + 1;
 			destination.text[separator_pos] = '\0';
-			
+
 			if (MoveFileEx(source, destination.text, 0))
 				remove_line = true;
-			else
-				destination.text[separator_pos] = '?';
+			else {
+				// Check if the file still  exists
+				WIN32_FILE_ATTRIBUTE_DATA fad;
+
+				if (!GetFileAttributesEx(source, GetFileExInfoStandard, &fad) && GetLastError() == ERROR_FILE_NOT_FOUND)
+					remove_line = true;
+				else
+					destination.text[separator_pos] = '?';
+			}
 		} else
 			remove_line = true;
 		
