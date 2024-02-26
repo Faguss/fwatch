@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2024,2,2,5,23,44,6,812,60,FALSE]
+	GS_FWATCH_MY_VERSION = [2024,2,26,1,17,15,55,0,60,FALSE]
 	GS_MY_VERSION        = 0.61
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -26,9 +26,10 @@
 	_my_game_version     = _fwatch_version select 4
 	? _fwatch_test_version < 3 : titleText ["New test version of Fwatch 1.16 required.\n\nPlease update your version.\n\nofp-faguss.com/fwatch/116test","PLAIN",1.5]; exit
 
-	? Format ["%1",GS_DOWNLOAD_THREADS] == "scalar bool array string 0xfcffffef" : GS_DOWNLOAD_THREADS=0; GS_SILENT_MODE_THREAD=false
+	? Format ["%1",GS_DOWNLOAD_THREADS] == "scalar bool array string 0xfcffffef" : GS_QUEUED_IMAGES=[]; GS_DOWNLOAD_THREADS=0; GS_SILENT_MODE_THREAD=false
 	
 	? "download" in _this                : goto "DownloadImageThread"
+	? "animate" in _this                 : goto "AnimateImageThread"
 	? GS_DOWNLOAD_THREADS > 0            : if (!GS_SILENT_MODE_THREAD) then {exit}
 	? MAINMENU_INPUT || ctrlVisible 6900 : exit
 	? ctrlVisible 6657                   : if (!(lbValue[6657,0] in [1,4])) then {LOADMOD_MODSELECTOR=true} else {closeDialog 0}; exit
@@ -1041,17 +1042,49 @@
 	@GS_DOWNLOAD_THREADS == 0
 	GS_DOWNLOAD_THREADS = GS_DOWNLOAD_THREADS + 1
 	GS_DOWNLOAD_RESULT = []
-	["--tries=1 "+_url, Format["schedule\%1\%2.%3", _img_folder, _record_id, _extension], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
+	_image_name = Format ["schedule\%1\%2.%3", _img_folder, _record_id, _extension]
+	["--tries=1 "+_url, _image_name, "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 	@count GS_DOWNLOAD_RESULT != 0
 
-	? !(GS_DOWNLOAD_RESULT select 0) : goto "DownloadImageThread_End"
+	? !(GS_DOWNLOAD_RESULT select 0) : goto "DownloadImageThread_End"	
 	loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1  key:%2write:_extension={%3};_logohash={%4};", _database, _record_id, _extension, _global_hash]
-	? dialog  &&  ctrlText 6462==_record_title  &&  lbCurSel 6657==_cursel : ctrlSetText [6461, Format["..\fwatch\tmp\schedule\%1\%2.%3", _img_folder, _record_id, _extension]]
+	~0.1
+	? dialog  &&  ctrlText 6462==_record_title  &&  lbCurSel 6657==_cursel : ctrlSetText [6461, Format ["..\fwatch\tmp\%1", _image_name]]; ctrlSetText [6463,""]
 	
 	#DownloadImageThread_End
+	GS_QUEUED_IMAGES    = GS_QUEUED_IMAGES - [_record_id]
 	GS_DOWNLOAD_THREADS = GS_DOWNLOAD_THREADS - 1
 	exit
 
+
+
+
+
+
+
+
+
+	; Show placeholder while waiting for the image to be downloaded =====================================================
+	#AnimateImageThread
+	_record_id    = _this select 1
+	_record_title = _this select 2
+	_cursel       = _this select 3
+	_dotsInit     = 1
+	_dots         = _dotsInit
+	_frame        = ""
+	
+	#AnimateImageThread_Loop
+	? !dialog || !ctrlVisible 6461 || !(_record_id in GS_QUEUED_IMAGES) || lbCurSel 6657!=_cursel || ctrlText 6462!=_record_title : exit
+	_text = "\n";
+	_i=-1; while "_i=_i+1; _i<_dots" do {_text=_text+"."}
+	ctrlShow [6463, true]
+	ctrlSetText [6463, _text]
+	_dots = _dots + 1
+	? _dots > 4 : _dots=_dotsInit
+	~0.05
+	goto "AnimateImageThread_Loop"
+
+	
 
 
 
@@ -1144,7 +1177,7 @@
 		[Format ["--verbose --output-file=fwatch\tmp\schedule\downloadlog.txt --tries=1 %1?mode=mods_v2_last_modified",_url,_mode,CURRENT_LANGUAGE,_now select 8], Format["schedule\dl_%1.sqf",_mode], "GS_DOWNLOAD_RESULT"] exec "..\fwatch\data\Download.sqs"
 		@count GS_DOWNLOAD_RESULT != 0
 		? !(GS_DOWNLOAD_RESULT select 0) : if (!_silent_mode) then {lbAdd [6657, GS_DOWNLOAD_RESULT select 3]}; if (_mirror < count (GS_DEFAULT_URL select _i)-1) then {_mirror=_mirror+1; goto "DownloadDatabase_ForEachURL"} else {goto "DownloadDatabase_Read"}
-		_result = call loadFile Format["..\fwatch\tmp\schedule\dl_%1.sqf",_mode]
+		_result = call loadFile Format ["\:IGSE LOAD file:..\fwatch\tmp\schedule\dl_%1.sqf mode:execute",_mode]
 		? Format ["%1",_result] != "true" : goto "DownloadDatabase_Full"
 
 		if (Format ["%1",count GS_FWATCH_LAST_UPDATE]!="scalar") then {_update_available=([GS_FWATCH_LAST_UPDATE,GS_FWATCH_MY_VERSION,"fraction","subtract"] call FLIB_DATEDIFFDAY) > 0; if (_update_available) then {_all_ok=true; goto "DownloadDatabase_Done"}}

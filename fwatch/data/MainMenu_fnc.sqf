@@ -1142,35 +1142,43 @@ FUNCTION_DISPLAY_LOGO = {
 	_cursel       = _this select 6;
 	
 	ctrlSetText [6461, ""];
+	ctrlSetText [6463, ""];//hide dots animation
 
-	// Read local record
-	_extension = "";
-	_logohash  = "";
-	call loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1  read:%2", _database, _record_id];
-	
-	// If logo exist at all
-	if (_global_hash != "") then {
-		_download = true;
+	// If waiting for this logo to be downloaded
+	if (_record_id in GS_QUEUED_IMAGES) then {
+		["animate", _record_id, _record_title, _cursel] exec "..\fwatch\data\MainMenu.sqs";
+	} else {
+		// Read local record
+		_extension = "";
+		_logohash  = "";
+		call loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1  read:%2", _database, _record_id];
 		
-		// does it exist locally
-		if (_global_hash == _logohash) then {
-			_ok = call loadFile Format ["\:IGSE NEW  mode:check  file:..\fwatch\tmp\schedule\%1\%2.%3", _img_folder, _record_id, _extension];
-			if (_ok select 0) then {
-				ctrlSetText [6461, Format ["..\fwatch\tmp\schedule\%1\%2.%3", _img_folder, _record_id, _extension]];
-				_download = false;
+		// If logo exist at all
+		if (_global_hash != "") then {
+			_download = true;
+			
+			// does it exist locally
+			if (_global_hash == _logohash) then {
+				_ok = call loadFile Format ["\:IGSE NEW  mode:check  file:..\fwatch\tmp\schedule\%1\%2.%3", _img_folder, _record_id, _extension];
+				if (_ok select 0) then {
+					ctrlSetText [6461, Format ["..\fwatch\tmp\schedule\%1\%2.%3", _img_folder, _record_id, _extension]];
+					_download = false;
+				}
+			} else {
+				loadFile Format ["\:IGSE NEW  file:..\fwatch\tmp\schedule\%1\%2.%3  mode:delete", _img_folder, _record_id, _extension];
+			};
+			
+			// if not then download it
+			if (_download) then {
+				GS_QUEUED_IMAGES set [count GS_QUEUED_IMAGES, _record_id];
+				["animate", _record_id, _record_title, _cursel] exec "..\fwatch\data\MainMenu.sqs";
+				["download", _img_folder, _database, _url, _record_id, _global_hash, _record_title, _cursel] exec "..\fwatch\data\MainMenu.sqs";
 			}
 		} else {
-			loadFile Format ["\:IGSE NEW  file:..\fwatch\tmp\schedule\%1\%2.%3  mode:delete", _img_folder, _record_id, _extension];
-		};
-		
-		// if not then download it
-		if (_download) then {
-			["download", _img_folder, _database, _url, _record_id, _global_hash, _record_title, _cursel] exec "..\fwatch\data\MainMenu.sqs"
-		}
-	} else {
-		// remove it locally
-		if (_logohash != "") then {
-			loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1  key:%2write:_extension="""";_logohash="""";", _database, _record_id];
+			// remove it locally
+			if (_logohash != "") then {
+				loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1  key:%2write:_extension="""";_logohash="""";", _database, _record_id];
+			}
 		}
 	}
 };
