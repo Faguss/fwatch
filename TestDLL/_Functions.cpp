@@ -2924,6 +2924,16 @@ int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_
 				String source     = {source_dynamic.text, source_dynamic.length};
 				int source_result = SQM_Parse(source, source_state, SQM_ACTION_FIND_CLASS, merge_state.class_name);
 				
+				// Add missing brackets
+				if (source_state.i==source.length && source_state.class_level>0) {
+					char to_add[] = "};\n";
+					buffer_modified = true;
+					source_state.scope_end += strlen(to_add)*source_state.class_level;
+
+					for(int i=0; i<source_state.class_level; i++)
+						StringDynamic_append(source_dynamic, to_add);
+				}
+
 				switch (source_result) {
 					case SQM_OUTPUT_CLASS : {
 						// If the class already exists in the source then scan it recursively

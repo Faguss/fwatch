@@ -3374,12 +3374,12 @@ case C_CLASS_READ:
 						i = file_size;
 
 					// Syntax error: excess closing brackets
-					if (arg_verify  &&  class_level < 0) {
+					/*if (arg_verify  &&  class_level < 0) {
 						column_num--;
 						separator    = ' ';
 						syntax_error = true;
 						goto class_read_end_parsing;
-					}
+					}*/
 
 					continue;
 				}
@@ -3780,10 +3780,11 @@ case C_CLASS_READ:
 	}
 	
 	if (arg_verify) {
-		if (!syntax_error && class_level>0) {
+		//ignore the unclosed classes
+		/*if (!syntax_error && class_level>0) {
 			syntax_error = true;
 			separator    = '}';
-		}
+		}*/
 
 		if (syntax_error) {
 			char error_msg[32]   = "";
@@ -4412,7 +4413,7 @@ case C_CLASS_WRITE :
 	StringDynamic file_contents_dynamic;
 	StringDynamic_init(file_contents_dynamic);
 
-	int buffer_max = file_size + 1 + argument[arg_merge].length + (arg_setpos!=empty_char_index ? setpos_size : 0);
+	int buffer_max = file_size + 1 + argument[arg_merge].length + (arg_setpos!=empty_char_index ? setpos_size : 0) + 128;
 	int result     = StringDynamic_allocate(file_contents_dynamic, buffer_max);
 	if (result != 0) {
 		QWrite_err(FWERROR_MALLOC, 2, "file_contents_dynamic", buffer_max);
