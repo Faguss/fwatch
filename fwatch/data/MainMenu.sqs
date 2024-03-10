@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2024,3,5,2,21,13,17,536,60,FALSE]
+	GS_FWATCH_MY_VERSION = [2024,3,10,0,22,1,18,374,60,FALSE]
 	GS_MY_VERSION        = 0.61
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -26,7 +26,7 @@
 	_my_game_version     = _fwatch_version select 4
 	? _fwatch_test_version < 3 : titleText ["New test version of Fwatch 1.16 required.\n\nPlease update your version.\n\nofp-faguss.com/fwatch/116test","PLAIN",1.5]; exit
 
-	? Format ["%1",GS_DOWNLOAD_THREADS] == "scalar bool array string 0xfcffffef" : GS_QUEUED_IMAGES=[]; GS_DOWNLOAD_THREADS=0; GS_SILENT_MODE_THREAD=false
+	? Format ["%1",GS_DOWNLOAD_THREADS] == "scalar bool array string 0xfcffffef" : GS_QUEUED_IMAGES=[]; GS_DOWNLOAD_THREADS=0; GS_SILENT_MODE_THREAD=false; ["animate"] exec "..\fwatch\data\MainMenu.sqs";
 	
 	? "download" in _this                : goto "DownloadImageThread"
 	? "animate" in _this                 : goto "AnimateImageThread"
@@ -379,7 +379,7 @@
 	lbClear 6657
 	lbSetCurSel [6657, -1]
 	[MAINMENU_STR select 32, 5,   _color_gingerbrown] call FUNCTION_LBADD
-	[MAINMENU_STR select 91, 229, _color_gingerbrown] call FUNCTION_LBADD
+	[Format ["[%1%2]", MAINMENU_STR select 91, (if (_mod_search_phrase!="") then {": "+_mod_search_phrase} else {""})], 229, _color_gingerbrown] call FUNCTION_LBADD
 	[MAINMENU_STR select 89, 228, _color_gingerbrown] call FUNCTION_LBADD
 	"ctrlShow [_x,false]" forEach [6460, 6463]
 	"ctrlShow [_x,false]" forEach _info_window
@@ -1066,22 +1066,20 @@
 
 	; Show placeholder while waiting for the image to be downloaded =====================================================
 	#AnimateImageThread
-	_record_id    = _this select 1
-	_record_title = _this select 2
-	_cursel       = _this select 3
 	_dotsInit     = 1
 	_dots         = _dotsInit
 	_frame        = ""
 	
 	#AnimateImageThread_Loop
-	? !dialog || !ctrlVisible 6461 || !(_record_id in GS_QUEUED_IMAGES) || lbCurSel 6657!=_cursel || ctrlText 6462!=_record_title : exit
+	~0.05
+	? !dialog : goto "AnimateImageThread_Loop"
+	? !(lbData [6657, lbCurSel 6657] in GS_QUEUED_IMAGES) : goto "AnimateImageThread_Loop"
 	_text = "\n";
 	_i=-1; while "_i=_i+1; _i<_dots" do {_text=_text+"."}
 	ctrlShow [6463, true]
 	ctrlSetText [6463, _text]
 	_dots = _dots + 1
 	? _dots > 4 : _dots=_dotsInit
-	~0.05
 	goto "AnimateImageThread_Loop"
 
 	

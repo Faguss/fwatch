@@ -729,7 +729,7 @@ FUNCTION_STRINGTABLE = {
 			"[Doі№cz po skoсczeniu: %1]",		//88
 			"[Pokaї prywatne mody]",		//89
 			"Napisz hasіa do prywatnych modуw",		//90
-			"[Wyszukaj]",		//91
+			"Wyszukaj",		//91
 			"Wpisz nazwк moda lub kategorii (rozszerzenie; zbiуr addonуw; uzupeіnienie; zbiуr misji; narzкdzia)",		//92
 			"Typ:",		//93
 			"Do pobrania:",		//94
@@ -849,7 +849,7 @@ FUNCTION_STRINGTABLE = {
 			"[Подключиться после окончания: %1]",		//88
 			"[Показать частные моды]",		//89
 			"Введите пароль, чтобы просмотреть моды",		//90
-			"[Найти]",		//91
+			"Найти",		//91
 			"Введите название мода или название категории (замена; аддоны; дополнение; миссии; инструменты)",		//92
 			"Тип:",		//93
 			"Скачать:",		//94
@@ -969,7 +969,7 @@ FUNCTION_STRINGTABLE = {
 			"[Connect when done: %1]",		//88
 			"[Show Private Mods]",		//89
 			"Type in password(s) to show private mod(s)",		//90
-			"[Search]",		//91
+			"Search",		//91
 			"Type mod or category name (replacement; addon pack; supplement; mission pack; tools)",		//92
 			"Type:",		//93
 			"Download:",		//94
@@ -1144,20 +1144,17 @@ FUNCTION_DISPLAY_LOGO = {
 	ctrlSetText [6461, ""];
 	ctrlSetText [6463, ""];//hide dots animation
 
-	// If waiting for this logo to be downloaded
-	if (_record_id in GS_QUEUED_IMAGES) then {
-		["animate", _record_id, _record_title, _cursel] exec "..\fwatch\data\MainMenu.sqs";
-	} else {
+	if (!(_record_id in GS_QUEUED_IMAGES)) then {
 		// Read local record
 		_extension = "";
 		_logohash  = "";
 		call loadFile Format ["\:IGSE DB  file:..\fwatch\tmp\schedule\%1  read:%2", _database, _record_id];
 		
-		// If logo exist at all
-		if (_global_hash != "") then {
+		// If logo exists on the website
+		if (_global_hash!="" && _url!="") then {
 			_download = true;
 			
-			// does it exist locally
+			// does the file exist locally
 			if (_global_hash == _logohash) then {
 				_ok = call loadFile Format ["\:IGSE NEW  mode:check  file:..\fwatch\tmp\schedule\%1\%2.%3", _img_folder, _record_id, _extension];
 				if (_ok select 0) then {
@@ -1171,7 +1168,6 @@ FUNCTION_DISPLAY_LOGO = {
 			// if not then download it
 			if (_download) then {
 				GS_QUEUED_IMAGES set [count GS_QUEUED_IMAGES, _record_id];
-				["animate", _record_id, _record_title, _cursel] exec "..\fwatch\data\MainMenu.sqs";
 				["download", _img_folder, _database, _url, _record_id, _global_hash, _record_title, _cursel] exec "..\fwatch\data\MainMenu.sqs";
 			}
 		} else {
