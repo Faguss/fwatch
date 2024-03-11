@@ -310,6 +310,8 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 			fclose(f);
 		}
 
+		DeleteFile(download_file_name.c_str());
+
 		if (strcmp(global.fwatch_build_date, fwatch_last_update) == 0) {
 			bool launch_game    = false;
 			bool task_delete    = false;
@@ -350,22 +352,25 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 						launch_game = true;
 					} else {
 						task_update = 
-								memcmp(&local.trigger, &trigger_downloaded, sizeof(TASK_TRIGGER)) != 0 && 
-								(
-									local.trigger.TriggerType != TASK_TIME_TRIGGER_ONCE || 
-									(local.trigger.TriggerType == TASK_TIME_TRIGGER_ONCE && event_start == FUTURE)
-								);
+							memcmp(&local.trigger, &trigger_downloaded, sizeof(TASK_TRIGGER)) != 0 && 
+							(
+								local.trigger.TriggerType != TASK_TIME_TRIGGER_ONCE || 
+								(local.trigger.TriggerType == TASK_TIME_TRIGGER_ONCE && event_start == FUTURE)
+							);
 
 						if (event_start == PAST) {
 							FILETIME downloaded_event_end_ft = {0};
 							SystemTimeToFileTime(&downloaded_event_end,&downloaded_event_end_ft);
 							launch_game = CompareFileTime(&downloaded_event_end_ft, &now_ft) == FUTURE;
 						}
+					}
 
-						if (task_update) {
-							std::wstring description = vacation_mode ? L"Event is on pause until " : L"Event date has changed to ";
-							messages.push_back(description + FormatSystemTime(downloaded_event_start, OPTION_MESSAGEBOX));
-						}
+					// Delete one-time events once they started
+					task_delete = trigger_downloaded.TriggerType == TASK_TIME_TRIGGER_ONCE && event_start != FUTURE;
+
+					if (task_update || (task_delete && memcmp(&local.trigger, &trigger_downloaded, sizeof(TASK_TRIGGER)) != 0)) {
+						std::wstring description = vacation_mode ? L"Event is on pause until " : L"Event date has changed to ";
+						messages.push_back(description + FormatSystemTime(downloaded_event_start, OPTION_MESSAGEBOX));
 					}
 
 					if (trigger_downloaded.TriggerType != local.trigger.TriggerType) {
@@ -376,11 +381,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 						};
 
 						messages.push_back(L"Event repetition has changed to " + recurrence_string[trigger_downloaded.TriggerType]);
-					
-						if (local.trigger.TriggerType == TASK_TIME_TRIGGER_ONCE)
-							messages.push_back(L"You can renew automatic connection in the main menu");
-						else
-							task_update = true;
+						task_update = true;
 					}
 				} else {
 					std::wstring game_version_string[] = {
@@ -408,20 +409,19 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 				}
 			}
 
-			if (task_update) {
-				bool saved = WTS_SaveTask(local, trigger_downloaded);
-				messages.push_back(saved ? L"Task was automatically updated" : L"Failed to automatically update the task");
-			}
+			if (task_update)
+				messages.push_back(
+					WTS_SaveTask(local, trigger_downloaded) 
+					? L"Task was automatically updated" 
+					: L"Failed to automatically update the task"
+				);
 
-			if (task_delete || (launch_game && trigger_downloaded.TriggerType == TASK_TIME_TRIGGER_ONCE)) {
-				local.result = local.scheduler->Delete(local.task_name.c_str());
-
-				if (SUCCEEDED(local.result)) {
-					if (task_delete)
-						messages.push_back(L"Task was automatically removed");
-				} else
-					messages.push_back(L"Failed to automatically remove the task");
-			}
+			if (task_delete)
+				messages.push_back(
+					SUCCEEDED(local.scheduler->Delete(local.task_name.c_str())) 
+					? L"Task was automatically removed" 
+					: L"Failed to automatically remove the task"
+				);
 
 			WTS_CloseTask(local);
 
@@ -638,7 +638,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 	std::wstring game_window = L"";
 	int game_version         = VER_196;
 	bool dedicated_server    = false;
-	GameInfo game;
+	GameInfo game            = {0};
 	game.handle              = 0;
 	game.pid                 = 0;
 	
