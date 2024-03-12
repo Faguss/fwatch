@@ -1411,22 +1411,61 @@ std::wstring FormatMessageArray(std::vector<std::wstring> &message_list, int typ
 	return output;
 }
 
-std::wstring FormatSystemTime(SYSTEMTIME &date, int type)
+std::wstring FormatSystemTime(SYSTEMTIME &date, int type, int which)
 {
-	std::wstring output =
+	std::wstring output = L"";
+
+	if (which & OPTION_DATE) {
+		output +=
 		Int2StrW(date.wYear) + L"." + 
 		Int2StrW(date.wMonth, OPTION_LEADINGZERO) + L"." + 
 		Int2StrW(date.wDay, OPTION_LEADINGZERO) + L" ";
+	}
 
 	if (type == OPTION_LOGFILE)
 		output += L" ";
 
+	if (which & OPTION_TIME) {
 	output += 
 		Int2StrW(date.wHour, OPTION_LEADINGZERO) + L":" + 
 		Int2StrW(date.wMinute, OPTION_LEADINGZERO);
 
 	if (type == OPTION_LOGFILE)
 		output += L":" + Int2StrW(date.wSecond, OPTION_LEADINGZERO);
+	}
 		
 	return output;
+}
+
+COMPARE_TIME_RESULT CompareSystemTime(SYSTEMTIME &date1, SYSTEMTIME &date2) 
+{
+	FILETIME ft1 = {0};
+	FILETIME ft2 = {0};
+
+	SystemTimeToFileTime(&date1,&ft1);
+	SystemTimeToFileTime(&date2,&ft2);
+
+	return static_cast<COMPARE_TIME_RESULT>(CompareFileTime(&ft1, &ft2));
+}
+
+std::wstring GetDayNameFromTrigger(TASK_TRIGGER &input, SYSTEMTIME *out) 
+{
+	std::wstring days[] = {
+		L"Sunday",
+		L"Monday",
+		L"Thursday",
+		L"Wednesday",
+		L"Thursday",
+		L"Friday",
+		L"Saturday"
+	};
+
+	for(WORD i=0, j=1; i<(sizeof(days)/sizeof(days[0])); i++,j<<=1)
+		if (input.Type.Weekly.rgfDaysOfTheWeek & j) {
+			if (out != NULL)
+				out->wDayOfWeek = i;
+			return days[i];
+		}
+
+	return L"";
 }

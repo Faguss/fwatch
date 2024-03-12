@@ -148,24 +148,9 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 			} break;
 
 			case TASK_TIME_TRIGGER_WEEKLY : {
-				std::wstring days[] = {
-					L"Sunday",
-					L"Monday",
-					L"Thursday",
-					L"Wednesday",
-					L"Thursday",
-					L"Friday",
-					L"Saturday"
-				};
-
-				for(WORD i=0, j=1; i<(sizeof(days)/sizeof(days[0])); i++,j<<=1)
-					if (local.trigger.Type.Weekly.rgfDaysOfTheWeek & j) {
-						time_scheduled.wDayOfWeek = i;
-						messages[0] += L"\r\nGame time: " + days[i] + L" " +
+				messages[0] += L"\r\nGame time: " + GetDayNameFromTrigger(local.trigger, &time_scheduled) + L" " +
 							Int2StrW(local.trigger.wStartHour, OPTION_LEADINGZERO) + L":" + 
 							Int2StrW(local.trigger.wStartMinute, OPTION_LEADINGZERO);
-						break;
-					}
 			} break;
 		}
 
@@ -214,8 +199,11 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		std::wstring exe_arguments = L"";
 		std::vector<MODLIST> event_mods;
 
+		SYSTEMTIME original_start_date       = {0};
 		SYSTEMTIME downloaded_event_start = {0};
 		SYSTEMTIME downloaded_event_end   = {0};
+		SYSTEMTIME downloaded_vacation_start = {0};
+		SYSTEMTIME downloaded_vacation_end   = {0};
 
 		TASK_TRIGGER trigger_downloaded;
 		ZeroMemory(&trigger_downloaded, sizeof(TASK_TRIGGER));
@@ -238,7 +226,10 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 				GR_TAG_FWATCH_DATE,
 				GR_TAG_EXE_ARGUMENTS,
 				GR_TAG_MOD_INFO,
-				GR_TAG_EVENT_VACATION
+				GR_TAG_EVENT_VACATION,
+				GR_TAG_EVENT_DATE_ORIGINAL,
+				GR_TAG_EVENT_DATE_VACATION_START,
+				GR_TAG_EVENT_DATE_VACATION_END
 			};
 
 			if (signature_read == signature_valid) {
@@ -249,17 +240,20 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 					switch(tag) {
 						case GR_TAG_STATUS        : fread(&event_status, sizeof(event_status), 1, f); break;
 						case GR_TAG_SERVER_VERSION: fread(&server_version, sizeof(server_version), 1, f); break;
+						case GR_TAG_EVENT_DATE_START         : fread(&downloaded_event_start, sizeof(downloaded_event_start), 1, f); break;
 						case GR_TAG_EVENT_DATE_END: fread(&downloaded_event_end, sizeof(downloaded_event_end), 1, f); break;
+						case GR_TAG_EVENT_DATE_VACATION_START: fread(&downloaded_vacation_start, sizeof(downloaded_vacation_start), 1, f); break;
+						case GR_TAG_EVENT_DATE_VACATION_END  : fread(&downloaded_vacation_end, sizeof(downloaded_vacation_end), 1, f); break;
 						case GR_TAG_EXE_ARGUMENTS : readStringFromBinaryFile(f, exe_arguments); break;
 						case GR_TAG_EVENT_VACATION: fread(&vacation_mode, sizeof(vacation_mode), 1, f); break;
 
-						case GR_TAG_EVENT_DATE_START: {
-							fread(&downloaded_event_start, sizeof(downloaded_event_start), 1, f);
-							trigger_downloaded.wBeginYear   = downloaded_event_start.wYear;
-							trigger_downloaded.wBeginMonth  = downloaded_event_start.wMonth;
-							trigger_downloaded.wBeginDay    = downloaded_event_start.wDay;
-							trigger_downloaded.wStartHour   = downloaded_event_start.wHour;
-							trigger_downloaded.wStartMinute = downloaded_event_start.wMinute;
+						case GR_TAG_EVENT_DATE_ORIGINAL: {
+							fread(&original_start_date, sizeof(original_start_date), 1, f);
+							trigger_downloaded.wBeginYear   = original_start_date.wYear;
+							trigger_downloaded.wBeginMonth  = original_start_date.wMonth;
+							trigger_downloaded.wBeginDay    = original_start_date.wDay;
+							trigger_downloaded.wStartHour   = original_start_date.wHour;
+							trigger_downloaded.wStartMinute = original_start_date.wMinute;
 						} break;
 
 						case GR_TAG_EVENT_TYPE: {
@@ -335,42 +329,53 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 					now.wSecond = 0;
 					now.wMilliseconds = 0;
 
-					FILETIME now_ft;
-					SystemTimeToFileTime(&now, &now_ft);
+					if (vacation_mode) {
+						trigger_downloaded.wBeginYear   = downloaded_event_start.wYear;
+						trigger_downloaded.wBeginMonth  = downloaded_event_start.wMonth;
+						trigger_downloaded.wBeginDay    = downloaded_event_start.wDay;
+						trigger_downloaded.wStartHour   = downloaded_event_start.wHour;
+						trigger_downloaded.wStartMinute = downloaded_event_start.wMinute;
 
-					FILETIME downloaded_event_start_ft = {0};
-					SystemTimeToFileTime(&downloaded_event_start,&downloaded_event_start_ft);
-					LONG event_start = CompareFileTime(&downloaded_event_start_ft, &now_ft);
-
-					enum COMPARE_FILE_TIME_RESULT {
-						PAST    = -1,
-						PRESENT = 0,
-						FUTURE  = 1
-					};
-
-					if (event_start == PRESENT) {
-						launch_game = true;
+						messages.push_back(L"Event is on pause since " + FormatSystemTime(downloaded_vacation_start, OPTION_MESSAGEBOX, OPTION_DATE) + L"until " + FormatSystemTime(downloaded_vacation_end, OPTION_MESSAGEBOX, OPTION_DATE));
+						task_update = true;
 					} else {
-						task_update = 
-							memcmp(&local.trigger, &trigger_downloaded, sizeof(TASK_TRIGGER)) != 0 && 
-							(
-								local.trigger.TriggerType != TASK_TIME_TRIGGER_ONCE || 
-								(local.trigger.TriggerType == TASK_TIME_TRIGGER_ONCE && event_start == FUTURE)
-							);
+						COMPARE_TIME_RESULT event_start = CompareSystemTime(downloaded_event_start, now);
+						COMPARE_TIME_RESULT event_end   = CompareSystemTime(downloaded_event_end, now);
+						launch_game = event_start == PRESENT || (event_start == PAST && event_end == FUTURE);
 
-						if (event_start == PAST) {
-							FILETIME downloaded_event_end_ft = {0};
-							SystemTimeToFileTime(&downloaded_event_end,&downloaded_event_end_ft);
-							launch_game = CompareFileTime(&downloaded_event_end_ft, &now_ft) == FUTURE;
+						bool different_date = local.trigger.wBeginYear != trigger_downloaded.wBeginYear || local.trigger.wBeginMonth  != trigger_downloaded.wBeginMonth || local.trigger.wBeginDay != trigger_downloaded.wBeginDay;
+						bool different_time = local.trigger.wStartHour != trigger_downloaded.wStartHour || local.trigger.wStartMinute != trigger_downloaded.wStartMinute;
+
+						if (different_date || different_time) {
+							task_update = true;
+
+							if (different_date) {
+								SYSTEMTIME now_date = {0};
+								SYSTEMTIME new_date = {0};
+								now_date.wYear  = now.wYear;
+								now_date.wMonth = now.wMonth;
+								now_date.wDay   = now.wDay;
+								new_date.wYear  = trigger_downloaded.wBeginYear;
+								new_date.wMonth = trigger_downloaded.wBeginMonth;
+								new_date.wDay   = trigger_downloaded.wBeginDay;
+
+								if (
+									trigger_downloaded.TriggerType == TASK_TIME_TRIGGER_ONCE ||
+									(trigger_downloaded.TriggerType != TASK_TIME_TRIGGER_ONCE && CompareSystemTime(new_date, now_date) == FUTURE)
+								) {
+									messages.push_back(L"Event date has changed to " + FormatSystemTime(downloaded_event_start, OPTION_MESSAGEBOX, OPTION_DATE));
+								} else
+									if (trigger_downloaded.TriggerType == TASK_TIME_TRIGGER_WEEKLY && trigger_downloaded.Type.Weekly.rgfDaysOfTheWeek != local.trigger.Type.Weekly.rgfDaysOfTheWeek) {
+										messages.push_back(L"Event day has changed to " + GetDayNameFromTrigger(trigger_downloaded));
 						}
 					}
 
+							if (different_time)
+								messages.push_back(L"Event time has changed to " + FormatSystemTime(downloaded_event_start, OPTION_MESSAGEBOX, OPTION_TIME));
+						}
+
 					// Delete one-time events once they started
 					task_delete = trigger_downloaded.TriggerType == TASK_TIME_TRIGGER_ONCE && event_start != FUTURE;
-
-					if (task_update || (task_delete && memcmp(&local.trigger, &trigger_downloaded, sizeof(TASK_TRIGGER)) != 0)) {
-						std::wstring description = vacation_mode ? L"Event is on pause until " : L"Event date has changed to ";
-						messages.push_back(description + FormatSystemTime(downloaded_event_start, OPTION_MESSAGEBOX));
 					}
 
 					if (trigger_downloaded.TriggerType != local.trigger.TriggerType) {
@@ -409,18 +414,18 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 				}
 			}
 
+			if (task_delete) {
+				messages.push_back(
+					SUCCEEDED(local.scheduler->Delete(local.task_name.c_str()))
+					? L"Task was automatically removed" 
+					: L"Failed to automatically remove the task"
+				);
+			} else 
 			if (task_update)
 				messages.push_back(
 					WTS_SaveTask(local, trigger_downloaded) 
 					? L"Task was automatically updated" 
 					: L"Failed to automatically update the task"
-				);
-
-			if (task_delete)
-				messages.push_back(
-					SUCCEEDED(local.scheduler->Delete(local.task_name.c_str())) 
-					? L"Task was automatically removed" 
-					: L"Failed to automatically remove the task"
 				);
 
 			WTS_CloseTask(local);

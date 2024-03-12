@@ -45,4 +45,6 @@ void WTS_CloseTask(WINDOWS_TASK_SCHEDULER &wts);
 bool WTS_Error(WINDOWS_TASK_SCHEDULER &wts, std::wstring message);
 DWORD ReadLocalMods(std::vector<MODLIST> &local_mods);
 std::wstring FormatMessageArray(std::vector<std::wstring> &message_list, int type=OPTION_LOGFILE);
-std::wstring FormatSystemTime(SYSTEMTIME &date, int type=OPTION_LOGFILE);
+std::wstring FormatSystemTime(SYSTEMTIME &date, int type=OPTION_LOGFILE, int which=OPTION_DATE | OPTION_TIME);
+COMPARE_TIME_RESULT CompareSystemTime(SYSTEMTIME &date1, SYSTEMTIME &date2);
+std::wstring GetDayNameFromTrigger(TASK_TRIGGER &input, SYSTEMTIME *out=NULL);
