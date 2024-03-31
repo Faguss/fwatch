@@ -1562,10 +1562,10 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 				for (int z=0;  z<level && z<10;  z++) 
 					strcat(tabs, "\t");
 
-				sprintf(line2, "\n%s\tclass %s ", tabs, WantedClass);
+				sprintf(line2, "\n%s\tclass %s ", tabs, WantedClass.text);
 
 				if (inherit.length > 0) 
-					sprintf(line2, "%s: %s ", line2,inherit);
+					sprintf(line2, "%s: %s ", line2,inherit.text);
 
 				sprintf(line2, "%s\n%s\t{\n%s\t};\n%s};\n",line2,tabs,tabs,tabs);
 				l2 = strlen(line2);
@@ -1821,10 +1821,10 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 			// Add new global class
 			if (K==-1  &&  action==1)
 			{
-				sprintf(line, "\nclass %s ", WantedClass);
+				sprintf(line, "\nclass %s ", WantedClass.text);
 
 				if (inherit.length > 0) 
-					sprintf(line, "%s: %s ", line,inherit);
+					sprintf(line, "%s: %s ", line,inherit.text);
 
 				sprintf(line, "%s\n{\n};\n", line);
 
@@ -2386,7 +2386,7 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 						strcpy(line2, "");
 
 					// Add token name
-					sprintf(line2, "%s%s\t%s=", line2, tabs,WantedToken);
+					sprintf(line2, "%s%s\t%s=", line2, tabs,argument[WantedToken].text);
 
 					l2 = strlen(line2);
 					memcpy(buf+bufsize, line2, l2+1);
@@ -2920,7 +2920,7 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 				if (strcmp(WantedValue,"") == 0)  
 					WantedValue = empty;
 
-				sprintf(line2, "\n%s=%s\n", WantedToken,WantedValue);
+				sprintf(line2, "\n%s=%s\n", argument[WantedToken].text,WantedValue);
 
 				int l = strlen(line2);
 				memcpy(buf+bufsize, line2, l+1);
@@ -3250,12 +3250,13 @@ case C_CLASS_READ:
 	int word_start        = -1;
 	int class_level       = classpath_current;
 	int array_level       = 0;
-	int output_level      = 0;
+	int max_output_level  = 0;
 	int parenthesis_level = 0;
 	int property_start    = 0;
 	int property_end      = 0;
 	int line_num          = 1;
 	int column_num        = 0;
+	int properties_found  = false;
 	bool first_char       = true;
 	bool is_array         = false;
 	bool in_quote         = false;
@@ -3263,11 +3264,12 @@ case C_CLASS_READ:
 	bool is_inherit       = false;
 	bool classpath_done   = false;
 	bool classpath_match  = false;
-	bool property_found   = false;
 	bool purge_comment    = false;
 	bool syntax_error     = false;
+	bool copy_property    = false;
 	char separator        = ' ';
 	char *text            = file_contents.text;
+#define CURRENT_OUTPUT_LEVEL class_level - classpath_current
 
 	for (i=0; i<file_size; i++) {
 		char c = text[i];
@@ -3407,6 +3409,27 @@ case C_CLASS_READ:
 									property_start = word_start;
 									property_end   = i;							
 									is_array       = text[i-2]=='[' && text[i-1]==']';
+									copy_property  = properties_to_find_size == 0;
+
+									for (int j=0; j<properties_to_find_size && !copy_property; j++)
+										if (_strcmpi(text+property_start,properties_to_find[j]) == 0)
+											copy_property = true;
+
+									if (copy_property) {
+										if (purge_comment) {
+											purge_comment = false;
+											PurgeComments(text, property_start, property_end);
+										}
+
+										properties_found++;
+										char *property = text + property_start;
+
+										if (lowercase_flag & CLASS_READ_LOWER_PROPERTY)
+											for (int z=0; z<property[z]!='\0'; z++)
+												property[z] = tolower(property[z]);
+
+										StringDynamic_appendf(output_property[CURRENT_OUTPUT_LEVEL], "]+[\"%s\"", property);
+									}
 								}
 
 						word_start = -1;
@@ -3420,7 +3443,15 @@ case C_CLASS_READ:
 			case ENUM_BRACKET : 
 			case EXEC_BRACKET : {
 				if (c == separator) {
-					expect++;
+					if (expect == EQUALITY)
+						expect = VALUE;
+					else
+						if (expect == ENUM_BRACKET)
+							expect = ENUM_CONTENT;
+						else
+							if (expect == EXEC_BRACKET)
+								expect = EXEC_CONTENT;
+
 					separator = ' ';
 				} else 
 					if (expect==EQUALITY && c=='(') {
@@ -3447,195 +3478,83 @@ case C_CLASS_READ:
 			}
 			
 			case VALUE : {
-				if (c == '"')
+				if (c == '"' && ((word_start == -1 && !in_quote) || in_quote))
 					in_quote = !in_quote;
 
-				if (!in_quote && (c=='{' || c=='['))
+				if (is_array && !in_quote) {
+					if (c=='{' || c=='[') {
 					array_level++;
-
-				if (!in_quote && (c=='}' || c==']')) {
-					array_level--;
-
-					// Remove trailing commas
-					for (int z=i-1; z>0 && (isspace(text[z]) || text[z]==',' || text[z]=='}' || text[z]==']'); z--)
-						if (text[z]==',')
-							text[z] = ' ';
+						StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "]+[");
+						for(int x=0, z=array_level>1 ? array_level-1 : array_level; x<z; x++)
+							StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "[");
+					}
 				}
 
-				if (!in_quote && c==';' && array_level>0)
-					text[i] = ',';
-
 				if (word_start == -1) {
-					if (!isspace(c))
+					if (!isspace(c) && (!is_array || (c!='{' && c!='[' && c!=',' && c!=';' && c!='}'))) {
 						word_start = i;
+					}
 				} else {
-					if (!in_quote && array_level==0 && (c==';' || c=='\r' || c=='\n')) {
-						text[i] = '\0';
-
-						char *property = text + property_start;
-						char *value    = text + word_start;
-
+					if (!in_quote && ((!is_array && (c==';' || c=='\r' || c=='\n')) || (c==',' || c==';' || c=='}' || c==']'))) {
+						if (!arg_verify && word_start!=-1 && copy_property && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {							
 						if (purge_comment) {
 							purge_comment = false;
-							PurgeComments(text, property_start, property_end);
 							PurgeComments(text, word_start    , i);
 						}
 
-						if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
-							bool found = properties_to_find_size == 0;
+							// Trim string
+							int word_end = i;
+							for (int z=i-1; z>word_start && isspace(text[z]); z--, word_end--);
 
-							for (int j=0; j<properties_to_find_size && !found; j++)
-								if (strcmpi(property,properties_to_find[j]) == 0)
-									found = true;
+							if (arg_trimdollar) {
+								bool quote = text[word_start] == '\"';
 
-							if (found) {
-								property_found = true;
-								int level      = class_level - classpath_current;
-
-								if (level < classpath_capacity) {
-									if (lowercase_flag & CLASS_READ_LOWER_PROPERTY)
-										for (int z=0; property[z]!='\0'; z++)
-											property[z] = tolower(property[z]);
-
-									// Add property name
-									StringDynamic_appendf(output_property[level], "]+[\"%s\"", property);
-
-									// Add property value
-									StringDynamic_append(output_value[level], "]+[");
-
-									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"' && !is_array))
-										StringDynamic_append(output_value[level], "\"");
-
-									// Convert array
-									if (is_array  &&  wrap==NODOUBLE_WRAP) {
-										size_t item_start   = word_start;
-										size_t item_started = false;
-										bool in_quote       = false;
-
-										for (size_t j=word_start; j<=i; j++) {
-											if (lowercase_flag & CLASS_READ_LOWER_VALUE)
-												text[j] = tolower(text[j]);
-
-											if (!in_quote) {
-												if (!item_started && !isspace(text[j]) && text[j]!='{' && text[j]!='}' && text[j]!=',' && text[j]!=';' && text[j]!='\0') {
-													item_start   = j;
-													item_started = true;
+								if (strncmpi(text+word_start+quote, "$STR", 4) == 0) {
+									word_start++;
+									if (quote)
+										text[word_start] = '\"';
 												}
-
-												// If encountered separator instead of value then insert empty string
-												if (!item_started && (text[j]==',' || text[j]==';'))
-													StringDynamic_append(output_value[level], "\"\"");
-												
-												if ((item_started && (isspace(text[j]) || text[j]=='{' || text[j]=='}' || text[j]==',' || text[j]==';' || i==j))) {
-													item_started   = false;					
-													bool add_quote = false;
-													
-													if (item_start != j) {
-														if (text[item_start]!='\"' && text[j-1]!='\"') {
-															StringDynamic_append(output_value[level], "\"");
-															add_quote = true;
 														}
 	
-														StringDynamic_appendl(output_value[level], text+item_start, j-item_start);
+							text[word_end] = '\0';
+							char *value = text + word_start;
+							size_t length = word_end - word_start;
 	
-														if (add_quote) {
-															StringDynamic_append(output_value[level], "\"");
-														}
-													}
-												}
+							if (lowercase_flag & CLASS_READ_LOWER_VALUE)
+								for (size_t j=0; j<length; j++)
+									value[j] = tolower(value[j]);
 												
-												if (text[j] == '{')
-													StringDynamic_append(output_value[level], "[");
-												else
-													if (text[j] == '}')
-														StringDynamic_append(output_value[level], "]");
-													else 
-														if (text[j]==','  ||  text[j]==';')
-															StringDynamic_append(output_value[level], ",");
-											}
+							StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "]+[");
 											
-											if (text[j] == '"')
-												in_quote = !in_quote;
-										}
+							if (wrap == YES_WRAP || (wrap==NODOUBLE_WRAP && value[0] != '\"' && value[word_end-1] != '\"')) {
+								StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "\"");
+								StringDynamic_appendq(output_value[CURRENT_OUTPUT_LEVEL], value);
+								StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "\"");
 									} else
-									// Convert arrays (square brackets) and strings (double quotes) so that "call" command in OFP can be used
-									if (is_array && wrap!=NODOUBLE_WRAP || (wrap==YES_WRAP && value[0]=='\"')) {
-										bool trimmed_dollar = false;
-
-										for (size_t j=word_start; j<i; j++) {
-											if (text[j] == '"')
-												in_quote = !in_quote;
-
-											if (arg_trimdollar && !trimmed_dollar) {
-												if (!isspace(text[j]) && text[j]!='$' && text[j]!='\"' && text[j]!='{')
-													trimmed_dollar = true;
-
-												if (text[j] == '$') {
-													trimmed_dollar = true;
-													continue;
-												}
+								StringDynamic_appendl(output_value[CURRENT_OUTPUT_LEVEL], value, length);
 											}
 
-											if (lowercase_flag & CLASS_READ_LOWER_VALUE)
-												text[j] = tolower(text[j]);
-
-											if (text[j]=='{' && !in_quote && wrap==NO_WRAP)
-												StringDynamic_append(output_value[level], "[");
-											else 
-												if (text[j]=='}' && !in_quote && wrap==NO_WRAP)
-													StringDynamic_append(output_value[level], "]");
-												else 
-													if (text[j]=='"' && (wrap==YES_WRAP || wrap==NODOUBLE_WRAP))
-														StringDynamic_append(output_value[level], "\"\"");
-													else 
-														StringDynamic_appendl(output_value[level], text+j, 1);
+						if (!is_array) {
+							expect = SEMICOLON;
+							copy_property = false;
 										}
-									} else {
-										if (arg_trimdollar) {
-											if (value[0] == '$')
-												value++;
 
-											if (value[0]=='\"'  &&  value[1]=='$') {
-												value++;
-												value[0] = '\"';
+						word_start = -1;
 											}
 										}
 
-										if (lowercase_flag & CLASS_READ_LOWER_VALUE)
-											for (size_t j=word_start; j<=i; j++)
-												text[j] = tolower(text[j]);
+				if (is_array && !in_quote && c=='}' || c==']') {
+					for (int z=array_level>1?array_level-1:array_level; word_start == -1 && z > 0; z--)
+						StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "]");
+					array_level--;
 											
-										// If the value is a string without quotes around then we need to double the amount of quotes
-										bool stringify = false;
 										
-										if (value[0] != '\"') {
-											for (size_t z=0; value[z]!='\0'; z++) {
-												if (value[z] == '\"') {
-													stringify = true;
-													break;
-												}
-											}
-										}
-
-										if (stringify)
-											StringDynamic_appendq(output_value[level], value);
-										else
-											StringDynamic_append(output_value[level], value);
-									}
-									
-									if (wrap==YES_WRAP || (wrap==NODOUBLE_WRAP && value[0]!='\"' && !is_array))
-										StringDynamic_append(output_value[level], "\"");
-								}
+					if (is_array && array_level == 0) {
+						expect = SEMICOLON;
+						copy_property = false;
 							}
 						}
-						
-						word_start = -1;
-						expect     = PROPERTY;
-					}
-				}
-				
-				break;
-			}
+			} break;
 			
 			case CLASS_NAME    :
 			case CLASS_INHERIT : {
@@ -3711,8 +3630,8 @@ case C_CLASS_READ:
 						if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
 							int level = class_level - classpath_current;
 							
-							if (level > output_level)
-								output_level = level;
+							if (level > max_output_level)
+								max_output_level = level;
 
 							for (int j=level==0 ? 1 : level; j<classpath_capacity; j++)
 								for (int k=0; k<all_output_strings_num; k++)
@@ -3772,7 +3691,7 @@ case C_CLASS_READ:
 		"value"
 	};
 
-	for (z=0; z<classpath_capacity && z<=output_level; z++) {
+	for (z=0; z<classpath_capacity && z<=max_output_level; z++) {
 		for (int j=0; j<all_output_strings_num; j++) {
 			QWritef("_output_%s%d=%s];", output_strings_name[j], z, all_output_strings[j][z].text);
 			StringDynamic_end(all_output_strings[j][z]);
@@ -3805,7 +3724,7 @@ case C_CLASS_READ:
 		if (classpath_current < classpath_size)
 			QWrite_err(FWERROR_CLASS_PARENT, 4, classpath[classpath_current], classpath_current, ++classpath_size, argument[arg_file].text);
 		else
-			if (arg_find_require && properties_to_find_size>0 && !property_found) {
+			if (arg_find_require && properties_to_find_size>0 && properties_found==0) {
 				for (size_t i=0; i<argument[arg_find].length; i++)
 					if (argument[arg_find].text[i] == '\"')
 						argument[arg_find].text[i] = ' ';
@@ -3817,7 +3736,7 @@ case C_CLASS_READ:
 
 	QWrite("[");
 	
-	for (z=0; z<classpath_capacity && z<=output_level; z++) {
+	for (z=0; z<classpath_capacity && z<=max_output_level; z++) {
 		if (z == 0)
 			QWrite("[");
 		else
