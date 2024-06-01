@@ -2601,7 +2601,7 @@ int SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_
 			}
 			
 			case SQM_VALUE : {
-				if (c == '"')
+				if (c == '"' && ((state.word_start == -1 && !state.in_quote) || state.in_quote))
 					state.in_quote = !state.in_quote;
 
 				if (!state.in_quote && (c=='{' || c=='[')) {
@@ -2887,6 +2887,16 @@ int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_
 
 					case SQM_OUTPUT_END_OF_SCOPE : {
 						// Add a new property
+
+						// Add missing brackets
+						if (source_state.i==source.length && source_state.class_level>0) {
+							char to_add[] = "};\n";
+							buffer_modified = true;
+							source_state.scope_end += strlen(to_add)*source_state.class_level;
+
+							for(int i=0; i<source_state.class_level; i++)
+								StringDynamic_append(source_dynamic, to_add);
+						}
 						
 						// Check what's the last character in the source
 						bool add_semicolon = false;
