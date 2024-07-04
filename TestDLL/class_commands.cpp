@@ -3267,6 +3267,7 @@ case C_CLASS_READ:
 	bool purge_comment    = false;
 	bool syntax_error     = false;
 	bool copy_property    = false;
+	bool value_quoted     = false;
 	char separator        = ' ';
 	char *text            = file_contents.text;
 #define CURRENT_OUTPUT_LEVEL class_level - classpath_current
@@ -3409,26 +3410,32 @@ case C_CLASS_READ:
 									property_start = word_start;
 									property_end   = i;							
 									is_array       = text[i-2]=='[' && text[i-1]==']';
-									copy_property  = properties_to_find_size == 0;
+									copy_property  = false;
+									value_quoted   = false;
 
-									for (int j=0; j<properties_to_find_size && !copy_property; j++)
-										if (_strcmpi(text+property_start,properties_to_find[j]) == 0)
-											copy_property = true;
+									int level = class_level - classpath_current;
+									if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && level < classpath_capacity && !classpath_done) {
+										copy_property  = properties_to_find_size == 0;
 
-									if (copy_property) {
-										if (purge_comment) {
-											purge_comment = false;
-											PurgeComments(text, property_start, property_end);
+										for (int j=0; j<properties_to_find_size && !copy_property; j++)
+											if (_strcmpi(text+property_start,properties_to_find[j]) == 0)
+												copy_property = true;
+
+										if (copy_property) {
+											if (purge_comment) {
+												purge_comment = false;
+												PurgeComments(text, property_start, property_end);
+											}
+
+											properties_found++;
+											char *property = text + property_start;
+
+											if (lowercase_flag & CLASS_READ_LOWER_PROPERTY)
+												for (int z=0; z<property[z]!='\0'; z++)
+													property[z] = tolower(property[z]);
+
+											StringDynamic_appendf(output_property[CURRENT_OUTPUT_LEVEL], "]+[\"%s\"", property);
 										}
-
-										properties_found++;
-										char *property = text + property_start;
-
-										if (lowercase_flag & CLASS_READ_LOWER_PROPERTY)
-											for (int z=0; z<property[z]!='\0'; z++)
-												property[z] = tolower(property[z]);
-
-										StringDynamic_appendf(output_property[CURRENT_OUTPUT_LEVEL], "]+[\"%s\"", property);
 									}
 								}
 
@@ -3478,29 +3485,44 @@ case C_CLASS_READ:
 			}
 			
 			case VALUE : {
-				if (c == '"' && ((word_start == -1 && !in_quote) || in_quote))
-					in_quote = !in_quote;
+				if (c == '"') {
+					if (word_start == -1)
+						value_quoted = true;
+
+					if (value_quoted)
+						in_quote = !in_quote;
+				}
 
 				if (is_array && !in_quote) {
 					if (c=='{' || c=='[') {
-					array_level++;
-						StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "]+[");
-						for(int x=0, z=array_level>1 ? array_level-1 : array_level; x<z; x++)
-							StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "[");
+						array_level++;
+
+						if (!arg_verify && copy_property && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+							StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "]+[");
+							for(int x=0, z=array_level>1 ? array_level-1 : array_level; x<z; x++)
+								StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "[");
+						}
 					}
 				}
 
 				if (word_start == -1) {
-					if (!isspace(c) && (!is_array || (c!='{' && c!='[' && c!=',' && c!=';' && c!='}'))) {
+					if (!isspace(c) && (!is_array || (is_array && (c!='{' && c!='[' && c!=',' && c!=';' && c!='}')))) {
 						word_start = i;
 					}
+
+					// If empty scalar value
+					if (!is_array && c==';') {
+						word_start = i;
+						i--;
+						continue;
+					}
 				} else {
-					if (!in_quote && ((!is_array && (c==';' || c=='\r' || c=='\n')) || (c==',' || c==';' || c=='}' || c==']'))) {
-						if (!arg_verify && word_start!=-1 && copy_property && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {							
-						if (purge_comment) {
-							purge_comment = false;
-							PurgeComments(text, word_start    , i);
-						}
+					if (!in_quote && ((!is_array && (c==';' || c=='\r' || c=='\n')) || (is_array && (c==',' || c==';' || c=='}' || c==']')))) {
+						if (!arg_verify && word_start!=-1 && copy_property && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+							if (purge_comment) {
+								purge_comment = false;
+								PurgeComments(text, word_start, i);
+							}
 
 							// Trim string
 							int word_end = i;
@@ -3513,47 +3535,49 @@ case C_CLASS_READ:
 									word_start++;
 									if (quote)
 										text[word_start] = '\"';
-												}
-														}
+								}
+							}
 	
 							text[word_end] = '\0';
 							char *value = text + word_start;
 							size_t length = word_end - word_start;
-	
+		
 							if (lowercase_flag & CLASS_READ_LOWER_VALUE)
 								for (size_t j=0; j<length; j++)
 									value[j] = tolower(value[j]);
 												
 							StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "]+[");
 											
-							if (wrap == YES_WRAP || (wrap==NODOUBLE_WRAP && value[0] != '\"' && value[word_end-1] != '\"')) {
+							if (wrap == YES_WRAP || (wrap==NODOUBLE_WRAP && value[0] != '\"' && value[length-1] != '\"')) {
 								StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "\"");
 								StringDynamic_appendq(output_value[CURRENT_OUTPUT_LEVEL], value);
 								StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "\"");
-									} else
+							} else
 								StringDynamic_appendl(output_value[CURRENT_OUTPUT_LEVEL], value, length);
-											}
+						}
 
 						if (!is_array) {
 							expect = SEMICOLON;
 							copy_property = false;
-										}
+						}
 
 						word_start = -1;
-											}
-										}
+					}
+				}
 
-				if (is_array && !in_quote && c=='}' || c==']') {
-					for (int z=array_level>1?array_level-1:array_level; word_start == -1 && z > 0; z--)
-						StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "]");
+				if (is_array && !in_quote && (c=='}' || c==']')) {
+					if (!arg_verify && copy_property && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+						for (int z=array_level>1?array_level-1:array_level; word_start == -1 && z > 0; z--)
+							StringDynamic_append(output_value[CURRENT_OUTPUT_LEVEL], "]");
+					}
+
 					array_level--;
-											
-										
+					
 					if (is_array && array_level == 0) {
 						expect = SEMICOLON;
 						copy_property = false;
-							}
-						}
+					}
+				}
 			} break;
 			
 			case CLASS_NAME    :
@@ -3627,7 +3651,7 @@ case C_CLASS_READ:
 						class_level++;
 						expect = PROPERTY;
 							
-						if (!arg_verify && classpath_current==classpath_size && class_level>=classpath_current && !classpath_done) {
+						if (!arg_verify && classpath_current==classpath_size && class_level>classpath_current && !classpath_done) {
 							int level = class_level - classpath_current;
 							
 							if (level > max_output_level)

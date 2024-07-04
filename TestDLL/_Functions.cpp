@@ -2406,6 +2406,7 @@ void SQM_Init(SQM_ParseState &input) {
 	input.macro             = false;
 	input.is_inherit        = false;
 	input.purge_comment     = false;
+	input.value_quoted      = false;
 	input.separator         = ' ';
 	strcpy(input.empty_char, "");
 
@@ -2565,6 +2566,7 @@ int SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_
 									state.property_end    = state.i;
 									state.property.length = state.property_end - state.property_start;
 									state.is_array        = input.text[state.i-2]=='[' && input.text[state.i-1]==']';
+									state.value_quoted    = false;
 								}
 
 						state.word_started = false;
@@ -2601,8 +2603,13 @@ int SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_
 			}
 			
 			case SQM_VALUE : {
-				if (c == '"' && ((state.word_start == -1 && !state.in_quote) || state.in_quote))
-					state.in_quote = !state.in_quote;
+				if (c == '"') {
+					if (state.word_start == -1)
+						state.value_quoted = true;
+
+					if (state.value_quoted)
+						state.in_quote = !state.in_quote;
+				}
 
 				if (!state.in_quote && (c=='{' || c=='[')) {
 					state.array_level++;

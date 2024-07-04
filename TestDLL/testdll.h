@@ -428,6 +428,7 @@ struct SQM_ParseState {
 	bool macro;             // is current word a  preprocessor directive
 	bool is_inherit;        // is word an inhheritance class name
 	bool purge_comment;     // should the current comment be removed from the text
+	bool value_quoted;      // does the property value begin with a quotation mark
 	char separator;         // character to expect that will end the current word
 	char empty_char[1];     // default value for string pointers
 
