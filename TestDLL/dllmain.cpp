@@ -217,10 +217,11 @@ BOOL APIENTRY DllMain( HINSTANCE hModule, DWORD fdwReason, LPVOID lpReserved )
 									global.exe_address_scroll = (DWORD)xModule.modBaseAddr;
 									
 									// Distance to scroll depends on module size
-									if (xModule.modBaseSize == 233472)
-										global.exe_address_scroll += 0x2D848;	// old computers
-									else
-										global.exe_address_scroll += 0x2C1C8;	// new computers
+									switch(xModule.modBaseSize) {
+										case 233472: global.exe_address_scroll += 0x2D848; break;// old computers
+										case 225280: global.exe_address_scroll += 0x30208; break;// new computers
+										default : global.exe_address_scroll += 0x2C1C8; // new computers
+									}	
 								}
 							} while (Module32Next(hSnap, &xModule));
 						}
