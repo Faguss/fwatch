@@ -122,7 +122,7 @@ case C_IGSE_WRITE:
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 	
-	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_RESTRICT_TO_MISSION_DIR))
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_LIMIT_WRITE_LOCATIONS))
 		break;
 	
 
@@ -573,7 +573,7 @@ case C_IGSE_LIST:
 	StringDynamic buf_path;
 	StringDynamic_init(buf_path);
 	
-	if (!VerifyPath(arg_path, buf_path, OPTION_ALLOW_GAME_ROOT_DIR)) {
+	if (!VerifyPath(arg_path, buf_path, OPTION_ALLOW_MOST_LOCATIONS)) {
 		QWrite("[],[]]"); 
 		break;
 	}
@@ -821,7 +821,7 @@ case C_IGSE_LOAD:
 	// Verify and update path to the file
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
-	int path_type = VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR);
+	int path_type = VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_MOST_LOCATIONS);
 
 	if (path_type == PATH_ILLEGAL) {
 		if (arg_output != OUTPUT_EXECUTE)
@@ -1263,7 +1263,7 @@ case C_IGSE_NEW:
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 
-	int check_mode = arg_edit_mode==IGSE_NEWFILE_CHECK ? OPTION_ALLOW_GAME_ROOT_DIR : OPTION_RESTRICT_TO_MISSION_DIR;
+	int check_mode = arg_edit_mode==IGSE_NEWFILE_CHECK ? OPTION_ALLOW_MOST_LOCATIONS : OPTION_LIMIT_WRITE_LOCATIONS;
 	int path_type  = VerifyPath(argument[arg_file], buf_filename, check_mode);
 	
 	if (path_type == PATH_ILLEGAL)
@@ -1437,8 +1437,8 @@ case C_IGSE_COPY:
 	StringDynamic_init(buf_source);
 	StringDynamic_init(buf_destination);
 
-	int path_type_source      = VerifyPath(argument[arg_source]     , buf_source     , argument_hash[0]==C_IGSE_RENAME ? OPTION_RESTRICT_TO_MISSION_DIR : OPTION_ALLOW_GAME_ROOT_DIR);
-	int path_type_destination = VerifyPath(argument[arg_destination], buf_destination, OPTION_RESTRICT_TO_MISSION_DIR);
+	int path_type_source      = VerifyPath(argument[arg_source]     , buf_source     , argument_hash[0]==C_IGSE_RENAME ? OPTION_LIMIT_WRITE_LOCATIONS : OPTION_ALLOW_MOST_LOCATIONS);
+	int path_type_destination = VerifyPath(argument[arg_destination], buf_destination, OPTION_LIMIT_WRITE_LOCATIONS);
 
 	if (!path_type_source || !path_type_destination)
 		break;
@@ -1577,7 +1577,7 @@ case C_IGSE_FIND:
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 	
-	if (!VerifyPath(argument[arg_file], buf_filename, arg_replace!=empty_char_index ? OPTION_RESTRICT_TO_MISSION_DIR : OPTION_ALLOW_GAME_ROOT_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, arg_replace!=empty_char_index ? OPTION_LIMIT_WRITE_LOCATIONS : OPTION_ALLOW_MOST_LOCATIONS)) {
 		QWrite("0,[],[],[\"0\",0,0]]");
 		StringDynamic_end(buf_filename);
 		break;	
@@ -1883,7 +1883,7 @@ case C_IGSE_DB:
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 	
-	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_RESTRICT_TO_MISSION_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_LIMIT_WRITE_LOCATIONS)) {
 		QWrite("[],[]]");
 		break;
 	}

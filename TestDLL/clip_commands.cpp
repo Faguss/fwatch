@@ -455,7 +455,7 @@ case C_CLIP_TOFILE:
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 
-	int path_type = VerifyPath(argument[arg_file], buf_filename, OPTION_RESTRICT_TO_MISSION_DIR);
+	int path_type = VerifyPath(argument[arg_file], buf_filename, OPTION_LIMIT_WRITE_LOCATIONS);
 	if (path_type == PATH_ILLEGAL) {
 		CloseClipboard();
 		break;
@@ -550,7 +550,7 @@ case C_CLIP_FROMFILE:
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 
-	if (!VerifyPath(argument[2], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR))
+	if (!VerifyPath(argument[2], buf_filename, OPTION_ALLOW_MOST_LOCATIONS))
 		break;
 
 
@@ -641,7 +641,7 @@ case C_CLIP_CUTFILE:
 		buf_filename.length = 0;
 		String_trim_quotes(argument[i]);
 
-		if (VerifyPath(argument[i], buf_filename, OPTION_SUPPRESS_ERROR | (argument_hash[0]==C_CLIP_COPYFILE ? OPTION_ALLOW_GAME_ROOT_DIR : OPTION_RESTRICT_TO_MISSION_DIR))) {
+		if (VerifyPath(argument[i], buf_filename, OPTION_SUPPRESS_ERROR | (argument_hash[0]==C_CLIP_COPYFILE ? OPTION_ALLOW_MOST_LOCATIONS : OPTION_LIMIT_WRITE_LOCATIONS))) {
 			mbstowcs(sWStr, global.game_dir , global.game_dir_length);
 			sWStr += global.game_dir_length;
 
@@ -661,7 +661,7 @@ case C_CLIP_CUTFILE:
 
 	// If nothing was copied
 	if (copied_files == 0) {
-		QWrite_err(FWERROR_PARAM_PATH_LEAVING, 1, "");
+		QWrite_err(FWERROR_PARAM_PATH_LIMITED, 1, "");
 		break;
 	}
 
@@ -725,7 +725,7 @@ case C_CLIP_PASTEFILE:
 	StringDynamic buf_destination;
 	StringDynamic_init(buf_destination);
 	int destination_type = 0;
-	int options          = OPTION_RESTRICT_TO_MISSION_DIR;
+	int options          = OPTION_LIMIT_WRITE_LOCATIONS;
 
 	if (argument[arg_destination].length==0 || (argument[arg_destination].length>0 && argument[arg_destination].text[argument[arg_destination].length-1]!='\\' && argument[arg_destination].text[argument[arg_destination].length-1]!='/'))
 		options |= OPTION_ASSUME_TRAILING_SLASH;

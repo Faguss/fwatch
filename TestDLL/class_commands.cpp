@@ -43,7 +43,7 @@ case C_CLASS_LIST:	//TODO: remove this command on release because it's obsolete
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 
-	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_MOST_LOCATIONS)) {
 		QWrite("0,[],[],[]]");
 		break;
 	}
@@ -549,7 +549,7 @@ case C_CLASS_TOKEN:	//TODO: remove this command on release because it's obsolete
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 
-	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_MOST_LOCATIONS)) {
 		QWrite("0,\"0\",[],[]]");
 		break;
 	}
@@ -1245,7 +1245,7 @@ case C_CLASS_MODIFY:	//TODO: remove this command on release because it's obsolet
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 	
-	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_RESTRICT_TO_MISSION_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_LIMIT_WRITE_LOCATIONS)) {
 		QWrite("0]");
 		break;
 	}
@@ -2002,7 +2002,7 @@ case C_CLASS_MODTOK:	//TODO: remove this command on release because it's obsolet
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 	
-	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_RESTRICT_TO_MISSION_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_LIMIT_WRITE_LOCATIONS)) {
 		QWrite("0]");
 		break;
 	}
@@ -3060,7 +3060,7 @@ case C_CLASS_READ:
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 
-	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_MOST_LOCATIONS)) {
 		QWrite("[],[],0]");
 		break;
 	}
@@ -3820,7 +3820,7 @@ case C_CLASS_READSQM:
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 
-	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR))
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_MOST_LOCATIONS))
 		break;
 	//---------------------------------------------------------------------------
 	
@@ -4318,7 +4318,7 @@ case C_CLASS_WRITE :
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 
-	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_LIMIT_WRITE_LOCATIONS)) {
 		QWrite("0]");
 		break;
 	}

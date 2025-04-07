@@ -265,7 +265,7 @@ case C_RESTART_SERVER:
 			size_t arg_filename = extra_option ? 4 : 2;
 
 			String_trim_quotes(argument[arg_filename]);
-			VerifyPath(argument[arg_filename], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR | OPTION_SUPPRESS_ERROR);
+			VerifyPath(argument[arg_filename], buf_filename, OPTION_ALLOW_MOST_LOCATIONS | OPTION_SUPPRESS_ERROR);
 			StringDynamic_append(param, argument_hash[0]==C_EXE_UNPBO ? " -YP " : " -NRK ");
 
 			if (extra_option)
@@ -283,7 +283,7 @@ case C_RESTART_SERVER:
 
 					String_trim_quotes(argument[arg_filename]);
 
-					if (VerifyPath(argument[arg_filename], buf_filename, OPTION_RESTRICT_TO_MISSION_DIR | OPTION_SUPPRESS_ERROR | OPTION_SUPPRESS_CONVERSION))
+					if (VerifyPath(argument[arg_filename], buf_filename, OPTION_LIMIT_WRITE_LOCATIONS | OPTION_SUPPRESS_ERROR | OPTION_SUPPRESS_CONVERSION))
 						StringDynamic_appendf(param, "\\fwatch\\tmp\\%s\" ", argument[arg_filename].text);
 					else
 						StringDynamic_append(param, "\\fwatch\\tmp\" ");
@@ -329,7 +329,7 @@ case C_RESTART_SERVER:
 					StringDynamic buf_filename;
 					StringDynamic_init(buf_filename);
 					String addondir = {argument[i].text+10, argument[i].length-10};
-					VerifyPath(addondir, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR | OPTION_SUPPRESS_ERROR);
+					VerifyPath(addondir, buf_filename, OPTION_ALLOW_MOST_LOCATIONS | OPTION_SUPPRESS_ERROR);
 					StringDynamic_appendf(param, "\"-addondir=%s\" ", addondir);
 					StringDynamic_end(buf_filename);
 					continue;
@@ -351,7 +351,7 @@ case C_RESTART_SERVER:
 						StringDynamic buf_filename;
 						StringDynamic_init(buf_filename);
 
-						if (VerifyPath(output_file, buf_filename, OPTION_RESTRICT_TO_MISSION_DIR))
+						if (VerifyPath(output_file, buf_filename, OPTION_LIMIT_WRITE_LOCATIONS))
 							StringDynamic_appendf(param, "\"-out=%s\" ", output_file.text);
 						else {
 							QWrite("0,0]"); 
@@ -367,7 +367,7 @@ case C_RESTART_SERVER:
 					StringDynamic buf_filename;
 					StringDynamic_init(buf_filename);
 					input_file = argument[i];
-					VerifyPath(input_file, buf_filename, OPTION_ALLOW_GAME_ROOT_DIR | OPTION_SUPPRESS_ERROR);
+					VerifyPath(input_file, buf_filename, OPTION_ALLOW_MOST_LOCATIONS | OPTION_SUPPRESS_ERROR);
 					StringDynamic_appendf(param, "\"%s\" ", input_file.text);
 					StringDynamic_end(buf_filename);
 					continue;

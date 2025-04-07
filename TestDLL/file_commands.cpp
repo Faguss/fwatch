@@ -449,7 +449,7 @@ case C_FILE_PBO:
 	StringDynamic buf_filename;
 	StringDynamic_init(buf_filename);
 
-	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_GAME_ROOT_DIR)) {
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_MOST_LOCATIONS)) {
 		QWrite("[]]");
 		break;
 	}	

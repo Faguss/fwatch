@@ -1672,6 +1672,19 @@ int VerifyPath(String &path, StringDynamic &buffer, int options) {
 	size_t item_start = 0;
 	size_t item_index = 0;
 	int level         = 0;
+
+	enum VP_LOCATIONS {
+		VP_NONE    = 0x0,
+		VP_ROOT    = 0x1,
+		VP_FWATCH  = 0x2,
+		VP_IDB     = 0x4,
+		VP_TMP     = 0x08,
+		VP_ALLOWED = 0x10,
+		VP_ILLEGAL = 0x20
+	};
+
+	int location = VP_NONE;
+
 	bool dir_root     = false;
 	bool dir_fwatch   = false;
 	bool dir_illegal  = false;
@@ -1696,65 +1709,58 @@ int VerifyPath(String &path, StringDynamic &buffer, int options) {
 
 			if (strcmp(item,"..") == 0) {
 				if (item_index == 0)
-					dir_root = true;
+					location |= VP_ROOT;
 				else {
 					level--;
 
+					// leaving game dir
 					if (level < 0) {
 						path.text[i] = backup;
 						break;
 					}
 					
-					if (dir_root) {
-						if (level == 0) {
-							dir_fwatch  = false;
-							dir_allowed = false;
-						}
-							
+					// if leaving special locations then indicate it
+					if (location & VP_ROOT) {
 						if (level < 2)
-							dir_download = false;
+							location &= (~VP_TMP & ~VP_IDB); //left fwatch\tmp\ and fwatch\idb\ 
+
+						if (level == 0)
+							location &= (~VP_FWATCH & ~VP_ALLOWED); //left fwatch\ and @addontest\ 
 					}
 				}
 			} else
 				if (backup != '\0')
 					level++;
 				
-			if (dir_root && level==1) {
+			if (location & VP_ROOT && level==1) {
 				if (strcmpi(item,"fwatch") == 0)
-					dir_fwatch = true;
+					location |= VP_FWATCH;
 				else
 					for (int j=0; j<sizeof(allowed_dirs)/sizeof(allowed_dirs[0]); j++)
 						if (strcmpi(item,allowed_dirs[j]) == 0)
-							dir_allowed = true;
+							location |= VP_ALLOWED;
 			}
 
-			if (dir_fwatch && level==2) {
-				if (strcmpi(item,"data")==0 || strcmpi(item,"mdb")==0) {
-					dir_illegal  = true;
+			if (location & VP_FWATCH && level==2) {
+				if (strcmpi(item,"mdb")==0) {
+					location |= VP_ILLEGAL;
 					path.text[i] = backup;
 					break;
 				}
 
 				if (strcmpi(item,"tmp") == 0)
-					dir_download = true;
+					location |= VP_TMP;
+
+				if (strcmpi(item,"idb") == 0)
+					location |= VP_IDB;
 			}
 			
 			path.text[i] = backup;
 			
+			// last item
 			if (path.text[i] == '\0') {
-				if (dir_fwatch && level==1) {
-					dir_illegal = true;
-
-					if (options & OPTION_ASSUME_TRAILING_SLASH) {
-						if (strcmpi(item,"idb") == 0)
-							dir_illegal = false;
-						else
-							if (strcmpi(item,"tmp") == 0) {
-								dir_illegal  = false;
-								dir_download = true;
-							}
-					}
-				}
+				if (location & VP_FWATCH && level==1 && options & OPTION_ASSUME_TRAILING_SLASH && strcmpi(item,"tmp")==0)
+					location |= VP_TMP;
 
 				break;
 			}
@@ -1765,27 +1771,29 @@ int VerifyPath(String &path, StringDynamic &buffer, int options) {
 	}
 
 
-	if (dir_illegal) {
+	if (location & VP_ILLEGAL) {
 		if (~options & OPTION_SUPPRESS_ERROR)
 			QWrite_err(FWERROR_PARAM_PATH_RESTRICTED, 1, path);
-	} else
-		if (dir_root  &&  !dir_fwatch  &&  !dir_allowed  &&  options & OPTION_RESTRICT_TO_MISSION_DIR) {
+	} else 
+		if (options & OPTION_LIMIT_WRITE_LOCATIONS  &&  location & VP_ROOT  &&  (location & (VP_ALLOWED | VP_IDB | VP_TMP))==0) {
 			if (~options & OPTION_SUPPRESS_ERROR)
-				QWrite_err(FWERROR_PARAM_PATH_LEAVING, 1, path);
+				QWrite_err(FWERROR_PARAM_PATH_LIMITED, 1, path);
 		} else
 			if (level >= 0) {
-				if (~options & OPTION_SUPPRESS_CONVERSION) {
-					if (dir_root) {
+				if (~options & OPTION_SUPPRESS_CONVERSION) { //convert ofp path to windows path
+					if (location & VP_ROOT) {
+						//skip leading ..\ 
 						path.text   += 3;
 						path.length -= 3;
 					} else {
+						//begin string with the path to the current mission folder
 						StringDynamic_appendf(buffer, "%s%s", global.mission_path, path.text);
 						path.text   = buffer.text;
 						path.length = buffer.length;
 					}
 				}
 
-				return dir_download ? PATH_DOWNLOAD_DIR : PATH_LEGAL;
+				return location & VP_TMP ? PATH_DOWNLOAD_DIR : PATH_LEGAL;
 			}
 
 	return PATH_ILLEGAL;
@@ -2262,7 +2270,7 @@ void QWrite_err(int code_primary, int arg_num, ...) {
 		case FWERROR_PARAM_ZERO            : strcpy(format,"Parameter is zero or less %s=%d"); break;
 		case FWERROR_PARAM_ONE             : strcpy(format,"Parameter is one or less %s=%d"); break;
 		case FWERROR_PARAM_RANGE           : strcpy(format,"Range start %s is larger than range end %s %d>%d"); break;
-		case FWERROR_PARAM_PATH_LEAVING    : strcpy(format,"Path leads outside source directory %s"); break;
+		case FWERROR_PARAM_PATH_LIMITED    : strcpy(format,"Cannot modify files in this location %s"); break;
 		case FWERROR_PARAM_ACTION          : strcpy(format,"Action was not specified"); break;
 		case FWERROR_PARAM_EMPTY           : strcpy(format,"Parameter is empty: %s"); break;
 		case FWERROR_PARAM_PATH_RESTRICTED : strcpy(format,"Restricted location %s"); break;
