@@ -12,7 +12,7 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2025,4,7,1,22,19,53,725,120,FALSE]
+	GS_FWATCH_MY_VERSION = [2025,4,12,6,23,4,8,977,120,FALSE]
 	GS_MY_VERSION        = 0.61
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php","http://faguss.paradoxstudio.uk/schedule/sqfproxy.php"]]
 
@@ -703,7 +703,7 @@
 	
 	lbClear 6657
 	lbSetCurSel [6657, -1]
-	? _server_version in [0,_my_game_version] && count _missing_mods_id==0 : comment "autoconnect;connect"; if (!_playingNow) then {[MAINMENU_STR select 26, 230, _color_yellowgreen] call FUNCTION_LBADD}; [MAINMENU_STR select 27, 221, _color_yellowgreen] call FUNCTION_LBADD
+	? _server_version in [0,_my_game_version] && count _missing_mods_id==0 : comment "autoconnect;connect"; if (!_playingNow && count _server_game_times2 > 0) then {[MAINMENU_STR select 26, 230, _color_yellowgreen] call FUNCTION_LBADD}; [MAINMENU_STR select 27, 221, _color_yellowgreen] call FUNCTION_LBADD
 	? count _missing_mods_id > 0                                           : comment "download;changelog"; [Format [MAINMENU_STR select 28, _missing_mods_size], 204, _color_fireenginered] call FUNCTION_LBADD; lbSetValue [6657, lbAdd [6657, MAINMENU_STR select 29], 224]
 	? _voice_name != ""                                                    : comment "voip"; lbSetValue [6657, lbAdd [6657, Format [_voice_format,_voice_name]], 222]
 	? count _missing_mods_id==0 && count _server_modfolders > 0            : comment "changelog"; lbSetValue [6657, lbAdd [6657, Format [MAINMENU_STR select 29, _missing_mods_size]], 225]

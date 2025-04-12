@@ -1759,8 +1759,13 @@ int VerifyPath(String &path, StringDynamic &buffer, int options) {
 			
 			// last item
 			if (path.text[i] == '\0') {
-				if (location & VP_FWATCH && level==1 && options & OPTION_ASSUME_TRAILING_SLASH && strcmpi(item,"tmp")==0)
-					location |= VP_TMP;
+				if (location & VP_FWATCH && level==1 && options & OPTION_ASSUME_TRAILING_SLASH) {
+					if (strcmpi(item,"tmp") == 0)
+						location |= VP_TMP;
+					else
+						if (strcmpi(item,"idb") == 0)
+							location |= VP_IDB;
+				}
 
 				break;
 			}

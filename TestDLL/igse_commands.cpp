@@ -1208,7 +1208,8 @@ case C_IGSE_NEW:
 		IGSE_NEWFILE_CREATE,
 		IGSE_NEWFILE_DELETE,
 		IGSE_NEWFILE_RECREATE,
-		IGSE_NEWFILE_CHECK
+		IGSE_NEWFILE_CHECK,
+		IGSE_NEWFILE_VERIFYPATH
 	};
 
 	size_t arg_file    = empty_char_index;
@@ -1235,6 +1236,9 @@ case C_IGSE_NEW:
 						else
 							if (strcmpi(argument[i+1].text,"check") == 0)
 								arg_edit_mode = IGSE_NEWFILE_CHECK;
+							else
+								if (strcmpi(argument[i+1].text,"verifypath") == 0)
+									arg_edit_mode = IGSE_NEWFILE_VERIFYPATH;
 			} break;
 
 			case NAMED_ARG_UNIQUE :
@@ -1264,11 +1268,18 @@ case C_IGSE_NEW:
 	StringDynamic_init(buf_filename);
 
 	int check_mode = arg_edit_mode==IGSE_NEWFILE_CHECK ? OPTION_ALLOW_MOST_LOCATIONS : OPTION_LIMIT_WRITE_LOCATIONS;
-	int path_type  = VerifyPath(argument[arg_file], buf_filename, check_mode);
-	
+
+	if (arg_edit_mode == IGSE_NEWFILE_VERIFYPATH)
+		check_mode |= OPTION_SUPPRESS_CONVERSION | OPTION_ASSUME_TRAILING_SLASH;
+
+	int path_type = VerifyPath(argument[arg_file], buf_filename, check_mode);
 	if (path_type == PATH_ILLEGAL)
 		break;
 
+	if (arg_edit_mode == IGSE_NEWFILE_VERIFYPATH) {
+		QWrite_err(FWERROR_NONE, 0);
+		break;
+	}
 
 	// Choose what actions to take based on arguments
 	bool CheckIt  = arg_edit_mode==IGSE_NEWFILE_CHECK   ||  arg_edit_mode==IGSE_NEWFILE_RECREATE  ||  arg_unique  ||  arg_directory;

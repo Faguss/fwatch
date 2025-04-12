@@ -439,7 +439,6 @@ case C_FILE_PBO:
 	
 	// File not specified
 	if (argument[arg_file].length == 0) {
-		printf("file not specified\n");
 		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
 		QWrite("[]]");
 		break;
