@@ -575,6 +575,7 @@ enum FWATCH_ERRORS {
 	FWERROR_PARAM_ACTION,
 	FWERROR_PARAM_EMPTY,
 	FWERROR_PARAM_PATH_RESTRICTED,
+	FWERROR_PARAM_SLASHES,
 
 	FWERROR_FILE_EMPTY = 200,
 	FWERROR_FILE_NOTDIR,
@@ -652,6 +653,7 @@ void FileTimeToString(FILETIME &ft, bool systime, char *str);
 bool CopyToClip(String &input, bool append);
 bool trashFile(String file, int error_behaviour);
 int  DeleteWrapper(char *refcstrRootDirectory);
+bool CreateFoldersInPath(String &input);
 
 // files
 void             createPathSqf(LPCSTR lpFileName, size_t len, int offset);

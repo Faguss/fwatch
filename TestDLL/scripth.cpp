@@ -45,10 +45,6 @@ extern GLOBAL_VARIABLES_TESTDLL global;
 #define PIPEBUFSIZE		4096
 
 // command hashes
-#define C_CLASS_LIST           3894729449u
-#define C_CLASS_TOKEN          1306216122u
-#define C_CLASS_MODIFY         3457835787u
-#define C_CLASS_MODTOK         2686266215u
 #define C_CLASS_READ           1269173709u
 #define C_CLASS_READ2          359139437u
 #define C_CLASS_READSQM        1404966420u
@@ -62,7 +58,6 @@ extern GLOBAL_VARIABLES_TESTDLL global;
 #define C_CLIP_COPYFILE        8450590u
 #define C_CLIP_CUTFILE         1451318777u
 #define C_CLIP_PASTEFILE       962169530u
-#define C_SPIG_EXE             3206713566u
 #define C_EXE_MAKEPBO          3754554022u
 #define C_EXE_ADDONTEST        501781933u
 #define C_EXE_ADDONINSTALL     367297688u
@@ -88,12 +83,14 @@ extern GLOBAL_VARIABLES_TESTDLL global;
 #define C_FILE_MODLIST         2709572447u
 #define C_FILE_PBO             4240196012u
 #define C_FILE_CUSTOMCOUNTSIZE 1721154120u
+#define C_FILE_IMG             4012922080u
 #define C_IGSE_WRITE           1567449702u
 #define C_IGSE_LIST            3690437211u
 #define C_IGSE_LOAD            3760381619u
 #define C_IGSE_NEW             3979929763u
 #define C_IGSE_RENAME          731063145u
 #define C_IGSE_COPY            1607149306u
+#define C_IGSE_MOVE            559887194u
 #define C_IGSE_FIND            519206608u
 #define C_IGSE_DB              1686459221u
 #define C_INFO_VERSION         682326273u
@@ -184,6 +181,7 @@ extern GLOBAL_VARIABLES_TESTDLL global;
 unsigned int commands_named_arguments[] = { // sorted
 	C_CLASS_READ2,
 	C_IGSE_FIND,
+	C_IGSE_MOVE,
 	C_STRING_SIZE,
 	C_STRING_ISNUMBER,
 	C_STRING_CUT,
@@ -197,7 +195,6 @@ unsigned int commands_named_arguments[] = { // sorted
 	C_STRING_SPLIT,
 	C_CLASS_READ,
 	C_MEM_BULLETS,
-	C_CLASS_TOKEN,
 	C_STRING_REPLACE,
 	C_CLASS_READSQM,
 	C_IGSE_WRITE,
@@ -208,19 +205,17 @@ unsigned int commands_named_arguments[] = { // sorted
 	C_STRING_COMPARE,
 	C_MEM_HUD,
 	C_CLIP_TOFILE,
-	C_CLASS_MODTOK,
 	C_CLASS_WRITE,
 	C_MEM_SETCAM,
 	C_STRING_DOMAIN,
 	C_STRING_REPLACECHAR,
 	C_STRING_CASE,
 	C_MEM_SETWEATHER,
-	C_CLASS_MODIFY,
 	C_STRING_FIND,
 	C_IGSE_LIST,
 	C_IGSE_LOAD,
-	C_CLASS_LIST,
 	C_IGSE_NEW,
+	C_FILE_IMG,
 	C_STRING_TRIM,
 	C_STRING_JOIN,
 	C_FILE_PBO
@@ -569,10 +564,6 @@ void ParseScript(String &command, FULLHANDLE file)
 					
 					// Determine if argument is terminated by unit separator (0x1F)
 					switch(argument_hash[0]) {
-						case C_CLASS_MODTOK : 
-							enable_unit_separator = argument_hash[argument_num-1]==NAMED_ARG_ADD || argument_hash[argument_num-1]==NAMED_ARG_APPEND; 
-							break;
-
 						case C_CLASS_WRITE : 
 							enable_unit_separator = argument_hash[argument_num-1] == NAMED_ARG_MERGE; 
 							break;

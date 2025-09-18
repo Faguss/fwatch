@@ -2279,6 +2279,7 @@ void QWrite_err(int code_primary, int arg_num, ...) {
 		case FWERROR_PARAM_ACTION          : strcpy(format,"Action was not specified"); break;
 		case FWERROR_PARAM_EMPTY           : strcpy(format,"Parameter is empty: %s"); break;
 		case FWERROR_PARAM_PATH_RESTRICTED : strcpy(format,"Restricted location %s"); break;
+		case FWERROR_PARAM_SLASHES         : strcpy(format,"Parameter %s may not contain slashes"); break;
 
 		case FWERROR_FILE_EMPTY       : strcpy(format,"File is empty"); break;
 		case FWERROR_FILE_NOTDIR      : strcpy(format,"File is not a directory"); break;
@@ -2617,7 +2618,7 @@ int SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_
 			
 			case SQM_VALUE : {
 				if (c == '"') {
-					if (state.word_start == -1)
+					if (!state.word_started)
 						state.value_quoted = true;
 
 					if (state.value_quoted)
@@ -2973,8 +2974,15 @@ int SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_
 
 					case SQM_OUTPUT_END_OF_SCOPE : {
 						// If the class doesn't exist in the source then copy the entire thing
+
 						SQM_Parse(merge, merge_state, SQM_ACTION_FIND_CLASS_END_CONVERT, empty_string);
 						
+						// If the file ends with a bracket instead of \n or ; then we need to add separator before the new class
+						if (source_dynamic.text[source_state.scope_end] == '\0' && source_dynamic.text[source_state.scope_end-1] == '}') {
+							StringDynamic_append(source_dynamic, ";");
+							source_state.scope_end++;
+						}
+
 						shift_buffer_chunk(source_dynamic.text, source_state.scope_end, source_dynamic.length, merge_state.class_length, OPTION_RIGHT);
 						memcpy(source_dynamic.text+source_state.scope_end, merge.text+merge_state.class_start, merge_state.class_length);
 
@@ -3095,4 +3103,25 @@ void FindCustomFaceTexture(const char *input_path, char *custom_filename, DWORD 
 			FindClose(hFind);
 		}
 	}
+}
+
+
+
+bool CreateFoldersInPath(String &input) 
+{
+	for (size_t i=0; i<=input.length; i++) {
+		if (input.text[i] == '/')
+			input.text[i] = '\\';
+
+		if (input.text[i]=='\\' && i<input.length-1) {
+			input.text[i] = '\0';
+
+			if (!CreateDirectory(input.text, NULL) && GetLastError()!=ERROR_ALREADY_EXISTS)
+				return false;
+
+			input.text[i] = '\\';
+		}
+	}
+
+	return true;
 }

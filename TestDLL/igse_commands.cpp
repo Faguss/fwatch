@@ -1290,26 +1290,9 @@ case C_IGSE_NEW:
 
 	// Create sub-directories specified in the path string
 	if (CreateIt && arg_subdirs) {
-		// Replace slashes with backslashes
-		for (int i=0; argument[arg_file].text[i]!='\0'; i++)
-			if (argument[arg_file].text[i] == '/') 
-				argument[arg_file].text[i] = '\\';
-
-		char *slash = NULL;
-		char *path  = argument[arg_file].text;
-
-		// For each arg_directory along the way
-		while ((slash = strchr(path,'\\'))) {
-			// Separate name from the rest of the string
-			int pos   = slash - path;
-			char prev = path[pos];
-			path[pos] = '\0';
-
-			CreateDirectory(argument[arg_file].text, NULL);
-
-			// Move on to the next
-			path[pos] = prev;
-			path     += pos+1;
+		if (!CreateFoldersInPath(argument[arg_file])) {
+			QWrite_err(FWERROR_WINAPI, 2, GetLastError(), argument[arg_file].text);
+			goto igse_new_end;
 		}
 	}
 
@@ -1391,6 +1374,7 @@ case C_IGSE_NEW:
 						QWrite_err(FWERROR_WINAPI, 1, GetLastError());
 	}
 
+igse_new_end:
 	StringDynamic_end(buf_filename);
 }
 break;
@@ -1405,13 +1389,19 @@ break;
 
 case C_IGSE_RENAME:
 case C_IGSE_COPY:
-{ // IGSE Rename/Copy
+case C_IGSE_MOVE:
+{ // IGSE Rename/Copy/Move
 
 	global.option_error_output = OPTION_ERROR_ARRAY_CLOSE;
 
 	size_t arg_source      = empty_char_index;
 	size_t arg_destination = empty_char_index;
+	size_t arg_file        = empty_char_index;
+	size_t arg_to          = empty_char_index;
+	size_t arg_rename      = empty_char_index;
+	size_t last_slash      = 0;
 	bool arg_overwrite     = false;
+	bool arg_subdirs       = false;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
@@ -1426,57 +1416,169 @@ case C_IGSE_COPY:
 			case NAMED_ARG_OVERWRITE :
 				arg_overwrite = String_bool(argument[i+1]);
 				break;
+				
+			case NAMED_ARG_FILE :
+				arg_file = i + 1;
+				break;
+
+			case NAMED_ARG_TO :
+				arg_to = i + 1;
+				break;
+
+			case NAMED_ARG_SUBDIRS :
+				arg_subdirs = String_bool(argument[i+1]);
+				break;
+
+			case NAMED_ARG_RENAME :
+				arg_rename = i + 1;
+				break;
 		}
 	}
 
 
 	// Files not specified
-	if (argument[arg_source].length == 0) {
-		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_source");
+	if (argument[arg_file].length == 0 && argument[arg_source].length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
 		break;
 	}
 
-	if (argument[arg_destination].length == 0) {
-		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_destination");
-		break;
-	}
+	if (argument[arg_file].length > 0) {
+		if (argument_hash[0] == C_IGSE_RENAME) {
+			bool found_slash = false;
+
+			for (size_t i=0; i<argument[arg_to].length && !found_slash; i++)
+				found_slash = argument[arg_to].text[i] == '\\' || argument[arg_to].text[i] == '/';
+
+			if (found_slash) {
+				QWrite_err(FWERROR_PARAM_SLASHES, 1, "to:");
+				break;
+			}
+		}
 
 
-	// Verify and update path to the files
-	StringDynamic buf_source;
-	StringDynamic buf_destination;
-	StringDynamic_init(buf_source);
-	StringDynamic_init(buf_destination);
+		// Verify and update path to the files
+		StringDynamic buf_source;
+		StringDynamic buf_destination;
+		StringDynamic_init(buf_source);
+		StringDynamic_init(buf_destination);
+		int options = OPTION_LIMIT_WRITE_LOCATIONS;
 
-	int path_type_source      = VerifyPath(argument[arg_source]     , buf_source     , argument_hash[0]==C_IGSE_RENAME ? OPTION_LIMIT_WRITE_LOCATIONS : OPTION_ALLOW_MOST_LOCATIONS);
-	int path_type_destination = VerifyPath(argument[arg_destination], buf_destination, OPTION_LIMIT_WRITE_LOCATIONS);
+		if (argument_hash[0] == C_IGSE_COPY || argument_hash[0] == C_IGSE_MOVE)
+			if (argument[arg_to].length==0 || (argument[arg_to].length>0 && argument[arg_to].text[argument[arg_to].length-1]!='\\' && argument[arg_to].text[argument[arg_to].length-1]!='/'))
+				options |= OPTION_ASSUME_TRAILING_SLASH;
 
-	if (!path_type_source || !path_type_destination)
-		break;
+		int path_type_source      = VerifyPath(argument[arg_file], buf_source, argument_hash[0]==C_IGSE_COPY ? OPTION_ALLOW_MOST_LOCATIONS : OPTION_LIMIT_WRITE_LOCATIONS);
+		int path_type_destination = PATH_LEGAL;
+		
+		if (argument_hash[0] == C_IGSE_COPY || argument_hash[0] == C_IGSE_MOVE)
+			path_type_destination = VerifyPath(argument[arg_to], buf_destination, options);
 
-	// Rename
-	if (argument_hash[0] == C_IGSE_RENAME) {
-		if (path_type_source!=PATH_DOWNLOAD_DIR  &&  path_type_destination==PATH_DOWNLOAD_DIR)	// Not allowed to move files to the download directory
-			QWrite_err(FWERROR_FILE_MOVETOTMP, 2, argument[arg_source].text, argument[arg_destination].text);
-		else {
-			if (rename(argument[arg_source].text, argument[arg_destination].text) == 0)
+		if (!path_type_source || !path_type_destination)
+			break;
+
+		// Not allowed to move files to the download directory (because files there can be deleted instead of trashed)
+		if ((argument_hash[0] == C_IGSE_RENAME || argument_hash[0] == C_IGSE_MOVE) && path_type_source!=PATH_DOWNLOAD_DIR  &&  path_type_destination==PATH_DOWNLOAD_DIR) {
+			QWrite_err(FWERROR_FILE_MOVETOTMP, 2, argument[arg_file].text, argument[arg_to].text);
+			goto igsecopy_end;
+		}	
+
+		for (i=argument[arg_file].length-1; i>0; i--) {
+			if (argument[arg_file].text[i] == '\\' || argument[arg_file].text[i] == '/') {
+				last_slash = i;
+				break;
+			}
+		}
+
+		if (argument_hash[0] == C_IGSE_RENAME) {
+			if (last_slash > 0) {
+				StringDynamic_allocate(buf_destination, argument[arg_file].length + argument[arg_to].length + 1);
+				StringDynamic_appendl(buf_destination, argument[arg_file].text, last_slash+1);
+				StringDynamic_appends(buf_destination, argument[arg_to]);
+				argument[arg_to].text   = buf_destination.text;
+				argument[arg_to].length = buf_destination.length;
+			}
+		} else {
+			// move/copy
+			if (buf_destination.length == 0)
+				StringDynamic_appends(buf_destination, argument[arg_to]);
+
+			if (options & OPTION_ASSUME_TRAILING_SLASH)
+				StringDynamic_append(buf_destination, "\\");
+
+			if (argument[arg_rename].length > 0)
+				StringDynamic_appends(buf_destination, argument[arg_rename]);
+			else 
+				if (last_slash == NULL)
+					StringDynamic_appends(buf_destination, argument[arg_file]);
+				else
+					StringDynamic_append(buf_destination, argument[arg_file].text+last_slash+1);
+
+			argument[arg_to].text = buf_destination.text;
+			argument[arg_to].length = buf_destination.length;
+
+			if (arg_subdirs && !CreateFoldersInPath(argument[arg_to])) {
+				QWrite_err(FWERROR_WINAPI, 2, GetLastError(), argument[arg_to].text);
+				goto igsecopy_end;
+			}
+		}	
+
+		if (argument_hash[0] == C_IGSE_COPY) {
+			if (CopyFile((LPCTSTR)argument[arg_file].text, (LPCTSTR)argument[arg_to].text, !arg_overwrite))
 				QWrite_err(FWERROR_NONE, 0);
 			else
-				QWrite_err(FWERROR_ERRNO, 3, errno, argument[arg_source].text, argument[arg_destination].text);
-		}		
-	// Copy
-	} else {
-		if (arg_overwrite  &&  path_type_destination!=PATH_DOWNLOAD_DIR)	// Overwrite means trashing before copying
-			trashFile(argument[arg_destination], OPTION_NONE);
+				QWrite_err(FWERROR_WINAPI, 3, GetLastError(), argument[arg_file].text, argument[arg_to].text);
+		} else {
+			if (MoveFileEx((LPCTSTR)argument[arg_file].text, (LPCTSTR)argument[arg_to].text, arg_overwrite ? MOVEFILE_REPLACE_EXISTING : 0))
+				QWrite_err(FWERROR_NONE, 0);
+			else
+				QWrite_err(FWERROR_WINAPI, 3, GetLastError(), argument[arg_file].text, argument[arg_to].text);
+		}
 
-		if (CopyFile((LPCTSTR)argument[arg_source].text, (LPCTSTR)argument[arg_destination].text, path_type_destination!=PATH_DOWNLOAD_DIR))
-			QWrite_err(FWERROR_NONE, 0);
-		else
-			QWrite_err(FWERROR_WINAPI, 3, GetLastError(), argument[arg_source].text, argument[arg_destination].text);
+	igsecopy_end:
+		StringDynamic_end(buf_source);
+		StringDynamic_end(buf_destination);
+	} else if (argument[arg_source].length > 0) {
+		if (argument[arg_destination].length == 0) {
+			QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_destination");
+			break;
+		}
+
+		// Verify and update path to the files
+		StringDynamic buf_source;
+		StringDynamic buf_destination;
+		StringDynamic_init(buf_source);
+		StringDynamic_init(buf_destination);
+
+		int path_type_source      = VerifyPath(argument[arg_source]     , buf_source     , argument_hash[0]==C_IGSE_RENAME ? OPTION_LIMIT_WRITE_LOCATIONS : OPTION_ALLOW_MOST_LOCATIONS);
+		int path_type_destination = VerifyPath(argument[arg_destination], buf_destination, OPTION_LIMIT_WRITE_LOCATIONS);
+
+		if (!path_type_source || !path_type_destination)
+			break;
+
+		// Rename
+		if (argument_hash[0] == C_IGSE_RENAME) {
+			if (path_type_source!=PATH_DOWNLOAD_DIR  &&  path_type_destination==PATH_DOWNLOAD_DIR)	// Not allowed to move files to the download directory
+				QWrite_err(FWERROR_FILE_MOVETOTMP, 2, argument[arg_source].text, argument[arg_destination].text);
+			else {
+				if (rename(argument[arg_source].text, argument[arg_destination].text) == 0)
+					QWrite_err(FWERROR_NONE, 0);
+				else
+					QWrite_err(FWERROR_ERRNO, 3, errno, argument[arg_source].text, argument[arg_destination].text);
+			}		
+		// Copy
+		} else {
+			if (arg_overwrite  &&  path_type_destination!=PATH_DOWNLOAD_DIR)	// Overwrite means trashing before copying
+				trashFile(argument[arg_destination], OPTION_NONE);
+
+			if (CopyFile((LPCTSTR)argument[arg_source].text, (LPCTSTR)argument[arg_destination].text, path_type_destination!=PATH_DOWNLOAD_DIR))
+				QWrite_err(FWERROR_NONE, 0);
+			else
+				QWrite_err(FWERROR_WINAPI, 3, GetLastError(), argument[arg_source].text, argument[arg_destination].text);
+		}
+
+		StringDynamic_end(buf_source);
+		StringDynamic_end(buf_destination);
 	}
-
-	StringDynamic_end(buf_source);
-	StringDynamic_end(buf_destination);
 }
 break;
 
@@ -1688,8 +1790,12 @@ case C_IGSE_FIND:
 			
 		cc = (char)c;
 			
-		if (arg_replace != empty_char_index)
+		if (arg_replace != empty_char_index) {
 			StringDynamic_appendl(file_contents_replaced, &cc, 1);
+
+			if (arg_result_limit>=0  &&  match_count>=arg_result_limit)
+				continue;
+		}
 		
 		// Count the amount of leading spaces
 		if (isspace(cc)) {
@@ -1780,7 +1886,7 @@ case C_IGSE_FIND:
 		}
 		
 		// End search if reached result limit
-		if (arg_result_limit>=0  &&  match_count>=arg_result_limit)
+		if (arg_result_limit>=0  &&  match_count>=arg_result_limit  &&  arg_replace==empty_char_index)
 			break;
 		
 		cc_previous = cc;

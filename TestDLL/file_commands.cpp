@@ -671,3 +671,246 @@ case C_FILE_CUSTOMCOUNTSIZE:
 	);
 }
 break;
+
+
+
+
+
+
+case C_FILE_IMG:
+{
+    #define JPG_START_OF_IMAGE 0xD8FF
+    #define JPG_START_OF_FRAME 0xC0FF
+    #define PAA_UNKNOWN 0
+    #define PAA_DXT1 0xFF01
+    #define PAA_DXT2 0xFF02
+    #define PAA_DXT3 0xFF03
+    #define PAA_DXT4 0xFF04
+    #define PAA_DXT5 0xFF05
+    #define PAA_IA88 0x8080
+    #define PAA_RGBA4444 0x4444
+    #define PAA_RGBA5551 0x1555
+    #define PAA_RGBA8888 0x8888
+    #define PAA_INDEX_PALETTE 0x4747
+    #define PAA_TAGG_START 0x54414747
+    #define PAA_TAGG_FLAG 0x464C4147
+
+    unsigned short paa_signatures[] = {
+        PAA_UNKNOWN,
+	    PAA_DXT1,
+        PAA_DXT2,
+        PAA_DXT3,
+        PAA_DXT4,
+        PAA_DXT5,
+	    PAA_RGBA4444,
+	    PAA_RGBA5551,
+	    PAA_IA88,
+        PAA_RGBA8888,
+        PAA_INDEX_PALETTE
+    };
+
+    char paa_signature_names[][16] = {
+        "",
+	    "DXT1",
+        "DXT2",
+        "DXT3",
+        "DXT4",
+        "DXT5",
+	    "RGBA4444",
+	    "RGBA5551",
+	    "IA88",
+        "RGBA8888",
+        "IndexPalette"
+    };
+
+    enum IMG_VERIFICATION_CODES {
+        IMG_OK,
+        IMG_UNKNOWN_SIGNATURE,
+        IMG_CORRUPTED,
+		IMG_INCORRECT_EXTENSION,
+		IMG_INCOMPATIBLE_FORMAT,
+        IMG_INCORRECT_RESOLUTION,
+        IMG_INCORRECT_RESOLUTION_DEDICATED
+    };
+
+	FILE *f;
+    char image_type[4] = "";
+    unsigned short signature = 0;
+    unsigned short width = 0;
+    unsigned short height = 0;
+	int ratio = 0;
+    int alpha_channel_interpolation = -1;
+    int paa_signature_index = 0;
+    int image_verification = IMG_UNKNOWN_SIGNATURE;
+    bool fread_fail = false;
+	char *extension = empty_char;
+
+	StringDynamic buf_filename;
+	StringDynamic_init(buf_filename);
+
+	size_t arg_file = empty_char_index;
+	size_t arg_find = empty_char_index;
+	bool arg_lower  = false;
+	
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_FILE : 
+				arg_file = i + 1;
+				break;
+		}
+	}
+	
+	// File not specified
+	if (argument[arg_file].length == 0) {
+		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
+		goto file_img_end;
+	}
+
+	if (!VerifyPath(argument[arg_file], buf_filename, OPTION_ALLOW_MOST_LOCATIONS))
+		goto file_img_end;
+
+    #define FREAD_VERIFY(VAR) if (fread(&VAR, sizeof(VAR), 1, f) != 1) {fread_fail=1; goto file_img_reading_end;}
+
+	f = fopen(argument[arg_file].text,"rb");
+
+	extension = strrchr(argument[arg_file].text, '.');
+	if (extension)
+		extension = extension + 1;
+	else
+		extension = empty_char;
+
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        int file_size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+
+        FREAD_VERIFY(signature);
+
+        if (signature == JPG_START_OF_IMAGE) {
+            image_verification = strcmpi(extension,"jpg")==0 || strcmpi(extension,"jpeg")==0 ? IMG_OK : IMG_INCORRECT_EXTENSION;
+            strcpy(image_type, "jpg");
+
+            struct marker_type {
+                unsigned short id;
+                unsigned short data_length;
+            } marker;
+
+            marker.id = 0;
+			marker.data_length = 0;
+
+            while (ftell(f) < file_size) {
+                FREAD_VERIFY(marker);
+                if (marker.id == JPG_START_OF_FRAME)
+                    break;
+
+                marker.data_length = (marker.data_length>>8) | (marker.data_length<<8);
+                fseek(f, marker.data_length - 2, SEEK_CUR);
+            }
+
+            if (marker.id == JPG_START_OF_FRAME) {
+                fseek(f, 1, SEEK_CUR);
+                FREAD_VERIFY(height);
+                FREAD_VERIFY(width);
+                height = (height>>8) | (height<<8);
+                width = (width>>8) | (width<<8);
+            } else
+                image_verification = IMG_CORRUPTED;
+        } else {
+            for (int i=1; i<sizeof(paa_signatures) / sizeof(paa_signatures[0]) && paa_signature_index==0; i++)
+                if (signature == paa_signatures[i])
+                    paa_signature_index = i;
+
+            if (paa_signature_index) {
+				if (strcmpi(extension,"paa")==0 || strcmpi(extension,"pac")==0) {
+					if (signature==PAA_DXT1 || signature==PAA_RGBA4444 || signature==PAA_RGBA5551 || signature==PAA_IA88 || signature==PAA_INDEX_PALETTE)
+						image_verification = IMG_OK;
+					else
+						image_verification = IMG_INCOMPATIBLE_FORMAT;
+				} else {
+					image_verification = IMG_INCORRECT_EXTENSION;
+				}
+
+                strcpy(image_type, "paa");
+
+                if (signature == PAA_INDEX_PALETTE)
+                    fseek(f, 0, SEEK_SET);
+
+                int tagg = 0;
+                FREAD_VERIFY(tagg);               
+
+				while (tagg == PAA_TAGG_START) {
+                    int tagg_name = 0;
+                    FREAD_VERIFY(tagg_name);
+
+					unsigned long data_len = 0;
+                    FREAD_VERIFY(data_len);
+
+                    if (tagg_name == PAA_TAGG_FLAG) {
+                        FREAD_VERIFY(alpha_channel_interpolation);
+                    } else
+					    fseek(f, data_len, SEEK_CUR);
+
+                    FREAD_VERIFY(tagg);
+				}
+
+                fseek(f, ftell(f)-4, SEEK_SET);
+
+                unsigned short palette = 0;
+                FREAD_VERIFY(palette);
+                fseek(f, palette*3, SEEK_CUR);
+
+                FREAD_VERIFY(width);
+                FREAD_VERIFY(height);
+
+                if (width == 1234 && height == 8765) {
+                    FREAD_VERIFY(width);
+                    FREAD_VERIFY(height);
+                }
+            }
+        }
+
+		if (width > 0 && height > 0) {
+			if (width >= height)
+				ratio = width / height;
+			else
+				ratio = -(height / width);
+		}
+
+        #define IsPowerOfTwo(x) ((x != 0) && ((x & (x - 1)) == 0))
+
+		if (image_verification == IMG_OK) {
+			if (!IsPowerOfTwo(width) || !IsPowerOfTwo(height) || (signature >= PAA_DXT1 && signature <= PAA_DXT5 && (width<4 || height < 4))) {
+				image_verification = IMG_INCORRECT_RESOLUTION;
+			} else
+				if (abs(ratio) > 8)
+					image_verification = IMG_INCORRECT_RESOLUTION_DEDICATED;
+		}
+
+    file_img_reading_end:
+        if (fread_fail) {
+            if (feof(f))
+                QWrite_err(FWERROR_NONE, 0);
+            else if (ferror(f))
+                QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+
+            image_verification = IMG_CORRUPTED;
+        } else
+			QWrite_err(FWERROR_NONE, 0);
+        
+        fclose(f);
+    } else 
+        QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+
+file_img_end:
+	QWritef("%d,\"%s\",%hu,%hu,%d,\"%s\",%d]", 
+		image_verification,
+		image_type,
+		width,
+		height,
+		ratio,
+		paa_signature_names[paa_signature_index],
+		alpha_channel_interpolation
+	);
+	StringDynamic_end(buf_filename);
+}
+break;

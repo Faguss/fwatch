@@ -151,7 +151,7 @@
 
 		; Clipboard operations
 		? _ctr  &&  _mark!=-1  &&  _mark!=_CurrPos : if ("C" call FLIB_INKEYS) 											then {loadFile Format ["\:CLIP COPY text:%1", loadFile Format ["\:STRING CUT start:%1 end:%2 text:%3", _MarkStart,_MarkEnd,_string]]};
-		? _ctr 									   : if ("V" call FLIB_INKEYS  ||  _shift && "INSERT" call FLIB_INKEYS) then {call _DeleteMark; _string=loadFile Format ["\:STRING JOIN position:%1 text:%2merge:%3", _CurrPos, _string, loadFile ":CLIP GET"]; _length=call loadFile Format ["\:STRING SIZE %1", _string]; _wordList=nil; goto "Output"};
+		? _ctr 									   : if ("V" call FLIB_INKEYS  ||  _shift && "INSERT" call FLIB_INKEYS) then {call _DeleteMark; _string=loadFile Format ["\:STRING JOIN position:%1 text:%2merge:%3", _CurrPos, _string, loadFile ":CLIP GET"]; _length=call loadFile Format ["\:STRING SIZE text:%1", _string]; _wordList=nil; goto "Output"};
 
 		? _toWrite in _pressed : goto "SkipToNextKey"
 		_pressed = _pressed + [_toWrite]
