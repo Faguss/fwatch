@@ -143,6 +143,19 @@ HANDLE WINAPI NewCreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD  dw
 			DebugMessage("fwatch: presence check");
 			strcpy((char*) lpFileName, "fwatch\\data\\true.sqf");
 
+		} else {
+			#define igse_cfg_len 39
+			char igse_cfg[igse_cfg_len] = "fwatch\\idb\\igse\\User Configuration.cpp";
+
+			if(!strncmpi(igse_cfg, lpFileName, igse_cfg_len)) {
+				// Create empty user config for IGSE script so that the game doesn't terminate because the config is missing
+				if (GetFileAttributes(igse_cfg) == 0xFFFFFFFF) {
+					String tmp = {igse_cfg, igse_cfg_len-1};
+					CreateFoldersInPath(tmp);
+					FILE *f=fopen(igse_cfg,"a");
+					fclose(f);
+				}
+			}
 		}
 
 		// On CWA there shouldn't be "Res" folder so we redirect from res\addons to addons

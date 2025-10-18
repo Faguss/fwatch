@@ -1402,6 +1402,7 @@ case C_IGSE_MOVE:
 	size_t last_slash      = 0;
 	bool arg_overwrite     = false;
 	bool arg_subdirs       = false;
+	char dummy_arg[]       = "";
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
@@ -1435,7 +1436,6 @@ case C_IGSE_MOVE:
 		}
 	}
 
-
 	// Files not specified
 	if (argument[arg_file].length == 0 && argument[arg_source].length == 0) {
 		QWrite_err(FWERROR_PARAM_EMPTY, 1, "arg_file");
@@ -1443,6 +1443,14 @@ case C_IGSE_MOVE:
 	}
 
 	if (argument[arg_file].length > 0) {
+		// If the arg_to was not passed then we need to make it as if user passed an empty char
+		// Otherwise it shares id with other arguments and messes things up because I assume arg_to is always passed
+		if (arg_to == empty_char_index) {
+			arg_to = argument_num;
+			argument[arg_to].text   = dummy_arg;
+			argument[arg_to].length = 0;
+		}
+
 		if (argument_hash[0] == C_IGSE_RENAME) {
 			bool found_slash = false;
 
@@ -1454,7 +1462,6 @@ case C_IGSE_MOVE:
 				break;
 			}
 		}
-
 
 		// Verify and update path to the files
 		StringDynamic buf_source;

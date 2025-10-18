@@ -139,6 +139,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 
 
+
+
 	// Temporary solution for a problem that I've created for myself
 	if (GetFileAttributes("ColdWarAssault.exe") != 0xFFFFFFFF)
 		rename("res\\bin\\resource.cpp","res\\bin\\resource_disabled.cpp");
@@ -2233,7 +2235,7 @@ void WatchProgram(ThreadArguments *arg)
 										GetExitCodeProcess(pi.hProcess, &info.exit_code);
 									} while (info.exit_code == STILL_ACTIVE);
 
-									if (hash==C_EXE_MAKEPBO  &&  info.exit_code==0) {
+									if (false && hash==C_EXE_MAKEPBO  &&  info.exit_code==0) {
 										//Extract path from arguments
 										StringDynamic path_dir;
 										StringDynamic path_pbo;

@@ -223,6 +223,7 @@ int StringDynamic_readfile(StringDynamic &buffer, const char *path) {
 	int bytes_read          = fread(buffer.text, 1, file_size, f);
 	buffer.length           = bytes_read;
 	buffer.text[bytes_read] = '\0';
+	fclose(f);
 
 	if (bytes_read == file_size)
 		return 0;
