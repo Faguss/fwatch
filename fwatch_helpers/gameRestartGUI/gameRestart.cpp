@@ -992,7 +992,6 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		
 		std::vector<std::wstring> download_mirrors;
 		download_mirrors.push_back(L"http://ofp-faguss.com/fwatch/download/fwatch_self_update.7z");
-		download_mirrors.push_back(L"http://faguss.paradoxstudio.uk/fwatch/download/fwatch_self_update.7z");
 		
 		for (size_t i=0; i<download_mirrors.size(); i++) {
 			DeleteFile(L"fwatch_self_update.7z");
@@ -1127,7 +1126,6 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		
 		std::vector<std::wstring> download_mirrors2;
 		download_mirrors2.push_back(L"http://ofp-faguss.com/fwatch/download/ofp_aspect_ratio207.7z");
-		download_mirrors2.push_back(L"http://faguss.paradoxstudio.uk/fwatch/download/ofp_aspect_ratio207.7z");
 		
 		for (size_t i=0; i<download_mirrors2.size(); i++) {
 			DeleteFile(L"ofp_aspect_ratio207.7z");

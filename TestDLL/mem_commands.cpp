@@ -300,8 +300,8 @@ case C_MEM_GETGRAPHICS:
 
 
 	QWritef("[%d,%d,%d,%s,%s,%s,%s,%s,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%d,%.6f,%.6f,%d,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f]", 
-			resolution_window[0]==0 ? resolution_window[0] : engine2.resolutionX, 
-			resolution_window[1]==0 ? resolution_window[1] : engine2.resolutionY, 
+			resolution_window[0]!=0 ? resolution_window[0] : engine2.resolutionX, 
+			resolution_window[1]!=0 ? resolution_window[1] : engine2.resolutionY, 
 			engine2.refresh,
 			getBool(engine.multitexturing), 
 			getBool(scene.object_shadows), 
