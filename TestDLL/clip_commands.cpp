@@ -920,7 +920,7 @@ case C_CLIP_PASTEFILE:
 			if (path_valid) {
 				if (!arg_list_files) {
 					if (dwEffect & DROPEFFECT_MOVE) {
-						if (MoveFileEx(absolute_path,buf_destination.text,0)) {
+						if (MoveFileEx(absolute_path,buf_destination.text, MOVEFILE_COPY_ALLOWED)) {
 							QWrite_err(FWERROR_NONE, 0);
 							EmptyClipboard();
 						} else 
