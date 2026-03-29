@@ -398,7 +398,6 @@ unsigned int commands_memory[] = { // sorted
 #define NAMED_ARG_WAIT                2301512864u
 #define NAMED_ARG_CHAT_COLORDIRECT    2373422770u
 #define NAMED_ARG_EVENTID             2407974098u
-#define NAMED_ARG_KEEPWWW             2464564123u
 #define NAMED_ARG_POSITION            2471448074u
 #define NAMED_ARG_ACTUALOVERCAST      2480966134u
 #define NAMED_ARG_GROUPDIR_H          2482955540u
@@ -421,7 +420,6 @@ unsigned int commands_memory[] = { // sorted
 #define NAMED_ARG_ACTION_ROWS         3073035893u
 #define NAMED_ARG_OBJECT              3099987130u
 #define NAMED_ARG_MERGE               3111536167u
-#define NAMED_ARG_SHORT               3122818005u
 #define NAMED_ARG_FOVLEFT             3130206285u
 #define NAMED_ARG_TEXT                3185987134u
 #define NAMED_ARG_MIDDLESINGLE        3186492500u

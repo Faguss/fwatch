@@ -21,7 +21,7 @@ Example:
 	
 Changelog:
 1.16
-- fixed a bug where it would show max unit number (like hour 11:60) after decreasing
+- fixed a bug where it would show max unit number (like 11:60 instead of 12:00)
 - fixed a bug where days were changed when added hours
 - no error message when passed incorrect unit string
 

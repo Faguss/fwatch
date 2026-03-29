@@ -34,6 +34,7 @@ Output: difference array
 Changelog:
 1.16
 - variable _j wasn't local and would interfere with scripts - fixed
+- fixed syntax error "_array local var"
 
 1.15
 - added "subtract" option

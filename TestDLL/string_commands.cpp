@@ -1398,22 +1398,12 @@ case C_STRING_DOMAIN:
 		MAX_COMPONENTS
 	};
 
-	size_t arg_url   = empty_char_index;
-	bool arg_keepwww = false;
-	int status       = ASSUME_SCHEME;
+	size_t arg_url = empty_char_index;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
 			case NAMED_ARG_URL : 
 				arg_url = i + 1; 
-				break;
-
-			case NAMED_ARG_SHORT : 
-				status = String_bool(argument[i+1]) ? ASSUME_HOST : ASSUME_SCHEME;
-				break;
-
-			case NAMED_ARG_KEEPWWW : 
-				arg_keepwww = String_bool(argument[i+1]);
 				break;
 		}
 	}
@@ -1421,12 +1411,22 @@ case C_STRING_DOMAIN:
 	
 	String url[MAX_COMPONENTS];
 	size_t word_start      = 0;
+	int status             = ASSUME_HOST;
 	int expect             = SCHEME;
 	const char separator[] = ":@?#/";
 
 	for (i=0; i<MAX_COMPONENTS; i++)
 		url[i] = empty_string;
+
+	// Check if input contains a scheme
+	char *colon = 0;
+	if ((colon = strchr(argument[arg_url].text, ':'))) {
+		size_t pos = colon - argument[arg_url].text;
+		if (argument[arg_url].text[pos+1]=='/')
+			status = ASSUME_SCHEME;
+	}
 	
+	// Fully parse input
 	for (i=0; i<=argument[arg_url].length; i++) {		
 		char c = argument[arg_url].text[i];
 		
@@ -1916,6 +1916,8 @@ case C_STRING_WORDPOS:
 		// Skip spaces
 		while (i<argument[arg_text].length  &&  GetCharType(argument[arg_text].text[i])==CHAR_TYPE_SPACE)
 			i++;
+
+		i--;
 	}
 
 	QWrite("]");

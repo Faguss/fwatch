@@ -310,7 +310,6 @@ case C_FILE_MODLIST:
 			"bin", 
 			"campaigns", 
 			"dta", 
-			"worlds", 
 			"Missions", 
 			"MPMissions", 
 			"Templates", 
