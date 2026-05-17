@@ -624,12 +624,16 @@ case C_CLIP_CUTFILE:
 
 	// Create list of files separated by \0 with paths starting from drive
 	// http://www.codeguru.com/cpp/w-p/clipboard/article.php/c2997/Copying-Files-into-Explorer.htm
-	DROPFILES dobj = { 20, { 0, 0 }, 0, 1 };
-	SIZE_T nGblLen = sizeof(dobj) + all_files_length*2 + 5;//lots of nulls and multibyte_char
+	// I am adding a signature to indicate that the files have been copied from fwatch
+	char signature[] = "fwatch";
+	size_t signature_len = strlen(signature) + 1;
+	DROPFILES dobj = { sizeof(dobj) + signature_len, { 0, 0 }, 0, 1 };
+	SIZE_T nGblLen = dobj.pFiles + all_files_length*2 + 5;//lots of nulls and multibyte_char
 	HGLOBAL hGbl   = GlobalAlloc(GMEM_ZEROINIT|GMEM_MOVEABLE|GMEM_DDESHARE, nGblLen);
 	char *sData    = (char*)GlobalLock(hGbl);
-	memcpy(sData, &dobj, 20);
-	wchar_t *sWStr = (wchar_t*)(sData + 20);
+	memcpy(sData, &dobj, sizeof(dobj));
+	memcpy(sData+sizeof(dobj), signature, signature_len);
+	wchar_t *sWStr = (wchar_t*)(sData + dobj.pFiles);
 	wchar_t *backup = sWStr;
 
 	StringDynamic buf_filename;
@@ -712,65 +716,44 @@ case C_CLIP_PASTEFILE:
   // http://bcbjournal.org/forums/viewtopic.php?f=10&t=1363
 
 	size_t arg_destination = empty_char_index;
+	String arg_rename      = {empty_char, 0};
 	bool arg_list_files    = false;
+	bool arg_overwrite     = false;
 
-	if (argument_num > 2) {
-		arg_destination = 2;
-		String_trim_quotes(argument[arg_destination]);
-		arg_list_files = strcmpi(argument[arg_destination].text,"?list") == 0;
-	}
+	for (size_t i=2; i<argument_num; i+=2) {
+		switch (argument_hash[i]) {
+			case NAMED_ARG_PATH:
+				arg_destination = i + 1;
+				String_trim_quotes(argument[arg_destination]);
+				break;
 
+			case NAMED_ARG_LIST: 
+				arg_list_files = String_bool(argument[i+1]);
+				break;
 
-	// Verify and update destination path
-	StringDynamic buf_destination;
-	StringDynamic_init(buf_destination);
-	int destination_type = 0;
-	int options          = OPTION_LIMIT_WRITE_LOCATIONS;
+			case NAMED_ARG_OVERWRITE:
+				arg_overwrite = String_bool(argument[i+1]);
+				break;
 
-	if (argument[arg_destination].length==0 || (argument[arg_destination].length>0 && argument[arg_destination].text[argument[arg_destination].length-1]!='\\' && argument[arg_destination].text[argument[arg_destination].length-1]!='/'))
-		options |= OPTION_ASSUME_TRAILING_SLASH;
-
-	if (!arg_list_files) {
-		destination_type = VerifyPath(argument[arg_destination], buf_destination, options);
-
-		// If path wasn't copied to the dynamic buffer then do it anyway because we need it later
-		if (destination_type != PATH_ILLEGAL) {
-			if (buf_destination.length == 0)
-				StringDynamic_appends(buf_destination, argument[arg_destination]);
-
-			if (options & OPTION_ASSUME_TRAILING_SLASH)
-				StringDynamic_append(buf_destination, "\\");
-
-			argument[arg_destination].text   = buf_destination.text;
-			argument[arg_destination].length = buf_destination.length;
-		} else {
-			QWrite("\"\",[]]");
-			StringDynamic_end(buf_destination);
-			break;
+			case NAMED_ARG_RENAME:
+				arg_rename = argument[i+1];
+				break;
 		}
 	}
 
-
-	// Open clipboard
 	if (!OpenClipboard(NULL)) {
 		QWrite_err(FWERROR_CLIP_OPEN, 1, GetLastError());
 		QWrite("\"\",[]]");
-		StringDynamic_end(buf_destination);
 		break;
 	}
 
-
-	// Check format
 	if (!IsClipboardFormatAvailable(CF_HDROP)) {
 		QWrite_err(FWERROR_CLIP_FORMAT, 0);
 		QWrite("\"\",[]]");
 		CloseClipboard();
-		StringDynamic_end(buf_destination);
 		break;
 	}
 
-
-	// Find what's the registered effect
 	DWORD dwEffect = 0;
 	DWORD dwFormat = RegisterClipboardFormat(CFSTR_PREFERREDDROPEFFECT);
 	HANDLE hGlobal = GetClipboardData(dwFormat);
@@ -789,7 +772,7 @@ case C_CLIP_PASTEFILE:
 		DROPEFFECT_SCROLL
 	};
 
-	const char effect_name[][16] = {
+	const char effect_name[][8] = {
 		"none",
 		"copy",
 		"move",
@@ -798,31 +781,26 @@ case C_CLIP_PASTEFILE:
 	};
 
 	size_t effect_id = 0;
-	for (size_t i=0; i<sizeof(effect)/sizeof(effect[0]); i++)
+	for (i=0; i<sizeof(effect)/sizeof(effect[0]); i++)
 		if (dwEffect & effect[i]) {
 			effect_id = i;
 			break;
 		}
-
 
 	// Prohibit actions other than move or copy
 	if (!arg_list_files  &&  ~dwEffect & DROPEFFECT_COPY  &&  ~dwEffect & DROPEFFECT_MOVE) {
 		QWrite_err(FWERROR_CLIP_EFFECT, 0);
 		QWritef("\"%s\",[]]", effect_name[effect_id]);
 		CloseClipboard();
-		StringDynamic_end(buf_destination);
 		break;
 	}
 
-
-	// Get data
 	HANDLE clipboard_handle = GetClipboardData(CF_HDROP);
 
 	if (!clipboard_handle) {
 		QWrite_err(FWERROR_CLIP_EMPTY, 0);
 		QWrite("\"\",[]]");
 		CloseClipboard();
-		StringDynamic_end(buf_destination);
 		break;
 	}
 
@@ -833,17 +811,53 @@ case C_CLIP_PASTEFILE:
 		QWrite("\"\",[]]");
 		GlobalUnlock(clipboard_handle);
 		CloseClipboard();
-		StringDynamic_end(buf_destination);
 		break;
 	}
 
+	// Check if the files were copied from Fwatch
 	LPWSTR pFilenames = (LPWSTR) (((LPBYTE)df) + df->pFiles);
+	bool copied_from_fwatch = false;
+	if (df->pFiles > sizeof(DROPFILES)) {
+		LPSTR signature = (LPSTR) (((LPBYTE)df) + sizeof(DROPFILES));
+		copied_from_fwatch = strncmp(signature, "fwatch", df->pFiles - sizeof(DROPFILES)) == 0;
+	}
+
+	// Verify and update destination path
+	StringDynamic buf_destination;
+	StringDynamic_init(buf_destination);
+	int destination_type = 0;
+	int options          = OPTION_LIMIT_WRITE_LOCATIONS | OPTION_SUPPRESS_ERROR;
+
+	if (argument[arg_destination].length>0 && argument[arg_destination].text[argument[arg_destination].length-1]!='\\' && argument[arg_destination].text[argument[arg_destination].length-1]!='/')
+		options |= OPTION_ASSUME_TRAILING_SLASH;
+
+	destination_type = VerifyPath(argument[arg_destination], buf_destination, options);
+
+	// If path wasn't copied to the dynamic buffer then do it anyway because we need it later
+	if (!copied_from_fwatch  ||  destination_type != PATH_ILLEGAL) {
+		if (buf_destination.length == 0)
+			StringDynamic_appends(buf_destination, argument[arg_destination]);
+
+		if (options & OPTION_ASSUME_TRAILING_SLASH)
+			StringDynamic_append(buf_destination, "\\");
+
+		argument[arg_destination].text   = buf_destination.text;
+		argument[arg_destination].length = buf_destination.length;
+	} else {
+		QWrite_err(FWERROR_PARAM_PATH_RESTRICTED, 1, argument[arg_destination].text);
+		QWrite("\"\",[]]");
+		StringDynamic_end(buf_destination);
+		GlobalUnlock(clipboard_handle);
+		CloseClipboard();
+		break;
+	}
 
 
-	// Create output array
 	QWrite_err(FWERROR_NONE, 0);
 	QWritef("\"%s\",[", effect_name[effect_id]);
 
+	String rename_item;
+	size_t rename_tokenize_pos = 0;
 
 	// Parse filepaths from the clipboard
 	StringDynamic buf_source;
@@ -867,7 +881,6 @@ case C_CLIP_PASTEFILE:
 				StringDynamic_end(buf_source);
 				break;
 			}
-
 
 			// Convert absolute path (starting from drive) to the OFP relative path - for logging and verification
 			char *absolute_path  = buf_source.text;
@@ -903,42 +916,68 @@ case C_CLIP_PASTEFILE:
 			} else
 				QWritef("\",\"%s\",", relative_path);
 			
-
 			int source_type = VerifyPath(relative_path, buf_source, OPTION_SUPPRESS_ERROR | OPTION_SUPPRESS_CONVERSION);
-			bool path_valid = true;
 
-			// Not allowed to move files to the fwatch\tmp directory
-			if (is_game_dir  &&  dwEffect & DROPEFFECT_MOVE  &&  source_type!=PATH_DOWNLOAD_DIR  &&  destination_type==PATH_DOWNLOAD_DIR) {
-				QWrite_err(FWERROR_FILE_MOVETOTMP, 2, relative_path.text, buf_destination);
-				path_valid = false;
-			}
+			// The only action that's prohibited is moving files to the fwatch\tmp directory
+			if (!copied_from_fwatch  ||  !is_game_dir  ||  ~dwEffect & DROPEFFECT_MOVE  ||  source_type==PATH_DOWNLOAD_DIR  ||  destination_type!=PATH_DOWNLOAD_DIR) {
 
-			// Copy filename from the source path to the destination path
-			StringDynamic_append(buf_destination, last_slash!=NULL ? last_slash+1 : relative_path.text);
+				// Copy filename from the source path to the destination path
+				char *destination_file_item = last_slash!=NULL ? last_slash+1 : relative_path.text;
 
-			// Execute move/copy
-			if (path_valid) {
-				if (!arg_list_files) {
-					if (dwEffect & DROPEFFECT_MOVE) {
-						if (MoveFileEx(absolute_path,buf_destination.text, MOVEFILE_COPY_ALLOWED)) {
+				rename_item = String_tokenize(arg_rename, ",", rename_tokenize_pos, OPTION_TRIM_SQUARE_BRACKETS | OPTION_INCLUDE_EMPTY_WORDS);
+				if (rename_item.length != 0xFFFFFFFF && rename_item.length > 0 && rename_item.text[0] != '?')
+					destination_file_item = rename_item.text;
+
+				StringDynamic_append(buf_destination, destination_file_item);
+
+				// Source must be different from destination
+				if (strcmpi(absolute_path,buf_destination.text) != 0) {
+
+					// Check if the file already exists
+					WIN32_FILE_ATTRIBUTE_DATA fad;
+					bool exists = GetFileAttributesEx(buf_destination.text, GetFileExInfoStandard, &fad) != 0;
+					bool overwrite = arg_overwrite || stricmp(rename_item.text,"?overwrite")==0;
+
+					if (overwrite || !exists || stricmp(rename_item.text,"?skip")==0) {
+						if (!arg_list_files && stricmp(rename_item.text,"?skip")!=0) {
+							DWORD move_flag = MOVEFILE_COPY_ALLOWED;
+							BOOL copy_flag = true; // fail if exists
+
+							// Overwrite means trashing before copying
+							if (overwrite && exists) {
+								if (destination_type != PATH_DOWNLOAD_DIR) {
+									String f = {buf_destination.text, buf_destination.length};
+									trashFile(f, OPTION_NONE);
+								} else {
+									move_flag |= MOVEFILE_REPLACE_EXISTING;
+									copy_flag = false;
+								}
+							}
+
+							if (dwEffect & DROPEFFECT_MOVE) {
+								if (MoveFileEx(absolute_path, buf_destination.text, move_flag)) {
+									QWrite_err(FWERROR_NONE, 0);
+									EmptyClipboard();
+								} else 
+									QWrite_err(FWERROR_WINAPI, 1, GetLastError());
+							}
+
+							if (dwEffect & DROPEFFECT_COPY) {
+								if (CopyFile((LPCTSTR)absolute_path, (LPCTSTR)buf_destination.text, copy_flag)) 
+									QWrite_err(FWERROR_NONE, 0);
+								else 
+									QWrite_err(FWERROR_WINAPI, 1, GetLastError());
+							}
+						} else
 							QWrite_err(FWERROR_NONE, 0);
-							EmptyClipboard();
-						} else 
-							QWrite_err(FWERROR_WINAPI, 1, GetLastError());
-					}
-
-					if (dwEffect & DROPEFFECT_COPY) {
-						if (CopyFile((LPCTSTR)absolute_path, (LPCTSTR)buf_destination.text, true)) 
-							QWrite_err(FWERROR_NONE, 0);
-						else 
-							QWrite_err(FWERROR_WINAPI, 1, GetLastError());
-					}
+					} else
+						QWrite_err(FWERROR_FILE_EXISTS, 1, buf_destination.text);
 				} else
-					QWrite_err(FWERROR_NONE, 0);
-			}
+					QWrite_err(FWERROR_FILE_SAMEPATH, 0);	
+			} else
+				QWrite_err(FWERROR_FILE_MOVETOTMP, 2, relative_path.text, buf_destination);
 
-
-			// Reset before the next file
+			// Reset destination path before the next file
 			buf_source.length      = 0;
 			buf_destination.length = argument[arg_destination].length;
 			name_start             = i + 1;
@@ -947,10 +986,8 @@ case C_CLIP_PASTEFILE:
 	}
 
 	QWrite("]]");
-
 	StringDynamic_end(buf_source);
 	StringDynamic_end(buf_destination);
-
 	GlobalUnlock(clipboard_handle);
 	CloseClipboard();
 }

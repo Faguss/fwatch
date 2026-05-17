@@ -831,6 +831,7 @@ case C_STRING_TOKENIZE:
 				break;
 
 			case NAMED_ARG_CUT :
+			case NAMED_ARG_CUTAMOUNT :
 				arg_cut = strtoul(argument[i+1].text, NULL, 0);
 				break;
 

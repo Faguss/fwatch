@@ -382,7 +382,7 @@ String String_tokenize(String &source, const char *delimiter, size_t &i, int opt
 					is_delimeter = true;
 
 		// Mark beginning of the word
-		if (!word_started  &&  (!is_delimeter || i==source.length)) {
+		if (!word_started  &&  (!is_delimeter || i==source.length || options & OPTION_INCLUDE_EMPTY_WORDS)) {
 			word_start   = i;
 			word_started = true;
 		}
@@ -397,6 +397,8 @@ String String_tokenize(String &source, const char *delimiter, size_t &i, int opt
 	}
 
 	String item = {source.text+source.length, 0};
+	if (options & OPTION_INCLUDE_EMPTY_WORDS)
+		item.length = 0xFFFFFFFF;
 	return item;
 }
 

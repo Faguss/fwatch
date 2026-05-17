@@ -2292,6 +2292,14 @@ void QWrite_err(int code_primary, int arg_num, ...) {
 		case FWERROR_FILE_DIREXISTS   : strcpy(format,"Directory %s already exists"); break;
 		case FWERROR_FILE_READ        : strcpy(format,"Read only %u/%u bytes from file %s"); break;
 		case FWERROR_FILE_WRITE       : strcpy(format,"Written only %u/%u bytes to file %s"); break;
+		case FWERROR_FILE_SAMEPATH    : strcpy(format,"Source path is the same as destination path"); break;
+
+		case FWERROR_IMG_UNKNOWN_SIGNATURE              : strcpy(format,"Unknown signature"); break;
+		case FWERROR_IMG_CORRUPTED                      : strcpy(format,"Corrupted file"); break;
+		case FWERROR_IMG_INCORRECT_EXTENSION            : strcpy(format,"Wrong file extension"); break;
+		case FWERROR_IMG_INCOMPATIBLE_FORMAT            : strcpy(format,"Wrong image format"); break;
+		case FWERROR_IMG_INCORRECT_RESOLUTION           : strcpy(format,"Wrong resolution"); break;
+		case FWERROR_IMG_INCORRECT_RESOLUTION_DEDICATED : strcpy(format,"Wrong resolution for dedicated server"); break;
 
 		case FWERROR_CLASS_PARENT   : strcpy(format,"Couldn't find parent class %s %d/%d in file %s"); break; 
 		case FWERROR_CLASS_EXISTS   : strcpy(format,"Class %s already exists in file %s"); break;
@@ -3124,4 +3132,66 @@ bool CreateFoldersInPath(String &input)
 	}
 
 	return true;
+}
+
+
+
+//https://superuser.com/questions/475874/how-does-the-windows-rename-command-interpret-wildcards
+bool IsWildcardMatch(char *name, String &mask) {
+	if (mask.length == 0)
+		return 1;
+	
+	if (name[0] == '\0')
+		return 0;
+		
+	size_t name_index = 0;
+	size_t name_len = strlen(name);
+
+    for (size_t mask_index=0; mask_index<mask.length; ++mask_index) {
+        char mask_character = mask.text[mask_index];
+        char name_character = name_index<name_len ? name[name_index] : ' ';
+        char mask_next_character = mask_index<mask.length-1 ? mask.text[mask_index+1] : ' ';
+        
+		if (mask_character!='.'  &&  mask_character!='*'  &&  mask_character!='?') {
+			if (name_index<name_len  &&  name_character!='.' && tolower(mask_character)==tolower(name[name_index]))
+				name_index++;
+			else
+			    return 0;
+        } else 
+        if (mask_character == '?') {
+            if (name_index<name_len && name_character!='.')
+		        name_index++;
+        } else 
+        if (mask_character == '*') {
+            if (mask_index == mask.length-1)
+                return 1;
+            else 
+                if (mask_next_character == '.' && mask_index+1 == mask.length-1) {
+                    for (; name_index<name_len; ++name_index)
+                        if (name[name_index] == '.')
+                            break;
+                } else 
+                    if (mask_next_character != '?' && mask_next_character != '*') {
+                        bool found = 0;
+                        for (; name_index<name_len; ++name_index) {
+							String mask_crop = {mask.text+mask_index+1, mask.length-(mask_index+1)};
+                            if (tolower(name[name_index])==tolower(mask_next_character) && IsWildcardMatch(name+name_index, mask_crop)) {
+                                found=1;
+                                break;
+                            }
+                        }
+                
+                        if (!found)
+                            return 0;
+                    }
+        } else 
+        if (mask_character == '.' || mask_character == ' ') {
+            if (name_index<name_len && mask_character==name_character) {
+	            name_index++;
+            } else 
+                return name_index>=name_len && mask_index == mask.length-1;
+        }
+    }
+
+    return name_index == name_len;
 }

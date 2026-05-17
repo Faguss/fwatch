@@ -525,46 +525,77 @@ break;
 case C_IGSE_LIST:
 { // IGSE List of files
 
-	enum IGSE_LIST_LIMITTO {
-		NO_LIMIT     = 0,
+	enum IGSE_LIST_SCOPE {
+		LIMIT_ALL    = 0,
 		ONLY_FILES   = 1,
-		ONLY_FOLDERS = 2
+		ONLY_FOLDERS = 2,
+		NO_LIMIT     = 3
 	};
 
-	bool arg_system_time = false;
-	bool arg_lowercase   = false;
-	bool arg_only_name   = false;
-	int arg_limit_to     = NO_LIMIT;
-	char default_path[2] = "*";
-	String arg_path      = {default_path, 1};
+	enum IGSE_ATTR_SCOPE {
+		NO_ATTRIBUTES = 0,
+		DIRMATCH_ATTRIBUTES = 1,
+		ALL_ATTRIBUTES = 2
+	};
+
+	bool arg_system_time  = false;
+	bool arg_lowercase    = false;
+	bool arg_foldersfirst = false;
+	int arg_scope         = NO_LIMIT;
+	int arg_scope_match   = NO_LIMIT;
+	int arg_attributes    = ALL_ATTRIBUTES;
+	char default_path[2]  = "*";
+	String arg_path       = {default_path, 1};
+	size_t arg_find       = empty_char_index;
 
 	for (size_t i=2; i<argument_num; i+=2) {
 		switch (argument_hash[i]) {
-			case NAMED_ARG_SYSTEMTIME :
+			case NAMED_ARG_SYSTEMTIME:
 				arg_system_time = String_bool(argument[i+1]);
 				break;
 
-			case NAMED_ARG_ONLYNAME :
-				arg_only_name = String_bool(argument[i+1]);
+			case NAMED_ARG_ONLYNAME:
+				arg_attributes = String_bool(argument[i+1]) ? NO_ATTRIBUTES : ALL_ATTRIBUTES;
 				break;
 
-			case NAMED_ARG_PATH :
+			case NAMED_ARG_PATH:
 				arg_path = argument[i+1];
 				break;
 
-			case NAMED_ARG_LOWERCASE : 
+			case NAMED_ARG_LOWERCASE: 
 				arg_lowercase = String_bool(argument[i+1]);
 				break;
 
-			case NAMED_ARG_LIMITTO :
+			case NAMED_ARG_LIMITTO:
+			case NAMED_ARG_SCOPE:
+			case NAMED_ARG_MATCHSCOPE: {
+				int *var = argument_hash[i]==NAMED_ARG_SCOPE ? &arg_scope : &arg_scope_match;
 				if (strcmpi(argument[i+1].text,"files") == 0)
-					arg_limit_to = ONLY_FILES;
+					*var = ONLY_FILES;
 				else
 					if (strcmpi(argument[i+1].text,"folders") == 0)
-						arg_limit_to = ONLY_FOLDERS;
+						*var = ONLY_FOLDERS;
 					else
-						arg_limit_to = NO_LIMIT;
+						if (strcmpi(argument[i+1].text,"none") == 0)
+							*var = LIMIT_ALL;
+			} break;
+
+			case NAMED_ARG_MATCH:
+				arg_find = i+1;
 				break;
+
+			case NAMED_ARG_FOLDERSFIRST:
+				arg_foldersfirst = String_bool(argument[i+1]);
+				break;
+
+			case NAMED_ARG_ATTRIBUTES: {
+				if (strcmpi(argument[i+1].text,"dirmatch") == 0)
+					arg_attributes = DIRMATCH_ATTRIBUTES;
+				else
+					if (strcmpi(argument[i+1].text,"none") == 0)
+						arg_attributes = NO_ATTRIBUTES;
+			} break;
+
 		}
 	}
 
@@ -574,42 +605,81 @@ case C_IGSE_LIST:
 	StringDynamic_init(buf_path);
 	
 	if (!VerifyPath(arg_path, buf_path, OPTION_ALLOW_MOST_LOCATIONS)) {
-		QWrite("[],[]]"); 
+		QWrite("[],[],[0,0,0,0]]"); 
 		break;
 	}
 
 
 	// Get list of files
+	int file_count = 0;
+	int folder_count = 0;
+	int match_file_count = 0;
+	int match_folder_count = 0;
 	WIN32_FIND_DATA file_data;
 	HANDLE hFind = INVALID_HANDLE_VALUE;
-	hFind		 = FindFirstFile(arg_path.text, &file_data);
+	hFind = FindFirstFile(arg_path.text, &file_data);
 
 	if (hFind != INVALID_HANDLE_VALUE) {
 		StringDynamic Names;
 		StringDynamic Attributes;
+		StringDynamic Files_Names;
+		StringDynamic Files_Attributes;
 		StringDynamic_init(Names);
 		StringDynamic_init(Attributes);
+		StringDynamic_init(Files_Names);
+		StringDynamic_init(Files_Attributes);
+		StringDynamic *Names_ptr = NULL;
+		StringDynamic *Attributes_ptr = NULL;
 
 		do {
 			if (strcmp(file_data.cFileName,".")==0  ||  strcmp(file_data.cFileName,"..")==0)
 				continue;
 
-			if (arg_limit_to==ONLY_FILES  &&  file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			if (file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+				folder_count++;
+			else
+				file_count++;
+
+			if (arg_scope==LIMIT_ALL ||
+				(arg_scope==ONLY_FILES   &&  file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+				(arg_scope==ONLY_FOLDERS &&  ~file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			)
 				continue;
 
-			if (arg_limit_to==ONLY_FOLDERS  &&  ~file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			bool find_match = IsWildcardMatch(file_data.cFileName, argument[arg_find]);
+
+			if (!find_match && 
+				(arg_scope_match==NO_LIMIT || 
+				(arg_scope_match==ONLY_FILES   && ~file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || 
+				(arg_scope_match==ONLY_FOLDERS && file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+			)
 				continue;
+
+			if (find_match) {
+				if (file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+					match_file_count++;
+				else
+					match_folder_count++;
+			}
 
 			if (arg_lowercase)
 				for (int i=0; file_data.cFileName[i]!='\0'; i++)
 					file_data.cFileName[i] = tolower(file_data.cFileName[i]);
 
-			StringDynamic_append(Names, "]+[\"");
-			StringDynamic_appendq(Names, file_data.cFileName);
-			StringDynamic_append(Names, "\"");
+			Names_ptr      = &Names;
+			Attributes_ptr = &Attributes;
 
-			if (!arg_only_name) {
-				StringDynamic_appendf(Attributes, "]+[");
+			if (arg_foldersfirst && ~file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+				Names_ptr      = &Files_Names;
+				Attributes_ptr = &Files_Attributes;
+			}
+
+			StringDynamic_append(*Names_ptr, "]+[\"");
+			StringDynamic_appendq(*Names_ptr, file_data.cFileName);
+			StringDynamic_append(*Names_ptr, "\"");
+
+			if (arg_attributes == ALL_ATTRIBUTES) {
+				StringDynamic_appendf(*Attributes_ptr, "]+[");
 				
 				// Name without extension and then extension alone
 				char *dot = strrchr(file_data.cFileName, '.');
@@ -621,8 +691,7 @@ case C_IGSE_LIST:
 					ext                      = file_data.cFileName + pos + 1;
 				}
 
-				StringDynamic_appendf(Attributes, "[\"%s\",\"%s\",[", file_data.cFileName, ext);
-
+				StringDynamic_appendf(*Attributes_ptr, "[\"%s\",\"%s\",[", file_data.cFileName, ext);
 
 				// List of attributes
 				if ((file_data.dwFileAttributes & FILE_ATTRIBUTE_NORMAL) == 0) {
@@ -651,16 +720,16 @@ case C_IGSE_LIST:
 					for (int bitmask=1,index=0;  bitmask<0x20000;  bitmask*=2,index++) {
 						if (bitmask!=8  &&  bitmask!=FILE_ATTRIBUTE_NORMAL  &&  (file_data.dwFileAttributes & bitmask)!=0) {
 							if (add_comma) 
-								StringDynamic_appendf(Attributes, ","); 
+								StringDynamic_appendf(*Attributes_ptr, ","); 
 							else 
 								add_comma = true;
 
-							StringDynamic_appendf(Attributes, "\"%s\"", attribute[index]);
+							StringDynamic_appendf(*Attributes_ptr, "\"%s\"", attribute[index]);
 						}
 					}
 				}
 
-				StringDynamic_appendf(Attributes, "],");
+				StringDynamic_appendf(*Attributes_ptr, "],");
 
 				// Creation, last access and last write time
 				FILETIME *date_list[] = {&file_data.ftCreationTime, &file_data.ftLastAccessTime, &file_data.ftLastWriteTime};
@@ -668,23 +737,35 @@ case C_IGSE_LIST:
 				for (int i=0, max=sizeof(date_list)/sizeof(date_list[0]); i<max; i++) {
 					char temp[64] = "";
 					FileTimeToString(*date_list[i], arg_system_time, temp);
-					StringDynamic_appendf(Attributes, "%s%s", (i>0 ? "," : ""), temp);
+					StringDynamic_appendf(*Attributes_ptr, "%s%s", (i>0 ? "," : ""), temp);
 				}
 
 				// Size
 				FileSize size = DivideBytes(file_data.nFileSizeLow);
-				StringDynamic_appendf(Attributes, ",[%f,%f,%f]]", size.bytes, size.kilobytes, size.megabytes);
-			}
+				StringDynamic_appendf(*Attributes_ptr, ",[%f,%f,%f],%s]", size.bytes, size.kilobytes, size.megabytes, find_match?"true":"false");
+			} else
+				if (arg_attributes == DIRMATCH_ATTRIBUTES) {
+					StringDynamic_appendf(*Attributes_ptr, "]+[[%s,%s]", file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? "true" : "false", find_match ? "true" : "false");
+				}
 		} while (FindNextFile(hFind, &file_data));
 		FindClose(hFind);
 
 		QWrite_err(FWERROR_NONE, 0);
-		QWritef("[%s],[%s]]", Names.text, Attributes.text);
+		QWritef("[%s%s],[%s%s],[%d,%d,%d,%d]]", 
+			Names.text, 
+			Files_Names.text, 
+			Attributes.text, 
+			Files_Attributes.text, 
+			file_count, 
+			folder_count, 
+			match_file_count, 
+			match_folder_count
+		);
 		StringDynamic_end(Names);
 		StringDynamic_end(Attributes);
 	} else {
 		QWrite_err(FWERROR_WINAPI, 2, GetLastError(), arg_path.text);
-		QWrite("[],[]]"); 
+		QWrite("[],[],[0,0,0,0]]"); 
 		break;
 	}
 
@@ -1972,10 +2053,10 @@ case C_IGSE_DB:
 				arg_writing_mode    = true;
 				break;
 
-			case NAMED_ARG_RENAME :
+			/*case NAMED_ARG_RENAME :
 				arg_arguments_size += argument[i+1].length + 1;
 				arg_writing_mode    = true;
-				break;
+				break;*/
 
 			case NAMED_ARG_REMOVE :
 				arg_writing_mode = true;

@@ -676,7 +676,7 @@ break;
 
 
 
-case C_FILE_IMG:
+case C_FILE_VERIFYIMAGE:
 {
     #define JPG_START_OF_IMAGE 0xD8FF
     #define JPG_START_OF_FRAME 0xC0FF
@@ -722,16 +722,6 @@ case C_FILE_IMG:
         "IndexPalette"
     };
 
-    enum IMG_VERIFICATION_CODES {
-        IMG_OK,
-        IMG_UNKNOWN_SIGNATURE,
-        IMG_CORRUPTED,
-		IMG_INCORRECT_EXTENSION,
-		IMG_INCOMPATIBLE_FORMAT,
-        IMG_INCORRECT_RESOLUTION,
-        IMG_INCORRECT_RESOLUTION_DEDICATED
-    };
-
 	FILE *f;
     char image_type[4] = "";
     unsigned short signature = 0;
@@ -740,7 +730,7 @@ case C_FILE_IMG:
 	int ratio = 0;
     int alpha_channel_interpolation = -1;
     int paa_signature_index = 0;
-    int image_verification = IMG_UNKNOWN_SIGNATURE;
+    int error_code = FWERROR_IMG_UNKNOWN_SIGNATURE;
     bool fread_fail = false;
 	char *extension = empty_char;
 
@@ -786,7 +776,7 @@ case C_FILE_IMG:
         FREAD_VERIFY(signature);
 
         if (signature == JPG_START_OF_IMAGE) {
-            image_verification = strcmpi(extension,"jpg")==0 || strcmpi(extension,"jpeg")==0 ? IMG_OK : IMG_INCORRECT_EXTENSION;
+            error_code = strcmpi(extension,"jpg")==0 || strcmpi(extension,"jpeg")==0 ? FWERROR_NONE : FWERROR_IMG_INCORRECT_EXTENSION;
             strcpy(image_type, "jpg");
 
             struct marker_type {
@@ -813,7 +803,7 @@ case C_FILE_IMG:
                 height = (height>>8) | (height<<8);
                 width = (width>>8) | (width<<8);
             } else
-                image_verification = IMG_CORRUPTED;
+                error_code = FWERROR_IMG_CORRUPTED;
         } else {
             for (int i=1; i<sizeof(paa_signatures) / sizeof(paa_signatures[0]) && paa_signature_index==0; i++)
                 if (signature == paa_signatures[i])
@@ -822,12 +812,11 @@ case C_FILE_IMG:
             if (paa_signature_index) {
 				if (strcmpi(extension,"paa")==0 || strcmpi(extension,"pac")==0) {
 					if (signature==PAA_DXT1 || signature==PAA_RGBA4444 || signature==PAA_RGBA5551 || signature==PAA_IA88 || signature==PAA_INDEX_PALETTE)
-						image_verification = IMG_OK;
+						error_code = FWERROR_NONE;
 					else
-						image_verification = IMG_INCOMPATIBLE_FORMAT;
-				} else {
-					image_verification = IMG_INCORRECT_EXTENSION;
-				}
+						error_code = FWERROR_IMG_INCOMPATIBLE_FORMAT;
+				} else
+					error_code = FWERROR_IMG_INCORRECT_EXTENSION;
 
                 strcpy(image_type, "paa");
 
@@ -835,7 +824,7 @@ case C_FILE_IMG:
                     fseek(f, 0, SEEK_SET);
 
                 int tagg = 0;
-                FREAD_VERIFY(tagg);               
+                FREAD_VERIFY(tagg);
 
 				while (tagg == PAA_TAGG_START) {
                     int tagg_name = 0;
@@ -846,8 +835,9 @@ case C_FILE_IMG:
 
                     if (tagg_name == PAA_TAGG_FLAG) {
                         FREAD_VERIFY(alpha_channel_interpolation);
-                    } else
+                    } else {
 					    fseek(f, data_len, SEEK_CUR);
+					}
 
                     FREAD_VERIFY(tagg);
 				}
@@ -877,32 +867,29 @@ case C_FILE_IMG:
 
         #define IsPowerOfTwo(x) ((x != 0) && ((x & (x - 1)) == 0))
 
-		if (image_verification == IMG_OK) {
-			if (!IsPowerOfTwo(width) || !IsPowerOfTwo(height) || (signature >= PAA_DXT1 && signature <= PAA_DXT5 && (width<4 || height < 4))) {
-				image_verification = IMG_INCORRECT_RESOLUTION;
+		if (error_code == FWERROR_NONE) {
+			if (!IsPowerOfTwo(width) || !IsPowerOfTwo(height) || (signature >= PAA_DXT1 && signature <= PAA_DXT5 && (width<4 || height<4))) {
+				error_code = FWERROR_IMG_INCORRECT_RESOLUTION;
 			} else
 				if (abs(ratio) > 8)
-					image_verification = IMG_INCORRECT_RESOLUTION_DEDICATED;
+					error_code = FWERROR_IMG_INCORRECT_RESOLUTION_DEDICATED;
 		}
 
     file_img_reading_end:
         if (fread_fail) {
             if (feof(f))
-                QWrite_err(FWERROR_NONE, 0);
+                QWrite_err(FWERROR_IMG_CORRUPTED, 0);
             else if (ferror(f))
                 QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
-
-            image_verification = IMG_CORRUPTED;
         } else
-			QWrite_err(FWERROR_NONE, 0);
+			QWrite_err(error_code, 0);
         
         fclose(f);
     } else 
         QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
 
 file_img_end:
-	QWritef("%d,\"%s\",%hu,%hu,%d,\"%s\",%d]", 
-		image_verification,
+	QWritef("\"%s\",%hu,%hu,%d,\"%s\",%d]", 
 		image_type,
 		width,
 		height,

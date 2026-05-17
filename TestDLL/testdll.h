@@ -540,7 +540,8 @@ enum OPTIONS_QWRITE_ERR {
 
 enum OPTIONS_TOKENIZE {
 	OPTION_SKIP_SQUARE_BRACKETS = 0x1,
-	OPTION_TRIM_SQUARE_BRACKETS = 0x2
+	OPTION_TRIM_SQUARE_BRACKETS = 0x2,
+	OPTION_INCLUDE_EMPTY_WORDS  = 0x4
 };
 
 enum FWATCH_ERRORS {
@@ -588,6 +589,14 @@ enum FWATCH_ERRORS {
 	FWERROR_FILE_DIREXISTS,
 	FWERROR_FILE_READ,
 	FWERROR_FILE_WRITE,
+	FWERROR_FILE_SAMEPATH,
+
+	FWERROR_IMG_UNKNOWN_SIGNATURE = 240,
+	FWERROR_IMG_CORRUPTED,
+	FWERROR_IMG_INCORRECT_EXTENSION,
+	FWERROR_IMG_INCOMPATIBLE_FORMAT,
+	FWERROR_IMG_INCORRECT_RESOLUTION,
+	FWERROR_IMG_INCORRECT_RESOLUTION_DEDICATED,
 
 	FWERROR_CLASS_PARENT = 250,
 	FWERROR_CLASS_EXISTS,
@@ -644,6 +653,7 @@ char*     strstr2_old(const char *arg1, size_t arg1_len, const char *arg2, size_
 void      SQM_Init(SQM_ParseState &input);
 int       SQM_Parse(String &input, SQM_ParseState &state, int action_type, String &to_find);
 int       SQM_Merge(String &merge, SQM_ParseState &merge_state, StringDynamic &source_dynamic, SQM_ParseState &source_state, char *setpos_line);
+bool      IsWildcardMatch(char *name, String &mask);
 
 // winapi
 void DebugMessage(const char *first, ...); 

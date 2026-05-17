@@ -83,7 +83,7 @@ extern GLOBAL_VARIABLES_TESTDLL global;
 #define C_FILE_MODLIST         2709572447u
 #define C_FILE_PBO             4240196012u
 #define C_FILE_CUSTOMCOUNTSIZE 1721154120u
-#define C_FILE_IMG             4012922080u
+#define C_FILE_VERIFYIMAGE     3415722461u
 #define C_IGSE_WRITE           1567449702u
 #define C_IGSE_LIST            3690437211u
 #define C_IGSE_LOAD            3760381619u
@@ -188,6 +188,7 @@ unsigned int commands_named_arguments[] = { // sorted
 	C_IGSE_RENAME,
 	C_STRING_ISVARIABLE,
 	C_CLIP_COPY,
+	C_CLIP_PASTEFILE,
 	C_RESTART_SCHEDULE,
 	C_MEM_SETGRAPHICS,
 	C_MEM_MODLIST,
@@ -211,11 +212,11 @@ unsigned int commands_named_arguments[] = { // sorted
 	C_STRING_REPLACECHAR,
 	C_STRING_CASE,
 	C_MEM_SETWEATHER,
+	C_FILE_VERIFYIMAGE,
 	C_STRING_FIND,
 	C_IGSE_LIST,
 	C_IGSE_LOAD,
 	C_IGSE_NEW,
-	C_FILE_IMG,
 	C_STRING_TRIM,
 	C_STRING_JOIN,
 	C_FILE_PBO
@@ -283,6 +284,7 @@ unsigned int commands_memory[] = { // sorted
 #define NAMED_ARG_UPPER               176974407u
 #define NAMED_ARG_LIST                217798785u
 #define NAMED_ARG_TRIMDOLLAR          231504115u
+#define NAMED_ARG_FOLDERSFIRST        252671504u
 #define NAMED_ARG_ACTION_H            277796120u
 #define NAMED_ARG_GUSTUNTIL           293809950u
 #define NAMED_ARG_DIRECTORY           294729096u
@@ -300,6 +302,7 @@ unsigned int commands_memory[] = { // sorted
 #define NAMED_ARG_ACTION_SIZE         467552881u
 #define NAMED_ARG_ACTION_W            529460405u
 #define NAMED_ARG_ACTION_X            546238024u
+#define NAMED_ARG_CUTAMOUNT           550443783u
 #define NAMED_ARG_REVERSE             558918661u
 #define NAMED_ARG_ACTION_Y            563015643u
 #define NAMED_ARG_SIZE                597743964u
@@ -378,6 +381,7 @@ unsigned int commands_memory[] = { // sorted
 #define NAMED_ARG_RADAR_X             2096317596u
 #define NAMED_ARG_RADAR_Y             2113095215u
 #define NAMED_ARG_LOWERCASE           2115640198u
+#define NAMED_ARG_MATCH               2116038550u
 #define NAMED_ARG_WRAP                2145121445u
 #define NAMED_ARG_GRAVACC             2164471156u
 #define NAMED_ARG_RENAME              2180167635u
@@ -398,6 +402,7 @@ unsigned int commands_memory[] = { // sorted
 #define NAMED_ARG_WAIT                2301512864u
 #define NAMED_ARG_CHAT_COLORDIRECT    2373422770u
 #define NAMED_ARG_EVENTID             2407974098u
+#define NAMED_ARG_KEEPWWW             2464564123u
 #define NAMED_ARG_POSITION            2471448074u
 #define NAMED_ARG_ACTUALOVERCAST      2480966134u
 #define NAMED_ARG_GROUPDIR_H          2482955540u
@@ -412,6 +417,7 @@ unsigned int commands_memory[] = { // sorted
 #define NAMED_ARG_OBJECTSDISTANCE     2825239140u
 #define NAMED_ARG_CLOUDSALPHA         2853247177u
 #define NAMED_ARG_FILE                2867484483u
+#define NAMED_ARG_MATCHSCOPE          2908573074u
 #define NAMED_ARG_WEATHERTIME         2922057354u
 #define NAMED_ARG_CHAT_ROWS           2996056849u
 #define NAMED_ARG_DESTINATION         3000919231u
@@ -420,11 +426,13 @@ unsigned int commands_memory[] = { // sorted
 #define NAMED_ARG_ACTION_ROWS         3073035893u
 #define NAMED_ARG_OBJECT              3099987130u
 #define NAMED_ARG_MERGE               3111536167u
+#define NAMED_ARG_SHORT               3122818005u
 #define NAMED_ARG_FOVLEFT             3130206285u
 #define NAMED_ARG_TEXT                3185987134u
 #define NAMED_ARG_MIDDLESINGLE        3186492500u
 #define NAMED_ARG_FIND                3186656602u
 #define NAMED_ARG_WRITE               3190202204u
+#define NAMED_ARG_SCOPE               3190485995u
 #define NAMED_ARG_CHAT_SIZE           3196690805u
 #define NAMED_ARG_OBJECTSHADOWS       3236536979u
 #define NAMED_ARG_CASESENSITIVE       3299045579u
@@ -454,6 +462,7 @@ unsigned int commands_memory[] = { // sorted
 #define NAMED_ARG_REMOVE              3683784189u
 #define NAMED_ARG_PATHPOS             3740902012u
 #define NAMED_ARG_NATURAL             3753552150u
+#define NAMED_ARG_ATTRIBUTES          3791641492u
 #define NAMED_ARG_VERIFY              3838716196u
 #define NAMED_ARG_SEAWAVESPEED        3851094496u
 #define NAMED_ARG_ROCKET              3866886229u
