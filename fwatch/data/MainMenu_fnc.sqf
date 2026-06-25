@@ -255,12 +255,20 @@ FUNCTION_MOD_SHORTCUTS = {
 
 
 FUNCTION_ADD_DOWNLOADABLE_MOD_TO_LISTBOX = {
-	private ["_entry", "_to_add", "_positions"];
+	private ["_entry", "_to_add", "_positions","_words","_description"];
 	
 	if (count _x == 1) then {
 		// label
 		if ((_x select 0) == "update")  then {lbSetColor [6657, lbAdd [6657, "==="+(MAINMENU_STR select 83)+"==="], _color_fireenginered]};
 		if ((_x select 0) == "missing") then {lbSetColor [6657, lbAdd [6657, "==="+(MAINMENU_STR select 84)+"==="], _color_sandybrown]};
+		if ((_x select 0) == "private") then {
+			_description = (MAINMENU_STR select 89);
+			_words = call loadFile Format ["\:string tokenize text:%1delimiter: []", (MAINMENU_STR select 89)];
+			if (count _words >= 3) then {
+				_description = Format["%1 %2",_words select 1,_words select 2];
+			};
+			lbSetColor [6657, lbAdd [6657, "==="+_description+"==="], _color_coral]
+		};
 	} else {
 		_to_add = true;
 		
@@ -1051,7 +1059,7 @@ FUNCTION_SHOW_MOD_INFO = {
 	_mod_forcename   = false;
 	_mod_size        = "";
 	_mod_sizearray   = [0,0,0];
-	_mod_is_mp       = true;
+	_mod_is_mp       = "";
 	_mod_addedby     = "";
 	_mod_description = "";
 	_mod_website     = "";
@@ -1071,7 +1079,7 @@ FUNCTION_SHOW_MOD_INFO = {
 		
 		_description = MAINMENU_STR select (99 + _mod_type);
 		if (_mod_forcename) then {_description=Format["%1\n%2",_description, MAINMENU_STR select 97]};
-		if (!_mod_is_mp) then {_description=Format["%1\n%2",_description, MAINMENU_STR select 98]};
+		if (_mod_is_mp!="") then {_description=Format["%1\n%2",_description, _mod_is_mp]};
 		
 		[6480, _description] call FUNCTION_CTRLSETTEXT;
 		ctrlSetText [6480, MAINMENU_STR select 93];
