@@ -779,9 +779,24 @@ size_t ParseInstallationScript(std::wstring &script_file_content, std::vector<Co
 	bool url_line              = false;
 	bool word_started          = false;
 	bool last_url_list_started = false;
+	bool first_character       = true;
 
 	for (size_t i=0; i<=script_file_content.length(); i++) {
 		bool end_of_word = i == script_file_content.length() || iswspace(script_file_content[i]);
+
+		// When comment
+		if (script_file_content[i] == L';' && first_character && !in_quote) {
+			size_t next_line = script_file_content.find(L"\n",i);
+			if (next_line == std::wstring::npos)
+				break;
+			else {
+				i = next_line;
+				continue;
+			}
+		}
+
+		if (!iswspace(script_file_content[i]))
+			first_character = false;
 		
 		// When quote
 		if (script_file_content[i] == L'"')
@@ -992,6 +1007,7 @@ size_t ParseInstallationScript(std::wstring &script_file_content, std::vector<Co
 			word_count            = 1;
 			url_line              = false;
 			last_url_list_started = false;
+			first_character       = true;
 			word_line_num++;
 			word_line_num_local++;
 		}
@@ -1064,6 +1080,7 @@ size_t ParseInstallationScript(std::wstring &script_file_content, std::vector<Co
 			case COMMAND_ELSE            : global.commands[i].disable=true; Condition_Else(); break;
 			case COMMAND_ENDIF           : global.commands[i].disable=true; Condition_Endif(); break;
 			case COMMAND_EXIT            : exit = true;
+			case COMMAND_STOP            : break;
 			default                      : global.installation_steps_max++;
 		}
 
@@ -3442,6 +3459,7 @@ void SwitchTab(INSTALLER_TAB tab)
 			for (int i=LOG_DETAIL; i<=BUTTON_JUMP_TO_LINE; i++)
 				ShowWindow(global.controls[i], SW_SHOW);
 			ShowCommandInfo();
+			SetFocus(global.controls[BUTTON_PLAY]);
 		} break;
 
 		case INSTALLER_TAB_SCRIPT : {

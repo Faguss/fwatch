@@ -774,6 +774,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				case COMMAND_ELSE       : command_result=Condition_Else(); break;
 				case COMMAND_ENDIF      : command_result=Condition_Endif(); break;
 				case COMMAND_EXIT       : global.instruction_index=global.commands.size(); break;
+				case COMMAND_STOP       : command_result=ERROR_NONE; if (global.test_mode && play_automatically) play_automatically=false; break;
 
 				case COMMAND_AUTO_INSTALL :  {
 					LogMessage(L"Auto installation"); 
@@ -975,6 +976,15 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					} else {
 						file_name = global.current_mod_new_name + L"\\" + file_name;
 					}
+
+					// If user selected directory then enable directory flag so that it will get (re)moved
+					if (
+						file_name.find(L"*") == std::wstring::npos && 
+						file_name.find(L"?") == std::wstring::npos && 
+						GetFileAttributes(file_name.c_str()) & FILE_ATTRIBUTE_DIRECTORY
+					) {
+						options |= FLAG_MATCH_DIRS;
+					}
 				
 
 					std::vector<std::wstring> source_list;
@@ -1038,6 +1048,15 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 								break;
 							}
 						}
+					}
+
+					// Remove empty directories
+					if (empty_dirs.size() > 0) {
+						size_t i = empty_dirs.size();
+						do {
+							i--;
+							RemoveDirectory(empty_dirs[i].c_str());
+						} while (i > 0);
 					}
 
 					break;

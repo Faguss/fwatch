@@ -40,7 +40,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 	global.download_iterator          = 0;
 	global.instruction_index          = 0;
 	global.current_mod_version_date   = 0;
-	global.installer_version          = 0.61f;
+	global.installer_version          = 0.62f;
 	global.script_version             = 0;
 	global.program_arguments          = lpCmdLine;
 	global.buffer_log                 = L"";
@@ -180,7 +180,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-   HWND hWnd;
+	HWND hWnd;
 	hInst = hInstance;
 
 	RECT desktop;
@@ -189,14 +189,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	int y = ((desktop.bottom - window_h) / 2);
 
 	hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW, x, y, window_w, window_h, NULL, NULL, hInstance, NULL);
-   if (!hWnd)
-      return FALSE;
+	if (!hWnd)
+		return FALSE;
 
 	global.window = hWnd;
-   ShowWindow(hWnd, nCmdShow);
-   UpdateWindow(hWnd);
+	ShowWindow(hWnd, nCmdShow);
+	UpdateWindow(hWnd);
 
-   return TRUE;
+	return TRUE;
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -266,6 +266,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			initWT(EDIT_SCRIPT, WC_EDITW, L"", SS_LEFT | ES_MULTILINE | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP);
 			initWT(TXT_LINE_NUMBER, WC_STATICW, L"Line:", SS_CENTERIMAGE);
+			initWT(TXT_HINT, WC_STATICW, L"", SS_RIGHT);
 			initWT(BUTTON_SAVETEST, WC_BUTTONW, L"Save and Test", WS_TABSTOP);
 			initWT(BUTTON_RELOAD, WC_BUTTONW, L"Reload file", WS_TABSTOP);
 			initWT(BUTTON_OPEN_DOC_GENERAL, WC_BUTTONW, L"Documentation", WS_TABSTOP);
@@ -297,6 +298,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				DWORD threadID2 = 0;
 				CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)UpdateLineNumber, 0, 0,&threadID2);
 			}
+
+			wchar_t hint[] = L"Ctrl+A to select all. Ctrl+D to duplicate line. Ctrl+Q to toggle comment. Ctrl+S to Save";
+			SetWindowText(global.controls[TXT_HINT], hint);
 		} break;
 
 		case WM_SIZE: {
@@ -337,6 +341,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				case (ID_BASE+BUTTON_SAVETEST) : {
 					if (global.order == ORDER_NONE)
 						global.order = ORDER_RELOAD;
+					SetFocus(global.controls[BUTTON_PLAY]);
 				} break;
 
 				case (ID_BASE+BUTTON_RELOAD) : {
@@ -396,6 +401,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 							case COMMAND_ALIAS : anchor=L"alias"; break;
 							case COMMAND_FILEDATE : anchor=L"filedate"; break;
 							case COMMAND_EXIT : anchor=L"exit"; break;
+							case COMMAND_STOP : anchor=L"stop"; break;
 						}
 						if (!anchor.empty()) {
 							anchor = (std::wstring)DOCUMENTATION_URL + L"#" + anchor;
@@ -801,8 +807,8 @@ LRESULT CALLBACK EditScript(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, 
 						DWORD sel_end   = 0;
 						SendMessageW(global.controls[EDIT_SCRIPT], EM_GETSEL, (LPARAM)&sel_start, (LPARAM)&sel_end);
 
-						DWORD line_num    = (DWORD)SendMessageW(global.controls[EDIT_SCRIPT], EM_LINEFROMCHAR, UINT_MAX, 0);
-						DWORD line_index  = (DWORD)SendMessageW(global.controls[EDIT_SCRIPT], EM_LINEINDEX, UINT_MAX, 0);
+						DWORD line_num    = (DWORD)SendMessage(global.controls[EDIT_SCRIPT], EM_LINEFROMCHAR, UINT_MAX, 0);
+						DWORD line_index  = (DWORD)SendMessage(global.controls[EDIT_SCRIPT], EM_LINEINDEX, UINT_MAX, 0);
 						DWORD line_length = (DWORD)SendMessage(global.controls[EDIT_SCRIPT], EM_LINELENGTH, sel_start, -1);
 						DWORD line_count  = (DWORD)SendMessage(global.controls[EDIT_SCRIPT], EM_GETLINECOUNT, 0, 0);
 
@@ -830,6 +836,101 @@ LRESULT CALLBACK EditScript(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, 
 					case 'S': {
 						if (global.order == ORDER_NONE)
 							global.order = ORDER_RELOAD;
+						SetFocus(global.controls[BUTTON_PLAY]);
+					} break;
+
+					// Comment
+					case 'Q': {
+						// Get indexes of currently selected lines
+						DWORD sel_start = 0;
+						DWORD sel_end   = 0;
+						SendMessage(global.controls[EDIT_SCRIPT], EM_GETSEL, (LPARAM)&sel_start, (LPARAM)&sel_end);
+						
+						SendMessage(global.controls[EDIT_SCRIPT], EM_SETSEL, (WPARAM)sel_start, (LPARAM)sel_start);
+						DWORD line_start_index = (DWORD)SendMessage(global.controls[EDIT_SCRIPT], EM_LINEINDEX, (WPARAM)-1, (LPARAM)0);
+
+						SendMessage(global.controls[EDIT_SCRIPT], EM_SETSEL, sel_end, sel_end);
+						DWORD line_end_index = (DWORD)SendMessage(global.controls[EDIT_SCRIPT], EM_LINEINDEX, (WPARAM)-1, (LPARAM)0);
+						DWORD line_end_len   = (DWORD)SendMessage(global.controls[EDIT_SCRIPT], EM_LINELENGTH, (WPARAM)sel_end, (LPARAM)0);
+						DWORD text_boundary  = line_end_index + line_end_len;
+
+						// Retrieve entire text
+						DWORD text_length = (DWORD)SendMessage(global.controls[EDIT_SCRIPT], WM_GETTEXTLENGTH, 0, 0) + 1;
+						std::wstring text;
+						std::wstring text_new;
+						text.reserve(text_length+2);
+						text_new.reserve(text_length+16);
+						text.resize(text_length);
+						*reinterpret_cast<WORD *>(&text[0]) = (WORD)text.size();
+						SendMessage(global.controls[EDIT_SCRIPT], WM_GETTEXT, text_length, (LPARAM)&text[0]);
+
+						bool first_line = true;
+						bool insert_comment = false;
+						DWORD sel_offset = 0;
+						size_t line_count = 0;
+						size_t search_offset = line_start_index;
+						size_t line_lf_pos = text.find(L"\n", search_offset);
+
+						if (line_lf_pos == std::wstring::npos) 
+							line_lf_pos = text.length();
+
+						for (;;) {
+							size_t line_end_pos = line_lf_pos;
+							size_t next_line_pos = line_lf_pos + 1;
+
+							while(text.substr(line_end_pos,1)==L"\n" && line_end_pos>0)
+								line_end_pos--;
+
+							line_count++;
+
+							if (first_line) {
+								insert_comment = text.substr(search_offset,1) != L";";
+								first_line = false;
+							}
+
+							if (text.substr(search_offset,1) == L";") {
+								size_t substr_offset = 0;
+								if (!insert_comment) {
+									substr_offset = 1;
+									sel_offset--;
+								}
+
+								text_new += text.substr(search_offset+substr_offset, next_line_pos-search_offset-substr_offset);
+							} else {
+								if (insert_comment) {
+									text_new += L";";
+									sel_offset++;
+								}
+
+								text_new += text.substr(search_offset, next_line_pos-search_offset);
+							}
+
+							search_offset = next_line_pos;
+							if (search_offset > text_boundary)
+								break;
+
+							line_lf_pos = text.find(L"\n", search_offset);
+							if (line_lf_pos == std::wstring::npos) 
+								line_lf_pos = text_boundary;
+						}
+
+						if (text_new.substr(text_new.length()-2,2) == L"\r\n") 
+							text_new = text_new.substr(0,text_new.length()-2);
+
+						SendMessage(global.controls[EDIT_SCRIPT], EM_SETSEL, line_start_index, text_boundary);
+						SendMessage(global.controls[EDIT_SCRIPT], EM_REPLACESEL, TRUE, (LPARAM)(LPCSTR)text_new.c_str());
+
+						if (line_count > 1) {
+							sel_start = line_start_index;
+							sel_end = text_boundary+sel_offset;
+						} else {
+							if (sel_start != line_start_index) {
+								sel_start += sel_offset;
+								sel_end += sel_offset;
+							}
+						}
+
+						SendMessage(global.controls[EDIT_SCRIPT], EM_SETSEL, sel_start, sel_end);
 					} break;
 				}
 			}
@@ -980,6 +1081,11 @@ void CalculateWindowSizes(HWND window)
 	controls_pos[TXT_LINE_NUMBER].right  = 50;
 	controls_pos[TXT_LINE_NUMBER].top    = controls_pos[EDIT_SCRIPT].top + controls_pos[EDIT_SCRIPT].bottom;
 	controls_pos[TXT_LINE_NUMBER].bottom = dialogspace.bottom - controls_pos[TXT_LINE_NUMBER].top;
+
+	controls_pos[TXT_HINT]       = controls_pos[TAB];
+	controls_pos[TXT_HINT].left  = controls_pos[TAB].left + 170;
+	controls_pos[TXT_HINT].right = dialogspace.right - controls_pos[TXT_HINT].left - 20;
+	controls_pos[TXT_HINT].bottom -= 10;
 
 	controls_pos[BUTTON_SAVETEST]       = controls_pos[TXT_LINE_NUMBER];
 	controls_pos[BUTTON_SAVETEST].left  = controls_pos[TXT_LINE_NUMBER].left + controls_pos[TXT_LINE_NUMBER].right + 10;

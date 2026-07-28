@@ -533,6 +533,12 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		_beginthread((void(*)(void*))FwatchPresence, 0, &client_arg);
 		_beginthread((void(*)(void*))FwatchPresence, 0, &server_arg);
 
+		char nolaunch_msg[512] = 
+			"Fwatch is now waiting for you to run the game and/or dedicated server.\n"
+			"Don't forget to add -nomap\n"
+			"\n"
+			"When you're done playing press OK to close Fwatch.";
+
 		// Launch the game through Steam
 		if (launch_steam) {
 			HKEY hKey			= 0;
@@ -541,12 +547,24 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			DWORD SteamExeSize	= sizeof(SteamExe);
 
 			if (RegOpenKey(HKEY_CURRENT_USER,"Software\\Valve\\Steam",&hKey) == ERROR_SUCCESS) {
-				if (RegQueryValueEx(hKey, "SteamExe" , 0, &dwType, (BYTE*)SteamExe , &SteamExeSize) == ERROR_SUCCESS) {
-					StringDynamic command_line_new;
-					StringDynamic_init(command_line_new);
-					StringDynamic_appendf(command_line_new, "\"start \"\" \"%s\" -applaunch 65790 %s%s\"", SteamExe, (add_nomap ? "-nomap " : ""), command_line.text);
-					system(command_line_new.text);
-					StringDynamic_end(command_line_new);
+				if (0) {
+					if (RegQueryValueEx(hKey, "SteamExe" , 0, &dwType, (BYTE*)SteamExe , &SteamExeSize) == ERROR_SUCCESS) {
+						StringDynamic command_line_new;
+						StringDynamic_init(command_line_new);
+						StringDynamic_appendf(command_line_new, "\"start \"\" \"%s\" -applaunch 65790 %s%s\"", SteamExe, (add_nomap ? "-nomap " : ""), command_line.text);
+						system(command_line_new.text);
+						StringDynamic_end(command_line_new);
+					}
+				} else {
+					strcat(nolaunch_msg, 
+						"\n"
+						"\n"
+						"To play with Steam:\n"
+						"1. Open Steam Library, find Arma: CWA, right-click on it and select Properties\n"
+						"2. Select launch option: play ArmA: CWA Legacy\n"
+						"3. Type -nomap in the input box below\n"
+						"4. Close the window and press Play in the Steam Library"
+					);
 				}
 
 				RegCloseKey(hKey);
@@ -554,7 +572,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		}
 
 		// Just sit and wait here
-		MessageBox( NULL, "Fwatch is now waiting for you to run the game and/or dedicated server.\nDon't forget to add -nomap\n\nWhen you're done playing press OK to close Fwatch.", "fwatch", MB_OK|MB_ICONINFORMATION );
+		MessageBox( NULL, nolaunch_msg, "fwatch", MB_OK|MB_ICONINFORMATION );
 	}
 
 
@@ -1097,15 +1115,12 @@ void FwatchPresence(ThreadArguments *arg)
 	bool ui_change_enabled     = false;
 	bool ui_portrait_mode      = false;
 	bool ui_apply_change       = true;
-	bool ui_portrait_calculate = false;
-	bool ui_move_tank_down     = false;
 	int ui_address             = 0;
 	int ui_address_chat        = 0;
 	int ui_chat_state          = 0;
 	int ui_chat_state_last     = -1;
 	float ui_shift_x           = 0;
 	float ui_shift_y           = 0;
-	float ui_move_tank_down_y  = 0;
 	float ui_current[ARRAY_SIZE];
 	float ui_written[ARRAY_SIZE];
 	float ui_custom[ARRAY_SIZE];
@@ -1126,9 +1141,38 @@ void FwatchPresence(ThreadArguments *arg)
 	// Prepare necessary data for fixing UI on game client - 
 	// Generate settings file, preprocess it and then parse it
 	if (!arg->is_dedicated_server) {
+		#define aspectratiohpp_vars_len 32
+		char aspectratiohpp_vars[][aspectratiohpp_vars_len] = {
+			"AR_CENTERHUD",
+			"AR_modifX",
+			"AR_modifY",
+			"AR_modifX_map",
+			"AR_modifY_map",
+			"AR_modifX_2NDMON",
+			"AR_modifX_2NDMON_map",
+			"AR_modifY_bordertop",
+			"AR_modifY_borderbottom"
+		};
+
 		FILE *f = fopen("Aspect_Ratio.sqf","w");
 		if (f) {
-			fprintf(f, "#include \"Aspect_Ratio.hpp\"\n#ifdef AR_CENTERHUD\nar_center=1;\n#else\nar_center=0;\n#endif\nar_modifx=AR_modifX;ar_modify=AR_modifY;ar_modifx_2ndmon=AR_modifX_2NDMON;true");
+			fprintf(f, "#include \"Aspect_Ratio.hpp\"\n");
+			char sqf_var_name[aspectratiohpp_vars_len] = "";
+
+			for (int i=0; i<sizeof(aspectratiohpp_vars)/sizeof(aspectratiohpp_vars[0]); i++) {
+				if (strcmp(aspectratiohpp_vars[i], "AR_CENTERHUD") == 0)
+					strcpy(sqf_var_name, "ar_center");
+				else
+					strcpy(sqf_var_name, aspectratiohpp_vars[i]);
+
+				for(int j=0; sqf_var_name[j]; j++)
+					sqf_var_name[j] = tolower(sqf_var_name[j]);
+
+				fprintf(f, "#ifdef %s\n%s=%s\n#else\n%s=0;\n#endif\n", aspectratiohpp_vars[i], sqf_var_name, aspectratiohpp_vars[i], sqf_var_name);
+			}
+		
+			
+			fprintf(f, "true");
 			fclose(f);
 
 			TCHAR pwd[MAX_PATH];
@@ -1154,37 +1198,58 @@ void FwatchPresence(ThreadArguments *arg)
 				} while (st == STILL_ACTIVE);
 
 				CloseHandle(pi.hProcess);
-				CloseHandle(pi.hThread); 
+				CloseHandle(pi.hThread);
 
+				// if no preprocessor error
+				if (st == 0) {
+					StringDynamic config;
+					if (StringDynamic_readfile(config, "Aspect_Ratio.sqf") == 0) {
+						char *token = strtok(config.text, ";\n\t ");
 
-				StringDynamic config;
-				if (StringDynamic_readfile(config, "Aspect_Ratio.sqf") == 0) {
-					char *token = strtok(config.text, ";\n\t ");
+						while (token != NULL) {
+							char *eq = strchr(token, '=');
 
-					while (token != NULL) {
-						char *eq = strchr(token, '=');
+							if (eq != NULL) {
+								int pos   = eq - token;
+								char *val = token + pos + 1;
 
-						if (eq != NULL) {
-							int pos   = eq - token;
-							char *val = token + pos + 1;
+								if (strncmp(token,"ar_modifx",pos) == 0) {
+									ui_shift_x       = (float)atof(val);
+									ui_portrait_mode = ui_shift_x < 0;
+								}
 
-							if (strncmp(token,"ar_modifx",pos) == 0) {
-								ui_shift_x       = (float)atof(val);
-								ui_portrait_mode = ui_shift_x < 0;
+								if (strncmp(token,"ar_modify",pos) == 0) 
+									ui_shift_y = (float)atof(val);
+
+								if (strncmp(token,"ar_center",pos) == 0)
+									ui_change_enabled = atoi(val) == 0;
 							}
 
-							if (strncmp(token,"ar_modify",pos) == 0) 
-								ui_shift_y = (float)atof(val);
-
-							if (strncmp(token,"ar_center",pos) == 0)
-								ui_change_enabled = atoi(val) == 0;
+							token = strtok (NULL, ";\n\t ");
 						}
+					}
 
-						token = strtok (NULL, ";\n\t ");
+					StringDynamic_end(config);
+				} else {
+					// if preprocessor failed then rewrite the file with zero values (because that file might be loaded with in-game scripting)
+					f = fopen("Aspect_Ratio.sqf","w");
+					if (f) {
+						for (int i=0; i<sizeof(aspectratiohpp_vars)/sizeof(aspectratiohpp_vars[0]); i++) {
+							if (strcmp(aspectratiohpp_vars[i], "AR_CENTERHUD") == 0)
+								strcpy(sqf_var_name, "ar_center");
+							else
+								strcpy(sqf_var_name, aspectratiohpp_vars[i]);
+
+							for(int j=0; sqf_var_name[j]; j++)
+								sqf_var_name[j] = tolower(sqf_var_name[j]);
+
+							fprintf(f, "%s=0;", sqf_var_name);
+						}
+						
+						fprintf(f, "true");
+						fclose(f);
 					}
 				}
-
-				StringDynamic_end(config);
 			}
 		}
 	}
@@ -1296,8 +1361,10 @@ void FwatchPresence(ThreadArguments *arg)
 					case VER_201 : ui_address=game_exe_address+0x6D8240; ui_address_chat=game_exe_address+0x6FFCC0; break;
 				}
 
-				ReadProcessMemory(phandle, (LPVOID)(ui_address+0x0), &ui_address, 4, &stBytes);
-				ReadProcessMemory(phandle, (LPVOID)(ui_address+0x8), &ui_address, 4, &stBytes);
+				if (ui_address) {
+					ReadProcessMemory(phandle, (LPVOID)(ui_address+0x0), &ui_address, 4, &stBytes);
+					ReadProcessMemory(phandle, (LPVOID)(ui_address+0x8), &ui_address, 4, &stBytes);
+				}
 
 				// Wait until game fills that memory
 				if (ui_address == 0) {
@@ -1340,15 +1407,14 @@ void FwatchPresence(ThreadArguments *arg)
 				memset(ui_is_custom , 0, sizeof(ui_is_custom));
 
 				ReadUIConfig((global_exe_version[game_exe_index]==VER_196 ? "Res\\bin\\config_fwatch_hud.cfg" : "bin\\config_fwatch_hud.cfg"), ui_no_ar, ui_is_custom, ui_custom, ui_customINT);
-
-				if (ui_portrait_mode)
-					ui_portrait_calculate = true;
 			}
 
 			// Get list of arguments passed to the game executable
-			ReadProcessMemory(phandle, (LPVOID)game_param_address, &game_param_address, 4, &stBytes);
-			ReadProcessMemory(phandle, (LPVOID)game_param_address, &game_param_address, 4, &stBytes);
-			ReadProcessMemory(phandle, (LPVOID)game_param_address, &game_param        , game_param_max, &stBytes);
+			if (game_param_address) {
+				ReadProcessMemory(phandle, (LPVOID)game_param_address, &game_param_address, 4, &stBytes);
+				ReadProcessMemory(phandle, (LPVOID)game_param_address, &game_param_address, 4, &stBytes);
+				ReadProcessMemory(phandle, (LPVOID)game_param_address, &game_param        , game_param_max, &stBytes);
+			}
 
 			size_t word_start = 0;
 			bool word_started = false;
@@ -1412,7 +1478,7 @@ void FwatchPresence(ThreadArguments *arg)
 				case VER_201 : listen_server_port_address=game_exe_address+0x6C9610; break;
 			}
 
-			if (listen_server_port_address != 0)
+			if (listen_server_port_address)
 				ReadProcessMemory(phandle, (LPVOID)listen_server_port_address, &global.listen_server_port, 4, &stBytes);
 
 
@@ -1497,8 +1563,10 @@ void FwatchPresence(ThreadArguments *arg)
 					case VER_201 : player_name_ptr=game_exe_address+0x714C10; break;
 				}
 
-				ReadProcessMemory(phandle, (LPVOID)player_name_ptr       , &player_name_addr, 4 , &stBytes);
-				ReadProcessMemory(phandle, (LPVOID)(player_name_addr+0x8), &player_name     , 25, &stBytes);
+				if (player_name_ptr) {
+					ReadProcessMemory(phandle, (LPVOID)player_name_ptr       , &player_name_addr, 4 , &stBytes);
+					ReadProcessMemory(phandle, (LPVOID)(player_name_addr+0x8), &player_name     , 25, &stBytes);
+				}
 			}
 			
 			// Transfer mission files from each mod
@@ -1511,8 +1579,11 @@ void FwatchPresence(ThreadArguments *arg)
 
 			// Refresh master servers (user can change them in the main menu)
 			if (!arg->is_dedicated_server) {
-				ReadProcessMemory(phandle, (LPVOID)master_server1_address, &global.master_server1, 64, &stBytes);
-				ReadProcessMemory(phandle, (LPVOID)master_server2_address, &global.master_server2, 19, &stBytes);
+				if (master_server1_address)
+					ReadProcessMemory(phandle, (LPVOID)master_server1_address, &global.master_server1, 64, &stBytes);
+
+				if (master_server2_address)
+					ReadProcessMemory(phandle, (LPVOID)master_server2_address, &global.master_server2, 19, &stBytes);
 			}
 
 			// Check for game scripting error
@@ -1527,33 +1598,35 @@ void FwatchPresence(ThreadArguments *arg)
 					case VER_201 : pointers[0]=game_exe_address+0x6D6A10; break;
 				}
 
-				for (int i=0; i<last; i++) {
-					ReadProcessMemory(phandle, (LPVOID)pointers[i], &pointers[i+1], 4, &stBytes);
-					pointers[i+1] = pointers[i+1] +  modif[i];
-				}
+				if (pointers[0]) {
+					for (int i=0; i<last; i++) {
+						ReadProcessMemory(phandle, (LPVOID)pointers[i], &pointers[i+1], 4, &stBytes);
+						pointers[i+1] = pointers[i+1] +  modif[i];
+					}
 
-				// Save message if it's different from the last one
-				if (pointers[last] != 0) {
-					char error_msg[512] = "";
-					ReadProcessMemory(phandle, (LPVOID)pointers[last], &error_msg, 512, &stBytes);
+					// Save message if it's different from the last one
+					if (pointers[last] != 0) {
+						char error_msg[512] = "";
+						ReadProcessMemory(phandle, (LPVOID)pointers[last], &error_msg, 512, &stBytes);
 
-					if (strcmp(error_msg,global.error_msg_last) != 0) {
-						strcpy(global.error_msg_last, error_msg);
+						if (strcmp(error_msg,global.error_msg_last) != 0) {
+							strcpy(global.error_msg_last, error_msg);
 
-						/*if (!global.error_log_started) {
-							fd=fopen("fwatch_debug.txt","a");fprintf(fd,"EXE message dll that log is starting\n");fclose(fd);
-							global.error_log_started = true;
-							HANDLE message = CreateFile("scripts\\:info errorlog start", GENERIC_READ, 0, NULL, OPEN_EXISTING, 128, NULL);
+							/*if (!global.error_log_started) {
+								fd=fopen("fwatch_debug.txt","a");fprintf(fd,"EXE message dll that log is starting\n");fclose(fd);
+								global.error_log_started = true;
+								HANDLE message = CreateFile("scripts\\:info errorlog start", GENERIC_READ, 0, NULL, OPEN_EXISTING, 128, NULL);
 
-							if (message != INVALID_HANDLE_VALUE)
-								CloseHandle(message);
-						}*/
+								if (message != INVALID_HANDLE_VALUE)
+									CloseHandle(message);
+							}*/
 
-						FILE *f = fopen("fwatch\\idb\\_errorLog.txt", "a");
+							FILE *f = fopen("fwatch\\idb\\_errorLog.txt", "a");
 
-						if (f) {
-							fprintf(f, "%s\n", error_msg);
-							fclose(f);
+							if (f) {
+								fprintf(f, "%s\n", error_msg);
+								fclose(f);
+							}
 						}
 					}
 				}
@@ -1577,32 +1650,6 @@ void FwatchPresence(ThreadArguments *arg)
 						ui_chat_state = UI_CHAT_MISSION;
 					else
 						ui_chat_state = UI_CHAT_CUSTOM;
-
-
-				// Run calculation for the portrait mode
-				if (ui_portrait_calculate) {
-					ui_portrait_calculate = false;
-
-					float tank_x    = ui_current[TANK_X]    + (ui_current[TANK_X]<0.5 ? -1 : 1)    * ui_shift_x;
-					float tank_y    = ui_current[TANK_Y]    + (ui_current[TANK_Y]<0.5 ? -1 : 1)    * ui_shift_y;
-					float radar_y	= ui_current[RADAR_Y]   + (ui_current[RADAR_Y]<0.5 ? -1 : 1)   * ui_shift_y;
-					float compass_y = ui_current[COMPASS_Y] + (ui_current[COMPASS_Y]<0.5 ? -1 : 1) * ui_shift_y;	
-
-					if (ui_portrait_mode && 
-						tank_x + ui_current[TANK_W] > ui_current[RADAR_X]  &&
-						tank_y + ui_current[TANK_H] >= radar_y) 
-					{
-						ui_move_tank_down   = true;
-						ui_move_tank_down_y = (radar_y + ui_shift_y) + ui_current[RADAR_H];
-					} else
-						if (ui_portrait_mode &&
-							tank_x + ui_current[TANK_W] > ui_current[COMPASS_X]  &&
-							tank_y + ui_current[TANK_H] >= compass_y) 
-						{
-							ui_move_tank_down   = true;
-							ui_move_tank_down_y = (compass_y + ui_shift_y) + ui_current[COMPASS_H];
-						}
-				}
 
 
 				// Modify HUD position
@@ -1633,7 +1680,7 @@ void FwatchPresence(ThreadArguments *arg)
 
 								// move up (but compensate for portrait)
 								case RADIOMENU_Y :
-								case TANK_Y		 : ui_written[i] = ui_current[i] + (ui_current[i]<0.5 ? -1 : 1) * ui_shift_y + ui_move_tank_down_y; break;
+								case TANK_Y		 : ui_written[i] = ui_current[i] + (ui_current[i]<0.5 ? -1 : 1) * ui_shift_y; break;
 
 								// move up/down
 								case ACTION_Y	 :
@@ -1645,7 +1692,7 @@ void FwatchPresence(ThreadArguments *arg)
 
 								// move left on portrait
 								case RADIOMENU_X : {
-									if (ui_move_tank_down)
+									if (ui_portrait_mode)
 										ui_written[i] = ui_current[i] + (ui_current[i]<0.5 ? -1 : 1) * ui_shift_x;
 									else
 										ui_written[i] = ui_current[i];
@@ -1653,23 +1700,27 @@ void FwatchPresence(ThreadArguments *arg)
 								break;
 
 								// extend on widescreen
-								case RADIOMENU_W : ui_written[i] = ui_current[i] + (!ui_move_tank_down ? ui_shift_x : 0); break; 
+								case RADIOMENU_W : ui_written[i] = ui_current[i] + (!ui_portrait_mode ? ui_shift_x : 0); break;
 
 								// shrink on portrait
 								case LEADER_X : ui_written[i] = ui_current[i] - ui_shift_x; break;
 								case LEADER_W : ui_written[i] = ui_current[i] + ui_shift_x*2; break;
-								/*{
-									if (portrait)
-									{
-										if (i == LEADER_X)
-											written[i] = current[i] + (current[i]<0.5 ? -1 : 1) * AR_modifX;
-										else
-											written[i] = current[i] + AR_modifX*2;
-									}
+
+								case COMPASS_X :
+								case RADAR_X :
+									if (ui_portrait_mode)
+										ui_written[i] = ui_current[i] - ui_shift_x;
 									else
-										written[i] = current[i];
-								}
-								break;*/
+										ui_written[i] = ui_current[i];
+								break;
+
+								case COMPASS_W : 
+								case RADAR_W :
+									if (ui_portrait_mode)
+										ui_written[i] = ui_current[i] + ui_shift_x*2;
+									else
+										ui_written[i] = ui_current[i];
+								break;
 
 								case CHAT_X : ui_written[i] = ui_current[i] - ui_shift_x; break;
 								case CHAT_Y : ui_written[i] = ui_current[i] + (ui_current[i]<0.5 ? -ui_shift_y : ui_shift_y); break;
