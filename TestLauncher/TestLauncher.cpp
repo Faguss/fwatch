@@ -1168,7 +1168,7 @@ void FwatchPresence(ThreadArguments *arg)
 				for(int j=0; sqf_var_name[j]; j++)
 					sqf_var_name[j] = tolower(sqf_var_name[j]);
 
-				fprintf(f, "#ifdef %s\n%s=%s\n#else\n%s=0;\n#endif\n", aspectratiohpp_vars[i], sqf_var_name, aspectratiohpp_vars[i], sqf_var_name);
+				fprintf(f, "#ifdef %s\n%s=%s;\n#else\n%s=0;\n#endif\n", aspectratiohpp_vars[i], sqf_var_name, aspectratiohpp_vars[i], sqf_var_name);
 			}
 		
 			

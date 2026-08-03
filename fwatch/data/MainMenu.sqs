@@ -12,8 +12,8 @@
 ; uses Fwatch 1.15
 ; no input limit
 
-	GS_FWATCH_MY_VERSION = [2026,7,29,3,0,23,51,266,120,FALSE]
-	GS_MY_VERSION        = 0.61
+	GS_FWATCH_MY_VERSION = [2026,8,3,1,10,35,30,486,120,FALSE]
+	GS_MY_VERSION        = 0.62
 	GS_DEFAULT_URL       = [["http://ofp-faguss.com/schedule/sqf.php"]]
 
 	; Won't work with older version
