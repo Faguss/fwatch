@@ -226,14 +226,12 @@ BOOL APIENTRY DllMain( HINSTANCE hModule, DWORD fdwReason, LPVOID lpReserved )
 								if (lstrcmpi(xModule.szModule, (LPCTSTR)"ifc22.dll") == 0)
 									global.exe_address_ifc22 = (DWORD)xModule.modBaseAddr;
 
-								if (lstrcmpi(xModule.szModule, (LPCTSTR)"dinput8.dll") == 0) {
-									global.exe_address_scroll = (DWORD)xModule.modBaseAddr;
-									
-									// Distance to scroll depends on module size
+								if (lstrcmpi(xModule.szModule, (LPCTSTR)"dinput8.dll") == 0) {									
 									switch(xModule.modBaseSize) {
-										case 233472: global.exe_address_scroll += 0x2D848; break;// old computers
-										case 225280: global.exe_address_scroll += 0x30208; break;// new computers
-										default : global.exe_address_scroll += 0x2C1C8; // new computers
+										case 233472: global.exe_address_scroll = (DWORD)xModule.modBaseAddr + 0x2D848; break;//winxp
+										case 196608: global.exe_address_scroll = (DWORD)xModule.modBaseAddr + 0x2C1C8; break;//win7
+										case 225280: global.exe_address_scroll = (DWORD)xModule.modBaseAddr + 0x30208; break;//win10
+										case 229376: global.exe_address_scroll = (DWORD)xModule.modBaseAddr + 0x31248; break;//win11
 									}	
 								}
 							} while (Module32Next(hSnap, &xModule));

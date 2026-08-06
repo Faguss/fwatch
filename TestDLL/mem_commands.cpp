@@ -758,7 +758,10 @@ case C_MEM_GETSCROLL:
 { // Get mouse scroll counter value from memory
 
 	int scroll = 0;
-	ReadProcessMemory(phandle, (LPVOID)global.exe_address_scroll, &scroll ,4, &stBytes);	
+
+	if (global.exe_address_scroll)
+		ReadProcessMemory(phandle, (LPVOID)global.exe_address_scroll, &scroll ,4, &stBytes);	
+
 	QWritef("%d", scroll/120);		// one scroll movement changes value by 120
 }
 break;
