@@ -230,6 +230,7 @@ BOOL APIENTRY DllMain( HINSTANCE hModule, DWORD fdwReason, LPVOID lpReserved )
 									switch(xModule.modBaseSize) {
 										case 233472: global.exe_address_scroll = (DWORD)xModule.modBaseAddr + 0x2D848; break;//winxp
 										case 196608: global.exe_address_scroll = (DWORD)xModule.modBaseAddr + 0x2C1C8; break;//win7
+										case 221184: global.exe_address_scroll = (DWORD)xModule.modBaseAddr + 0x2FEE8; break;//win8
 										case 225280: global.exe_address_scroll = (DWORD)xModule.modBaseAddr + 0x30208; break;//win10
 										case 229376: global.exe_address_scroll = (DWORD)xModule.modBaseAddr + 0x31248; break;//win11
 									}	

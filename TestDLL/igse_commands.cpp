@@ -19,11 +19,30 @@ case C_IGSE_WRITE:
 		IGSE_WRITE_MOVEDOWN
 	};
 
+	char modes[][32] = {
+		"replace",
+		"append",
+		"new",
+		"insert",
+		"copy",
+		"delete",
+		"clear",
+		"moveup",
+		"movedown"
+	};
+
 	enum IGSE_WRITE_MODES_OPENING {
 		IGSE_WRITE_OPEN_CREATE,
 		IGSE_WRITE_OPEN_RECREATE,
 		IGSE_WRITE_OPEN_UNIQUE,
-		IGSE_WRITE_OPEN_CHECK
+		IGSE_WRITE_OPEN_EXISTING
+	};
+
+	char modes_opening[][32] = {
+		"create",
+		"recreate",
+		"unique",
+		"existing"
 	};
 
 	size_t arg_file    = empty_char_index;
@@ -57,18 +76,6 @@ case C_IGSE_WRITE:
 				break;
 
 			case NAMED_ARG_MODE : {
-				char modes[][32] = {
-					"replace",
-					"append",
-					"new",
-					"insert",
-					"copy",
-					"delete",
-					"clear",
-					"moveup",
-					"movedown"
-				};
-
 				for (int j=0, max=sizeof(modes)/sizeof(modes[0]);  j<max;  j++)
 					if (strcmpi(argument[i+1].text,modes[j]) == 0) {
 						arg_edit_mode = j;
@@ -89,18 +96,12 @@ case C_IGSE_WRITE:
 				break;
 
 			case NAMED_ARG_OPEN : {
-				char modes[][32] = {
-					"create",
-					"recreate",
-					"unique",
-					"check"
-				};
-
-				for (int j=0, max=sizeof(modes)/sizeof(modes[0]);  j<max;  j++)
-					if (strcmpi(argument[i+1].text,modes[j]) == 0) {
+				for (int j=0, max=sizeof(modes_opening)/sizeof(modes_opening[0]);  j<max;  j++) {
+					if (strcmpi(argument[i+1].text,modes_opening[j]) == 0) {
 						arg_open_mode = j;
 						break;
 					}
+				}
 			} break;
 		}
 	}
@@ -185,6 +186,10 @@ case C_IGSE_WRITE:
 		arg_line_start++;
 	}
 
+	// range: is not available for modes:new,insert,copy,moveup,movedown
+	if (arg_line_range>1 && (arg_edit_mode==IGSE_WRITE_NEW || arg_edit_mode==IGSE_WRITE_INSERT || arg_edit_mode==IGSE_WRITE_COPY || arg_edit_mode==IGSE_WRITE_MOVEUP || arg_edit_mode==IGSE_WRITE_MOVEDOWN))
+		arg_line_range = 1;
+
 	// Default append at the end
 	if (!arg_column  &&  (arg_edit_mode==IGSE_WRITE_APPEND  ||  arg_edit_mode == IGSE_WRITE_NEW))
 		arg_column_num = -1;
@@ -195,15 +200,31 @@ case C_IGSE_WRITE:
 	
 
 
-	// Open wanted file -----------------------------------------------------------------
+	// Open wanted file ---------------------------------------------------------
+	if (arg_open_mode == IGSE_WRITE_OPEN_UNIQUE || arg_open_mode == IGSE_WRITE_OPEN_EXISTING) {
+		WIN32_FILE_ATTRIBUTE_DATA fad;
+		bool exists = GetFileAttributesEx(argument[arg_file].text, GetFileExInfoStandard, &fad) != 0;
+
+		if (exists && arg_open_mode == IGSE_WRITE_OPEN_UNIQUE) {
+			QWrite_err(FWERROR_FILE_EXISTS, 1, argument[arg_file].text);
+			StringDynamic_end(buf_filename);
+			break;
+		}
+
+		if (!exists && arg_open_mode == IGSE_WRITE_OPEN_EXISTING) {
+			QWrite_err(FWERROR_WINAPI, 2, GetLastError(), argument[arg_file].text);
+			StringDynamic_end(buf_filename);
+			break;
+		}
+	}
+
 	char open_mode[3] = "rb";
 
-	if (arg_line_start==0  &&  arg_open_mode!=IGSE_WRITE_OPEN_CHECK) {
-		strcpy(open_mode, "ab");
+	if (arg_line_start == 0)
+		open_mode[0] = 'a';
 
-		if (arg_open_mode == IGSE_WRITE_OPEN_RECREATE)
-			strcpy(open_mode, "wb");
-	}
+	if (arg_open_mode == IGSE_WRITE_OPEN_RECREATE)
+		open_mode[0] = 'w';
 
 	FILE *file = fopen(argument[arg_file].text, open_mode);
 	if (!file) {
@@ -211,14 +232,6 @@ case C_IGSE_WRITE:
 		StringDynamic_end(buf_filename);
 		break;
 	}
-
-	if (arg_open_mode == IGSE_WRITE_OPEN_UNIQUE) {
-		QWrite_err(FWERROR_FILE_EXISTS, 1, argument[arg_file].text);
-		StringDynamic_end(buf_filename);
-		fclose(file);
-		break;
-	}
-
 
 	// Find file size
 	if (fseek(file, 0, SEEK_END) != 0) {
@@ -237,10 +250,7 @@ case C_IGSE_WRITE:
 	}
 
 	// Quick append mode
-	if (arg_line_start == 0) {
-		if (arg_open_mode == IGSE_WRITE_OPEN_CHECK)
-			freopen(argument[arg_file].text, "ab", file);
-		
+	if (arg_line_start == 0) {		
 		if (file_size>0  &&  arg_edit_mode != IGSE_WRITE_APPEND) 
 			fprintf(file, "\r\n");
 
@@ -277,9 +287,9 @@ case C_IGSE_WRITE:
 	size_t bytes_read = fread(file_contents.text, 1, file_size, file);
 
 	if (bytes_read != file_size) {
+		QWrite_err(FWERROR_FILE_READ, 3, bytes_read, file_size, argument[arg_file].text);
 		StringDynamic_end(buf_filename);
-		StringDynamic_end(file_contents);
-		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+		StringDynamic_end(file_contents);		
 		fclose(file);
 		break;
 	}
@@ -2201,7 +2211,7 @@ case C_IGSE_DB:
 		fclose(file);
 
 		if (bytes_read != buffer_size) {
-			QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+			QWrite_err(FWERROR_FILE_READ, 3, bytes_read, buffer_size, argument[arg_file].text);
 			QWrite("[],[]]");
 			StringDynamic_end(buf_filename);
 			break;

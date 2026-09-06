@@ -200,8 +200,8 @@ case C_CLASS_READ:
 	size_t bytes_read = fread(file_contents.text, 1, file_size, file);
 	file_contents.text[file_size] = '\0';
 
-	if (bytes_read != file_size) {		
-		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);		
+	if (bytes_read != file_size) {
+		QWrite_err(FWERROR_FILE_READ, 3, bytes_read, file_size, argument[arg_file].text);
 		StringDynamic_end(buf_filename);
 		StringDynamic_end(file_contents);
 		QWrite("[],[],0]");
@@ -882,7 +882,7 @@ case C_CLASS_READSQM:
 	size_t bytes_read = fread(file_content_dynamic.text, 1, file_size, file);
 
 	if (bytes_read != file_size) {		
-		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+		QWrite_err(FWERROR_FILE_READ, 3, bytes_read, file_size, argument[arg_file].text);
 		StringDynamic_end(buf_filename);
 		StringDynamic_end(file_content_dynamic);
 		fclose(file);
@@ -1386,8 +1386,8 @@ case C_CLASS_WRITE :
 	size_t bytes_read            = fread(file_contents_dynamic.text, 1, file_size, file);
 	file_contents_dynamic.length = bytes_read;
 
-	if (bytes_read != file_size) {		
-		QWrite_err(FWERROR_ERRNO, 2, errno, argument[arg_file].text);
+	if (bytes_read != file_size) {
+		QWrite_err(FWERROR_FILE_READ, 3, bytes_read, file_size, argument[arg_file].text);
 		StringDynamic_end(buf_filename);
 		StringDynamic_end(file_contents_dynamic);
 		QWrite("0]");

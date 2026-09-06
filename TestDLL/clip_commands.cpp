@@ -587,7 +587,7 @@ case C_CLIP_FROMFILE:
 		if (CopyToClip(text_to_copy, append))
 			QWrite_err(FWERROR_NONE, 0);
 	} else
-		QWrite_err(FWERROR_ERRNO, 2, errno, argument[2].text);
+		QWrite_err(FWERROR_FILE_READ, 3, result, fsize, argument[2].text);
 
 	delete[] filetext;
 	StringDynamic_end(buf_filename);
