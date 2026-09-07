@@ -247,6 +247,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			initWT(BUTTON_BACK, WC_BUTTONW, L"<<", WS_TABSTOP);
 			initWT(BUTTON_NEXT, WC_BUTTONW, L">>", WS_TABSTOP);
 			initWT(BUTTON_PLAY, WC_BUTTONW, L">", WS_TABSTOP);
+			initWT(BUTTON_RETRY, WC_BUTTONW, L"Retry", WS_TABSTOP);
+			initWT(BUTTON_ABORT, WC_BUTTONW, L"Abort", WS_TABSTOP);
 
 			initWT(TESTING_SEPARATOR, WC_STATICW, L"", SS_ETCHEDHORZ | SS_SUNKEN);
 			initWT(TXT_COMMAND_INFO0, WC_STATICW, L"", SS_LEFT);
@@ -301,6 +303,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			wchar_t hint[] = L"Ctrl+A to select all. Ctrl+D to duplicate line. Ctrl+Q to toggle comment. Ctrl+S to Save";
 			SetWindowText(global.controls[TXT_HINT], hint);
+
+			EnableRetryAbortButtons(false);
 		} break;
 
 		case WM_SIZE: {
@@ -338,6 +342,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					}
 				} break;
 
+				case (ID_BASE+BUTTON_RETRY) : {
+					if (global.order == ORDER_NONE)
+						global.order = ORDER_RETRY;
+					EnableRetryAbortButtons(false);
+				} break;
+
+				case (ID_BASE+BUTTON_ABORT) : {
+					global.order = ORDER_ABORT;
+					EnableRetryAbortButtons(false);
+				} break;
+
 				case (ID_BASE+BUTTON_SAVETEST) : {
 					if (global.order == ORDER_NONE)
 						global.order = ORDER_RELOAD;
@@ -345,7 +360,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				} break;
 
 				case (ID_BASE+BUTTON_RELOAD) : {
-					int pressed = MessageBox(global.window, L"You'll lose changes. Are you sure?", L"Script Editor", MB_ICONQUESTION | MB_YESNO);
+					int pressed = MessageBox(global.window, L"You'll lose current text. Are you sure?", L"Script Editor", MB_ICONQUESTION | MB_YESNO);
 					if (pressed == IDYES) {
 						std::wstring script_file_content = GetFileContents(PATH_TO_TEST_SCRIPT);
 						SetWindowText(global.controls[EDIT_SCRIPT], script_file_content.c_str());
@@ -447,7 +462,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				} break;
 
 				case ID_PROCESS_ABORT: {
-						global.order = ORDER_ABORT;
+					global.order = ORDER_ABORT;
 					EnableWindowMenu(false);
 				} break;
 
@@ -660,8 +675,7 @@ INT_PTR CALLBACK ConvertDownloadLink(HWND hwndDlg, UINT message, WPARAM wParam, 
 							} break;
 
 							case MEDIAFIRE : {
-								std::wstring sub = url.substr(domain_pos+sites[index].length());
-								size_t slash     = sub.find_last_of(L"/");
+								size_t slash = url.find_last_of(L"/");
 			
 								if (slash != std::wstring::npos) {
 									final_url = url.substr(0,slash);
@@ -1018,6 +1032,16 @@ void CalculateWindowSizes(HWND window)
 		}
 	}
 
+	controls_pos[BUTTON_RETRY].left = controls_pos[BUTTON_PLAY].left + controls_pos[BUTTON_PLAY].right + 5;
+	controls_pos[BUTTON_RETRY].right = (LONG)(button_size * 1.5);
+	controls_pos[BUTTON_RETRY].top = controls_pos[BUTTON_REWIND].top;
+	controls_pos[BUTTON_RETRY].bottom = controls_pos[BUTTON_REWIND].bottom;
+
+	controls_pos[BUTTON_ABORT].left = controls_pos[BUTTON_RETRY].left + controls_pos[BUTTON_RETRY].right + 5;
+	controls_pos[BUTTON_ABORT].right = controls_pos[BUTTON_RETRY].right;
+	controls_pos[BUTTON_ABORT].top = controls_pos[BUTTON_RETRY].top;
+	controls_pos[BUTTON_ABORT].bottom = controls_pos[BUTTON_RETRY].bottom;
+
 	controls_pos[TESTING_SEPARATOR].left   = 10;
 	controls_pos[TESTING_SEPARATOR].top    = controls_pos[INPUT_GAME_VER].top + controls_pos[INPUT_GAME_VER].bottom + 10;
 	controls_pos[TESTING_SEPARATOR].right  = dialogspace.right - 20;
@@ -1085,7 +1109,7 @@ void CalculateWindowSizes(HWND window)
 	controls_pos[TXT_HINT]       = controls_pos[TAB];
 	controls_pos[TXT_HINT].left  = controls_pos[TAB].left + 170;
 	controls_pos[TXT_HINT].right = dialogspace.right - controls_pos[TXT_HINT].left - 20;
-	controls_pos[TXT_HINT].bottom -= 10;
+	controls_pos[TXT_HINT].bottom -= 4;
 
 	controls_pos[BUTTON_SAVETEST]       = controls_pos[TXT_LINE_NUMBER];
 	controls_pos[BUTTON_SAVETEST].left  = controls_pos[TXT_LINE_NUMBER].left + controls_pos[TXT_LINE_NUMBER].right + 10;

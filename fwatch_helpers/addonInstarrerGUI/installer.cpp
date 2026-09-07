@@ -224,7 +224,9 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 			EnableWindow(global.controls[INPUT_MOD_NAME], command_result==ERROR_NONE && global.instruction_index==0);
 			EnableWindow(global.controls[INPUT_DIR_NAME], command_result==ERROR_NONE && global.instruction_index==0);
 			EnableWindow(global.controls[INPUT_GAME_VER], command_result==ERROR_NONE && global.instruction_index==0);
-			EnableWindow(global.controls[BUTTON_JUMP_TO_STEP], global.instruction_index<global.commands.size() && !global.commands[global.instruction_index].disable);
+			size_t selection = (size_t)SendMessage(global.controls[LIST_COMMANDS], LB_GETCURSEL, 0, 0);
+			EnableWindow(global.controls[BUTTON_JUMP_TO_STEP], global.instruction_index!=selection && selection<global.commands.size() && !global.commands[selection].disable);
+			EnableRetryAbortButtons(command_result==ERROR_COMMAND_FAILED);
 			SetWindowText(global.controls[BUTTON_PLAY], play_automatically && command_result==ERROR_NONE ? L"||" : L">");
 			SumDownloadSizes(download_sizes, global.instruction_index);
 
@@ -232,6 +234,8 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 				WriteProgressFile(INSTALL_RETRYORABORT, global.last_log_message + L"\r\n\r\n" + global.lang[STR_ASK_RETRYORABORT]);
 				EnableMenuItem(global.window_menu, ID_PROCESS_RETRY, MF_BYCOMMAND);
 				EnableMenuItem(global.window_menu, ID_PROCESS_ABORT, MF_BYCOMMAND);
+				SendMessage(global.controls[LIST_COMMANDS], LB_SETCURSEL, global.instruction_index, 0);
+				ShowCommandInfo();
 			} else
 				// Installation finished
 				if (global.instruction_index >= global.commands.size() && global.commands.size() > 0) {

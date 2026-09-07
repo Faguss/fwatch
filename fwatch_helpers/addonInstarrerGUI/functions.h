@@ -83,6 +83,7 @@ bool ReadTextInputs();
 // Interface ---------------------------------------------------------------------------------------------
 void EditMultilineUpdateText(HWND control, std::wstring &text);
 void EnableWindowMenu(bool yes);
+void EnableRetryAbortButtons(bool yes);
 void SetCommandInfo(int index, std::wstring title, std::wstring content);
 void ShowCommandInfo();
 void ShowDownloadInfo();

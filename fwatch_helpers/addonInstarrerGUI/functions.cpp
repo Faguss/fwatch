@@ -770,7 +770,7 @@ size_t ParseInstallationScript(std::wstring &script_file_content, std::vector<Co
 	size_t word_begin          = 0;  //number of column where a phrase begins
 	int word_count             = 1;  //number of found phrases in the current line
 	int word_line_num          = 1;	 //line count for the entire script
-	int word_line_num_local    = 1;  //line count for single version of the mod
+	int word_line_num_local    = 1;  //line count for a single version of the mod
 	int command_id             = -1;
 	int last_command_line_num  = -1;
 	bool in_quote              = false;
@@ -791,6 +791,8 @@ size_t ParseInstallationScript(std::wstring &script_file_content, std::vector<Co
 				break;
 			else {
 				i = next_line;
+				word_line_num++;
+				word_line_num_local++;
 				continue;
 			}
 		}
@@ -2001,7 +2003,7 @@ INSTALLER_ERROR_CODE Unpack(std::wstring file_name, std::wstring password, int o
 		unpack_destination += L"\\" + relative_path;
 
 	// Backup files in test mode; otherwise clean directory
-	if (global.test_mode) {
+	if (global.test_mode && GetFileAttributes(unpack_destination.c_str())!=INVALID_FILE_ATTRIBUTES) {
 		std::vector<std::wstring> source_list;
 		std::vector<std::wstring> destination_list;
 		std::vector<bool>         is_dir_list;
@@ -3137,6 +3139,12 @@ void EnableWindowMenu(bool yes)
 		EnableMenuItem(global.window_menu, id[i], yes ? 0 : MF_GRAYED);
 }
 
+void EnableRetryAbortButtons(bool yes)
+{
+	ShowWindow(global.controls[BUTTON_RETRY], yes ? SW_SHOW : SW_HIDE);
+	ShowWindow(global.controls[BUTTON_ABORT], yes ? SW_SHOW : SW_HIDE);
+}
+
 void SetCommandInfo(int index, std::wstring title, std::wstring content) 
 {
 	if (!content.empty()) {
@@ -3460,6 +3468,10 @@ void SwitchTab(INSTALLER_TAB tab)
 				ShowWindow(global.controls[i], SW_SHOW);
 			ShowCommandInfo();
 			SetFocus(global.controls[BUTTON_PLAY]);
+
+			UINT menu_state = GetMenuState(global.window_menu, ID_PROCESS_RETRY, MF_BYCOMMAND);
+			bool is_retry_enabled = !(menu_state & (MF_DISABLED | MF_GRAYED));
+			EnableRetryAbortButtons(is_retry_enabled);
 		} break;
 
 		case INSTALLER_TAB_SCRIPT : {
