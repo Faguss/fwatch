@@ -1799,7 +1799,19 @@ INSTALLER_ERROR_CODE CreateTimestampList(std::wstring path, size_t path_cut, std
 	return ERROR_NONE;
 }
 
-INSTALLER_ERROR_CODE Download(std::wstring url, int options, std::wstring log_file_name)
+// Download function wrapper
+INSTALLER_ERROR_CODE Download(std::wstring url, int options, std::wstring file_name_to_log)
+{
+	INSTALLER_ERROR_CODE result = DownloadCore(url, options, file_name_to_log);
+
+	// If secure download failed then try insecurely so that it will still work on older computers
+	if (result == ERROR_DOWNLOAD_CERT_FAIL)
+		result = DownloadCore(L"--no-check-certificate "+url, options, (file_name_to_log.empty() ? url : file_name_to_log));
+
+	return result;
+}
+
+INSTALLER_ERROR_CODE DownloadCore(std::wstring url, int options, std::wstring file_name_to_log)
 {
 	// Delete previously downloaded file
 	if (
@@ -1889,7 +1901,7 @@ INSTALLER_ERROR_CODE Download(std::wstring url, int options, std::wstring log_fi
 		find = url.find(output, find);
 	}
 
-	std::wstring arguments = L" --user-agent=\"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0\" --tries=1 --no-check-certificate --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ ";
+	std::wstring arguments = L" --user-agent=\"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0\" --tries=1 --output-file=fwatch\\tmp\\schedule\\downloadLog.txt --directory-prefix=fwatch\\tmp\\ ";
 	
 	if (options & FLAG_CONTINUE)
 		arguments += L" --continue ";
@@ -1907,8 +1919,8 @@ INSTALLER_ERROR_CODE Download(std::wstring url, int options, std::wstring log_fi
 	// Execute program
 	PROCESS_INFORMATION pi;
     STARTUPINFO si; 
-	ZeroMemory( &si, sizeof(si) );
-	ZeroMemory( &pi, sizeof(pi) );
+	ZeroMemory(&si, sizeof(si));
+	ZeroMemory(&pi, sizeof(pi));
 	si.cb 		   = sizeof(si);
 	si.dwFlags 	   = STARTF_USESHOWWINDOW;
 	si.wShowWindow = SW_HIDE;
@@ -1918,7 +1930,7 @@ INSTALLER_ERROR_CODE Download(std::wstring url, int options, std::wstring log_fi
 		return ErrorMessage(STR_ERROR_EXE, L"%STR% wget.exe - " + Int2StrW(errorCode) + L" " + FormatError(errorCode));
 	} else
 		if (~options & FLAG_SILENT_MODE)
-			LogMessage(L"Downloading  " + (log_file_name.empty() ? url : log_file_name));
+			LogMessage(L"Downloading  " + (file_name_to_log.empty() ? url : file_name_to_log));
 
 
 
@@ -1957,7 +1969,8 @@ INSTALLER_ERROR_CODE Download(std::wstring url, int options, std::wstring log_fi
 		return ERROR_PAUSED;
 	
 	ParseWgetLog(message);
-	
+
+	// File already exists
 	if (exit_code == 1 && message.find("not retrieving") != std::string::npos) {
 		exit_code = 0;
 		LogMessage(utf16(message));
@@ -1984,7 +1997,10 @@ INSTALLER_ERROR_CODE Download(std::wstring url, int options, std::wstring log_fi
 			global.downloads.push_back(global.downloaded_filename);
 			
 	global.downloaded_filename_last = options & FLAG_CLEAN_DL_LATER ? L"" : global.downloaded_filename;
-	
+
+	if (exit_code == 5)
+		return ERROR_DOWNLOAD_CERT_FAIL;
+
 	return (exit_code!=ERROR_SUCCESS ? ERROR_COMMAND_FAILED : ERROR_NONE);
 }
 

@@ -830,7 +830,19 @@ DWORD DeleteDirectory(const std::wstring &refcstrRootDirectory, bool bDeleteSubd
 	return 0;
 }
 
+// Download function wrapper
 DWORD Download(std::wstring url)
+{
+	DWORD result = DownloadCore(url);
+
+	// If secure download failed then try insecurely so that it will still work on older computers
+	if (result == 5)
+		result = DownloadCore(L"--no-check-certificate "+url);
+
+	return result;
+}
+
+DWORD DownloadCore(std::wstring url)
 {
 	global.downloaded_filename = PathLastItem(url);
 	std::wstring arguments     = L" --user-agent=\"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0\" --tries=1 --output-file=fwatch\\tmp\\schedule\\downloadLog.txt " + url;

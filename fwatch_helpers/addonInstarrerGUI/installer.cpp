@@ -129,9 +129,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 	if (!global.arguments_table[L"downloadscript"].empty()) {
 		WriteProgressFile(INSTALL_PROGRESS, global.lang[STR_ACTION_GETSCRIPT]);
 
-		std::wstring url = GetFileContents(global.arguments_table[L"downloadscript"]) + L" --verbose \"--output-document=fwatch\\tmp\\installation script\"";
-		int result       = Download(url, FLAG_OVERWRITE | FLAG_SILENT_MODE);
-
+		int result = Download(L" --verbose \"--output-document=fwatch\\tmp\\installation script\" " + GetFileContents(global.arguments_table[L"downloadscript"]), FLAG_OVERWRITE | FLAG_SILENT_MODE);
 		if (result > 0) {
 			LogMessage(L"", CLOSE_LOG);
 			return ERROR_NO_SCRIPT;
@@ -152,6 +150,9 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 		}
 
 		SetWindowText(global.controls[EDIT_SCRIPT], script_file_content.c_str());
+		
+		if (!global.test_mode)
+			DeleteFile(L"fwatch\\tmp\\installation script");
 	}
 	
 	ParseInstallationScript(script_file_content, global.commands);
@@ -182,7 +183,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 	std::vector<LARGE_INTEGER> download_sizes;
 	download_sizes.resize(global.commands.size());
 
-	for (;;) {
+	for(;;) {
 		global.installation_phase = PHASE_WAITING;
 
 		InvalidateRect(global.controls[LIST_COMMANDS], NULL, false); //trigger WM_DRAWITEM for the listbox
@@ -460,7 +461,7 @@ DWORD WINAPI addonInstallerMain(__in LPVOID lpParameter)
 					command_result = Download(global.commands[global.instruction_index].downloads[j].url, download_flags);
 				else 
 				if (global.commands[global.instruction_index].downloads[j].arguments.size() == 1)
-					command_result = Download(global.commands[global.instruction_index].downloads[j].url + L" \"--output-document=" + global.commands[global.instruction_index].downloads[j].arguments[0] + L"\"", download_flags);
+					command_result = Download(L" \"--output-document=" + global.commands[global.instruction_index].downloads[j].arguments[0] + L"\" " + global.commands[global.instruction_index].downloads[j].url, download_flags);
 				else {
 					std::wstring original_url     = global.commands[global.instruction_index].downloads[j].url;
 					std::wstring cookie_file_name = L"fwatch\\tmp\\__cookies.txt";

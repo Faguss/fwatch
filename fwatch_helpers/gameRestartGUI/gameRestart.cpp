@@ -917,7 +917,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 
 	// Self-update
 	if (input.self_update != SELF_UPDATE_DISABLED) {
-		wchar_t url[]           = L"http://ofp-faguss.com/fwatch/116test";
+		wchar_t url[]           = L"https://ofp-faguss.com/fwatch/download";
 		std::wstring error_text = L"";
 		DWORD result            = 0;
 		
@@ -991,7 +991,7 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		}
 		
 		std::vector<std::wstring> download_mirrors;
-		download_mirrors.push_back(L"http://ofp-faguss.com/fwatch/download/fwatch_self_update.7z");
+		download_mirrors.push_back(L"https://ofp-faguss.com/fwatch/download/fwatch_self_update.7z");
 		
 		for (size_t i=0; i<download_mirrors.size(); i++) {
 			DeleteFile(L"fwatch_self_update.7z");
@@ -1121,11 +1121,11 @@ DWORD WINAPI gameRestartMain(__in LPVOID lpParameter)
 		
 	// Update resource.cpp file
 	if (!input.update_resource.empty()) {
-		wchar_t url[]           = L"http://ofp-faguss.com/fwatch/116test";
+		wchar_t url[]           = L"https://ofp-faguss.com/fwatch/116test";
 		DWORD result            = 0;
 		
 		std::vector<std::wstring> download_mirrors2;
-		download_mirrors2.push_back(L"http://ofp-faguss.com/fwatch/download/ofp_aspect_ratio207.7z");
+		download_mirrors2.push_back(L"https://ofp-faguss.com/fwatch/download/ofp_aspect_ratio207.7z");
 		
 		for (size_t i=0; i<download_mirrors2.size(); i++) {
 			DeleteFile(L"ofp_aspect_ratio207.7z");

@@ -31,6 +31,7 @@ int ParseWgetLog(std::string &error);
 int ParseUnpackLog(std::string &error);
 DWORD DeleteDirectory(const std::wstring &refcstrRootDirectory, bool bDeleteSubdirectories=true);
 DWORD Download(std::wstring url);
+DWORD DownloadCore(std::wstring url);
 DWORD Unpack(std::wstring file_name, std::wstring password, bool tmp_dir=false);
 std::wstring Decrypt(std::wstring sentence) ;
 void LogMessage(std::wstring input, bool close=false);
