@@ -59,6 +59,7 @@ void CustomFilesReturn();
 void FwatchPresence(ThreadArguments *arg);
 void ListenServer(ThreadArguments *arg);
 void WatchProgram(ThreadArguments *arg);
+void LaunchAndMonitorExe(HANDLE &logfile_stdout, char *exe_path, char *params, unsigned int &hash, unsigned short &show_window, WatchProgramInfo &info);
 
 
 
@@ -199,7 +200,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	int custom_exe             = -1;
 	ThreadArguments client_arg = {false, false, false, &mailslot};
 
-	while ((word = String_tokenize(lpCmdLine_String, " \t\r\n", lpCmdLine_pos, OPTION_NONE)).length > 0) {
+	while((word = String_tokenize(lpCmdLine_String, " \t\r\n", lpCmdLine_pos, OPTION_NONE)).length > 0) {
 		if (strcmp(word.text,"-nomap") == 0)
 			add_nomap = false;
 
@@ -345,7 +346,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			if (user_choice == IDABORT)
 				exit(0);
 		}
-	} while (user_choice == IDRETRY);
+	} while(user_choice == IDRETRY);
 
 
 
@@ -362,7 +363,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			size_t source_pos = 0;
 			int length        = 0;
 
-			while ((word = String_tokenize(source, ";", source_pos, OPTION_NONE)).length > 0)
+			while((word = String_tokenize(source, ";", source_pos, OPTION_NONE)).length > 0)
 				if (length < capacity)
 					mod_names[length++] = word;
 
@@ -598,7 +599,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 				DeleteFile(del_path);
 			}
 		}
-		while (FindNextFile(hFile, &FileInformation) == TRUE);
+		while(FindNextFile(hFile, &FileInformation) == TRUE);
 		FindClose(hFile);
 	}
 
@@ -657,7 +658,7 @@ void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, i
 	size_t config_pos = 0;
 
 	// For each config property
-	while ((property = String_tokenize(config, ";", config_pos, OPTION_SKIP_SQUARE_BRACKETS)).length > 0) {
+	while((property = String_tokenize(config, ";", config_pos, OPTION_SKIP_SQUARE_BRACKETS)).length > 0) {
 		char *equality = strchr(property.text, '=');
 		if (equality == NULL)
 			continue;
@@ -681,7 +682,7 @@ void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, i
 		size_t value_pos = 0;
 
 		// For each property value
-		while ((subvalue = String_tokenize(value, ",", value_pos, OPTION_SKIP_SQUARE_BRACKETS)).length > 0) {
+		while((subvalue = String_tokenize(value, ",", value_pos, OPTION_SKIP_SQUARE_BRACKETS)).length > 0) {
 			String_trim_space(subvalue);
 
 			if (strcmpi(subvalue.text, "noar")==0)
@@ -696,7 +697,7 @@ void ReadUIConfig(char *filename, bool *no_ar, bool *is_custom, float *custom, i
 						String number          = {NULL, 0};
 						size_t subvalue_pos    = 0;
 
-						while ((number = String_tokenize(subvalue, ",;", subvalue_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  index<4) {
+						while((number = String_tokenize(subvalue, ",;", subvalue_pos, OPTION_TRIM_SQUARE_BRACKETS)).length>0  &&  index<4) {
 							String_trim_space(number);
 							color[index++] = (unsigned char)(atof(number.text) * 255);
 						}
@@ -847,7 +848,7 @@ int ModfolderMissionsTransfer(char *mod, bool is_dedicated_server, char *player_
 						}
 					}
 				} 
-				while (FindNextFileW(hFind, &fd));
+				while(FindNextFileW(hFind, &fd));
 				FindClose(hFind);
 			}
 		}
@@ -879,7 +880,7 @@ void ModfolderMissionsReturn(bool is_dedicated_server)
 	String destination          = {NULL, 0};
 	size_t mission_list_pos     = 0;
 
-	while ((destination = String_tokenize(mission_list, "\r\n", mission_list_pos, OPTION_NONE)).length > 0) {
+	while((destination = String_tokenize(mission_list, "\r\n", mission_list_pos, OPTION_NONE)).length > 0) {
 		char *source     = strchr(destination.text, '\\');
 		bool remove_line = false;
 		
@@ -991,7 +992,7 @@ void CustomFilesReturn()
 	String destination   = {NULL, 0};
 	size_t file_list_pos = 0;
 
-	while ((destination = String_tokenize(file_list, "\r\n", file_list_pos, OPTION_NONE)).length > 0) {
+	while((destination = String_tokenize(file_list, "\r\n", file_list_pos, OPTION_NONE)).length > 0) {
 		char *separator  = strchr(destination.text, '?');
 		bool remove_line = false;
 
@@ -1195,7 +1196,7 @@ void FwatchPresence(ThreadArguments *arg)
 				do {					
 					GetExitCodeProcess(pi.hProcess, &st);
 					Sleep(5);
-				} while (st == STILL_ACTIVE);
+				} while(st == STILL_ACTIVE);
 
 				CloseHandle(pi.hProcess);
 				CloseHandle(pi.hThread);
@@ -1206,7 +1207,7 @@ void FwatchPresence(ThreadArguments *arg)
 					if (StringDynamic_readfile(config, "Aspect_Ratio.sqf") == 0) {
 						char *token = strtok(config.text, ";\n\t ");
 
-						while (token != NULL) {
+						while(token != NULL) {
 							char *eq = strchr(token, '=');
 
 							if (eq != NULL) {
@@ -1257,7 +1258,7 @@ void FwatchPresence(ThreadArguments *arg)
 
 
 
-	while (true) {
+	for(;;) {
 		Sleep(250);
 
 		// Search for the game window
@@ -1265,7 +1266,7 @@ void FwatchPresence(ThreadArguments *arg)
 			HWND hwnd = NULL;
 			hwnd      = GetTopWindow(hwnd);
 
-			while (hwnd && game_pid==0) {
+			while(hwnd && game_pid==0) {
 				char current_window_name[32] = "";
 				GetWindowText(hwnd, current_window_name, 32);
 
@@ -1428,7 +1429,7 @@ void FwatchPresence(ThreadArguments *arg)
 						String item;
 						size_t value_pos = 0;
 
-						while ((item = String_tokenize(value, ";", value_pos, OPTION_NONE)).length>0  && game_mods_num<game_mods_max)
+						while((item = String_tokenize(value, ";", value_pos, OPTION_NONE)).length>0  && game_mods_num<game_mods_max)
 							game_mods[game_mods_num++] = item.text;
 					}
 
@@ -1838,7 +1839,7 @@ void ListenServer(ThreadArguments *arg)
 	
 
 	// Wait for the other thread to read port from the memory
-	while (global.listen_server_port < 0)
+	while(global.listen_server_port < 0)
 		Sleep(1000);
 
 	initsocket:
@@ -1866,7 +1867,7 @@ void ListenServer(ThreadArguments *arg)
 
 
 	// **** MAIN LOOP ********************************
-	while (true)
+	for(;;)
 	{	
 		// check if port changed
 		if (localPort != global.listen_server_port + 1) {
@@ -2180,7 +2181,7 @@ void ListenServer(ThreadArguments *arg)
 
 
 
-// Save program's exit code
+// Listen to messages from fwatch.dll to launch external programs
 void WatchProgram(ThreadArguments *arg)
 {
 	if (*arg->mailslot != INVALID_HANDLE_VALUE) {
@@ -2205,7 +2206,7 @@ void WatchProgram(ThreadArguments *arg)
 						size_t message_pos  = 0;
 						int value_index     = 0;
 
-						while ((token = String_tokenize(message, "|", message_pos, OPTION_NONE)).length > 0) {
+						while((token = String_tokenize(message, "|", message_pos, OPTION_NONE)).length > 0) {
 
 							switch(value_index++) {
 								case 0 : hash   = strtoul(token.text, NULL, 0); break;
@@ -2244,8 +2245,7 @@ void WatchProgram(ThreadArguments *arg)
 						if (strcmp(exe_name,"") != 0) {
 							strcat(exe_path, exe_name);
 
-							// Create log file
-							// TODO: need to have separate files
+							// Create a file where output (stdout and stderr) from the program will be saved
 							SECURITY_ATTRIBUTES sa;
 							sa.nLength              = sizeof(sa);
 							sa.lpSecurityDescriptor = NULL;
@@ -2263,150 +2263,20 @@ void WatchProgram(ThreadArguments *arg)
 								FILE_ATTRIBUTE_NORMAL,
 								NULL );
 
-							// Run program
-							STARTUPINFO si;
-							PROCESS_INFORMATION pi;
-							ZeroMemory(&si, sizeof(si));
-							si.cb          = sizeof(si);
-							si.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-							si.wShowWindow = show_window;
-							si.hStdOutput  = logfile_stdout;
-							si.hStdError   = logfile_stdout;
-							ZeroMemory(&pi, sizeof(pi));
+							WatchProgramInfo info = {db_id, 0, STILL_ACTIVE, 0};
+							LaunchAndMonitorExe(logfile_stdout, exe_path, params, hash, show_window, info);
 
-							if (CreateProcess(exe_path, params, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
-								WatchProgramInfo info = {db_id, pi.dwProcessId, STILL_ACTIVE, 0};
-								db_pid_save(info);
-
-								// Run another program monitoring the first program
-								// Don't monitor gameRestart.exe if everything is going to be restarted
-								if (hash != C_RESTART_CLIENT  ||  (hash==C_RESTART_CLIENT && strstr(params,"-queryserver="))) {
-									do {
-										Sleep(5);
-										GetExitCodeProcess(pi.hProcess, &info.exit_code);
-									} while (info.exit_code == STILL_ACTIVE);
-
-									if (false && hash==C_EXE_MAKEPBO  &&  info.exit_code==0) {
-										//Extract path from arguments
-										StringDynamic path_dir;
-										StringDynamic path_pbo;
-										StringDynamic path_dir_file;
-										StringDynamic_init(path_dir);
-										StringDynamic_init(path_pbo);
-										StringDynamic_init(path_dir_file);
-
-										for (int i=strlen(params),quot=0; i>=0; i--) {
-											if (params[i] == '"') {
-												quot++;
-
-												if (quot == 1)
-													params[i] = '\0';
-
-												if (quot == 2)
-													StringDynamic_append(path_dir, params+i+1);
-											}
-										}
-										
-										StringDynamic_appendf(path_pbo, "%s.pbo", path_dir.text);
-										StringDynamic_appendf(path_dir_file, "%s\\", path_dir.text);
-										
-										StringDynamic buffer_pbo;
-										int result = StringDynamic_readfile(buffer_pbo, path_pbo.text);
-
-										if (result == 0) {
-											const int name_max  = 512;
-											char name[name_max] = "";
-											int name_len        = 0;
-											int file_count      = 0;
-											size_t file_pos     = 0;
-											bool save_file      = false;
-											 
-											while (file_pos < buffer_pbo.length) {
-												memset(name, 0, name_max);
-												name_len = 0;
-
-												for (int i=0; i<name_max-1; i++) {
-													char c = buffer_pbo.text[file_pos++];
-
-													if (c != '\0')
-														name[name_len++] = c;
-													else
-														break;
-												}
-
-												unsigned long pbo_mime_type  = *((unsigned long*)&buffer_pbo.text[file_pos]);
-												unsigned long pbo_time_stamp = *((unsigned long*)&buffer_pbo.text[file_pos+12]);
-												unsigned long pbo_data_size  = *((unsigned long*)&buffer_pbo.text[file_pos+16]);
-
-												file_pos += 20;
-
-												if (name_len == 0) {
-													if (file_count==0 && pbo_mime_type==0x56657273 && pbo_time_stamp==0 && pbo_data_size==0) {
-														int value_len = 0;
-														bool is_name  = true;
-														
-														while (file_pos < buffer_pbo.length) {
-															if (buffer_pbo.text[file_pos++] != '\0')
-																value_len++;
-															else {
-																if (is_name && value_len==0)
-																	break;
-																else {
-																	is_name   = !is_name;
-																	value_len = 0;
-																}
-															}
-														}
-													} else
-														break;
-												} else {
-													path_dir_file.length = path_dir.length+ 1;
-													StringDynamic_append(path_dir_file, name);
-													
-													WIN32_FILE_ATTRIBUTE_DATA fd;
-													GetFileAttributesEx(path_dir_file.text, GetFileExInfoStandard, &fd);
-													
-													ULARGE_INTEGER ull;
-													ull.LowPart              = fd.ftLastWriteTime.dwLowDateTime;
-													ull.HighPart             = fd.ftLastWriteTime.dwHighDateTime;
-													ULONGLONG n1             = (ULONGLONG)10000000;
-													ULONGLONG n2             = UInt32x32To64(116444736, 100);
-													unsigned long file_stamp = (unsigned long)(ull.QuadPart / n1 - n2);
-
-													if (file_stamp != pbo_time_stamp) {
-														memcpy(buffer_pbo.text+file_pos-8, &file_stamp, 4);
-														save_file = true;
-													}
-												}
-													
-												file_count++;
-											}
-											
-											if (save_file) {
-												FILE *f = fopen(path_pbo.text, "wb");
-												if (f) {
-													fwrite(buffer_pbo.text, 1, buffer_pbo.length, f);
-													fclose(f);
-												}
-											}
-										}
-
-										StringDynamic_end(path_dir);
-										StringDynamic_end(path_pbo);
-										StringDynamic_end(path_dir_file);
-										StringDynamic_end(buffer_pbo);
-									}
-
-									db_pid_save(info);
-								}
-
-								CloseHandle(pi.hProcess);
-								CloseHandle(pi.hThread);
-							} else {
-								WatchProgramInfo info = {db_id, pi.dwProcessId, STILL_ACTIVE, GetLastError()};
-								db_pid_save(info);
+							// If secure download failed then try insecurely so that it will still work on older computers
+							if (hash == C_EXE_WGET && info.launch_error == 0 && info.pid != 0 && info.exit_code == 5) {
+								StringDynamic params_new;
+								StringDynamic_init(params_new);
+								StringDynamic_append(params_new, params);
+								StringDynamic_append(params_new, " --no-check-certificate");
+								LaunchAndMonitorExe(logfile_stdout, exe_path, params_new.text, hash, show_window, info);
+								StringDynamic_end(params_new);
 							}
 
+							db_pid_save(info);
 							CloseHandle(logfile_stdout);
 						}
 					}
@@ -2418,4 +2288,148 @@ void WatchProgram(ThreadArguments *arg)
 	}
 
 	_endthread();
+}
+
+void LaunchAndMonitorExe(HANDLE &logfile_stdout, char *exe_path, char *params, unsigned int &hash, unsigned short &show_window, WatchProgramInfo &info)
+{
+	// Run program
+	STARTUPINFO si;
+	PROCESS_INFORMATION pi;
+	ZeroMemory(&si, sizeof(si));
+	si.cb          = sizeof(si);
+	si.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+	si.wShowWindow = show_window;
+	si.hStdOutput  = logfile_stdout;
+	si.hStdError   = logfile_stdout;
+	ZeroMemory(&pi, sizeof(pi));
+
+	if (CreateProcess(exe_path, params, NULL, NULL, TRUE, HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
+		info.pid = pi.dwProcessId;
+		db_pid_save(info);
+
+		// Don't monitor gameRestart.exe if everything is going to be restarted
+		if (hash != C_RESTART_CLIENT  ||  (hash==C_RESTART_CLIENT && strstr(params,"-queryserver="))) {
+			do {
+				Sleep(5);
+				GetExitCodeProcess(pi.hProcess, &info.exit_code);
+			} while(info.exit_code == STILL_ACTIVE);
+
+			if (hash==C_EXE_MAKEPBO  &&  info.exit_code==0) {
+				//Extract path from arguments
+				StringDynamic path_dir;
+				StringDynamic path_pbo;
+				StringDynamic path_dir_file;
+				StringDynamic_init(path_dir);
+				StringDynamic_init(path_pbo);
+				StringDynamic_init(path_dir_file);
+
+				for (int i=strlen(params),quot=0; i>=0; i--) {
+					if (params[i] == '"') {
+						quot++;
+
+						if (quot == 1)
+							params[i] = '\0';
+
+						if (quot == 2)
+							StringDynamic_append(path_dir, params+i+1);
+					}
+				}
+				
+				StringDynamic_appendf(path_pbo, "%s.pbo", path_dir.text);
+				StringDynamic_appendf(path_dir_file, "%s\\", path_dir.text);
+				
+				StringDynamic buffer_pbo;
+				int result = StringDynamic_readfile(buffer_pbo, path_pbo.text);
+
+				if (result == 0) {
+					const int name_max  = 512;
+					char name[name_max] = "";
+					int name_len        = 0;
+					int file_count      = 0;
+					size_t file_pos     = 0;
+					bool save_file      = false;
+					 
+					while(file_pos < buffer_pbo.length) {
+						memset(name, 0, name_max);
+						name_len = 0;
+
+						for (int i=0; i<name_max-1; i++) {
+							char c = buffer_pbo.text[file_pos++];
+
+							if (c != '\0')
+								name[name_len++] = c;
+							else
+								break;
+						}
+
+						unsigned long pbo_mime_type  = *((unsigned long*)&buffer_pbo.text[file_pos]);
+						unsigned long pbo_time_stamp = *((unsigned long*)&buffer_pbo.text[file_pos+12]);
+						unsigned long pbo_data_size  = *((unsigned long*)&buffer_pbo.text[file_pos+16]);
+
+						file_pos += 20;
+
+						if (name_len == 0) {
+							if (file_count==0 && pbo_mime_type==0x56657273 && pbo_time_stamp==0 && pbo_data_size==0) {
+								int value_len = 0;
+								bool is_name  = true;
+								
+								while(file_pos < buffer_pbo.length) {
+									if (buffer_pbo.text[file_pos++] != '\0')
+										value_len++;
+									else {
+										if (is_name && value_len==0)
+											break;
+										else {
+											is_name   = !is_name;
+											value_len = 0;
+										}
+									}
+								}
+							} else
+								break;
+						} else {
+							path_dir_file.length = path_dir.length+ 1;
+							StringDynamic_append(path_dir_file, name);
+							
+							WIN32_FILE_ATTRIBUTE_DATA fd;
+							GetFileAttributesEx(path_dir_file.text, GetFileExInfoStandard, &fd);
+							
+							ULARGE_INTEGER ull;
+							ull.LowPart  = fd.ftLastWriteTime.dwLowDateTime;
+							ull.HighPart = fd.ftLastWriteTime.dwHighDateTime;
+							ULONGLONG n1 = (ULONGLONG)10000000;
+							ULONGLONG n2 = UInt32x32To64(116444736, 100);
+							unsigned long file_stamp = (unsigned long)(ull.QuadPart / n1 - n2);
+
+							if (file_stamp != pbo_time_stamp) {
+								memcpy(buffer_pbo.text+file_pos-8, &file_stamp, 4);
+								save_file = true;
+							}
+						}
+							
+						file_count++;
+					}
+					
+					if (save_file) {
+						FILE *f = fopen(path_pbo.text, "wb");
+						if (f) {
+							fwrite(buffer_pbo.text, 1, buffer_pbo.length, f);
+							fclose(f);
+						}
+					}
+				}
+
+				StringDynamic_end(path_dir);
+				StringDynamic_end(path_pbo);
+				StringDynamic_end(path_dir_file);
+				StringDynamic_end(buffer_pbo);
+			}	
+		}
+
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+	} else {
+		info.launch_error = GetLastError();
+		info.pid = pi.dwProcessId;
+	}
 }
